@@ -31,7 +31,7 @@ from datastore import DatastoreException
 from datastore.restore import restore_db, dump_collection
 from freenas.dispatcher.jsonenc import dump, load
 from freenas.dispatcher.fd import FileDescriptor
-from freenas.dispatcher.rpc import description
+from freenas.dispatcher.rpc import description, accepts
 from task import Task, ProgressTask, TaskException, TaskDescription
 
 
@@ -59,6 +59,7 @@ class DownloadDatabaseTask(Task):
             dump(result, f)
 
 
+@accepts(FileDescriptor)
 @description('Uploads database state from file')
 class UploadDatabaseTask(ProgressTask):
     @classmethod

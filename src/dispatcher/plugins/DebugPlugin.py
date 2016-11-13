@@ -47,6 +47,7 @@ class RemoteDebugProvider(Provider):
 
 
 @private
+@accepts(FileDescriptor)
 @description('Collects debug information')
 class CollectDebugTask(ProgressTask):
     @classmethod
