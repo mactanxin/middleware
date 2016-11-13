@@ -299,11 +299,11 @@ class UpdateShareTask(Task):
     def early_describe(cls):
         return "Updating share"
 
-    def describe(self, id, updated_fields):
+    def describe(self, id, updated_fields, enable_service=False):
         share = self.datastore.get_by_id('shares', id)
         return TaskDescription("Updating share {name}", name=share.get('name', id) if share else id)
 
-    def verify(self, id, updated_fields):
+    def verify(self, id, updated_fields, enable_service=False):
         return ['system']
 
     def run(self, id, updated_fields, enable_service=False):
