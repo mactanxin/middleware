@@ -595,7 +595,7 @@ class Balancer(object):
         return task.id
 
     def submit_with_upload(self, task_name, args, sender, env=None):
-        task_metadata = self.dispatcher.tasks[task_name]
+        task_metadata = self.dispatcher.tasks[task_name]._get_metadata()
         schema = task_metadata['schema']
 
         upload_token_list = []
