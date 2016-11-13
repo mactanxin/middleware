@@ -100,6 +100,7 @@ class FreeIPAPlugin(DirectoryServicePlugin):
             'realm': '',
             'server': None,
             'kdc': None,
+            'krb_principal': None,
             'username': '',
             'password': '',
             'user_suffix': 'cn=users,cn=accounts',
