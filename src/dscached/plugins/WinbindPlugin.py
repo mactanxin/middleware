@@ -129,7 +129,7 @@ class WinbindPlugin(DirectoryServicePlugin):
             'realm': '',
             'username': 'Administrator',
             'password': None,
-            'keytab': None,
+            'krb_principal': None,
             'site_name': None,
             'dc_address': None,
             'gcs_address': None,
