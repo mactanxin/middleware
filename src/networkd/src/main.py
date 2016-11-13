@@ -605,6 +605,10 @@ class ConfigurationService(RpcService):
             return
 
         try:
+            if netif.InterfaceFlags.UP not in iface.flags:
+                self.logger.info('Bringing interface {0} up'.format(name))
+                iface.up()
+
             # If it's VLAN, configure parent and tag
             if entity.get('type') == 'VLAN':
                 vlan = entity.get('vlan')
@@ -718,9 +722,6 @@ class ConfigurationService(RpcService):
 
                 iface.capabilities = caps
 
-            if netif.InterfaceFlags.UP not in iface.flags:
-                self.logger.info('Bringing interface {0} up'.format(name))
-                iface.up()
         except OSError as err:
             yield err.errno, err.strerror
 
