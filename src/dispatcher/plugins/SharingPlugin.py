@@ -306,7 +306,7 @@ class UpdateShareTask(Task):
     def verify(self, id, updated_fields):
         return ['system']
 
-    def run(self, id, updated_fields):
+    def run(self, id, updated_fields, enable_service=False):
         share = self.datastore.get_by_id('shares', id)
         if not share:
             raise TaskException(errno.ENOENT, 'Share not found')
@@ -389,10 +389,15 @@ class UpdateShareTask(Task):
 
         service_state = self.dispatcher.call_sync('service.query', [('name', '=', share['type'])], {'single': True})
         if service_state['state'] != 'RUNNING':
-            self.add_warning(TaskWarning(
-                errno.ENXIO, "Share has been updated but the service {0} is not currently running "
-                             "Please enable the {0} service.".format(share['type'])
-            ))
+            if enable_service:
+                config = service_state['config']
+                config['enable'] = True
+                self.join_subtasks(self.run_subtask('service.update', service_state['id'], {'config': config}))
+            else:
+                self.add_warning(TaskWarning(
+                    errno.ENXIO, "Share has been updated but the service {0} is not currently running "
+                                 "Please enable the {0} service.".format(share['type'])
+                ))
 
 
 @description("Imports existing share")
