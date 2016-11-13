@@ -1,0 +1,3 @@
+Python bindings for the docker credentials store API
+
+WWW: https://pypi.python.org/pypi/docker-pycreds/
