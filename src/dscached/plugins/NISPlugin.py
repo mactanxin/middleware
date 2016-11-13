@@ -43,6 +43,9 @@ class NISPlugin(DirectoryServicePlugin):
     def __init__(self, context):
         self.context = context
         self.server = None
+        self.directory = None
+        self.parameters = None
+        self.enabled = False
         self.domain_name = None
         self.server_name = None
         self.bind_thread = threading.Thread(target=self.bind, daemon=True)
@@ -184,6 +187,7 @@ class NISPlugin(DirectoryServicePlugin):
             
         return directory.parameters.get("domain")
 
+
 def _init(context):
     context.register_plugin('nis', NISPlugin)
 
@@ -196,4 +200,3 @@ def _init(context):
             'domain': {'type': 'string'}
         }
     })
-    
