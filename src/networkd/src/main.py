@@ -326,7 +326,7 @@ class ConfigurationService(RpcService):
         type_map = {
             'VLAN': 'vlan',
             'LAGG': 'lagg',
-            'BRIDGE': 'bridge'
+            'BRIDGE': ('bridge', 'brg')
         }
 
         if type not in list(type_map.keys()):
@@ -864,15 +864,16 @@ class Main(object):
                 })
                 self.logger.info('Deleted DNS configuration')
 
+        def reject(reason):
+            self.logger.info('DHCP request rejected on {0}: {1}'.format(interface, reason))
+
         def unbind(lease, reason):
             reasons = {
                 dhcp.client.UnbindReason.EXPIRE: 'expired',
                 dhcp.client.UnbindReason.REVOKE: 'revoked'
             }
 
-            self.logger.info(''.format(
-                'DHCP lease on {0} {1}'.format(interface, reasons.get(reason, 'revoked'))
-            ))
+            self.logger.info('DHCP lease on {0}: {1}'.format(interface, reasons.get(reason, 'revoked')))
 
         def state_change(state):
             self.client.emit_event('network.interface.changed', {
@@ -887,6 +888,7 @@ class Main(object):
         client = dhcp.client.Client(interface, lambda: socket.gethostname().split('.')[0])
         client.on_bind = bind
         client.on_unbind = unbind
+        client.on_reject = reject
         client.on_state_change = state_change
         client.start()
         self.dhcp_clients[interface] = client
