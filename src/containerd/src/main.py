@@ -1281,7 +1281,7 @@ class DockerService(RpcService):
                 'external': host.connection.create_endpoint_config(
                     ipv4_address=q.get(container, 'bridge.address')
                 )
-            }),
+            })
 
         create_args = {
             'name': container['name'],
