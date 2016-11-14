@@ -666,6 +666,7 @@ class DockerHost(object):
             if external and q.get(external, 'Config.Subnet') != subnet:
                 if external:
                     self.connection.remove_network('external')
+                    external = False
 
             if not external:
                 self.connection.create_network(
