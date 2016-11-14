@@ -343,7 +343,8 @@ class VolumeProvider(Provider):
                 except RpcException:
                     continue
 
-                disks.remove(disk)
+                if disk in disks:
+                    disks.remove(disk)
 
         return list(disks)
 
