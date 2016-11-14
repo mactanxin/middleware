@@ -656,8 +656,9 @@ class DockerHost(object):
                 gevent.sleep(1)
 
         # Initialize the bridge network
-        alias = first_or_default(lambda a: a['type'] == 'INET', q.get(self.context.default_if, 'status.aliases'))
-        network_config = self.context.client.call_sync('network.get_config')
+        default_if = self.context.client.call_sync('network.interface.query', [('id', '=', self.context.default_if)], {'single': True})
+        alias = first_or_default(lambda a: a['type'] == 'INET', q.get(default_if, 'status.aliases'))
+        network_config = self.context.client.call_sync('network.config.get_config')
 
         if alias and q.get(network_config, 'gateway.ipv4'):
             subnet = '{address}/{netmask}'.format(**alias)
@@ -666,6 +667,7 @@ class DockerHost(object):
                 if external:
                     self.connection.remove_network('external')
 
+            if not external:
                 self.connection.create_network(
                     name='external',
                     driver='macvlan',
