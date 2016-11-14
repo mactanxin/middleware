@@ -2296,16 +2296,16 @@ class DatasetDeleteTask(Task):
 
 
 @description("Configures/Updates an existing Dataset's properties")
-@accepts(str, h.ref('volume-dataset'))
+@accepts(str, h.ref('volume-dataset'), bool)
 class DatasetConfigureTask(Task):
     @classmethod
     def early_describe(cls):
         return "Configuring a dataset"
 
-    def describe(self, id, updated_params):
+    def describe(self, id, updated_params, reset_permissions=False):
         return TaskDescription("Configuring the dataset {name}", name=id)
 
-    def verify(self, id, updated_params):
+    def verify(self, id, updated_params, reset_permissions=False):
         pool_name, _, ds = id.partition('/')
         if not self.datastore.exists('volumes', ('id', '=', pool_name)):
             raise VerifyException(errno.ENOENT, 'Volume {0} not found'.format(pool_name))
@@ -2330,7 +2330,7 @@ class DatasetConfigureTask(Task):
             'org.freenas:permissions_type': {'value': 'PERM'}
         }))
 
-    def run(self, id, updated_params):
+    def run(self, id, updated_params, reset_permissions=False):
         pool_name, _, ds = id.partition('/')
         if not self.datastore.exists('volumes', ('id', '=', pool_name)):
             raise TaskException(errno.ENOENT, 'Volume {0} not found'.format(pool_name))
@@ -2377,7 +2377,12 @@ class DatasetConfigureTask(Task):
 
         if 'permissions' in updated_params:
             fs_path = os.path.join(VOLUMES_ROOT, ds['id'])
-            self.join_subtasks(self.run_subtask('file.set_permissions', fs_path, updated_params['permissions']))
+            self.join_subtasks(self.run_subtask(
+                'file.set_permissions',
+                fs_path,
+                updated_params['permissions'],
+                reset_permissions
+            ))
 
         if 'mounted' in updated_params:
             if updated_params['mounted']:
