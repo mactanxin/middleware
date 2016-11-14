@@ -109,6 +109,7 @@ class DockerContainerProvider(Provider):
         def extend(obj):
             presets = self.dispatcher.call_sync('docker.image.labels_to_presets', obj['labels'])
             settings = obj.setdefault('settings', [])
+            address = q.get(obj, 'bridge.address') or socket.gethostname()
             obj.update({
                 'web_ui_url': None,
                 'settings': [],
@@ -125,7 +126,7 @@ class DockerContainerProvider(Provider):
                 if presets.get('web_ui_protocol'):
                     obj['web_ui_url'] = '{0}://{1}:{2}/{3}'.format(
                         presets['web_ui_protocol'],
-                        socket.gethostname(),
+                        address,
                         presets['web_ui_port'],
                         presets['web_ui_path'][1:]
                     )
