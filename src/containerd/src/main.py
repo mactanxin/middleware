@@ -773,7 +773,10 @@ class DockerHost(object):
                                     p.delete_rule('rdr', rule.index)
 
                         elif ev['Action'] == 'start':
-                            if 'org.freenas.expose_ports_at_host' not in details['Config']['Labels']:
+                            if 'org.freenas.expose-ports-at-host' not in details['Config']['Labels']:
+                                continue
+
+                            if 'org.freenas.bridged' in details['Config']['Labels']:
                                 continue
 
                             self.logger.debug('Redirecting container {0} ports on host firewall'.format(ev['id']))
@@ -781,9 +784,7 @@ class DockerHost(object):
                             mapped_ports = []
 
                             # Setup or destroy port redirection now, if needed
-
                             for i in get_docker_ports(details):
-
                                 if i['host_port'] in mapped_ports:
                                     continue
 
@@ -1190,7 +1191,7 @@ class DockerService(RpcService):
                     'volumes': list(get_docker_volumes(details)),
                     'interactive': get_interactive(details),
                     'labels': details['Config']['Labels'],
-                    'expose_ports': 'org.freenas.expose_ports_at_host' in details['Config']['Labels'],
+                    'expose_ports': 'org.freenas.expose-ports-at-host' in details['Config']['Labels'],
                     'autostart': 'org.freenas.autostart' in details['Config']['Labels'],
                     'environment': details['Config']['Env'],
                     'hostname': details['Config']['Hostname'],
@@ -1266,7 +1267,7 @@ class DockerService(RpcService):
             labels.append('org.freenas.autostart')
 
         if container.get('expose_ports'):
-            labels.append('org.freenas.expose_ports_at_host')
+            labels.append('org.freenas.expose-ports-at-host')
 
         port_bindings = {
             str(i['container_port']) + '/' + i.get('protocol', 'tcp').lower(): i['host_port'] for i in container['ports']
