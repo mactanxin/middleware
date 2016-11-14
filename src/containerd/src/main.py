@@ -661,7 +661,7 @@ class DockerHost(object):
         network_config = self.context.client.call_sync('network.config.get_config')
 
         if alias and q.get(network_config, 'gateway.ipv4'):
-            subnet = '{address}/{netmask}'.format(**alias)
+            subnet = str(ipaddress.ip_interface('{address}/{netmask}'.format(**alias)).network)
             external = first_or_default(lambda n: n['Name'] == 'external', self.connection.networks())
             if external and q.get(external, 'Config.Subnet') != subnet:
                 if external:
@@ -672,6 +672,7 @@ class DockerHost(object):
                 self.connection.create_network(
                     name='external',
                     driver='macvlan',
+                    options={'parent': 'eth1'},
                     ipam=docker.utils.create_ipam_config(
                         pool_configs=[
                             docker.utils.create_ipam_pool(
@@ -1251,6 +1252,7 @@ class DockerService(RpcService):
 
     def create(self, container):
         labels = []
+        networking_config = None
         host = self.context.get_docker_host(container['host'])
         if not host:
             raise RpcException(errno.ENOENT, 'Docker host {0} not found'.format(container['host']))
@@ -1274,14 +1276,21 @@ class DockerService(RpcService):
                     )
                 )
 
+        if q.get(container, 'bridge.enable'):
+            networking_config = host.connection.create_networking_config({
+                'external': host.connection.create_endpoint_config(
+                    ipv4_address=q.get(container, 'bridge.address')
+                )
+            }),
+
         create_args = {
             'name': container['name'],
             'image': container['image'],
             'ports': [(str(i['container_port']), i.get('protocol', 'tcp').lower()) for i in container['ports']],
             'volumes': [i['container_path'] for i in container['volumes']],
             'labels': labels,
+            'networking_config': networking_config,
             'host_config': host.connection.create_host_config(
-                cap_add=['NET_ADMIN'] if q.get(container, 'bridge.enable') else [],
                 port_bindings=port_bindings,
                 binds={
                     i['host_path'].replace('/mnt', '/host'): {
