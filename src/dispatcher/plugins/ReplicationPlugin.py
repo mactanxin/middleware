@@ -1381,7 +1381,7 @@ class ReplicateDatasetTask(ProgressTask):
         for i in set(i['localfs'] for i in actions):
             subtasks.append(self.run_subtask('zfs.update', i, {
                 'org.freenas:last_replicated_by': {'value': self.environment.get('CALENDAR_TASK_NAME', '<none>')},
-                'org.freenas:last_replicated_at': {'value': time.time()}
+                'org.freenas:last_replicated_at': {'value': int(time.time())}
             }))
 
         return actions, send_size
