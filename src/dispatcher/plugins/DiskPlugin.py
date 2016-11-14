@@ -1310,6 +1310,7 @@ def generate_disk_cache(dispatcher, path):
     name = os.path.basename(path)
     gdisk = geom.geom_by_name('DISK', name)
     multipath_info = None
+    max_rotation = None
 
     try:
         camdev = CamDevice(gdisk.name)
@@ -1330,7 +1331,7 @@ def generate_disk_cache(dispatcher, path):
     try:
         max_rotation = int(provider.config.get('rotationrate', 0))
     except:
-        max_rotation = 0
+        pass
 
     with dispatcher.get_lock('multipath'):
         # Path repesents disk device (not multipath device) and has NAA ID attached
@@ -1347,7 +1348,7 @@ def generate_disk_cache(dispatcher, path):
             'description': provider.config['descr'],
             'serial': serial,
             'max_rotation': max_rotation,
-            'is_ssd': False if max_rotation else True,
+            'is_ssd': max_rotation is not None,
             'lunid': provider.config.get('lunid'),
             'id': identifier,
             'controller': camdev.__getstate__() if camdev else None,
@@ -1620,7 +1621,7 @@ def _init(dispatcher, plugin):
             'description': {'type': 'string'},
             'serial': {'type': ['string', 'null']},
             'lunid': {'type': 'string'},
-            'max_rotation': {'type': 'integer'},
+            'max_rotation': {'type': ['integer', 'null']},
             'is_ssd': {'type': 'boolean'},
             'is_multipath': {'type': 'boolean'},
             'is_encrypted': {'type': 'boolean'},
