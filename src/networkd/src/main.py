@@ -765,6 +765,7 @@ class Main(object):
         self.configstore = None
         self.rtsock_thread = None
         self.dhcp_clients = {}
+        self.dhcp_lock = threading.RLock()
         self.logger = logging.getLogger('networkd')
 
     def dhclient_pid(self, interface):
@@ -866,6 +867,9 @@ class Main(object):
 
         def reject(reason):
             self.logger.info('DHCP request rejected on {0}: {1}'.format(interface, reason))
+            if not block:
+                t = threading.Timer(60, self.configure_dhcp, args=(interface,))
+                t.start()
 
         def unbind(lease, reason):
             reasons = {
@@ -885,13 +889,14 @@ class Main(object):
                 'operation': 'update'
             })
 
-        client = dhcp.client.Client(interface, lambda: socket.gethostname().split('.')[0])
-        client.on_bind = bind
-        client.on_unbind = unbind
-        client.on_reject = reject
-        client.on_state_change = state_change
-        client.start()
-        self.dhcp_clients[interface] = client
+        with self.dhcp_lock:
+            client = dhcp.client.Client(interface, lambda: socket.gethostname().split('.')[0])
+            client.on_bind = bind
+            client.on_unbind = unbind
+            client.on_reject = reject
+            client.on_state_change = state_change
+            client.start()
+            self.dhcp_clients[interface] = client
 
         if block:
             ret = client.wait_for_bind(timeout)
@@ -904,10 +909,11 @@ class Main(object):
         return True
 
     def deconfigure_dhcp(self, interface):
-        client = self.dhcp_clients[interface]
-        client.release()
-        client.stop()
-        del self.dhcp_clients[interface]
+        with self.dhcp_lock:
+            client = self.dhcp_clients[interface]
+            client.release()
+            client.stop()
+            del self.dhcp_clients[interface]
 
     def renew_dhcp(self, interface):
         if interface not in self.dhcp_clients:
