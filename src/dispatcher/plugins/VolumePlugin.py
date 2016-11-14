@@ -2981,7 +2981,10 @@ def _init(dispatcher, plugin):
 
         prop = q.get(ds, 'properties.org\\.freenas:last_replicated_at')
         if prop and prop['source'] == 'LOCAL':
-            last_replicated_at = datetime.utcfromtimestamp(int(prop['value']))
+            try:
+                last_replicated_at = datetime.utcfromtimestamp(int(prop['value']))
+            except ValueError:
+                pass
 
         prop = q.get(ds, 'properties.org\\.freenas:last_replicated_by')
         if prop and prop['source'] == 'LOCAL':
