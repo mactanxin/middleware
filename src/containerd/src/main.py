@@ -1177,6 +1177,7 @@ class DockerService(RpcService):
                 except NotFound:
                     continue
 
+                external = q.get(details, 'NetworkSettings.Networks.external')
                 result.append({
                     'id': container['Id'],
                     'image': container['Image'],
@@ -1193,7 +1194,11 @@ class DockerService(RpcService):
                     'autostart': 'org.freenas.autostart' in details['Config']['Labels'],
                     'environment': details['Config']['Env'],
                     'hostname': details['Config']['Hostname'],
-                    'exec_ids': details['ExecIDs'] or []
+                    'exec_ids': details['ExecIDs'] or [],
+                    'bridge': {
+                        'enabled': external is not None,
+                        'address': external['IPAddress'] if external else None
+                    }
                 })
 
         return q.query(result, *(filter or []), stream=True, **(params or {}))
