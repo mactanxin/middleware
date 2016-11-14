@@ -501,7 +501,7 @@ def _init(dispatcher, plugin):
             'remote_module': {'type': 'string'},
             'rsync_direction': {'$ref': 'rsync-copy-rsyncdirection'},
             'rsync_mode': {'$ref': 'rsync-copy-rsyncmode'},
-            'remote_ssh_port': {'type': 'integer'},
+            'remote_ssh_port': {'type': ['integer', 'null']},
             'rsync_properties': {
                 'type': 'object',
                 'properties': {
