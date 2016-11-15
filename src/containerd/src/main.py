@@ -652,7 +652,7 @@ class DockerHost(object):
         while not ready:
             try:
                 ready = self.connection.ping()
-            except requests.exceptions.RequestException
+            except requests.exceptions.RequestException:
                 gevent.sleep(1)
 
         # Initialize the bridge network
