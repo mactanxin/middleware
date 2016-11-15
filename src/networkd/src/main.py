@@ -867,6 +867,7 @@ class Main(object):
 
         def reject(reason):
             self.logger.info('DHCP request rejected on {0}: {1}'.format(interface, reason))
+            self.deconfigure_dhcp(interface)
             if not block:
                 t = threading.Timer(60, self.configure_dhcp, args=(interface,))
                 t.start()
