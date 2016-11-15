@@ -1241,7 +1241,7 @@ class ZfsReceiveTask(Task):
     def run(self, name, fd, force=False, nomount=False, props=None, limitds=None):
         try:
             zfs = get_zfs()
-            zfs.receive(name, fd.fd, force, nomount, props, limitds)
+            zfs.receive(name, fd.fd, force, nomount, False, props, limitds)
         except libzfs.ZFSException as err:
             raise TaskException(zfs_error_to_errno(err.code), str(err))
         finally:
