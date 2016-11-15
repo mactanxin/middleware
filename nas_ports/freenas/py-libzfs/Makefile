@@ -19,7 +19,7 @@ EXTRACT_ONLY=
 
 WRKSRC=		/usr/middleware_src/py-libzfs
 
-MAKE_ENV=	FREEBSD_SRC=/usr/src
+MAKE_ENV=	FREEBSD_SRC=/usr/src TRUEOS=yes
 
 checksum fetch:
 	${ECHO_CMD} ${.TARGET} not needed because building direct
