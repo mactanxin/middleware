@@ -89,6 +89,22 @@ class DCProvider(Provider):
         else:
             raise RpcException(errno.ENOENT, 'Please configure and enable the Domain Controller vm service.')
 
+    def provide_dc_ip(self):
+        dc_vm = self.get_config()
+        if dc_vm['vm_id'] and dc_vm['enable']:
+            try:
+                guest_info = self.dispatcher.call_sync('vm.get_guest_info', dc_vm['vm_id'])
+                addresses = []
+                for name, config in guest_info['interfaces'].items():
+                    if name.startswith('lo'):
+                        continue
+                    addresses += [i['address'] for i in config['aliases'] if i['af'] != 'LINK']
+
+                return addresses
+
+            except RpcException:
+                return None
+
     def check_dc_vm_availability(self):
         dc_vm = self.get_config()
         if not self.dispatcher.call_sync('vm.query', [('id', '=', dc_vm['vm_id'])], {'single': True}):
