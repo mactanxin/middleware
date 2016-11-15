@@ -50,6 +50,7 @@ import subprocess
 import struct
 import termios
 import fcntl
+import traceback
 import websocket  # do not remove - we import it only for side effects
 
 import gevent
@@ -277,33 +278,37 @@ class EventType(object):
         self.source = source
         self.schema = schema
         self.refcount = 0
+        self.lock = RLock()
         self.logger = logging.getLogger('EventType:{0}'.format(name))
 
     def incref(self):
-        if self.refcount == 0 and self.source:
-            self.source.enable(self.name)
-            self.logger.log(TRACE, 'Enabling event source: {0}'.format(self.name))
+        with self.lock:
+            if self.refcount == 0 and self.source:
+                self.source.enable(self.name)
+                self.logger.log(TRACE, 'Enabling event source: {0}'.format(self.name))
 
-        self.refcount += 1
+            self.refcount += 1
 
     def decref(self):
-        # lets not go below 0!!!
-        if self.refcount > 0:
-            self.refcount -= 1
-        elif self.refcount < 0:
-            # Ok so something is messed up
-            # fix it by going to 0
-            self.refcount = 0
-            self.logger.error(
-                "{0}'s refcount was below zero and was being decreased even further!".format(self.name))
-            return
-        elif self.refcount == 0:
-            self.logger.error("Cannot decrease {0}'s refcount below zero!".format(self.name))
-            return
+        with self.lock:
+            # lets not go below 0!!!
+            if self.refcount > 0:
+                self.refcount -= 1
+            elif self.refcount < 0:
+                # Ok so something is messed up
+                # fix it by going to 0
+                self.refcount = 0
+                self.logger.error("{0}'s refcount was below zero and was being decreased".format(self.name))
+                self.logger.error("Traceback: {0}".format(traceback.format_stack()))
+                return
+            elif self.refcount == 0:
+                self.logger.error("Cannot decrease {0}'s refcount below zero!".format(self.name))
+                self.logger.error("Traceback: {0}".format(traceback.format_stack()))
+                return
 
-        if self.refcount == 0 and self.source:
-            self.source.disable(self.name)
-            self.logger.log(TRACE, 'Disabling event source: {0}'.format(self.name))
+            if self.refcount == 0 and self.source:
+                self.source.disable(self.name)
+                self.logger.log(TRACE, 'Disabling event source: {0}'.format(self.name))
 
 
 class Dispatcher(object):
