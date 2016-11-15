@@ -142,7 +142,7 @@ class ManagementService(RpcService):
         self.context.logger.info('Updating job with ID {0}'.format(job_id))
 
         if 'name' in updated_params:
-            if currjob['protected']:
+            if currjob.kwargs['protected']:
                 raise RpcException(errno.EPERM, 'Job {0} is protected from being renamed'.format(job_id))
 
             self.context.scheduler.modify_job(job_id, name=updated_params['name'])
