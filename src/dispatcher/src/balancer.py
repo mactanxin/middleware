@@ -616,28 +616,24 @@ class Balancer(object):
         return task_id, upload_token_list
 
     def submit_with_download(self, task_name, args, sender, env=None):
-        if len(args) == 0 or (len(args) >= 1 and not isinstance(args[0], list)):
-            raise RpcException(
-                errno.EINVAL,
-                "Please supply the file name list to download as an array in the args list"
-            )
-        file_name_list = args.pop(0)
+        task_metadata = self.dispatcher.tasks[task_name]._get_metadata()
+        schema = task_metadata['schema']
         url_list = []
-        fd_list = []
-        for f in file_name_list:
-            rfd, wfd = os.pipe()
-            fd_list.append(FileDescriptor(wfd))
-            url_list.append("/dispatcher/filedownload?token={0}".format(
-                self.dispatcher.token_store.issue_token(FileToken(
-                    user=sender.user,
-                    lifetime=60,
-                    direction='download',
-                    file=FileObjectPosix(rfd, 'rb', close=True),
-                    name=f
-                ))
-            ))
 
-        task_id = self.submit(task_name, fd_list + args, sender, env)
+        for idx, arg in enumerate(schema):
+            if arg['type'] == 'fd':
+                rfd, wfd = os.pipe()
+                url_list.append("/dispatcher/filedownload?token={0}".format(
+                    self.dispatcher.token_store.issue_token(FileToken(
+                        user=sender.user,
+                        lifetime=60,
+                        direction='download',
+                        file=FileObjectPosix(rfd, 'rb', close=True),
+                        name=args[idx]
+                    ))
+                ))
+                args[idx] = FileDescriptor(wfd)
+        task_id = self.submit(task_name, args, sender, env)
         return task_id, url_list
 
     def verify_subtask(self, parent, name, args):
