@@ -808,8 +808,17 @@ class Main(object):
             if old_lease is None or lease.client_ip != old_lease.client_ip:
                 self.logger.info('Assigning IP address {0} to interface {1}'.format(lease.client_ip, interface))
                 alias = lease.client_interface
+                iface = netif.get_interface(interface)
+
+                if old_lease:
+                    try:
+                        addr = first_or_default(lambda a: a.address == old_lease.client_ip, iface.addresses)
+                        if addr:
+                            iface.remove_address(addr)
+                    except OSError as err:
+                        self.logger.error('Cannot remove alias {0}: {1}'.format(old_lease.client_ip, err.strerror))
+
                 try:
-                    iface = netif.get_interface(interface)
                     iface.add_address(netif.InterfaceAddress(netif.AddressFamily.INET, alias))
                 except OSError as err:
                     self.logger.error('Cannot add alias to {0}: {1}'.format(interface, err.strerror))
