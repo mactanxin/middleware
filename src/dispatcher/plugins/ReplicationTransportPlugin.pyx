@@ -351,7 +351,7 @@ class TransportSendTask(Task):
             logger.debug('New connection from {0}:{1} to {2}:{3}'.format(*(addr + sock_addr)))
 
             self.conn.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, buffer_size)
-            self.conn.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+            self.conn.settimeout(self.configstore.get('replication.connection.timeout'))
 
             conn_fd = os.dup(self.conn.fileno())
             self.fds.append(conn_fd)
@@ -601,7 +601,7 @@ class TransportReceiveTask(ProgressTask):
             logger.debug('Connected to a TCP socket at {0}:{1}'.format(*addr))
 
             self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, buffer_size)
-            self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+            self.sock.settimeout(self.configstore.get('replication.connection.timeout'))
 
             conn_fd = os.dup(self.sock.fileno())
             self.fds.append(conn_fd)

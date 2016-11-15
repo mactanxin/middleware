@@ -372,6 +372,7 @@
             "peer.freenas.key.public": null,
             "peer.freenas.key.private": null,
             "replication.auto_recovery_ping_interval": 60,
+            "replication.connection.timeout": 60,
             "container.network.management": "172.31.254.0/24",
             "container.network.nat": "172.31.255.0/24",
             "container.additional_templates": [],
