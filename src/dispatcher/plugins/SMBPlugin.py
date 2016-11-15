@@ -147,6 +147,7 @@ def yesno(val):
 
 def configure_params(smb, ad=False):
     conf = smbconf.SambaConfig('registry')
+    conf.clear()
     conf['netbios name'] = smb['netbiosname'][0]
     conf['netbios aliases'] = ' '.join(smb['netbiosname'][1:])
 
