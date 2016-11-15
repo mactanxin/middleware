@@ -1355,7 +1355,7 @@ class ReplicateDatasetTask(ProgressTask):
                                 'name': action['remotefs'],
                                 'force': force,
                                 'nomount': nomount,
-                                'props': {'mountpoint': True}
+                                'props': {'mountpoint': None}
                             },
                             'estimated_size': send_size
                         }
