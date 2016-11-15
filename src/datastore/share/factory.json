@@ -997,6 +997,18 @@
                 "etcd-group": "consul",
                 "name": "consul"
             },
+            "d829391a-97b1-48fd-8a1e-d282b327afdd": {
+                "builtin": false,
+                "task": "service.dc.update",
+                "get_config_rpc": "service.dc.get_config",
+                "name": "dc"
+            },
+            "cc04a353-d077-4c85-92f6-224e7a63200d": {
+                "builtin": false,
+                "task": "service.ups.update",
+                "get_config_rpc": "service.ups.get_config",
+                "name": "ups"
+            },
             "98d512f6-9111-11e6-91a2-000c2924b2c6": {
                 "rcng": {
                     "rc-scripts": "ypbind"
