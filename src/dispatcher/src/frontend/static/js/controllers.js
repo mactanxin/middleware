@@ -514,11 +514,7 @@ function FileBrowserController($scope, $location, $routeParams, $route, $rootSco
           );
           fileconn.send( evt.target.result );
           if ( stop == file.size ) {
-            // we are done with the transfer, AWESOME!
-            // disconnet after a small delay
-            setTimeout( function ( ) {
-                fileconn.disconnect();
-              }, 2000 );
+              fileconn.send("");
           }
         }
       };
