@@ -1391,44 +1391,34 @@ class FileConnection(WebSocketApplication, EventEmitter):
         self.logger = logging.getLogger('FileConnection')
 
     def worker(self, file, direction, size=None):
-        # def read_worker():
-        #     while True:
-        #         data = file.read(self.BUFSIZE)
-        #         if not data:
-        #             return
-
-        #         self.ws.send(data)
-
-        # def write_worker():
-        #     for i in self.inq:
-        #         file.write(i)
-
-        # if self.token.direction == "upload":
-        #     worker = gevent.spawn(write_worker)
-        # else:
-        #     worker = gevent.spawn(read_worker)
         try:
+            self.bytes_done = 0
             if self.token.direction == "download":
-                file.seek(0)
-                while file.tell() <= self.bytes_total:
-                    data = file.read(self.BUFSIZE)
-                    if not data:
+                while True:
+                    data = tp_read(file.fileno(), self.BUFSIZE)
+                    self.bytes_done += self.BUFSIZE
+                    if data == b'':
                         break
                     self.ws.send(data)
                     # issue keepalive
                     self.dispatcher.token_store.keepalive_token(self.token)
-                    self.bytes_done = file.tell()
             else:
                 for i in self.inq:
-                    file.write(i)
+                    if i == b'':
+                        break
+
+                    ret = tp_write(file.fileno(), i)
+                    if ret == 0:
+                        # close everything
+                        break
+
+                    self.bytes_done += ret
                     # issue keepalive
                     self.dispatcher.token_store.keepalive_token(self.token)
-                    self.bytes_done = file.tell()
         finally:
             file.close()
             self.done.set()
             self.ws.close()
-            # gevent.joinall([worker])
 
     def on_open(self, *args, **kwargs):
         self.logger.info("FileConnection Opened")
