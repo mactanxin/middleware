@@ -145,7 +145,10 @@ def move_system_dataset(dispatcher, dsid, services, src_pool, dst_pool):
     mount_system_dataset(dispatcher, dsid, dst_pool, tmpath)
 
     for s in services:
-        dispatcher.call_sync('service.ensure_stopped', s)
+        try:
+            dispatcher.call_sync('service.ensure_stopped', s)
+        except RpcException as err:
+            logger.warning('Failed to stop {0} service: {1}'.format(s, err))
 
     dispatcher.call_sync('management.stop_logdb')
 
@@ -164,7 +167,10 @@ def move_system_dataset(dispatcher, dsid, services, src_pool, dst_pool):
     dispatcher.call_sync('management.start_logdb')
 
     for s in services:
-        dispatcher.call_sync('service.ensure_started', s, timeout=20)
+        try:
+            dispatcher.call_sync('service.ensure_started', s, timeout=20)
+        except RpcException as err:
+            logger.warning('Failed to start {0} service: {1}'.format(s, err))
 
 
 def import_system_dataset(dispatcher, services, src_pool, old_pool, old_id):
