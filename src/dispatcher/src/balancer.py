@@ -600,7 +600,7 @@ class Balancer(object):
 
         upload_token_list = []
         for idx, arg in enumerate(schema):
-            if arg['type'] == 'fd':
+            if arg.get('type') == 'fd':
                 rfd, wfd = os.pipe()
                 token = self.dispatcher.token_store.issue_token(FileToken(
                     user=sender.user,
@@ -621,7 +621,7 @@ class Balancer(object):
         url_list = []
 
         for idx, arg in enumerate(schema):
-            if arg['type'] == 'fd':
+            if arg.get('type') == 'fd':
                 rfd, wfd = os.pipe()
                 url_list.append("/dispatcher/filedownload?token={0}".format(
                     self.dispatcher.token_store.issue_token(FileToken(
