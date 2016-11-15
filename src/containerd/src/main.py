@@ -645,14 +645,14 @@ class DockerHost(object):
         self.vm.network_ready.wait()
         ip = self.vm.management_lease.lease.client_ip
         self.logger.info('Docker instance at {0} ({1}) is ready'.format(self.vm.name, ip))
-        self.connection = docker.Client(base_url='http://{0}:2375'.format(ip))
+        self.connection = docker.Client(base_url='http://{0}:2375'.format(ip), version='auto')
         self.listener = gevent.spawn(self.listen)
 
         ready = False
         while not ready:
             try:
                 ready = self.connection.ping()
-            except requests.exceptions.ConnectionError:
+            except requests.exceptions.RequestException
                 gevent.sleep(1)
 
         # Initialize the bridge network
