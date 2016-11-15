@@ -163,6 +163,11 @@ def migrate_db(ds, dump, migpath=None, types=None, force=False):
     for i in dump:
         metadata = i['metadata']
         name = metadata['name']
+        attrs = metadata['attributes']
+
+        if types and 'type' in attrs.keys() and attrs['type'] not in types:
+            continue
+
         if not ds.collection_exists(name):
             ds.collection_create(name, metadata['pkey-type'], metadata['attributes'])
             print("Created missing collection {0}".format(name))
