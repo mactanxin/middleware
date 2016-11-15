@@ -113,7 +113,7 @@ class DockerContainerProvider(Provider):
             obj.update({
                 'web_ui_url': None,
                 'settings': [],
-                'version': 0
+                'version': '0'
             })
 
             if presets:
@@ -131,7 +131,7 @@ class DockerContainerProvider(Provider):
                         presets['web_ui_path'][1:]
                     )
 
-                obj['version'] = presets.get('version', 0)
+                obj['version'] = presets.get('version', '0')
 
             return obj
 
@@ -180,7 +180,7 @@ class DockerImagesProvider(Provider):
     def query(self, filter=None, params=None):
         def extend(obj):
             obj['presets'] = self.labels_to_presets(obj['labels'])
-            obj['version'] = 0 if not obj['presets'] else obj['presets'].get('version', 0)
+            obj['version'] = '0' if not obj['presets'] else obj['presets'].get('version', '0')
             return obj
 
         return images.query(*(filter or []), stream=True, callback=extend, **(params or {}))
@@ -245,7 +245,7 @@ class DockerImagesProvider(Provider):
                         'pull_count': i['pull_count'],
                         'icon': icon,
                         'presets': presets,
-                        'version': 0 if not presets else presets.get('version', 0)
+                        'version': '0' if not presets else presets.get('version', '0')
                     }
                     items.append(item)
 
@@ -1364,7 +1364,7 @@ def _init(dispatcher, plugin):
             'autostart': {'type': 'boolean'},
             'running': {'type': 'boolean'},
             'interactive': {'type': 'boolean'},
-            'version': {'type': 'integer'},
+            'version': {'type': 'string'},
             'web_ui_url': {'type': 'string'},
             'environment': {
                 'type': 'array',
@@ -1436,7 +1436,7 @@ def _init(dispatcher, plugin):
                 'items': {'type': 'string'}
             },
             'presets': {'type': ['object', 'null']},
-            'version': {'type': 'integer'},
+            'version': {'type': 'string'},
             'created_at': {'type': 'string'}
         }
     })
@@ -1450,7 +1450,7 @@ def _init(dispatcher, plugin):
             'icon': {'type': 'string'},
             'pull_count': {'type': 'integer'},
             'star_count': {'type': 'integer'},
-            'version': {'type': 'integer'},
+            'version': {'type': 'string'},
             'presets': {'type': ['object', 'null']}
         }
     })
