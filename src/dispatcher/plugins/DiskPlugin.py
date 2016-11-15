@@ -1348,7 +1348,7 @@ def generate_disk_cache(dispatcher, path):
             'description': provider.config['descr'],
             'serial': serial,
             'max_rotation': max_rotation,
-            'is_ssd': max_rotation is not None,
+            'is_ssd': False if max_rotation else True,
             'lunid': provider.config.get('lunid'),
             'id': identifier,
             'controller': camdev.__getstate__() if camdev else None,
