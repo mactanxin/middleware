@@ -644,16 +644,19 @@ class DockerHost(object):
     def wait_ready(self):
         self.vm.network_ready.wait()
         ip = self.vm.management_lease.lease.client_ip
-        self.logger.info('Docker instance at {0} ({1}) is ready'.format(self.vm.name, ip))
-        self.connection = docker.Client(base_url='http://{0}:2375'.format(ip), version='auto')
-        self.listener = gevent.spawn(self.listen)
-
+        connection = None
         ready = False
-        while not ready:
+
+        while ready != 'OK':
             try:
-                ready = self.connection.ping()
-            except requests.exceptions.RequestException:
+                connection = docker.Client(base_url='http://{0}:2375'.format(ip), version='auto')
+                ready = connection.ping()
+            except (requests.exceptions.RequestException, docker.errors.DockerException):
                 gevent.sleep(1)
+
+        self.connection = connection
+        self.logger.info('Docker instance at {0} ({1}) is ready'.format(self.vm.name, ip))
+        self.listener = gevent.spawn(self.listen)
 
         # Initialize the bridge network
         default_if = self.context.client.call_sync('network.interface.query', [('id', '=', self.context.default_if)], {'single': True})
@@ -669,19 +672,22 @@ class DockerHost(object):
                     external = False
 
             if not external:
-                self.connection.create_network(
-                    name='external',
-                    driver='macvlan',
-                    options={'parent': 'eth1'},
-                    ipam=docker.utils.create_ipam_config(
-                        pool_configs=[
-                            docker.utils.create_ipam_pool(
-                                subnet=subnet,
-                                gateway=q.get(network_config, 'gateway.ipv4')
-                            )
-                        ]
+                try:
+                    self.connection.create_network(
+                        name='external',
+                        driver='macvlan',
+                        options={'parent': 'eth1'},
+                        ipam=docker.utils.create_ipam_config(
+                            pool_configs=[
+                                docker.utils.create_ipam_pool(
+                                    subnet=subnet,
+                                    gateway=q.get(network_config, 'gateway.ipv4')
+                                )
+                            ]
+                        )
                     )
-                )
+                except BaseException as err:
+                    self.logger.warning('Cannot create docker external network: {0}'.format(err))
 
         self.notify()
         self.init_autostart()
