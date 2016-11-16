@@ -24,6 +24,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 #####################################################################
+
 import errno
 import logging
 import os
@@ -31,6 +32,8 @@ import os
 from datastore.config import ConfigNode
 from freenas.dispatcher.rpc import RpcException, SchemaHelper as h, description, accepts, returns, private
 from task import Task, Provider, TaskException, ValidationException, TaskDescription
+from debug import AttachFile
+
 
 logger = logging.getLogger('AFPPlugin')
 
@@ -86,6 +89,10 @@ class AFPConfigureTask(Task):
             )
 
         return 'RELOAD'
+
+
+def collect_debug(dispatcher):
+    yield AttachFile('afp.conf', '/usr/local/etc/afp.conf')
 
 
 def _depends():
