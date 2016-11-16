@@ -616,7 +616,7 @@ class VolumeCreateTask(ProgressTask):
 
 @description("Creates new volume and automatically guesses disks layout")
 @accepts(str, str, str, h.one_of(h.array(str), str), h.array(str), h.array(str), h.one_of(bool, None), h.one_of(str, None), h.one_of(bool, None))
-class VolumeAutoCreateTask(Task):
+class VolumeAutoCreateTask(ProgressTask):
     @classmethod
     def early_describe(cls):
         return "Creating a volume"
@@ -710,7 +710,10 @@ class VolumeAutoCreateTask(Task):
                 'password_encrypted': True if password else False,
                 'auto_unlock': auto_unlock
             },
-            password
+            password,
+            progress_callback=lambda p, m, e=None: self.chunk_progress(
+                0, 100, '', p, m, e
+            )
         ))
 
 
