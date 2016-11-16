@@ -1409,15 +1409,17 @@ def _init(dispatcher, plugin):
                 'type': 'array',
                 'items': {'$ref': 'docker-volume'}
             },
-            'bridge': {
-                'type': 'object',
-                'additionalProperties': False,
-                'properties': {
-                    'enable': {'type': 'boolean'},
-                    'address': {'type': ['string', 'null']}
-                }
-            },
+            'bridge': {'$ref': 'docker-container-bridge'},
             'parent_directory': {'type': 'string'}
+        }
+    })
+
+    plugin.register_schema_definition('docker-container-bridge', {
+        'type': 'object',
+        'additionalProperties': False,
+        'properties': {
+            'enable': {'type': 'boolean'},
+            'address': {'type': ['string', 'null']}
         }
     })
 
