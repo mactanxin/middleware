@@ -25,6 +25,7 @@
 #
 #####################################################################
 
+import os
 import errno
 import logging
 import re
@@ -346,5 +347,7 @@ def _init(dispatcher, plugin):
     plugin.register_debug_hook(collect_debug)
 
     set_smb_sid()
+    os.unlink('/var/db/samba4/registry.tdb')
+
     node = ConfigNode('service.smb', dispatcher.configstore)
     configure_params(node.__getstate__(), dispatcher.call_sync('service.smb.ad_enabled'))
