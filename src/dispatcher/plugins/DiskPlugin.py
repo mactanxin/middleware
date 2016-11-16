@@ -1541,7 +1541,7 @@ def collect_debug(dispatcher):
 
 
 def _depends():
-    return ['DevdPlugin']
+    return ['AlertPlugin', 'DevdPlugin']
 
 
 def _init(dispatcher, plugin):
