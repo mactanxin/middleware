@@ -119,7 +119,19 @@ class ServiceInfoProvider(Provider):
             raise RpcException(errno.ENOENT, 'Service {0} not found'.format(service))
 
         if 'rcng' not in svc:
-            return
+            if 'start_rpc' in svc:
+                try:
+                    self.dispatcher.call_sync(svc['start_rpc'])
+                    return True
+                except RpcException as e:
+                    raise RpcException(
+                        errno.ENOENT,
+                        "Whilst starting service {0} rpc '{1}'".format(service, svc['start_rpc']) +
+                        " failed with error: {0}".format(e.err)
+                    )
+            else:
+                return
+
 
         rc_scripts = svc['rcng']['rc-scripts']
 
@@ -152,7 +164,18 @@ class ServiceInfoProvider(Provider):
             raise RpcException(errno.ENOENT, 'Service {0} not found'.format(service))
 
         if 'rcng' not in svc:
-            return
+            if 'stop_rpc' in svc:
+                try:
+                    self.dispatcher.call_sync(svc['stop_rpc'])
+                    return True
+                except RpcException as e:
+                    raise RpcException(
+                        errno.ENOENT,
+                        "Whilst starting service {0} rpc '{1}'".format(service, svc['stop_rpc']) +
+                        " failed with error: {0}".format(e.err)
+                    )
+            else:
+                return
 
         rc_scripts = svc['rcng']['rc-scripts']
 
