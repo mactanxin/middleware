@@ -854,6 +854,8 @@
                 "stop_rpc": "service.ups.service_stop",
                 "restart_rpc": "service.ups.service_restart",
                 "status_rpc": "service.ups.service_status",
+                "task": "service.ups.update",
+                "get_config_rpc": "service.ups.get_config",
                 "name": "ups"
             },
             "301e7943-5d01-43e8-b211-1303d1a2e1e6": {
@@ -862,6 +864,8 @@
                 "stop_rpc": "service.dc.service_stop",
                 "restart_rpc": "service.dc.service_restart",
                 "status_rpc": "service.dc.service_status",
+                "task": "service.dc.update",
+                "get_config_rpc": "service.dc.get_config",
                 "name": "dc"
             },
             "3f884592-fd25-4fe6-85c5-f1aabd4387e2": {
@@ -996,18 +1000,6 @@
                 "get_config_rpc": "service.consul.get_config",
                 "etcd-group": "consul",
                 "name": "consul"
-            },
-            "d829391a-97b1-48fd-8a1e-d282b327afdd": {
-                "builtin": false,
-                "task": "service.dc.update",
-                "get_config_rpc": "service.dc.get_config",
-                "name": "dc"
-            },
-            "cc04a353-d077-4c85-92f6-224e7a63200d": {
-                "builtin": false,
-                "task": "service.ups.update",
-                "get_config_rpc": "service.ups.get_config",
-                "name": "ups"
             },
             "98d512f6-9111-11e6-91a2-000c2924b2c6": {
                 "rcng": {
