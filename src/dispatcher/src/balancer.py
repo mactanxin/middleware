@@ -598,6 +598,10 @@ class Balancer(object):
         task_metadata = self.dispatcher.tasks[task_name]._get_metadata()
         schema = task_metadata['schema']
 
+        if schema is None:
+            raise RpcException(
+                errno.ENOENT, "Task {0} has no schema associated with it".format(task_name)
+            )
         upload_token_list = []
         for idx, arg in enumerate(schema):
             if arg.get('type') == 'fd':
@@ -619,6 +623,11 @@ class Balancer(object):
         task_metadata = self.dispatcher.tasks[task_name]._get_metadata()
         schema = task_metadata['schema']
         url_list = []
+
+        if schema is None:
+            raise RpcException(
+                errno.ENOENT, "Task {0} has no schema associated with it".format(task_name)
+            )
 
         for idx, arg in enumerate(schema):
             if arg.get('type') == 'fd':
