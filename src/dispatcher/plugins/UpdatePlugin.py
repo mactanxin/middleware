@@ -997,12 +997,14 @@ def _init(dispatcher, plugin):
             'hidden': True,
             'protected': True
         })
+
         caltask['schedule'].update({
             'hour': str(random.randint(1, 6)),
             'minute': str(random.randint(0, 59)),
         })
 
         if caltask.get('id'):
+            del caltask['name']
             dispatcher.call_task_sync('calendar_task.update', caltask['id'], caltask)
         else:
             dispatcher.call_task_sync('calendar_task.create', caltask)
