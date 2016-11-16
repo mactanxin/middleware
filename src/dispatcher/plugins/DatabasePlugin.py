@@ -38,6 +38,7 @@ from task import Task, ProgressTask, TaskException, TaskDescription
 FACTORY_DB = '/usr/local/share/datastore/factory.json'
 
 
+@accepts(FileDescriptor)
 @description('Dumps current database state')
 class DownloadDatabaseTask(Task):
     @classmethod
