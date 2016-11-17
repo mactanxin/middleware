@@ -260,6 +260,16 @@ class CreateInterfaceTask(Task):
             if (not vlan['parent'] and vlan['tag']) or (vlan['parent'] and not vlan['tag']):
                 raise TaskException(errno.EINVAL, 'Can only set VLAN parent interface and tag at the same time')
 
+        if iface.get('lagg'):
+            lagg = iface['lagg']
+            for i in lagg['ports']:
+                member = self.datastore.get_by_id('network.interfaces', i)
+                if not member:
+                    raise TaskException(errno.EINVAL, 'Lagg member interface {0} doesn\'t exist'.format(i))
+
+                if member['type'] in ('LAGG', 'VLAN'):
+                    raise TaskException(errno.EINVAL, 'VLAN and LAGG interfaces cannot be members of a LAGG')
+
         self.datastore.insert('network.interfaces', iface)
 
         try:
@@ -385,6 +395,16 @@ class ConfigureInterfaceTask(Task):
             vlan = updated_fields['vlan']
             if (not vlan['parent'] and vlan['tag']) or (vlan['parent'] and not vlan['tag']):
                 raise TaskException(errno.EINVAL, 'Can only set VLAN parent interface and tag at the same time')
+
+        if updated_fields.get('lagg'):
+            lagg = updated_fields['lagg']
+            for i in lagg['ports']:
+                member = self.datastore.get_by_id('network.interfaces', i)
+                if not member:
+                    raise TaskException(errno.EINVAL, 'Lagg member interface {0} doesn\'t exist'.format(i))
+
+                if member['type'] in ('LAGG', 'VLAN'):
+                    raise TaskException(errno.EINVAL, 'VLAN and LAGG interfaces cannot be members of a LAGG')
 
         entity.update(updated_fields)
         self.datastore.update('network.interfaces', id, entity)
