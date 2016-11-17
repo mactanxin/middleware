@@ -123,11 +123,10 @@ class ServiceInfoProvider(Provider):
                 try:
                     self.dispatcher.call_sync(svc['start_rpc'])
                     return True
-                except RpcException as e:
+                except RpcException:
                     raise RpcException(
                         errno.ENOENT,
-                        "Whilst starting service {0} rpc '{1}'".format(service, svc['start_rpc']) +
-                        " failed with error: {0}".format(e.err)
+                        "Whilst starting service {0} rpc '{1}' failed".format(service, svc['start_rpc'])
                     )
             else:
                 return
@@ -168,11 +167,10 @@ class ServiceInfoProvider(Provider):
                 try:
                     self.dispatcher.call_sync(svc['stop_rpc'])
                     return True
-                except RpcException as e:
+                except RpcException:
                     raise RpcException(
                         errno.ENOENT,
-                        "Whilst starting service {0} rpc '{1}'".format(service, svc['stop_rpc']) +
-                        " failed with error: {0}".format(e.err)
+                        "Whilst starting service {0} rpc '{1}' failed".format(service, svc['stop_rpc']) 
                     )
             else:
                 return

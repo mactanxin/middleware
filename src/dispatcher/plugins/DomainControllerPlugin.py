@@ -174,7 +174,7 @@ def _init(dispatcher, plugin):
             'enable': {'type': 'boolean'},
             'volume': {'type': 'string'}
         },
-        'additionalProperties': False,
+        'additionalProperties': True,
     })
 
     plugin.register_provider("service.dc", DCProvider)
