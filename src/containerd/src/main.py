@@ -747,7 +747,7 @@ class DockerHost(object):
                                 self.context.client.call_sync('alert.emit', {
                                     'class': 'DockerContainerDied',
                                     'target': details['Name'],
-                                    'title': 'Docker container exited with nonzero status.',
+                                    'title': 'Docker container {0} exited with nonzero status.'.format(name),
                                     'description': 'Docker container {0} has exited with status {1}'.format(
                                         name,
                                         state.get('ExitCode')
@@ -762,7 +762,7 @@ class DockerHost(object):
                             self.context.client.call_sync('alert.emit', {
                                 'class': 'DockerContainerDied',
                                 'target': details['Name'],
-                                'title': 'Docker container ran out of memory.',
+                                'title': 'Docker container {0} ran out of memory.'.format(name),
                                 'description': 'Docker container {0} has run out of memory.'.format(name)
                             })
                             self.logger.debug('Container {0} has run out of memory'.format(name))
