@@ -125,8 +125,8 @@ class ConfigureIPMITask(Task):
                 system('/usr/local/bin/ipmitool', 'lan', 'set', channel, 'netmask', cidr_to_netmask(config['netmask']))
                 system('/usr/local/bin/ipmitool', 'lan', 'set', channel, 'defgw', 'ipaddr', config['gateway'])
 
-            vlanid = config['vlanid'] if config.get('vlanid') else 'off'
-            system('/usr/local/bin/ipmitool', 'lan', 'set', channel, 'vlan', 'id', vlanid)
+            vlan_id = config['vlan_id'] if config.get('vlan_id') else 'off'
+            system('/usr/local/bin/ipmitool', 'lan', 'set', channel, 'vlan', 'id', str(vlan_id))
             system('/usr/local/bin/ipmitool', 'lan', 'set', channel, 'access', 'on')
             system('/usr/local/bin/ipmitool', 'lan', 'set', channel, 'auth', 'USER', 'MD2,MD5')
             system('/usr/local/bin/ipmitool', 'lan', 'set', channel, 'auth', 'OPERATOR', 'MD2,MD5')
