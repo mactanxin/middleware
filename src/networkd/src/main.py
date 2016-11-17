@@ -604,6 +604,17 @@ class ConfigurationService(RpcService):
             self.logger.info('Interface {0} is disabled'.format(name))
             return
 
+        # check whether interface is a lagg member
+        for j in netif.list_interfaces().values():
+            try:
+                if isinstance(j, netif.LaggInterface) and name in [p[0] for p in j.ports]:
+                    lagg_member = True
+                    break
+            except OSError:
+                continue
+        else:
+            lagg_member = False
+
         try:
             if netif.InterfaceFlags.UP not in iface.flags:
                 self.logger.info('Bringing interface {0} up'.format(name))
@@ -702,7 +713,7 @@ class ConfigurationService(RpcService):
                 iface.nd6_flags = iface.nd6_flags - {netif.NeighborDiscoveryFlags.IFDISABLED}
                 iface.nd6_flags = iface.nd6_flags | {netif.NeighborDiscoveryFlags.AUTO_LINKLOCAL}
 
-            if entity.get('mtu') and not isinstance(iface, netif.LaggInterface):
+            if entity.get('mtu') and not isinstance(iface, netif.LaggInterface) and not lagg_member:
                 try:
                     iface.mtu = entity['mtu']
                 except OSError as err:
