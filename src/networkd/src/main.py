@@ -450,7 +450,7 @@ class ConfigurationService(RpcService):
 
         # Are there any orphaned interfaces?
         for name, iface in list(netif.list_interfaces().items()):
-            if not name.startswith(('vlan', 'lagg', 'bridge')):
+            if not name.startswith(('vlan', 'lagg', 'bridge', 'brg')):
                 continue
 
             if not self.datastore.exists('network.interfaces', ('id', '=', name)):
