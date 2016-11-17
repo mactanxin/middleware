@@ -168,11 +168,15 @@ class DirectoryServiceUpdateTask(Task):
 
     def run(self, id, updated_params):
         directory = self.datastore.get_by_id('directories', id)
+        old_name = None
+
         if directory['immutable']:
             raise TaskException(errno.EPERM, 'Directory {0} is immutable'.format(directory['name']))
 
-        if 'name' in updated_params and self.datastore.exists('directories', ('name', '=', updated_params['name'])):
-            raise TaskException(errno.EEXIST, 'Directory {0} already exists'.format(directory['name']))
+        if 'name' in updated_params:
+            old_name = directory['name']
+            if self.datastore.exists('directories', ('name', '=', updated_params['name'])):
+                raise TaskException(errno.EEXIST, 'Directory {0} already exists'.format(directory['name']))
 
         directory.update(updated_params)
         self.datastore.update('directories', id, directory)
@@ -181,6 +185,16 @@ class DirectoryServiceUpdateTask(Task):
             'operation': 'update',
             'ids': [id]
         })
+
+        if old_name:
+            node = ConfigNode('directory', self.configstore)
+            search_order = node['search_order'].value
+            if old_name in search_order:
+                search_order.remove(old_name)
+                search_order.append(directory['name'])
+                node['search_order'] = search_order
+
+            self.dispatcher.call_sync('dscached.management.reload_config')
 
 
 @accepts(str)
