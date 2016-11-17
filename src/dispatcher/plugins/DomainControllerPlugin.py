@@ -55,10 +55,10 @@ class DCProvider(Provider):
             [('id', '=', dc_vm['vm_id'])],
             {'select': 'status.state', 'single': True}
         )
-        if state != 'RUNNING':
+        if state not in ('RUNNING', 'BOOTLOADER'):
             raise RpcException(errno.ENOENT, "Domain Controller service is not running")
         else:
-            return state
+            return 'RUNNING'
 
     def service_stop(self):
         dc_vm = self.get_config()
