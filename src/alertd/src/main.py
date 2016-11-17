@@ -187,7 +187,10 @@ class Main(object):
         self.logger.debug('Emitting alert <id:{0}> (class {1})'.format(alert['id'], alert['class']))
         for i in self.datastore.query('alert.filters'):
             for predicate in i['predicates']:
-                if not operators_table[predicate['op']](alert[predicate['property']], predicate['value']):
+                if predicate['operator'] not in operators_table:
+                    continue
+
+                if not operators_table[predicate['operator']](alert[predicate['property']], predicate['value']):
                     break
             else:
                 emitter = self.emitters.get(i['emitter'])
