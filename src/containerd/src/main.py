@@ -1303,6 +1303,7 @@ class DockerService(RpcService):
             'labels': labels,
             'networking_config': networking_config,
             'host_config': host.connection.create_host_config(
+                cap_add=['NET_ADMIN'],
                 port_bindings=port_bindings,
                 binds={
                     i['host_path'].replace('/mnt', '/host'): {
