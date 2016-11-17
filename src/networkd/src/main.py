@@ -422,6 +422,9 @@ class ConfigurationService(RpcService):
                 if i.name in ('mgmt0', 'nat0'):
                     continue
 
+                if i.name.startswith(('brg', 'tap')):
+                    continue
+
                 self.logger.info('Trying to acquire DHCP lease on interface {0}...'.format(i.name))
                 i.up()
 
@@ -450,7 +453,7 @@ class ConfigurationService(RpcService):
 
         # Are there any orphaned interfaces?
         for name, iface in list(netif.list_interfaces().items()):
-            if not name.startswith(('vlan', 'lagg', 'bridge', 'brg')):
+            if not name.startswith(('vlan', 'lagg', 'bridge')):
                 continue
 
             if not self.datastore.exists('network.interfaces', ('id', '=', name)):
@@ -971,6 +974,9 @@ class Main(object):
                 continue
 
             if i.name in ('mgmt0', 'nat0'):
+                continue
+
+            if i.name.startswith(('tap', 'brg')):
                 continue
 
             if not self.datastore.exists('network.interfaces', ('id', '=', i.name)):
