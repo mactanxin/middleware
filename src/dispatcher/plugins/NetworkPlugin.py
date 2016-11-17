@@ -284,8 +284,7 @@ class DeleteInterfaceTask(Task):
         return "Deleting network interface"
 
     def describe(self, id):
-        iface = self.datastore.get_by_id('network.interfaces', id)
-        return TaskDescription("Deleting network interface {name}", name=iface.get('name', ''))
+        return TaskDescription("Deleting network interface {name}", name=id)
 
     def verify(self, id):
         return ['system']
@@ -322,8 +321,7 @@ class ConfigureInterfaceTask(Task):
         return "Updating configuration of network interface"
 
     def describe(self, id, updated_fields):
-        iface = self.datastore.get_by_id('network.interfaces', id)
-        return TaskDescription("Updating configuration of network interface {name}", name=iface.get('id', ''))
+        return TaskDescription("Updating configuration of network interface {name}", name=id)
 
     def verify(self, id, updated_fields):
         return ['system']
@@ -411,8 +409,7 @@ class InterfaceUpTask(Task):
         return "Setting network interface up"
 
     def describe(self, id):
-        iface = self.datastore.get_by_id('network.interfaces', id)
-        return TaskDescription("Setting network interface {name} up", name=iface.get('name', ''))
+        return TaskDescription("Setting network interface {name} up", name=id)
 
     def verify(self, id):
         return ['system']
@@ -445,8 +442,7 @@ class InterfaceDownTask(Task):
         return "Setting network interface down"
 
     def describe(self, id):
-        iface = self.datastore.get_by_id('network.interfaces', id)
-        return TaskDescription("Setting network interface {name} down", name=iface.get('name', ''))
+        return TaskDescription("Setting network interface {name} down", name=id)
 
     def verify(self, id):
         return ['system']
