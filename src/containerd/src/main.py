@@ -370,9 +370,19 @@ class VirtualMachine(object):
 
             if nic['mode'] == 'BRIDGED':
                 if nic.get('bridge'):
+                    self.logger.debug('Creating a bridged interface for {0}'.format(name))
                     bridge_if = nic['bridge']
                     if bridge_if == 'default':
-                        bridge_if = self.context.client.call_sync('networkd.configuration.get_default_interface')
+                        bridge_if = self.context.client.call_sync(
+                            'networkd.configuration.wait_for_default_interface',
+                            600
+                        )
+                        if not bridge_if:
+                            self.logger.error('Error creating {0}. Default interface does not exist'.format(name))
+
+                        self.logger.debug('{0} is bridged to a default interface {1}'.format(name, bridge_if))
+
+                    self.logger.debug('Creating a bridged interface')
 
                     if_by_description = self.context.client.call_sync(
                         'network.interface.query',
@@ -381,6 +391,9 @@ class VirtualMachine(object):
                     )
                     if if_by_description:
                         bridge_if = if_by_description
+                        self.logger.debug(
+                            'Found an interface for {0} nic by its description: {1}'.format(name, bridge_if)
+                        )
 
                     try:
                         target_if = netif.get_interface(bridge_if)
@@ -389,6 +402,7 @@ class VirtualMachine(object):
 
                     if isinstance(target_if, netif.BridgeInterface):
                         target_if.add_member(iface.name)
+                        self.logger.debug('{0} is a bridge. Adding {1}'.format(bridge_if, name))
                     else:
                         bridges = list(b for b in netif.list_interfaces().keys())
                         for b in bridges:
@@ -398,6 +412,9 @@ class VirtualMachine(object):
                             bridge = netif.get_interface(b, bridge=True)
                             if bridge_if in bridge.members:
                                 bridge.add_member(iface.name)
+                                self.logger.debug(
+                                    '{0} is already in a bridge {1}. Adding {2}'.format(bridge_if, bridge.name, name)
+                                )
                                 break
                         else:
                             new_bridge = netif.get_interface(netif.create_interface('bridge'))
@@ -406,6 +423,9 @@ class VirtualMachine(object):
                             new_bridge.add_member(bridge_if)
                             new_bridge.add_member(iface.name)
                             new_bridge.rename('brg{0}'.format(len(bridges)))
+                            self.logger.debug(
+                                'Created a new bridge brg{0}. Added {1} and {2}'.format(len(bridges), name, bridge_if)
+                            )
 
             if nic['mode'] == 'MANAGEMENT':
                 mgmt = netif.get_interface('mgmt0', bridge=True)

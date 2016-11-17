@@ -41,6 +41,7 @@ import ipaddress
 import io
 import dhcp.client
 import socket
+from threading import Condition
 from datastore import get_datastore, DatastoreException
 from datastore.config import ConfigStore
 from freenas.dispatcher.client import Client, ClientError
@@ -305,6 +306,10 @@ class RoutingSocketEventSource(threading.Thread):
                 if message.type == netif.RoutingMessageType.ADD:
                     self.context.logger.info('Route to {0} added'.format(describe_route(message.route)))
                     self.client.emit_event('network.route.added', message.__getstate__())
+                    with self.context.cv:
+                        if str(message.route.network) == '0.0.0.0':
+                            self.context.default_interface = message.route.interface
+                            self.context.cv.notify_all()
 
                 if message.type == netif.RoutingMessageType.DELETE:
                     self.context.logger.info('Route to {0} deleted'.format(describe_route(message.route)))
@@ -388,6 +393,10 @@ class ConfigurationService(RpcService):
             return default['interface']
 
         return None
+
+    def wait_for_default_interface(self, timeout=None):
+        with self.context.cv:
+            return self.context.cv.wait_for(lambda: self.context.default_interface, timeout=timeout)
 
     def query_interfaces(self):
         def extend(name, iface):
@@ -781,6 +790,8 @@ class Main(object):
         self.dhcp_clients = {}
         self.dhcp_lock = threading.RLock()
         self.logger = logging.getLogger('networkd')
+        self.default_interface = None
+        self.cv = Condition()
 
     def dhclient_pid(self, interface):
         path = os.path.join('/var/run', 'dhclient.{0}.pid'.format(interface))
