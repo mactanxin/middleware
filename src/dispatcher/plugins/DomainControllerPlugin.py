@@ -130,14 +130,14 @@ class DCConfigureTask(ProgressTask):
         self.set_progress(0, 'Checking Domain Controller service state')
         node = ConfigNode('service.dc', self.configstore).__getstate__()
         node.update(dc)
-        if node['enable'] and not node.get('volume'):
+        if not node.get('volume'):
             raise TaskException(
                 errno.ENXIO,
                 'Domain controller service is hosted by the virutal machine.'
                 'Please provide the valid zfs pool name for the virtual machine volume creation.'
             )
 
-        if node['enable']:
+        else:
             try:
                 self.dispatcher.call_sync('service.dc.check_dc_vm_availability')
             except RpcException:
