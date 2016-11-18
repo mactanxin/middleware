@@ -433,7 +433,7 @@ function StatsController($scope, $location, $routeParams, $route, $rootScope) {
 
 function FileBrowserController($scope, $location, $routeParams, $route, $rootScope) {
     document.title = "File Browser";
-    var BUFSIZE = 1024;
+    var BUFSIZE = 1048576;
     var sock = new middleware.DispatcherClient( document.domain );
     sock.connect();
     $scope.init = function () {
@@ -499,6 +499,10 @@ function FileBrowserController($scope, $location, $routeParams, $route, $rootSco
       var start = parseInt( optStartByte ) || 0;
       var stop = parseInt( optStopByte ) || file.size;
 
+      if (stop > file.size) {
+        stop = file.size;
+      };
+
       var reader = new FileReader();
 
       reader.onloadend = function ( evt ) {
@@ -515,7 +519,11 @@ function FileBrowserController($scope, $location, $routeParams, $route, $rootSco
           fileconn.send( evt.target.result );
           if ( stop == file.size ) {
               fileconn.send("");
-          }
+          } else if ( stop + BUFSIZE < file.size ) {
+            sendBlob( fileconn, file, stop, stop + BUFSIZE );
+          } else {
+            sendBlob( fileconn, file, stop, file.size);
+          };
         }
       };
 
@@ -528,14 +536,7 @@ function FileBrowserController($scope, $location, $routeParams, $route, $rootSco
       var fileconn = new middleware.FileClient( sock );
       fileconn.onOpen = function ( ) {
         console.log( "FileConnection opened, Websocket resdyState: ", fileconn.socket.readyState );
-        var filePos = 0;
-        while ( filePos + BUFSIZE <= file.size ) {
-          sendBlob( fileconn, file, filePos, filePos + BUFSIZE );
-          filePos = filePos + BUFSIZE;
-        }
-        if ( filePos < file.size ) {
-          sendBlob( fileconn, file, filePos, file.size );
-        }
+        sendBlob(fileconn, file, 0, 0 + BUFSIZE);
       };
       fileconn.onData = function ( msg ) {
         console.log( "FileConnection message recieved is ", msg );
