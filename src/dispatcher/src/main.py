@@ -929,11 +929,14 @@ class DispatcherConnection(ServerConnection):
 
         if self.user:
             self.close_session()
+            self.user = None
 
-        for mask in self.event_masks:
+        for mask in set(self.event_masks):
             for name, ev in list(self.dispatcher.event_types.items()):
                 if match_event(name, mask):
                     ev.decref()
+
+            self.event_masks.remove(mask)
 
         self.outgoing_events.put(StopIteration)
         self.dispatcher.dispatch_event('server.client_disconnected', {
@@ -1234,21 +1237,16 @@ class DispatcherConnection(ServerConnection):
         self.enabled_features.add(feature)
 
     def logout(self, token_store, token, token_id):
-        args = {
-            "reason": token.revocation_reason,
-        }
         try:
-            self.send('events', 'logout', args)
-            # Delete the token at logout since otherwise
-            # the reconnect will just log the session back in
+            self.send('events', 'logout', {
+                "reason": token.revocation_reason
+            })
+
+            # Delete the token at logout since otherwise the reconnect will just log the session back in
             token_store.revoke_token(token_id)
             self.transport.close()
-
-            # geventwebsocket doesn't notify us when we initiate the close
-            self.on_close(None)
         except WebSocketError as werr:
-            # This error usually implies that the socket is dead
-            # so just log it and move on
+            # This error usually implies that the socket is dead so just log it and move on
             self.dispatcher.logger.debug(
                 'Tried to logout Websocket Connection and the ' +
                 'following error occured {0}'.format(str(werr)))
