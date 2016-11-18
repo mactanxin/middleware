@@ -62,7 +62,7 @@ class NISPlugin(DirectoryServicePlugin):
     def _convert_user(self, entry):
         tmp = (self.domain_name or "").encode('utf-8')
         
-        return {
+        retval = {
             'id': str(uuid2(crc32(tmp), entry.pw_uid)),
             'uid': entry.pw_uid,
             'gid': entry.pw_gid,
@@ -76,6 +76,12 @@ class NISPlugin(DirectoryServicePlugin):
             'groups': None,
             'sudo': False,
             }
+        if entry.pw_passwd and entry.pw_passwd != "*":
+            retval['unixhash'] = entry.pw_passwd
+        else:
+            retval['unixhash'] = None
+
+        return retval
     
     def _convert_group(self, entry):
         tmp = (self.domain_name or "").encode('utf-8')
