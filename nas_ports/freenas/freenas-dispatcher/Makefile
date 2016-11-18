@@ -38,6 +38,7 @@ RUN_DEPENDS=	${PYTHON_PKGNAMEPREFIX}argh>0:${PORTSDIR}/devel/py-argh \
 		${PYTHON_PKGNAMEPREFIX}sortedcontainers>0:${PORTSDIR}/devel/py-sortedcontainers \
 		${PYTHON_PKGNAMEPREFIX}freenas.dispatcher>0:${PORTSDIR}/freenas/py-freenas.dispatcher \
 		${PYTHON_PKGNAMEPREFIX}libusb1>0:${PORTSDIR}/devel/py-libusb1 \
+		${PYTHON_PKGNAMEPREFIX}wsaccel>0:${PORTSDIR}/www/py-wsaccel \
 		pyvmomi>0:${PORTSDIR}/net/py-pyvmomi \
 		js-freenas.dispatcher>0:${PORTSDIR}/freenas/js-freenas.dispatcher
 
