@@ -76,8 +76,10 @@ class NISPlugin(DirectoryServicePlugin):
             'groups': None,
             'sudo': False,
             }
-        if entry.pw_passwd:
+        if entry.pw_passwd and entry.pw_passwd != "*":
             retval['unixhash'] = entry.pw_passwd
+        else:
+            retval['unixhash'] = None
 
         return retval
     
