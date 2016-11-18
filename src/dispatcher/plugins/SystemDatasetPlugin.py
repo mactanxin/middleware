@@ -254,47 +254,12 @@ class SystemDatasetConfigure(Task):
         services = self.configstore.get('system.dataset.services')
         restart = [s for s in services if self.configstore.get('service.{0}.enable'.format(s))]
 
+        logger.warning('Services to be restarted: {0}'.format(', '.join(restart)))
+
         if status['pool'] != pool:
-            id = self.configstore.get('system.dataset.id')
-            system_dataset_size = self.dispatcher.call_sync(
-                'zfs.dataset.query',
-                [('id', '=', '{0}/.system-{1}'.format(status['pool'], id))],
-                {'select': 'properties.used.parsed', 'single': True}
-            )
-            if not system_dataset_size:
-                raise TaskException(
-                    errno.ENOENT,
-                    'System dataset not found under {0}/.system-{1}'.format(status['pool'], id)
-                )
-
-            target_free_space = self.dispatcher.call_sync(
-                'zfs.pool.query',
-                [('id', '=', pool)],
-                {'select': 'properties.free.parsed', 'single': True}
-            )
-
-            target_total_size = self.dispatcher.call_sync(
-                'zfs.pool.query',
-                [('id', '=', pool)],
-                {'select': 'properties.size.parsed', 'single': True}
-            )
-
-            needed_free_space = int(target_total_size * 0.1) + system_dataset_size
-
-            if needed_free_space > target_free_space:
-                raise TaskException(
-                    errno.ENOSPC,
-                    'Not enough space left on pool {0} to move system dataset. Migration needs at least {1}MB'.format(
-                        pool,
-                        int(needed_free_space) >> 20
-                    )
-                )
-
-            logger.warning('Services to be restarted: {0}'.format(', '.join(restart)))
-
             move_system_dataset(
                 self.dispatcher,
-                id,
+                self.configstore.get('system.dataset.id'),
                 restart,
                 status['pool'],
                 pool
