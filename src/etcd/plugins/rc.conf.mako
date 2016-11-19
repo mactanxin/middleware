@@ -191,10 +191,10 @@ tftpd_flags="-s -u ${tftp_config['username']} -U ${perm_to_oct_string(tftp_confi
 % endif
 "
 
-% if ups_config['mode'] == 'MASTER':
+% if ups_config['mode'] == 'MASTER' and ups_config['enable']:
 nut_enable="YES"
 nut_upslog_ups="${ups_config['identifier']}"
-% else:
+% elif ups_config['mode'] == 'SLAVE' and ups_config['enable']:
 nut_upslog_ups="${ups_config['identifier']}@${ups_config['remote_host']}:${ups_config['remote_port']}"
 % endif
 % if ups_config['enable']:
