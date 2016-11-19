@@ -1314,6 +1314,7 @@ class DockerService(RpcService):
                     ipv4_address=q.get(container, 'bridge.address')
                 )
             })
+            labels.append('org.freenas.bridged')
 
         create_args = {
             'name': container['name'],
