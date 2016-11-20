@@ -293,7 +293,7 @@ class CreateShareTask(Task):
 
 
 @description("Updates existing share")
-@accepts(str, h.ref('share'))
+@accepts(str, h.ref('share'), bool)
 class UpdateShareTask(Task):
     @classmethod
     def early_describe(cls):
