@@ -33,6 +33,7 @@ import logging
 from freenas.dispatcher.rpc import RpcException, SchemaHelper as h, description, accepts, returns, private
 from freenas.dispatcher.fd import FileDescriptor
 from lib.system import system, SubprocessException
+from debug import AttachCommandOutput
 from task import (
     Provider, Task, ProgressTask, TaskWarning, TaskDescription, ValidationException, TaskException
 )
@@ -189,6 +190,10 @@ class RemoteDebugDisconnectTask(Task):
 
     def run(self, connect):
         self.dispatcher.call_sync('debugd.management.disconnect')
+
+
+def collect_debug(dispatcher):
+    yield AttachCommandOutput('dsprinttask', ['/usr/local/sbin/dsprinttask', '--last', '100'])
 
 
 def _init(dispatcher, plugin):
