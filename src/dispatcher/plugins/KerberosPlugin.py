@@ -29,6 +29,7 @@ import errno
 import krb5
 from freenas.dispatcher.rpc import SchemaHelper as h, accepts, generator
 from task import Task, TaskException, Provider, query
+from debug import AttachFile, AttachCommandOutput
 from freenas.utils import query as q
 
 
@@ -188,6 +189,11 @@ def generate_keytab(datastore):
         k = krb5.Keytab(ctx, contents=i['keytab'])
         for entry in k.entries:
             sys_keytab.add(entry)
+
+
+def collect_debug(dispatcher):
+    yield AttachFile('krb5.conf', '/etc/krb5.conf')
+    yield AttachCommandOutput('klist', ['/usr/bin/klist', 'conf', 'list'])
 
 
 def _init(dispatcher, plugin):

@@ -34,6 +34,7 @@ from datetime import datetime
 from task import Provider, Task, ProgressTask, TaskException, query, TaskDescription
 from cache import EventCacheStore
 from utils import split_dataset
+from debug import AttachCommandOutput
 from freenas.dispatcher.rpc import accepts, returns, description, SchemaHelper as h, generator
 from freenas.utils import include, first_or_default, query as q
 
@@ -273,6 +274,10 @@ class BootPoolScrubTask(ProgressTask):
             'zfs.pool.scrub', boot_pool_id,
             progress_callback=self.set_progress
         ))
+
+
+def collect_debug(dispatcher):
+    yield AttachCommandOutput('beadm-list', ['/usr/local/sbin/beadm', 'list'])
 
 
 def _depends():
