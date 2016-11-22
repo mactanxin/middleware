@@ -494,8 +494,7 @@ class InterfaceRenewTask(Task):
         return "Renewing IP address of network interface"
 
     def describe(self, id):
-        iface = self.datastore.get_by_id('network.interfaces', id)
-        return TaskDescription("Renewing IP address of network interface {name}", name=iface.get('name', ''))
+        return TaskDescription("Renewing IP address of network interface {name}", name=id)
 
     def verify(self, id):
         return ['system']
