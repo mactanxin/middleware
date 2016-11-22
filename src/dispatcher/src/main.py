@@ -973,12 +973,7 @@ class DispatcherConnection(ServerConnection):
 
         # Keep session alive
         if self.token:
-            try:
-                self.dispatcher.token_store.keepalive_token(self.token)
-            except TokenException:
-                # Token expired, logout user
-                self.logout('Logged out due to inactivity period')
-                return
+            self.dispatcher.token_store.keepalive_token(self.token)
 
         with self.event_subscription_lock:
             # Increment reference count for any newly subscribed event
@@ -1000,12 +995,7 @@ class DispatcherConnection(ServerConnection):
 
         # Keep session alive
         if self.token:
-            try:
-                self.dispatcher.token_store.keepalive_token(self.token)
-            except TokenException:
-                # Token expired, logout user
-                self.logout('Logged out due to inactivity period')
-                return
+            self.dispatcher.token_store.keepalive_token(self.token)
 
         with self.event_subscription_lock:
             # Decrement reference count for any newly unsubscribed event
@@ -1025,12 +1015,7 @@ class DispatcherConnection(ServerConnection):
 
         # Keep session alive
         if self.token:
-            try:
-                self.dispatcher.token_store.keepalive_token(self.token)
-            except TokenException:
-                # Token expired, logout user
-                self.logout('Logged out due to inactivity period')
-                return
+            self.dispatcher.token_store.keepalive_token(self.token)
 
         self.dispatcher.dispatch_event(data['name'], data['args'])
 
@@ -1040,12 +1025,7 @@ class DispatcherConnection(ServerConnection):
 
         # Keep session alive
         if self.token:
-            try:
-                self.dispatcher.token_store.keepalive_token(self.token)
-            except TokenException:
-                # Token expired, logout user
-                self.logout('Logged out due to inactivity period')
-                return
+            self.dispatcher.token_store.keepalive_token(self.token)
 
         if 'events' not in data:
             return
@@ -1170,12 +1150,7 @@ class DispatcherConnection(ServerConnection):
     def on_rpc_call(self, id, data):
         # Keep session alive
         if self.token:
-            try:
-                self.dispatcher.token_store.keepalive_token(self.token)
-            except TokenException:
-                # Token expired, logout user
-                self.logout('Logged out due to inactivity period')
-                return
+            self.dispatcher.token_store.keepalive_token(self.token)
 
         super(DispatcherConnection, self).on_rpc_call(id, data)
 
