@@ -206,6 +206,10 @@ class VirtualMachine(object):
     def vmtools_socket(self):
         return '/var/run/containerd/{0}.vmtools.sock'.format(self.id)
 
+    @property
+    def vm_root(self):
+        return self.context.client.call_sync('vm.get_vm_root', self.id)
+
     def get_link_address(self, mode):
         nic = first_or_default(
             lambda d: d['type'] == 'NIC' and d['properties']['mode'] == mode,
@@ -305,6 +309,14 @@ class VirtualMachine(object):
         args.append(self.name)
         self.logger.debug('bhyve args: {0}'.format(args))
         return args
+
+    def build_env(self):
+        ret = {}
+
+        if 'LIB9P' in self.config['logging']:
+            ret['LIB9P_LOGGING'] = os.path.join(self.vm_root, 'lib9p.log')
+
+        return ret
 
     def init_vnc(self, index, vnc_enabled, vnc_port=5900):
         self.vnc_socket = '/var/run/containerd/{0}.{1}.vnc.sock'.format(self.id, index)
@@ -564,9 +576,16 @@ class VirtualMachine(object):
 
             self.logger.debug('Starting bhyve...')
             args = self.build_args()
+            env = self.build_env()
 
             self.set_state(VirtualMachineState.RUNNING)
-            self.bhyve_process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, close_fds=True)
+            self.bhyve_process = subprocess.Popen(
+                args,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                close_fds=True,
+                env=env
+            )
 
             # Now it's time to start vmtools worker, because bhyve should be running now
             self.vmtools_thread = gevent.spawn(self.vmtools_worker)

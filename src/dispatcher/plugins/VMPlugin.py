@@ -697,7 +697,8 @@ class VMCreateTask(VMBaseTask):
         normalize(vm['config'], {
             'memsize': 512,
             'ncpus': 1,
-            'autostart': False
+            'autostart': False,
+            'logging': []
         })
 
         if vm['config']['ncpus'] > 16:
@@ -1922,6 +1923,10 @@ def _init(dispatcher, plugin):
                     'autostart': {'type': 'boolean'},
                     'docker_host': {'type': 'boolean'},
                     'readme': {'type': ['string', 'null']},
+                    'logging': {
+                        'type': 'array',
+                        'items': {'type': 'string'}
+                    }
                 }
             },
             'devices': {
