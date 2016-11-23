@@ -25,19 +25,42 @@
 #
 #####################################################################
 
+import socket
 import errno
 import iscsi
-from freenas.dispatcher.rpc import SchemaHelper as h, generator, accepts, returns
 from task import Provider, Task, TaskDescription, TaskException
+from freenas.dispatcher.rpc import SchemaHelper as h, description, generator, accepts, returns
+from freenas.utils import normalize, first_or_default
 
 
-class ISCSIInitiatorProvider(Provider):
+class ISCSITargetProvider(Provider):
     @generator
     def query(self, filter=None, params=None):
-        return self.datastore.query_stream('iscsi_initiator.targets', *(filter or []), **(params or {}))
+        ctx = iscsi.ISCSIInitiator()
+        sessions = self.dispatcher.threaded(lambda: list(ctx.sessions))
+
+        def extend(obj):
+            ses = first_or_default(lambda s: s.config.target == obj['name'], sessions)
+            obj['status'] = {
+                'connected': ses.connected,
+                'status': ses.reason
+            }
+
+            return obj
+
+        return self.datastore.query_stream(
+            'iscsi_initiator.targets',
+            *(filter or []),
+            callback=extend,
+            **(params or {})
+        )
 
 
-@accepts(h.ref('iscsi-target'))
+@description("Creates a new iSCSI initiator target")
+@accepts(h.all_of(
+    h.ref('iscsi-target'),
+    h.required('address', 'name')
+))
 class ISCSITargetCreateTask(Task):
     @classmethod
     def early_describe(cls):
@@ -50,14 +73,30 @@ class ISCSITargetCreateTask(Task):
         return ['system']
 
     def run(self, target):
-        if self.datastore.get_by_id('iscsi_initiator.targets', target['id']):
-            raise TaskException(errno.EEXIST, 'Target {0} already exists'.format(target['id']))
+        normalize(target, {
+            'enabled': True,
+            'user': None,
+            'secret': None,
+            'mutual_user': None,
+            'mutual_secret': None
+        })
 
-        self.datastore.insert('iscsi_initiator.targets', target)
+        # if iscsid service is not enabled, enable it now.
+        pass
+
+        id = self.datastore.insert('iscsi_initiator.targets', target)
         iscsi_add_session(target)
-        return target['id']
+
+        self.dispatcher.emit_event('disk.iscsi.target.changed', {
+            'operation': 'create',
+            'ids': [id]
+        })
+
+        return id
 
 
+@description("Updates configuration of a iSCSI initiator target")
+@accepts(str, h.ref('iscsi-target'))
 class ISCSITargetUpdateTask(Task):
     @classmethod
     def early_describe(cls):
@@ -73,6 +112,7 @@ class ISCSITargetUpdateTask(Task):
         pass
 
 
+@description("Removes iSCSI initiator target")
 @accepts(str)
 class ISCSITargetDeleteTask(Task):
     @classmethod
@@ -87,24 +127,29 @@ class ISCSITargetDeleteTask(Task):
 
     def run(self, id):
         if not self.datastore.get_by_id('iscsi_initiator.targets', id):
-            raise TaskException(errno.ENOENT, 'Target {0} doesn\'t exist'.format(id)
+            raise TaskException(errno.ENOENT, 'Target {0} doesn\'t exist'.format(id))
 
 
 def iscsi_add_session(target):
     ctx = iscsi.ISCSIInitiator()
-    session = iscsi.ISCSISession()
+    session = iscsi.ISCSISessionConfig()
+    session.initiator = 'iqn.2005-10.org.freenas:{0}'.format(socket.gethostname())
     session.target = target['name']
-    session.target_address = target['addresss']
+    session.target_address = target['address']
     session.user = target['user']
     session.secret = target['secret']
     session.mutual_user = target['mutual_user']
     session.mutual_secret = target['mutual_secret']
-    ctx.session_add(session)
+    ctx.add_session(session)
 
 
 def iscsi_remove_session(target):
     ctx = iscsi.ISCSIInitiator()
     pass
+
+
+def _depends():
+    return ['DiskPlugin']
 
 
 def _init(dispatcher, plugin):
@@ -114,14 +159,31 @@ def _init(dispatcher, plugin):
         'properties': {
             'id': {'type': 'string'},
             'address': {'type': 'string'},
-            'name': {'type': 'name'},
+            'name': {'type': 'string'},
+            'enabled': {'type': 'boolean'},
             'user': {'type': ['string', 'null']},
             'secret': {'type': ['string', 'null']},
             'mutual_user': {'type': ['string', 'null']},
             'mutual_secret': {'type': ['string', 'null']},
+            'status': {'$ref': 'iscsi-target-status'}
         }
     })
 
-    plugin.register_schema_definition('iscsi-session', {
-
+    plugin.register_schema_definition('iscsi-target-status', {
+        'type': 'object',
+        'additionalProperties': False,
+        'readOnly': True,
+        'properties': {
+            'connected': {'type': 'boolean'},
+            'status': {'type': 'string'},
+        }
     })
+
+    plugin.register_provider('disk.iscsi.target', ISCSITargetProvider)
+    plugin.register_event_type('disk.iscsi.target.changed')
+    plugin.register_task_handler('disk.iscsi.target.create', ISCSITargetCreateTask)
+    plugin.register_task_handler('disk.iscsi.target.update', ISCSITargetUpdateTask)
+    plugin.register_task_handler('disk.iscsi.target.delete', ISCSITargetDeleteTask)
+
+    for i in dispatcher.datastore.query('iscsi_initiator.targets'):
+        iscsi_add_session(i)
