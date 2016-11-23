@@ -1007,6 +1007,13 @@
                 },
                 "builtin": true,
                 "name": "ypbind"
+            },
+            "e538db78-b14e-11e6-af2f-000c29796bea": {
+                "rcng": {
+                    "rc-scripts": "iscsid"
+                },
+                "builtin": true,
+                "name": "iscsid"
             }
         },
         "metadata": {
@@ -1642,6 +1649,21 @@
     {
         "metadata": {
             "name": "vmware.datasets",
+            "migration": "keep",
+            "pkey-type": "uuid",
+            "attributes": {
+                "type": "config",
+                "unique_indexes": [
+                    ["name"]
+                ]
+            }
+        },
+        "data": {
+        }
+    },
+    {
+        "metadata": {
+            "name": "iscsi_initiator.targets",
             "migration": "keep",
             "pkey-type": "uuid",
             "attributes": {
