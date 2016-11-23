@@ -33,7 +33,6 @@ bootstrap_start()
 		done
 	    fi
 	    rm -rf /update-scripts
-	    read -p "Remove this when you know it works " foo
 	    reboot
 	fi
 }
