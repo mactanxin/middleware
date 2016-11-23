@@ -458,7 +458,7 @@ class SystemUIConfigureTask(Task):
             self.configstore.set('service.nginx.http.port', props['webui_http_port'])
 
         if 'webui_http_redirect_https' in props:
-            self.configstore.set( 'service.nginx.http.redirect_https', props['webui_http_redirect_https'])
+            self.configstore.set('service.nginx.http.redirect_https', props['webui_http_redirect_https'])
 
         if 'webui_https_certificate' in props:
             self.configstore.set( 'service.nginx.https.certificate', props['webui_https_certificate'])
