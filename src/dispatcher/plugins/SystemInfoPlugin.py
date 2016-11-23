@@ -228,7 +228,7 @@ class SystemUIProvider(Provider):
             'webui_protocol': protocol,
             'webui_listen': self.configstore.get('service.nginx.listen'),
             'webui_http_port': self.configstore.get('service.nginx.http.port'),
-            'webui_http_redirect_https': self.configstore.get( 'service.nginx.http.redirect_https'),
+            'webui_http_redirect_https': self.configstore.get('service.nginx.http.redirect_https'),
             'webui_https_certificate': self.configstore.get('service.nginx.https.certificate'),
             'webui_https_port': self.configstore.get('service.nginx.https.port')
         }
