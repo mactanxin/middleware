@@ -449,10 +449,9 @@ class SystemUIConfigureTask(Task):
             self.configstore.set('service.nginx.http.redirect_https', props['webui_http_redirect_https'])
 
         if 'webui_https_certificate' in props:
-            if props['webui_https_certificate'] not in self.dispatcher.call_sync(
-                    'crypto.certificate.query',
-                    [('type', '!=', 'CERT_CSR')],
-                    {'select': 'id'}):
+            if not self.dispatcher.call_sync('crypto.certificate.query',
+                                            [('type', '!=', 'CERT_CSR'), ('id', '=', props['webui_https_certificate'])],
+                                             {'count': True}):
                 raise TaskException(errno.ENOENT, 'Certificate id : {0} does not exist'.format(
                     props['webui_https_certificate']))
             else:
