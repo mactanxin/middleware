@@ -39,6 +39,7 @@ import shutil
 import tarfile
 import logging
 import datetime
+from bsd import sysctl
 from task import Provider, Task, ProgressTask, VerifyException, TaskException, query, TaskWarning, TaskDescription
 from task import ValidationException
 from datastore.config import ConfigNode
@@ -232,6 +233,22 @@ class VMProvider(Provider):
     @returns(str)
     def request_webvnc_console(self, id):
         return self.dispatcher.call_sync('containerd.console.request_webvnc_console', id)
+
+    @returns(h.object())
+    def provide_hw_vm_capabilities(self):
+        hw_capabilities = {'vtx_enabled': False, 'svm_features': False, 'unrestricted_guest': False}
+        try:
+            if sysctl.sysctlbyname('hw.vmm.vmx.initialized'):
+                hw_capabilities['vtx_enabled'] = True
+
+            if sysctl.sysctlbyname('hw.vmm.svm.features') > 0:
+                hw_capabilities['svm_features'] = True
+
+            if sysctl.sysctlbyname('hw.vmm.vmx.cap.unrestricted_guest'):
+                hw_capabilities['unrestricted_guest'] = True
+        except OSError:
+            pass
+        return hw_capabilities
 
 
 @description('Provides information about VM snapshots')
