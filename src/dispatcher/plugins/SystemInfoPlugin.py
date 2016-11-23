@@ -426,18 +426,6 @@ class SystemUIConfigureTask(Task):
         return TaskDescription('Configuring System UI settings')
 
     def verify(self, props):
-        errors = ValidationException()
-        # Need to actually check for a valid cert here instead of just checking if not None
-        if (
-            'HTTPS' in props.get('webui_protocol', []) and
-            props.get('webui_https_certificate') is None
-        ):
-            errors.add(
-                (0, 'webui_https_certificate'),
-                'HTTPS protocol specified for UI without certificate'
-            )
-        if errors:
-            raise errors
         return ['system']
 
     def run(self, props):
@@ -461,10 +449,21 @@ class SystemUIConfigureTask(Task):
             self.configstore.set('service.nginx.http.redirect_https', props['webui_http_redirect_https'])
 
         if 'webui_https_certificate' in props:
-            self.configstore.set( 'service.nginx.https.certificate', props['webui_https_certificate'])
+            if props['webui_https_certificate'] not in self.dispatcher.call_sync(
+                    'crypto.certificate.query',
+                    [('type', '!=', 'CERT_CSR')],
+                    {'select': 'id'}):
+                raise TaskException(errno.ENOENT, 'Certificate id : {0} does not exist'.format(
+                    props['webui_https_certificate']))
+            else:
+                self.configstore.set('service.nginx.https.certificate', props['webui_https_certificate'])
 
         if 'webui_https_port' in props:
             self.configstore.set('service.nginx.https.port', props['webui_https_port'])
+
+        if self.configstore.get('service.nginx.https.enable', False) and not self.configstore.get(
+                'service.nginx.https.certificate', False):
+            raise TaskException(errno.EINVAL, 'HTTPS protocol specified for UI without certificate')
 
         try:
             self.dispatcher.call_sync('etcd.generation.generate_group', 'nginx')
