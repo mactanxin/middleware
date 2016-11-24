@@ -28,7 +28,7 @@ import errno
 import logging
 from datastore.config import ConfigNode
 from freenas.dispatcher.rpc import RpcException, SchemaHelper as h, description, accepts, returns
-from task import ProgressTask, Provider, TaskException, TaskDescription
+from task import ProgressTask, Provider, TaskException, TaskDescription, VerifyException
 
 
 logger = logging.getLogger(__name__)
@@ -124,7 +124,13 @@ class DCConfigureTask(ProgressTask):
         return TaskDescription('Configuring Domain Controller vm service')
 
     def verify(self, dc):
-        return ['system']
+        hw_capabilities = self.dispatcher.call_sync('vm.get_hw_vm_capabilities')
+        if (hw_capabilities['vtx_enabled'] and hw_capabilities['unrestricted_guest']) or hw_capabilities['svm_features']:
+            return ['system']
+        else:
+            raise VerifyException(errno.ENXIO,
+                        'Lack of the hardware virtualization support - check hardware setup.')
+
 
     def run(self, dc):
         self.set_progress(0, 'Checking Domain Controller service state')
