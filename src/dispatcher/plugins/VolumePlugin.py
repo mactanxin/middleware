@@ -837,7 +837,7 @@ class VolumeUpdateTask(ProgressTask):
             disks = self.dispatcher.call_sync('volume.get_volume_disks', id)
             return ['disk:{0}'.format(d) for d in disks]
 
-        return ['disk:{0}'.format(i) for i, _ in get_disks(topology)]
+        return get_resources(topology)
 
     def run(self, id, updated_params, password=None):
         if password is None:
@@ -2666,9 +2666,16 @@ def disk_spec_to_path(dispatcher, ident):
     )
 
 
-def get_disks(topology):
+def get_disks(topology, predicate=None):
     for vdev, gname in iterate_vdevs(topology):
+        if predicate and not predicate(vdev):
+            continue
+
         yield vdev['path'], gname
+
+
+def get_resources(topology):
+    return ['disk:{0}'.format(d) for d, _ in get_disks(topology, lambda v: v.get('status') != 'UNAVAIL')]
 
 
 def get_disk_gptid(dispatcher, disk):
