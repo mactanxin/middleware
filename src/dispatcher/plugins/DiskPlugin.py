@@ -197,6 +197,28 @@ class DiskProvider(Provider):
         )
         return disk_info['id'] if disk_info else None
 
+    @accepts(h.array(str))
+    @returns(h.array(h.object(
+        properties={
+            'path': str,
+            'key_slot': int
+        },
+        additionalProperties=False
+    )))
+    def key_slots_by_paths(self, paths):
+        result = []
+        geom.scan()
+        for p in paths:
+            provider_path = self.dispatcher.call_sync(
+                'disk.query',
+                [('path', '=', p)],
+                {'select': 'status.data_partition_path', 'single': True}
+            )
+            vdev_config = geom.geom_by_name('ELI', provider_path.strip('/dev')).config
+            result.append({'path': p, 'key_slot': int(vdev_config.get('UsedKey'))})
+
+        return result
+
 
 class EnclosureProvider(Provider):
     @query('enclosure')
