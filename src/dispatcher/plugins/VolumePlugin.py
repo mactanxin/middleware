@@ -45,6 +45,7 @@ from datetime import datetime
 from event import sync
 from cache import EventCacheStore
 from lib.system import SubprocessException
+from bsd import geom
 from lib.freebsd import fstyp
 from task import (
     Provider, Task, ProgressTask, TaskException, TaskWarning, VerifyException, query,
@@ -1164,6 +1165,8 @@ class VolumeImportTask(Task):
                         except UnicodeDecodeError:
                             key = base64.b64encode(raw_key).decode('utf-8')
 
+            slot = 0
+
             if password:
                 salt, digest = get_digest(password)
             else:
@@ -1212,6 +1215,39 @@ class VolumeImportTask(Task):
                         for child in vdev['children']:
                             simplify_vdev(child)
 
+            if key or password:
+                def get_used_slot(disk_name):
+                    provider_path = self.dispatcher.call_sync(
+                        'disk.query',
+                        [('path', '=', disk_name)],
+                        {'select': 'status.data_partition_path', 'single': True}
+                    )
+                    vdev_config = geom.geom_by_name('ELI', provider_path.strip('/dev')).config
+                    return int(vdev_config.get('UsedKey'))
+
+                slot_0_cnt = 0
+                slot_1_cnt = 0
+                for dname in disks:
+                    geom.scan()
+                    if get_used_slot(dname):
+                        slot_1_cnt += 1
+                    else:
+                        slot_0_cnt += 1
+
+                slot = int(slot_1_cnt > slot_0_cnt)
+
+                if slot_0_cnt and slot_1_cnt:
+                    for dname in disks:
+                        used_slot = get_used_slot(dname)
+                        if used_slot != slot:
+                            disk_id = self.dispatcher.call_sync('disk.path_to_id', dname)
+                            self.join_subtasks(self.run_subtask('disk.geli.ukey.set', disk_id, {
+                                'key': key,
+                                'password': password,
+                                'slot': slot
+                            }))
+                            self.join_subtasks(self.run_subtask('disk.geli.ukey.del', disk_id, used_slot))
+
             new_id = self.datastore.insert('volumes', {
                 'id': new_name,
                 'guid': guid,
@@ -1221,7 +1257,7 @@ class VolumeImportTask(Task):
                     'key': key,
                     'hashed_password': digest,
                     'salt': salt,
-                    'slot': 0 if key or password else None},
+                    'slot': slot if key or password else None},
                 'key_encrypted': True if key else False,
                 'password_encrypted': True if password else False,
                 'mountpoint': mountpoint
