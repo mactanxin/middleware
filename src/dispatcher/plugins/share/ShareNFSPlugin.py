@@ -27,7 +27,7 @@
 
 import errno
 import logging
-from task import Task, Provider, TaskException, VerifyException, TaskDescription
+from task import Task, Provider, TaskException, VerifyException, TaskDescription, TaskWarning
 from freenas.dispatcher.rpc import description, accepts, private
 from freenas.dispatcher.rpc import SchemaHelper as h
 from freenas.utils import normalize, query as q
@@ -92,6 +92,11 @@ class CreateNFSShareTask(Task):
             'security': []
         })
 
+        if share['properties']['security'] and not self.dispatcher.call_sync(
+                'service.query', [('name', '=', 'nfs')], {'single': True})['config']['v4']:
+            self.add_warning(TaskWarning(
+                errno.ENXIO, "NFS security option requires NFSv4 support to be enabled in NFS service settings."))
+
         id = self.datastore.insert('shares', share)
         self.dispatcher.call_sync('etcd.generation.generate_group', 'nfs')
         self.dispatcher.call_sync('service.reload', 'nfs', timeout=60)
@@ -125,6 +130,11 @@ class UpdateNFSShareTask(Task):
 
         if share['target_type'] != 'DATASET' and q.get(share, 'properties.alldirs'):
             raise TaskException(errno.EINVAL, 'alldirs can be only used with dataset shares')
+
+        if share['properties']['security'] and not self.dispatcher.call_sync(
+                'service.query', [('name', '=', 'nfs')], {'single': True})['config']['v4']:
+            self.add_warning(TaskWarning(
+                errno.ENXIO, "NFS security option requires NFSv4 support to be enabled in NFS service settings."))
 
         self.datastore.update('shares', id, share)
         self.dispatcher.call_sync('etcd.generation.generate_group', 'nfs')
