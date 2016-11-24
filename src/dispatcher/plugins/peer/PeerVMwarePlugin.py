@@ -192,4 +192,3 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler("peer.vmware.create", VMwarePeerCreateTask)
     plugin.register_task_handler("peer.vmware.delete", VMwarePeerDeleteTask)
     plugin.register_task_handler("peer.vmware.update", VMwarePeerUpdateTask)
-

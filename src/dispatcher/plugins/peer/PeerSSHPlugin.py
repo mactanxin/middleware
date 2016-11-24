@@ -194,4 +194,3 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler("peer.ssh.create", SSHPeerCreateTask)
     plugin.register_task_handler("peer.ssh.delete", SSHPeerDeleteTask)
     plugin.register_task_handler("peer.ssh.update", SSHPeerUpdateTask)
-
