@@ -337,6 +337,9 @@ class ServiceManageTask(Task):
         if state == 'STOPPED' and action == 'stop':
             return
 
+        if state != 'RUNNING' and action == 'reload':
+            raise TaskException(errno.EINVAL, 'Only running services can be reloaded')
+
         if hook_rpc:
             try:
                 return self.dispatcher.call_sync(hook_rpc)
