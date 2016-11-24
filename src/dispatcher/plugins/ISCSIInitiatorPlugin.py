@@ -213,11 +213,20 @@ def _init(dispatcher, plugin):
         }
     })
 
+    def on_session_update(args):
+        target = dispatcher.datastore.query('iscsi_initiator.targets', ('name', '=', args['target']), single=True)
+        if target:
+            dispatcher.emit_event('disk.iscsi.target.changed', {
+                'operation': 'update',
+                'ids': [target['id']]
+            })
+
     plugin.register_provider('disk.iscsi.target', ISCSITargetProvider)
     plugin.register_event_type('disk.iscsi.target.changed')
     plugin.register_task_handler('disk.iscsi.target.create', ISCSITargetCreateTask)
     plugin.register_task_handler('disk.iscsi.target.update', ISCSITargetUpdateTask)
     plugin.register_task_handler('disk.iscsi.target.delete', ISCSITargetDeleteTask)
+    plugin.register_event_handler('iscsi.session.update', on_session_update)
 
     ctx = iscsi.ISCSIInitiator()
     for i in dispatcher.datastore.query('iscsi_initiator.targets'):
