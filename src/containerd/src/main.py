@@ -87,7 +87,7 @@ SCROLLBACK_SIZE = 20 * 1024
 
 vtx_enabled = False
 svm_features = False
-restricted_guest = True
+unrestricted_guest = True
 
 
 class VirtualMachineState(enum.Enum):
@@ -1071,7 +1071,7 @@ class ManagementService(RpcService):
                 'Cannot start VM {0} - CPU does not support virtualization'.format(container['name'])
             )
 
-        if restricted_guest and vtx_enabled and container['config']['bootloader'] != 'BHYVELOAD':
+        if not unrestricted_guest and vtx_enabled and container['config']['bootloader'] != 'BHYVELOAD':
             raise RpcException(
                 errno.ENOTSUP,
                 'Cannot start VM {0} - only BHYVELOAD is supported for VT-x without unrestricted guest feature.'.format(
@@ -1855,19 +1855,6 @@ class Main(object):
                 self.logger.error('Cannot load PF module: %s', str(err))
                 self.logger.error('NAT unavailable')
 
-        global vtx_enabled, restricted_guest, svm_features
-        try:
-            if sysctl.sysctlbyname('hw.vmm.vmx.initialized'):
-                vtx_enabled = True
-
-            if sysctl.sysctlbyname('hw.vmm.svm.features') > 0:
-                svm_features = True
-
-            if sysctl.sysctlbyname('hw.vmm.vmx.cap.unrestricted_guest'):
-                restricted_guest = False
-        except OSError:
-            pass
-
         os.makedirs('/var/run/containerd', exist_ok=True)
 
         self.config = args.c
@@ -1876,6 +1863,13 @@ class Main(object):
         self.init_ec2()
         gevent.spawn(self.init_autostart)
         self.logger.info('Started')
+
+        global vtx_enabled, unrestricted_guest, svm_features
+        hw_capabilities = self.client.call_sync('vm.get_hw_vm_capabilities')
+
+        vtx_enabled = hw_capabilities['vtx_enabled']
+        svm_features = hw_capabilities['svm_features']
+        unrestricted_guest = hw_capabilities['unrestricted_guest']
 
         # WebSockets server
         kwargs = {}
