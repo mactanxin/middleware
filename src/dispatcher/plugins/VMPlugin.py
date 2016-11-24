@@ -234,8 +234,8 @@ class VMProvider(Provider):
     def request_webvnc_console(self, id):
         return self.dispatcher.call_sync('containerd.console.request_webvnc_console', id)
 
-    @returns(h.object())
-    def provide_hw_vm_capabilities(self):
+    @returns(h.ref('vm-hw-capabilites'))
+    def get_hw_vm_capabilities(self):
         hw_capabilities = {'vtx_enabled': False, 'svm_features': False, 'unrestricted_guest': False}
         try:
             if sysctl.sysctlbyname('hw.vmm.vmx.initialized'):
@@ -2169,6 +2169,16 @@ def _init(dispatcher, plugin):
             'interfaces': {'type': 'object'},
             'time': {'type': 'datetime'}
         }
+    })
+
+    plugin.register_schema_definition('vm-hw-capabilites', {
+        'type': 'object',
+        'properties': {
+            'vtx_enabled': {'type': 'boolean'},
+            'svm_features': {'type': 'boolean'},
+            'unrestricted_guest': {'type': 'boolean'}
+        },
+        'additionalProperties': False,
     })
 
     def volume_pre_detach(args):
