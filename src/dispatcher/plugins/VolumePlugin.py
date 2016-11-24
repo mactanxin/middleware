@@ -3129,6 +3129,17 @@ def _init(dispatcher, plugin):
 
             dispatcher.call_task_sync('volume.autoreplace', volume['id'], args['vdev_guid'])
 
+    @sync
+    def on_disk_attached(args):
+        for vol in dispatcher.call_sync('volume.query', [('status', '=', 'UNKNOWN')]):
+            for vdev, group in iterate_vdevs(vol['topology']):
+                if group != 'data':
+                    continue
+
+                if vdev['type'] == 'disk' and vdev['path'] == args['path']:
+                    dispatcher.call_task_sync('zfs.pool.import', vol['guid'])
+                    dispatcher.call_task_sync('zfs.mount', vol['guid'], True)
+
     def scrub_snapshots():
         interval = dispatcher.configstore.get('middleware.snapshot_scrub_interval')
         while True:
@@ -3428,6 +3439,7 @@ def _init(dispatcher, plugin):
     plugin.register_event_handler('entity-subscriber.zfs.pool.changed', on_pool_change)
     plugin.register_event_handler('fs.zfs.vdev.removed', on_vdev_remove)
     plugin.register_event_handler('fs.zfs.vdev.state_changed', on_vdev_state_change)
+    plugin.register_event_handler('disk.attached', on_disk_attached)
 
     plugin.register_event_type('volume.changed')
     plugin.register_event_type('volume.dataset.changed')
