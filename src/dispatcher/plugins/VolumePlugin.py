@@ -45,7 +45,6 @@ from datetime import datetime
 from event import sync
 from cache import EventCacheStore
 from lib.system import SubprocessException
-from bsd import geom
 from lib.freebsd import fstyp
 from task import (
     Provider, Task, ProgressTask, TaskException, TaskWarning, VerifyException, query,
@@ -1216,20 +1215,11 @@ class VolumeImportTask(Task):
                             simplify_vdev(child)
 
             if key or password:
-                def get_used_slot(disk_name):
-                    provider_path = self.dispatcher.call_sync(
-                        'disk.query',
-                        [('path', '=', disk_name)],
-                        {'select': 'status.data_partition_path', 'single': True}
-                    )
-                    vdev_config = geom.geom_by_name('ELI', provider_path.strip('/dev')).config
-                    return int(vdev_config.get('UsedKey'))
-
+                slots_state = self.dispatcher.call_sync('disk.key_slots_by_paths', disks)
                 slot_0_cnt = 0
                 slot_1_cnt = 0
-                for dname in disks:
-                    geom.scan()
-                    if get_used_slot(dname):
+                for s in slots_state:
+                    if s['key_slot']:
                         slot_1_cnt += 1
                     else:
                         slot_0_cnt += 1
@@ -1238,7 +1228,7 @@ class VolumeImportTask(Task):
 
                 if slot_0_cnt and slot_1_cnt:
                     for dname in disks:
-                        used_slot = get_used_slot(dname)
+                        used_slot = first_or_default(lambda s: s['path'] == dname, slots_state, {}).get('key_slot')
                         if used_slot != slot:
                             disk_id = self.dispatcher.call_sync('disk.path_to_id', dname)
                             self.join_subtasks(self.run_subtask('disk.geli.ukey.set', disk_id, {
