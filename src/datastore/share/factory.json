@@ -280,6 +280,7 @@
             "service.consul.start_join_wan": [],
             "service.consul.retry_join": true,
             "service.consul.encryption_key": null,
+            "service.iscsid.enable": false,
             "update.check_auto": true,
             "update.train": "FreeNAS-10-Nightlies",
             "accounts.local_gid_range": [

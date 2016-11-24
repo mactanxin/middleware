@@ -1,5 +1,5 @@
 #
-# Copyright 2017 iXsystems, Inc.
+# Copyright 2016 iXsystems, Inc.
 # All rights reserved
 #
 # Redistribution and use in source and binary forms, with or without
@@ -42,8 +42,8 @@ class ISCSITargetProvider(Provider):
         def extend(obj):
             ses = first_or_default(lambda s: s.config.target == obj['name'], sessions)
             obj['status'] = {
-                'connected': ses.connected,
-                'status': ses.reason
+                'connected': ses.connected if ses else False,
+                'status': ses.reason if ses else 'Unknown'
             }
 
             return obj
@@ -82,10 +82,16 @@ class ISCSITargetCreateTask(Task):
         })
 
         # if iscsid service is not enabled, enable it now.
-        pass
+        service_state = self.dispatcher.call_sync('service.query', [('name', '=', 'iscsid')], {'single': True})
+        if service_state['state'] != 'RUNNING':
+            config = service_state['config']
+            config['enable'] = True
+            self.join_subtasks(self.run_subtask('service.update', service_state['id'], {'config': config}))
 
         id = self.datastore.insert('iscsi_initiator.targets', target)
-        iscsi_add_session(target)
+        ctx = iscsi.ISCSIInitiator()
+        session = iscsi_convert_session(target)
+        ctx.add_session(session)
 
         self.dispatcher.emit_event('disk.iscsi.target.changed', {
             'operation': 'create',
@@ -102,14 +108,32 @@ class ISCSITargetUpdateTask(Task):
     def early_describe(cls):
         return "Updating iSCSI initiator target"
 
-    def describe(self, *args, **kwargs):
+    def describe(self, id, updated_params):
         pass
 
-    def verify(self, target):
+    def verify(self, id, updated_params):
         return ['system']
 
-    def run(self, target):
-        pass
+    def run(self, id, updated_params):
+        target = self.datastore.get_by_id('iscsi_initiator.targets', id)
+        if not target:
+            raise TaskException(errno.ENOENT, 'Target {0} doesn\'t exist'.format(id))
+
+        target.update(updated_params)
+        self.datastore.update('iscsi_initiator.targets', id, target)
+
+        ctx = iscsi.ISCSIInitiator()
+        session = first_or_default(lambda s: s.config.target == target['name'], ctx.sessions)
+        session = iscsi_convert_session(target, session)
+        if session.id:
+            ctx.modify_session(session)
+        else:
+            ctx.add_session(session)
+
+        self.dispatcher.emit_event('disk.iscsi.target.changed', {
+            'operation': 'update',
+            'ids': [id]
+        })
 
 
 @description("Removes iSCSI initiator target")
@@ -126,26 +150,36 @@ class ISCSITargetDeleteTask(Task):
         return ['system']
 
     def run(self, id):
-        if not self.datastore.get_by_id('iscsi_initiator.targets', id):
+        target = self.datastore.get_by_id('iscsi_initiator.targets', id)
+        if not target:
             raise TaskException(errno.ENOENT, 'Target {0} doesn\'t exist'.format(id))
 
+        self.datastore.delete('iscsi_initiator.targets', id)
 
-def iscsi_add_session(target):
-    ctx = iscsi.ISCSIInitiator()
-    session = iscsi.ISCSISessionConfig()
+        ctx = iscsi.ISCSIInitiator()
+        session = first_or_default(lambda s: s.config.target == target['name'], ctx.sessions)
+        if session:
+            ctx.remove_session(session)
+
+        self.dispatcher.emit_event('disk.iscsi.target.changed', {
+            'operation': 'delete',
+            'ids': [id]
+        })
+
+
+def iscsi_convert_session(target, session=None):
+    if not session:
+        session = iscsi.ISCSISessionConfig()
+
     session.initiator = 'iqn.2005-10.org.freenas:{0}'.format(socket.gethostname())
+    session.enable = target['enabled']
     session.target = target['name']
     session.target_address = target['address']
     session.user = target['user']
     session.secret = target['secret']
     session.mutual_user = target['mutual_user']
     session.mutual_secret = target['mutual_secret']
-    ctx.add_session(session)
-
-
-def iscsi_remove_session(target):
-    ctx = iscsi.ISCSIInitiator()
-    pass
+    return session
 
 
 def _depends():
@@ -185,5 +219,7 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('disk.iscsi.target.update', ISCSITargetUpdateTask)
     plugin.register_task_handler('disk.iscsi.target.delete', ISCSITargetDeleteTask)
 
+    ctx = iscsi.ISCSIInitiator()
     for i in dispatcher.datastore.query('iscsi_initiator.targets'):
-        iscsi_add_session(i)
+        session = iscsi_convert_session(i)
+        ctx.add_session(session)
