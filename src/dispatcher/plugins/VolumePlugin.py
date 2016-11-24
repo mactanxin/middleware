@@ -1124,7 +1124,7 @@ class VolumeImportTask(Task):
     def verify(self, id, new_name=None, params=None, enc_params=None, password=None):
         enc_params = enc_params or {}
 
-        if enc_params.get('key') or password:
+        if enc_params.get('key') or enc_params.get('key_fd') or password:
             disks = enc_params.get('disks', None)
             if disks is None:
                 raise VerifyException(
@@ -1154,6 +1154,15 @@ class VolumeImportTask(Task):
 
         with self.dispatcher.get_lock('volumes'):
             key = enc_params.get('key')
+            if not key:
+                key_fd = enc_params.get('key_fd')
+                if key_fd:
+                    with os.fdopen(key_fd.fd, 'rb') as key_file:
+                        raw_key = key_file.read()
+                        try:
+                            key = raw_key.decode('utf-8')
+                        except UnicodeDecodeError:
+                            key = base64.b64encode(raw_key).decode('utf-8')
 
             if password:
                 salt, digest = get_digest(password)
@@ -1294,23 +1303,23 @@ class VolumeDiskImportTask(ProgressTask):
 
 
 @description("Exports active volume")
-@accepts(str)
+@accepts(str, h.one_of(None, FileDescriptor))
 class VolumeDetachTask(Task):
     @classmethod
     def early_describe(cls):
         return "Detaching a volume"
 
-    def describe(self, id):
+    def describe(self, id, key_fd=None):
         return TaskDescription("Detaching the volume {name}", name=id)
 
-    def verify(self, id):
+    def verify(self, id, key_fd=None):
         vol = self.datastore.get_by_id('volumes', id)
         if not vol:
             raise VerifyException(errno.ENOENT, 'Volume {0} not found'.format(id))
 
         return ['disk:{0}'.format(d) for d in self.dispatcher.call_sync('volume.get_volume_disks', vol['id'])]
 
-    def run(self, id):
+    def run(self, id, key_fd=None):
         vol = self.datastore.get_by_id('volumes', id)
         if not vol:
             raise TaskException(errno.ENOENT, 'Volume {0} not found'.format(id))
@@ -1337,13 +1346,17 @@ class VolumeDetachTask(Task):
         })
 
         if encryption['key']:
-            self.add_warning(TaskWarning(
-                errno.EPERM,
-                'Detached volume {0} was encrypted! Save key {1} to be able to import that volume.'.format(
-                    id,
-                    encryption['key']
-                )
-            ))
+            if not key_fd:
+                self.add_warning(TaskWarning(
+                    errno.EPERM,
+                    'Detached volume {0} was encrypted! Save key {1} to be able to import the volume later.'.format(
+                        id,
+                        encryption['key']
+                    )
+                ))
+            else:
+                with os.fdopen(key_fd.fd, 'wb') as key_file:
+                    key_file.write(encryption['key'])
 
 
 @description("Upgrades volume to newest ZFS version")
@@ -3329,6 +3342,7 @@ def _init(dispatcher, plugin):
         'type': 'object',
         'properties': {
             'key': {'type': ['string', 'null']},
+            'key_fd': {'type': ['fd', 'null']},
             'disks': {
                 'type': 'array',
                 'items': {'type': 'string'}
