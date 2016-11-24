@@ -27,11 +27,11 @@
 
 import errno
 import logging
-import os
+from pathlib import PosixPath
 
 from datastore.config import ConfigNode
 from freenas.dispatcher.rpc import RpcException, SchemaHelper as h, description, accepts, returns, private
-from task import Task, Provider, TaskException, ValidationException, TaskDescription
+from task import Task, Provider, TaskException, TaskDescription
 from debug import AttachFile
 
 
@@ -59,21 +59,16 @@ class AFPConfigureTask(Task):
         return TaskDescription('Configuring AFP service')
 
     def verify(self, afp):
-
-        errors = ValidationException()
-        dbpath = afp.get('dbpath')
-        if dbpath:
-            if not os.path.exists(dbpath):
-                errors.add((0, 'dbpath'), 'Path does not exist', code=errno.ENOENT)
-            elif not os.path.isdir(dbpath):
-                errors.add((0, 'dbpath'), 'Path is not a directory')
-
-        if errors:
-            raise errors
-
         return ['system']
 
     def run(self, afp):
+        paths = [PosixPath(afp.get(y)) if afp.get(y) else None for y in ('dbpath', 'homedir_path')]
+        for p in paths:
+            if p and not p.exists():
+                raise TaskException(errno.ENOENT, 'Path : {0} does not exist'.format(p.as_posix()))
+            if p and not p.is_dir():
+                raise TaskException(errno.ENOTDIR, 'Path : {0} is not a directory'.format(p.as_posix()))
+
         try:
             node = ConfigNode('service.afp', self.configstore)
             node.update(afp)
