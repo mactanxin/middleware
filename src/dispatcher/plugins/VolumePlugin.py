@@ -1432,11 +1432,11 @@ class VolumeReplaceTask(ProgressTask):
         if not vol:
             raise TaskException(errno.ENOENT, 'Volume {0} not found'.format(id))
 
-        disk = self.dispatcher.call_sync('disk.query', [('path', '=', path)], {'single': True})
+        disk = self.dispatcher.call_sync('disk.query', [('path', '=', path), ('online', '=', True)], {'single': True})
         spares = vol['topology'].get('spare', [])
 
-        if not disk['online']:
-            raise TaskException('Cannot replace with {0}: disk is not online'.format(path))
+        if not disk:
+            raise TaskException(errno.ENOENT, 'Cannot replace with {0}: disk not found or not online'.format(path))
 
         if first_or_default(lambda v: v['path'] == os.path.join('/dev', disk['path']), spares):
             # New disk is a spare. No need to format it, but we need to remove it from the spares
