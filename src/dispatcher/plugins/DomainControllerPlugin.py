@@ -124,8 +124,8 @@ class DCConfigureTask(ProgressTask):
         return TaskDescription('Configuring Domain Controller vm service')
 
     def verify(self, dc):
-        hw_capabilities = self.dispatcher.call_sync('vm.provide_hw_vm_capabilities')
-        if (hw_capabilities['vtx_enabled'] or hw_capabilities['svm_features']) and hw_capabilities['unrestricted_guest']:
+        hw_capabilities = self.dispatcher.call_sync('vm.get_hw_vm_capabilities')
+        if (hw_capabilities['vtx_enabled'] and hw_capabilities['unrestricted_guest']) or hw_capabilities['svm_features']:
             return ['system']
         else:
             raise VerifyException(errno.ENXIO,
