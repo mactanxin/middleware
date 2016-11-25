@@ -135,6 +135,12 @@ class Task(object):
     def chain(self, task, *args):
         self.dispatcher.balancer.submit(task, *args)
 
+    def verify(self, *args, **kwargs):
+        raise NotImplementedError()
+
+    def run(self, *args, **kwargs):
+        raise NotImplementedError()
+
 
 class ProgressTask(Task):
     def __init__(self, dispatcher, datastore):
