@@ -58,11 +58,6 @@ class NFSConfigureTask(Task):
         return TaskDescription('Configuring NFS service')
 
     def verify(self, nfs):
-        errors = []
-
-        if errors:
-            raise ValidationException(errors)
-
         return ['system']
 
     def run(self, nfs):
