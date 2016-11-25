@@ -32,6 +32,7 @@ from datastore.config import ConfigNode
 from freenas.dispatcher.rpc import RpcException, SchemaHelper as h, description, accepts, returns, private
 from task import Task, Provider, TaskException, ValidationException, TaskDescription
 from debug import AttachFile
+from utils import is_port_open
 
 
 logger = logging.getLogger('NFSPlugin')
@@ -61,6 +62,12 @@ class NFSConfigureTask(Task):
         return ['system']
 
     def run(self, nfs):
+        config = self.dispatcher.call_sync('service.query', [('name', '=', 'nfs')], {'single': True})['config']
+        for n in ('mountd_port', 'rpcstatd_port', 'rpclockd_port'):
+            port = nfs.get(n)
+            if port and port != config[n] and is_port_open(port):
+                raise TaskException(errno.EBUSY, 'Port number : {0} is already opened'.format(port))
+
         try:
             node = ConfigNode('service.nfs', self.configstore)
             node.update(nfs)
