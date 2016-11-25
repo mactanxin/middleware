@@ -2655,6 +2655,12 @@ def iterate_vdevs(topology):
                     yield child, name
 
 
+def vdev_by_guid(topology, guid):
+    for vd, _ in iterate_vdevs(topology):
+        if vd['guid'] == guid:
+            return vd
+
+
 def disk_spec_to_path(dispatcher, ident):
     return dispatcher.call_sync(
         'disk.query',
@@ -3127,7 +3133,11 @@ def _init(dispatcher, plugin):
             # Ignore root vdev state changes
             return
 
-        if args['vdev_state'] in ('FAULTED', 'REMOVED'):
+        vdev = vdev_by_guid(volume['topology'], args['vdev_guid'])
+        if not vdev:
+            return
+
+        if args['vdev_state'] in ('FAULTED', 'REMOVED') and args['vdev_state'] != vdev['status']:
             logger.warning('Vdev {0} of pool {1} is now in {2} state - attempting to replace'.format(
                 args['vdev_guid'],
                 volume['id'],
