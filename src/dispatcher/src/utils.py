@@ -25,6 +25,7 @@
 #
 #####################################################################
 
+import subprocess
 import io
 import os
 import errno
@@ -121,3 +122,10 @@ def call_task_and_check_state(client, name, *args):
             result['error']['message']
         ))
     return result
+
+
+def is_port_open(portnum):
+    sockstat = subprocess.Popen(['sockstat', '-l'], stdout=subprocess.PIPE)
+    grep = subprocess.Popen(['grep', ':{0}'.format(str(portnum))], stdin=sockstat.stdout, stdout=subprocess.PIPE)
+    sockstat.stdout.close()
+    return True if grep.communicate()[0] else False
