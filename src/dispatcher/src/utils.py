@@ -25,6 +25,7 @@
 #
 #####################################################################
 
+import psutil
 import io
 import os
 import errno
@@ -121,3 +122,10 @@ def call_task_and_check_state(client, name, *args):
             result['error']['message']
         ))
     return result
+
+
+def is_port_open(portnum):
+    for c in psutil.net_connections(kind='inet'):
+        if c.laddr[1] == int(portnum):
+            return True
+    return False
