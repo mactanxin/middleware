@@ -66,7 +66,7 @@ class NFSConfigureTask(Task):
         for n in ('mountd_port', 'rpcstatd_port', 'rpclockd_port'):
             port = nfs.get(n)
             if port and port != config[n] and is_port_open(port):
-                raise TaskException(errno.EBUSY, 'Port number : {0} is already opened'.format(port))
+                raise TaskException(errno.EBUSY, 'Port number : {0} is already in use'.format(port))
 
         try:
             node = ConfigNode('service.nfs', self.configstore)

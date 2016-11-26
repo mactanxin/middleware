@@ -25,7 +25,7 @@
 #
 #####################################################################
 
-import subprocess
+import psutil
 import io
 import os
 import errno
@@ -125,7 +125,7 @@ def call_task_and_check_state(client, name, *args):
 
 
 def is_port_open(portnum):
-    sockstat = subprocess.Popen(['sockstat', '-l'], stdout=subprocess.PIPE)
-    grep = subprocess.Popen(['grep', ':{0}'.format(str(portnum))], stdin=sockstat.stdout, stdout=subprocess.PIPE)
-    sockstat.stdout.close()
-    return True if grep.communicate()[0] else False
+    for c in psutil.net_connections(kind='inet'):
+        if c.laddr[1] == int(portnum):
+            return True
+    return False
