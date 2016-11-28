@@ -837,7 +837,7 @@ class VolumeUpdateTask(ProgressTask):
             disks = self.dispatcher.call_sync('volume.get_volume_disks', id)
             return ['disk:{0}'.format(d) for d in disks]
 
-        return ['disk:{0}'.format(i) for i, _ in get_disks(topology)]
+        return get_resources(topology)
 
     def run(self, id, updated_params, password=None):
         if password is None:
@@ -2694,6 +2694,12 @@ def iterate_vdevs(topology):
                     yield child, name
 
 
+def vdev_by_guid(topology, guid):
+    for vd, _ in iterate_vdevs(topology):
+        if vd['guid'] == guid:
+            return vd
+
+
 def disk_spec_to_path(dispatcher, ident):
     return dispatcher.call_sync(
         'disk.query',
@@ -2705,9 +2711,16 @@ def disk_spec_to_path(dispatcher, ident):
     )
 
 
-def get_disks(topology):
+def get_disks(topology, predicate=None):
     for vdev, gname in iterate_vdevs(topology):
+        if predicate and not predicate(vdev):
+            continue
+
         yield vdev['path'], gname
+
+
+def get_resources(topology):
+    return ['disk:{0}'.format(d) for d, _ in get_disks(topology, lambda v: v.get('status') != 'UNAVAIL')]
 
 
 def get_disk_gptid(dispatcher, disk):
@@ -3159,7 +3172,11 @@ def _init(dispatcher, plugin):
             # Ignore root vdev state changes
             return
 
-        if args['vdev_state'] in ('FAULTED', 'REMOVED'):
+        vdev = vdev_by_guid(volume['topology'], args['vdev_guid'])
+        if not vdev:
+            return
+
+        if args['vdev_state'] in ('FAULTED', 'REMOVED') and args['vdev_state'] != vdev['status']:
             logger.warning('Vdev {0} of pool {1} is now in {2} state - attempting to replace'.format(
                 args['vdev_guid'],
                 volume['id'],
@@ -3167,6 +3184,17 @@ def _init(dispatcher, plugin):
             ))
 
             dispatcher.call_task_sync('volume.autoreplace', volume['id'], args['vdev_guid'])
+
+    @sync
+    def on_disk_attached(args):
+        for vol in dispatcher.call_sync('volume.query', [('status', '=', 'UNKNOWN')]):
+            for vdev, group in iterate_vdevs(vol['topology']):
+                if group != 'data':
+                    continue
+
+                if vdev['type'] == 'disk' and vdev['path'] == args['path']:
+                    dispatcher.call_task_sync('zfs.pool.import', vol['guid'])
+                    dispatcher.call_task_sync('zfs.mount', vol['guid'], True)
 
     def scrub_snapshots():
         interval = dispatcher.configstore.get('middleware.snapshot_scrub_interval')
@@ -3468,6 +3496,7 @@ def _init(dispatcher, plugin):
     plugin.register_event_handler('entity-subscriber.zfs.pool.changed', on_pool_change)
     plugin.register_event_handler('fs.zfs.vdev.removed', on_vdev_remove)
     plugin.register_event_handler('fs.zfs.vdev.state_changed', on_vdev_state_change)
+    plugin.register_event_handler('disk.attached', on_disk_attached)
 
     plugin.register_event_type('volume.changed')
     plugin.register_event_type('volume.dataset.changed')

@@ -280,6 +280,7 @@
             "service.consul.start_join_wan": [],
             "service.consul.retry_join": true,
             "service.consul.encryption_key": null,
+            "service.iscsid.enable": false,
             "update.check_auto": true,
             "update.train": "FreeNAS-10-Nightlies",
             "accounts.local_gid_range": [
@@ -1007,6 +1008,13 @@
                 },
                 "builtin": true,
                 "name": "ypbind"
+            },
+            "e538db78-b14e-11e6-af2f-000c29796bea": {
+                "rcng": {
+                    "rc-scripts": "iscsid"
+                },
+                "builtin": true,
+                "name": "iscsid"
             }
         },
         "metadata": {
@@ -1642,6 +1650,21 @@
     {
         "metadata": {
             "name": "vmware.datasets",
+            "migration": "keep",
+            "pkey-type": "uuid",
+            "attributes": {
+                "type": "config",
+                "unique_indexes": [
+                    ["name"]
+                ]
+            }
+        },
+        "data": {
+        }
+    },
+    {
+        "metadata": {
+            "name": "iscsi_initiator.targets",
             "migration": "keep",
             "pkey-type": "uuid",
             "attributes": {

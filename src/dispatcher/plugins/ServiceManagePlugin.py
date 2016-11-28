@@ -131,7 +131,6 @@ class ServiceInfoProvider(Provider):
             else:
                 return
 
-
         rc_scripts = svc['rcng']['rc-scripts']
 
         if type(rc_scripts) is str:

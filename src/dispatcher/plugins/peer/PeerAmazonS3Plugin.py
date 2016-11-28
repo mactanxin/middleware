@@ -169,4 +169,3 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler("peer.amazon-s3.create", AmazonS3PeerCreateTask)
     plugin.register_task_handler("peer.amazon-s3.delete", AmazonS3PeerDeleteTask)
     plugin.register_task_handler("peer.amazon-s3.update", AmazonS3PeerUpdateTask)
-

@@ -1270,10 +1270,9 @@ def update_disk_cache(dispatcher, path):
     data_path = data_uuid
 
     encrypted = False
-    if data_part:
-        if data_part["encrypted"]:
-            data_path = data_uuid + '.eli'
-            encrypted = True
+    if data_part and data_part["encrypted"]:
+        data_path = data_uuid + '.eli'
+        encrypted = True
 
     swap_part = first_or_default(lambda x: x['type'] == 'freebsd-swap', partitions)
     swap_uuid = swap_part["uuid"] if swap_part else None
@@ -1579,6 +1578,8 @@ def _init(dispatcher, plugin):
             with dispatcher.get_lock('diskcache:{0}'.format(path)):
                 generate_disk_cache(dispatcher, path)
 
+        dispatcher.emit_event('disk.attached', {'path': path})
+
     def on_device_detached(args):
         path = args['path']
         if re.match(r'^/dev/(da|ada|vtbd|nvd)[0-9]+$', path):
@@ -1587,6 +1588,8 @@ def _init(dispatcher, plugin):
 
         if re.match(r'^/dev/(da|ada|vtbd|nvd|multipath/mpath)[0-9]+$', path):
             dispatcher.unregister_resource('disk:{0}'.format(path))
+
+        dispatcher.emit_event('disk.detached', {'path': path})
 
     def on_device_mediachange(args):
         # Regenerate caches
@@ -1868,6 +1871,8 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('disk.parallel_test', DiskParallelTestTask)
 
     plugin.register_event_type('disk.changed')
+    plugin.register_event_type('disk.attached')
+    plugin.register_event_type('disk.detached')
     plugin.register_event_type('disk.enclosure.changed')
 
     plugin.register_debug_hook(collect_debug)

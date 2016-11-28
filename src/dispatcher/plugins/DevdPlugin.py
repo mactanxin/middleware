@@ -269,6 +269,7 @@ class DevdEventSource(EventSource):
         self.register_event_type("fs.zfs.dataset.deleted")
         self.register_event_type("fs.zfs.dataset.renamed")
         self.register_event_type("fs.zfs.snapshot.cloned")
+        self.register_event_type("iscsi.session.update")
 
     def __tokenize(self, buffer):
         try:
@@ -364,6 +365,10 @@ class DevdEventSource(EventSource):
         params.update(args)
         self.emit_event(event_mapping[ev_type][0], **params)
 
+    def __process_iscsi(self, args):
+        if args['subsystem'] == 'SESSION' and args['type'] == 'UPDATE':
+            self.emit_event('iscsi.session.update', **exclude(args, "system", "subsystem", "type"))
+
     def read_until_nul(self, sock):
         buf = io.BytesIO()
         while True:
@@ -407,6 +412,9 @@ class DevdEventSource(EventSource):
 
                     if event["system"] == "ZFS":
                         self.__process_zfs(event)
+
+                    if event["system"] == "ISCSI":
+                        self.__process_iscsi(event)
 
                     if event["system"] == "SYSTEM":
                         self.__process_system(event)
