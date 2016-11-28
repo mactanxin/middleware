@@ -53,7 +53,14 @@ chroot_target()
 # 3:  Check memory size and cpu speed.
 pre_install_check()
 {
-    true
+    # We need at least 4gbytes of RAM
+    local readonly minmem=$(expr 4 \* 1024 \* 1024 \* 1024)
+    local memsize=$(sysctl -n hw.physmem)
+
+    if [ ${memsize} -lt ${minmem} ]; then
+	dialog --clear --title "${AVATAR_PROJECT}" --yesno "You have less than the recommended amount of RAM (4GBytes), do you wish to continue even though performance may be horribly slow?" 7 74 || return 1
+    fi
+    return 0
 }
 
 build_config_old()
@@ -264,7 +271,7 @@ EOD
 ask_boot_method()
 {
     # TrueNAS is BIOS only for now
-    if [ "$AVATAR_PROJECT" = "TrueNAS" ] ; then
+    if [ "${AVATAR_PROJECT}" = "TrueNAS" -a "$(sysctl -n kern.vm_guest)" != "bhyve" ]; then
       return 1
     fi
 
@@ -793,6 +800,10 @@ menu_install()
 	INTERACTIVE=false
     else
 	INTERACTIVE=true
+    fi
+
+    if ${INTERACTIVE}; then
+	pre_install_check || return 0
     fi
 
     if do_sata_dom
