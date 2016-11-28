@@ -82,6 +82,8 @@ class WinbindPlugin(DirectoryServicePlugin):
         self.ldap_servers = None
         self.ldap = None
         self.domain_users_guid = None
+        self.user_dn = None
+        self.group_dn = None
         self.cv = Condition()
         self.bind_thread = Thread(target=self.bind, daemon=True)
         self.bind_thread.start()
@@ -103,7 +105,7 @@ class WinbindPlugin(DirectoryServicePlugin):
 
     @property
     def base_dn(self):
-        return join_dn('CN=Users', domain_to_dn(self.realm))
+        return domain_to_dn(self.realm)
 
     @property
     def wbc(self):
@@ -183,6 +185,7 @@ class WinbindPlugin(DirectoryServicePlugin):
 
                 if notify:
                     if self.is_joined():
+                        self.directory.put_state(DirectoryState.EXITING)
                         self.leave()
 
                 if self.enabled:
@@ -202,45 +205,59 @@ class WinbindPlugin(DirectoryServicePlugin):
                     else:
                         self.domain_info = self.wbc.get_domain_info(self.realm)
                         self.domain_name = self.wbc.interface.netbios_domain
-                        self.directory.put_state(DirectoryState.BOUND)
 
-                    if not self.ldap:
-                        logger.debug('Initializing LDAP connection')
-                        logger.debug('LDAP server addresses: {0}'.format(', '.join(self.ldap_addresses)))
-                        ldap_addresses = self.ldap_addresses
-                        sasl_credentials = None
-
-                        if self.parameters.get('dc_address'):
-                            logger.debug('Using manually configured DC address')
-                            sasl_credentials = (self.ldap_addresses[0][:-1],)
-                            ldap_addresses = get_a_records(self.ldap_addresses[0], self.parameters['dc_address'])
-
-                        self.ldap_servers = [ldap3.Server(i) for i in ldap_addresses]
-                        self.ldap = ldap3.Connection(
-                            self.ldap_servers,
-                            client_strategy='ASYNC',
-                            authentication=ldap3.SASL,
-                            sasl_mechanism='GSSAPI',
-                            sasl_credentials=sasl_credentials
-                        )
-
+                    if self.directory.state != DirectoryState.BOUND:
                         try:
-                            self.ldap.bind()
+                            logger.debug('Initializing LDAP connection')
+                            logger.debug('LDAP server addresses: {0}'.format(', '.join(self.ldap_addresses)))
+                            ldap_addresses = self.ldap_addresses
+                            sasl_credentials = None
+
+                            if self.parameters.get('dc_address'):
+                                logger.debug('Using manually configured DC address')
+                                sasl_credentials = (self.ldap_addresses[0][:-1],)
+                                ldap_addresses = get_a_records(self.ldap_addresses[0], self.parameters['dc_address'])
+
+                            self.ldap_servers = [ldap3.Server(i) for i in ldap_addresses]
+                            self.ldap = ldap3.Connection(
+                                self.ldap_servers,
+                                client_strategy='ASYNC',
+                                authentication=ldap3.SASL,
+                                sasl_mechanism='GSSAPI',
+                                sasl_credentials=sasl_credentials
+                            )
+
+                            if not self.ldap.bind():
+                                # try TLS now
+                                logger.warning('Regular bind failed, trying STARTTLS...')
+                                self.ldap.start_tls()
+                                if not self.ldap.bind():
+                                    raise RuntimeError("Failed to bind")
+
                             logger.debug('LDAP bound')
+
+                            # Figure out group DN and prefetch "Domain Users" GUID
+                            for dn in ('CN=Users', 'CN=Groups'):
+                                du = self.search_one(join_dn(dn, self.base_dn), '(sAMAccountName=Domain Users)')
+                                if not du:
+                                    continue
+
+                                self.domain_users_guid = uuid.UUID(bytes=du['attributes']['objectGUID'][0])
+                                self.user_dn = join_dn('CN=Users', self.base_dn)
+                                self.group_dn = join_dn(dn, self.base_dn)
+                                logger.debug('Group DN is {0}'.format(self.group_dn))
+                                logger.debug('Domain Users GUID is {0}'.format(self.domain_users_guid))
+                                break
+                            else:
+                                raise RuntimeError('Failed to fetch Domain Users')
+
                         except BaseException as err:
-                            logging.exception('err')
-                            self.directory.put_status(errno.ENXIO, str(err))
+                            self.directory.put_status(errno.ENXIO, '{0} <{1}>'.format(str(err), type(err).__name__))
                             self.directory.put_state(DirectoryState.FAILURE)
-                            continue
-
-                        # Prefetch "Domain Users" GUID
-                        du = self.search_one(self.base_dn, '(sAMAccountName=Domain Users)')
-                        self.domain_users_guid = uuid.UUID(bytes=du['attributes']['objectGUID'][0])
-                        logger.debug('Domain Users GUID is {0}'.format(self.domain_users_guid))
-
+                        else:
+                            self.directory.put_state(DirectoryState.BOUND)
                 else:
                     if self.directory.state != DirectoryState.DISABLED:
-                        self.directory.put_state(DirectoryState.EXITING)
                         self.leave()
                         self.directory.put_state(DirectoryState.DISABLED)
 
@@ -270,7 +287,7 @@ class WinbindPlugin(DirectoryServicePlugin):
                 '{0}-{1}'.format(self.uid_min, self.uid_max),
             'client use spnego': 'yes',
             'allow trusted domains': 'no',
-            'client ldap sasl wrapping': 'plain',
+            'client ldap sasl wrapping': self.parameters['sasl_wrapping'].lower(),
             'template shell': '/bin/sh',
             'template homedir': '/home/%U'
         }
@@ -325,7 +342,7 @@ class WinbindPlugin(DirectoryServicePlugin):
                 ('distinguishedName', 'in', get(entry, 'memberOf'))
             ])
 
-            for r in self.search(self.base_dn, qstr):
+            for r in self.search(self.group_dn, qstr):
                 r = dict(r['attributes'])
                 guid = uuid.UUID(bytes=get(r, 'objectGUID.0'))
                 groups.append(str(guid))
@@ -372,7 +389,7 @@ class WinbindPlugin(DirectoryServicePlugin):
                 ('distinguishedName', 'in', get(entry, 'memberOf'))
             ])
 
-            for r in self.search(self.base_dn, qstr):
+            for r in self.search(self.group_dn, qstr):
                 r = dict(r['attributes'])
                 guid = uuid.UUID(bytes=get(r, 'objectGUID.0'))
                 parents.append(str(guid))
@@ -397,7 +414,7 @@ class WinbindPlugin(DirectoryServicePlugin):
         query = LdapQueryBuilder(AD_LDAP_ATTRIBUTE_MAPPING)
         qstr = query.build_query([['objectClass', '=', 'person']] + (filter or []))
         logger.debug('getpwent query string: {0}'.format(qstr))
-        results = self.search(self.base_dn, qstr)
+        results = self.search(self.user_dn, qstr)
         return (self.convert_user(i) for i in results)
 
     def getpwuid(self, uid):
@@ -414,7 +431,7 @@ class WinbindPlugin(DirectoryServicePlugin):
             return
 
         usid = ldap3.utils.conv.escape_bytes(bytes(wbu.sid))
-        return self.convert_user(self.search_one(self.base_dn, '(objectSid={0})'.format(usid)))
+        return self.convert_user(self.search_one(self.user_dn, '(objectSid={0})'.format(usid)))
 
     def getpwuuid(self, id):
         logger.debug('getpwuuid(uuid={0})'.format(id))
@@ -423,7 +440,7 @@ class WinbindPlugin(DirectoryServicePlugin):
             return
 
         guid = ldap3.utils.conv.escape_bytes(uuid.UUID(id).bytes)
-        return self.convert_user(self.search_one(self.base_dn, '(objectGUID={0})'.format(guid)))
+        return self.convert_user(self.search_one(self.user_dn, '(objectGUID={0})'.format(guid)))
 
     def getpwnam(self, name):
         logger.debug('getpwnam(name={0})'.format(name))
@@ -437,7 +454,7 @@ class WinbindPlugin(DirectoryServicePlugin):
             logger.debug('getpwnam: not joined')
             return
 
-        return self.convert_user(self.search_one(self.base_dn, '(sAMAccountName={0})'.format(name)))
+        return self.convert_user(self.search_one(self.user_dn, '(sAMAccountName={0})'.format(name)))
 
     def getgrent(self, filter=None, params=None):
         logger.debug('getgrent(filter={0}, params={1})'.format(filter, params))
@@ -445,7 +462,7 @@ class WinbindPlugin(DirectoryServicePlugin):
             logger.debug('getgrent: not joined')
             return []
 
-        results = self.search(self.base_dn, '(objectClass=group)')
+        results = self.search(self.group_dn, '(objectClass=group)')
         return (self.convert_group(i) for i in results)
 
     def getgrnam(self, name):
@@ -460,7 +477,7 @@ class WinbindPlugin(DirectoryServicePlugin):
             logger.debug('getgrnam: not joined')
             return
 
-        return self.convert_group(self.search_one(self.base_dn, '(sAMAccountName={0})'.format(name)))
+        return self.convert_group(self.search_one(self.group_dn, '(sAMAccountName={0})'.format(name)))
 
     def getgruuid(self, id):
         logger.debug('getgruuid(uuid={0})'.format(id))
@@ -469,7 +486,7 @@ class WinbindPlugin(DirectoryServicePlugin):
             return
 
         guid = ldap3.utils.conv.escape_bytes(uuid.UUID(id).bytes)
-        return self.convert_group(self.search_one(self.base_dn, '(objectGUID={0})'.format(guid)))
+        return self.convert_group(self.search_one(self.group_dn, '(objectGUID={0})'.format(guid)))
 
     def getgrgid(self, gid):
         logger.debug('getgrgid(gid={0})'.format(gid))
@@ -482,7 +499,7 @@ class WinbindPlugin(DirectoryServicePlugin):
             return
 
         usid = ldap3.utils.conv.escape_bytes(bytes(wbg.sid))
-        return self.convert_group(self.search_one(self.base_dn, '(objectSid={0})'.format(usid)))
+        return self.convert_group(self.search_one(self.group_dn, '(objectSid={0})'.format(usid)))
 
     def configure(self, enable, directory):
         with self.cv:
@@ -522,7 +539,6 @@ class WinbindPlugin(DirectoryServicePlugin):
             return False
 
         logger.info('Sucessfully joined to the domain {0}'.format(self.realm))
-        self.directory.put_state(DirectoryState.BOUND)
         return True
 
     def leave(self):
@@ -553,7 +569,7 @@ def _init(context):
 
     context.register_schema('ldap-directory-params-sasl-wrapping', {
         'type': 'string',
-        'enum': ['OFF', 'SSL', 'TLS']
+        'enum': ['PLAIN', 'SIGN', 'SEAL']
     })
 
     context.register_schema('winbind-directory-params', {
