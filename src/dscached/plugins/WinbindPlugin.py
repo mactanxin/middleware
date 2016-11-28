@@ -184,7 +184,7 @@ class WinbindPlugin(DirectoryServicePlugin):
                 notify = self.cv.wait(60)
 
                 if notify:
-                    if self.is_joined():
+                    if self.is_joined() and self.enabled:
                         self.directory.put_state(DirectoryState.EXITING)
                         self.leave()
 
