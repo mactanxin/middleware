@@ -31,6 +31,7 @@ import logging
 from datastore.config import ConfigNode
 from freenas.dispatcher.rpc import RpcException, SchemaHelper as h, description, accepts, returns, private
 from task import Task, Provider, TaskException, TaskDescription
+from utils import is_port_open
 
 logger = logging.getLogger('WebDAVPlugin')
 
@@ -60,6 +61,12 @@ class WebDAVConfigureTask(Task):
 
     def run(self, webdav):
         node = ConfigNode('service.webdav', self.configstore).__getstate__()
+
+        for p in ('http_port', 'https_port'):
+            port = webdav.get(p)
+            if port and port != node[p] and is_port_open(port):
+                raise TaskException(errno.EBUSY, 'Port number : {0} is already in use'.format(port))
+
         node.update(webdav)
 
         if node['http_port'] == node['https_port']:
