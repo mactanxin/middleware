@@ -290,7 +290,6 @@ class WinbindPlugin(DirectoryServicePlugin):
                 logger.debug('Setting samba parameter "{0}" to "{1}"'.format(k, v))
                 cfg[k] = v
 
-        #self.context.client.call_sync('service.reload', 'smb', 'reload')
         subprocess.call(['/usr/sbin/service', 'samba_server', 'restart'])
 
     def get_directory_info(self):
@@ -502,12 +501,16 @@ class WinbindPlugin(DirectoryServicePlugin):
             self.configure_smb(True)
             obtain_or_renew_ticket(self.principal, self.parameters['password'])
 
-            subprocess.call(['/usr/local/bin/net', 'ads', 'join', self.realm, '-k'])
-            subprocess.call(['/usr/sbin/service', 'samba_server', 'restart'])
+            try:
+                subprocess.check_output(['/usr/local/bin/net', 'ads', 'join', self.realm, '-k'])
+                subprocess.call(['/usr/sbin/service', 'samba_server', 'restart'])
+            except subprocess.CalledProcessError as err:
+                raise RuntimeError(err.output.decode('utf-8'))
 
             self.dc = self.wbc.ping_dc(self.realm)
             self.domain_info = self.wbc.get_domain_info(self.realm)
             self.domain_name = self.wbc.interface.netbios_domain
+
         except BaseException as err:
             self.directory.put_status(errno.ENXIO, str(err))
             self.directory.put_state(DirectoryState.FAILURE)
