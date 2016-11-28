@@ -25,6 +25,7 @@
 #
 #####################################################################
 
+import os
 import errno
 import logging
 
@@ -96,10 +97,19 @@ class FTPConfigureTask(Task):
         return ['system']
 
     def run(self, ftp):
+        if ftp.get('filemask'):
+            ftp['filemask'] = get_integer(ftp['filemask'])
+
+        if ftp.get('dirmask'):
+            ftp['dirmask'] = get_integer(ftp['dirmask'])
+
+        if ftp.get('anonymous_path'):
+            if not os.path.exists(ftp['anonymous_path']):
+                raise TaskException(errno.ENOENT,
+                    'Directory {0} does not exists'.format(ftp['anonymous_path']))
+
         try:
             node = ConfigNode('service.ftp', self.configstore)
-            ftp['filemask'] = get_integer(ftp['filemask'])
-            ftp['dirmask'] = get_integer(ftp['dirmask'])
             node.update(ftp)
             self.dispatcher.call_sync('etcd.generation.generate_group', 'ftp')
             self.dispatcher.dispatch_event('service.ftp.changed', {
