@@ -133,7 +133,8 @@ class WinbindPlugin(DirectoryServicePlugin):
             'site_name': None,
             'dc_address': None,
             'gcs_address': None,
-            'allow_dns_updates': True
+            'allow_dns_updates': True,
+            'sasl_wrapping': 'PLAIN'
         })
 
     def is_joined(self, full=False):
@@ -507,6 +508,8 @@ class WinbindPlugin(DirectoryServicePlugin):
                 subprocess.check_output(['/usr/local/bin/net', 'ads', 'join', self.realm, '-k'])
                 subprocess.call(['/usr/sbin/service', 'samba_server', 'restart'])
             except subprocess.CalledProcessError as err:
+                # Undo possibly partially successful join
+                subprocess.call(['/usr/local/bin/net', 'ads', 'leave'])
                 raise RuntimeError(err.output.decode('utf-8'))
 
             self.dc = self.wbc.ping_dc(self.realm)
@@ -526,6 +529,10 @@ class WinbindPlugin(DirectoryServicePlugin):
         logger.info('Leaving domain')
         subprocess.call(['/usr/local/bin/net', 'ads', 'leave'])
         self.configure_smb(False)
+        self.dc = None
+        self.domain_name = None
+        self.domain_info = None
+        self.ldap = None
 
     def get_kerberos_realm(self, parameters):
         ret = {
@@ -544,6 +551,11 @@ class WinbindPlugin(DirectoryServicePlugin):
 def _init(context):
     context.register_plugin('winbind', WinbindPlugin)
 
+    context.register_schema('ldap-directory-params-sasl-wrapping', {
+        'type': 'string',
+        'enum': ['OFF', 'SSL', 'TLS']
+    })
+
     context.register_schema('winbind-directory-params', {
         'type': 'object',
         'additionalProperties': False,
@@ -556,7 +568,8 @@ def _init(context):
             'site_name': {'type': ['string', 'null']},
             'dc_address': {'type': ['string', 'null']},
             'gcs_address': {'type': ['string', 'null']},
-            'allow_dns_updates': {'type': 'boolean'}
+            'allow_dns_updates': {'type': 'boolean'},
+            'sasl_wrapping': {'$ref': 'ldap-directory-params-sasl-wrapping'}
         }
     })
 
