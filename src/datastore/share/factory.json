@@ -1438,9 +1438,24 @@
                 "subtype": "USER",
                 "severity": "INFO"
             },
+            "UserLogin": {
+                "type": "SYSTEM",
+                "subtype": "USER",
+                "severity": "INFO"
+            },
+            "UserLogout": {
+                "type": "SYSTEM",
+                "subtype": "USER",
+                "severity": "INFO"
+            },
             "DirectoryServiceBindFailed": {
                 "type": "SYSTEM",
                 "subtype": "DIRECTORY_SERVICES",
+                "severity": "WARNING"
+            },
+            "CalendarTaskFailed": {
+                "type": "SYSTEM",
+                "subtype": "CALENDAR",
                 "severity": "WARNING"
             }
         }
