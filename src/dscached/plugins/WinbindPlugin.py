@@ -181,7 +181,8 @@ class WinbindPlugin(DirectoryServicePlugin):
                 notify = self.cv.wait(60)
 
                 if notify:
-                    pass
+                    if self.is_joined():
+                        self.leave()
 
                 if self.enabled:
                     try:
@@ -238,6 +239,7 @@ class WinbindPlugin(DirectoryServicePlugin):
 
                 else:
                     if self.directory.state != DirectoryState.DISABLED:
+                        self.directory.put_state(DirectoryState.EXITING)
                         self.leave()
                         self.directory.put_state(DirectoryState.DISABLED)
 
@@ -521,8 +523,8 @@ class WinbindPlugin(DirectoryServicePlugin):
         return True
 
     def leave(self):
-        logger.info('Leaving domain {0}'.format(self.realm))
-        subprocess.call(['/usr/local/bin/net', 'ads', 'leave', self.parameters['realm']])
+        logger.info('Leaving domain')
+        subprocess.call(['/usr/local/bin/net', 'ads', 'leave'])
         self.configure_smb(False)
 
     def get_kerberos_realm(self, parameters):
