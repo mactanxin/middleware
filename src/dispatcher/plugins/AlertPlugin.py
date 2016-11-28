@@ -187,7 +187,7 @@ class AlertsFiltersProvider(Provider):
 @description("Creates an Alert Filter")
 @accepts(h.all_of(
     h.ref('alert-filter'),
-    h.required('id')
+    h.required('id', 'emitter', 'parameters')
 ))
 class AlertFilterCreateTask(Task):
     @classmethod
