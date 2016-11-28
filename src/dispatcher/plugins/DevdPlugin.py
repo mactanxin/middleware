@@ -367,7 +367,7 @@ class DevdEventSource(EventSource):
 
     def __process_iscsi(self, args):
         if args['subsystem'] == 'SESSION' and args['type'] == 'UPDATE':
-            self.emit_event('iscsi.session.update', **args)
+            self.emit_event('iscsi.session.update', **exclude(args, "system", "subsystem", "type"))
 
     def read_until_nul(self, sock):
         buf = io.BytesIO()
