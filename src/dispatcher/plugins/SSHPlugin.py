@@ -31,6 +31,7 @@ from datastore.config import ConfigNode
 from freenas.dispatcher.rpc import RpcException, SchemaHelper as h, description, accepts, returns, private
 from task import Task, Provider, TaskException, TaskDescription
 from freenas.utils import exclude
+from utils import is_port_open
 
 logger = logging.getLogger('SSHPlugin')
 
@@ -59,6 +60,12 @@ class SSHConfigureTask(Task):
         return ['system']
 
     def run(self, ssh):
+        config = self.dispatcher.call_sync(
+            'service.query', [('name', '=', 'sshd')], {'single': True, 'select': 'config'})
+        port = ssh.get('port')
+        if port and port != config['port'] and is_port_open(port):
+            raise TaskException(errno.EBUSY, 'Port number : {0} is already in use'.format(port))
+
         try:
             node = ConfigNode('service.sshd', self.configstore)
             node.update(ssh)
