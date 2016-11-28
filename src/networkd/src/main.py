@@ -331,7 +331,7 @@ class ConfigurationService(RpcService):
         type_map = {
             'VLAN': 'vlan',
             'LAGG': 'lagg',
-            'BRIDGE': ('bridge', 'brg')
+            'BRIDGE': 'bridge'
         }
 
         if type not in list(type_map.keys()):
