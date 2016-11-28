@@ -15,7 +15,7 @@
 #
 # type The initial terminal type for this port.  For hardwired
 #      terminal lines, this will contain the type of terminal used.
-#      For virtual consoles, the correct type is typically cons25.
+#      For virtual consoles, the correct type is typically xterm.
 #      Other common values include network for network connections on
 #      pseudo-terminals, dialup for incoming modem ports, and unknown
 #      when the terminal type cannot be predetermined.
@@ -51,19 +51,19 @@
 %>\
 console	none				unknown	off secure
 #
-ttyv0	"/usr/libexec/getty go-cli"	cons25	on  secure
+ttyv0	"/usr/libexec/getty go-cli"	xterm	on  secure
 % if adv.get('console_cli'):
-ttyv1	"/usr/libexec/getty cli"	cons25	on  secure
+ttyv1	"/usr/libexec/getty cli"	xterm	on  secure
 % else:
-ttyv1	"/usr/libexec/getty Pc"		cons25	on  secure
+ttyv1	"/usr/libexec/getty Pc"		xterm	on  secure
 % endif
 # Virtual terminals
-ttyv2	"/usr/libexec/getty Pc"		cons25	on  secure
-ttyv3	"/usr/libexec/getty Pc"		cons25	on  secure
-ttyv4	"/usr/libexec/getty Pc"		cons25	on  secure
-ttyv5	"/usr/libexec/getty Pc"		cons25	on  secure
-ttyv6	"/usr/libexec/getty Pc"		cons25	on  secure
-ttyv7	"/usr/libexec/getty Pc"		cons25	on  secure
+ttyv2	"/usr/libexec/getty Pc"		xterm	on  secure
+ttyv3	"/usr/libexec/getty Pc"		xterm	on  secure
+ttyv4	"/usr/libexec/getty Pc"		xterm	on  secure
+ttyv5	"/usr/libexec/getty Pc"		xterm	on  secure
+ttyv6	"/usr/libexec/getty Pc"		xterm	on  secure
+ttyv7	"/usr/libexec/getty Pc"		xterm	on  secure
 ttyv8	"/usr/local/bin/xdm -nodaemon"	xterm	off secure
 # Serial terminals
 # The 'dialup' keyword identifies dialin lines to login, fingerd etc.
