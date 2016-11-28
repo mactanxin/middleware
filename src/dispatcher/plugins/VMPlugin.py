@@ -28,6 +28,7 @@
 import ipaddress
 import errno
 import os
+import copy
 import random
 import gzip
 import uuid
@@ -476,6 +477,8 @@ class VMBaseTask(ProgressTask):
                         )
 
         if res['type'] == 'GRAPHICS':
+            if q.get(vm, 'config.bootloader') != 'UEFI':
+                raise TaskException(errno.EINVAL, 'Graphical consoles are supported for UEFI bootloader only.')
             normalize(res['properties'], {'resolution': '1024x768'})
 
         if res['type'] == 'DISK':
@@ -924,6 +927,9 @@ class VMUpdateTask(VMBaseTask):
 
             self.join_subtasks(self.run_subtask('zfs.rename', vm_ds, new_vm_ds))
 
+        old_vm = copy.deepcopy(vm)
+        vm.update(updated_params)
+
         if 'config' in updated_params:
             readme = updated_params['config'].pop('readme', '')
             root = self.dispatcher.call_sync('vm.get_vm_root', vm['id'])
@@ -932,23 +938,29 @@ class VMUpdateTask(VMBaseTask):
                 with open(os.path.join(root, 'README.md'), 'w') as readme_file:
                     readme_file.write(readme)
 
+            if q.get(vm, 'config.bootloader') != 'UEFI':
+                if first_or_default(lambda i: i['type'] == 'GRAPHICS', vm['devices']):
+                    raise TaskException(
+                        errno.EINVAL,
+                        'Cannot change bootloader type. VM has graphical console - this is only supported in UEFI mode'
+                    )
+
         if 'devices' in updated_params:
             for res in updated_params['devices']:
                 res.pop('id', None)
-                existing = first_or_default(lambda i: i['name'] == res['name'], vm['devices'])
+                existing = first_or_default(lambda i: i['name'] == res['name'], old_vm['devices'])
                 if existing:
                     self.update_device(vm, existing, res)
                 else:
                     self.create_device(vm, res)
 
-            for res in vm['devices']:
+            for res in old_vm['devices']:
                 if not first_or_default(lambda i: i['name'] == res['name'], updated_params['devices']):
-                    self.delete_device(vm, res)
+                    self.delete_device(old_vm, res)
 
         if not updated_params.get('enabled', True):
             self.join_subtasks(self.run_subtask('vm.stop', id))
 
-        vm.update(updated_params)
         self.datastore.update('vms', id, vm)
         self.dispatcher.dispatch_event('vm.changed', {
             'operation': 'update',
