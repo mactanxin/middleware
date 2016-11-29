@@ -126,6 +126,7 @@ def migrate_collection(ds, dump, directory, force=False):
     integer = metadata['pkey-type'] == 'integer'
     upsert = metadata['migration'] in ('merge-overwrite', 'replace')
     configstore = metadata['attributes'].get('configstore', False)
+    just_created = False
 
     if metadata['migration'] != 'replace' and directory and os.path.isdir(directory) and ds.collection_exists(name):
         apply_migrations(ds, name, directory, force)
@@ -135,16 +136,17 @@ def migrate_collection(ds, dump, directory, force=False):
 
     if not ds.collection_exists(name):
         ds.collection_create(name, metadata['pkey-type'], metadata['attributes'])
+        just_created = True
 
     # Update pkey type for collection
     ds.collection_set_pkey_type(name, metadata['pkey-type'])
 
-    if metadata['migration'] == 'keep':
+    if metadata['migration'] == 'keep' and not just_created:
         return
 
     for key, row in list(data.items()):
         pkey = int(key) if integer else key
-        if metadata['migration'] == 'merge-preserve':
+        if metadata['migration'] == 'merge-preserve' or just_created:
             if not ds.exists(name, ('id', '=', pkey)):
                 ds.insert(name, row, pkey=pkey, config=configstore)
 
@@ -162,14 +164,20 @@ def migrate_db(ds, dump, migpath=None, types=None, force=False):
 
     for i in dump:
         metadata = i['metadata']
+        data = i['data']
         name = metadata['name']
         attrs = metadata['attributes']
+        integer = metadata['pkey-type'] == 'integer'
 
         if types and 'type' in attrs.keys() and attrs['type'] not in types:
             continue
 
         if not ds.collection_exists(name):
             ds.collection_create(name, metadata['pkey-type'], metadata['attributes'])
+            for key, row in list(data.items()):
+                pkey = int(key) if integer else key
+                ds.insert(name, row, pkey=pkey)
+
             print("Created missing collection {0}".format(name))
 
     for i in dump:
