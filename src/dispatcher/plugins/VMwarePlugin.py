@@ -362,7 +362,7 @@ class DeleteVMSnapshotsTask(ProgressTask):
                     'when': 'connect',
                     'host': q.get(peer, 'credentials.address'),
                     'datastore': mapping['datastore'],
-                    'error': getattr(err, 'msg') or str(err)
+                    'error': getattr(err, 'msg', str(err))
                 })
 
                 continue
