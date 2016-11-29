@@ -22,8 +22,9 @@ server\
 % endif
 
 % endfor
-restrict default limited kod nomodify notrap nopeer noquery
+restrict -4 default limited kod nomodify notrap nopeer noquery
 restrict -6 default limited kod nomodify notrap nopeer noquery
+restrict source notrap nomodify noquery
 restrict 127.0.0.1
-restrict -6 ::1
+restrict ::1
 restrict 127.127.1.0
