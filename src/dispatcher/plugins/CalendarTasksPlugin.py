@@ -76,7 +76,7 @@ class CreateCalendarTask(Task):
         return ['system']
 
     def run(self, task):
-        if task['name'] in self.dispatcher.call_sync('scheduler.management.query', [], {'select': 'name'}):
+        if self.dispatcher.call_sync('scheduler.management.query', [('name', '=', task['name'])], {'count': True}):
             raise TaskException(errno.EEXIST, 'Task {0} already exists'.format(task['name']))
 
         if is_empty_schedule(task.get('schedule')):
