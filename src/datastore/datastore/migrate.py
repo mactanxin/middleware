@@ -162,14 +162,20 @@ def migrate_db(ds, dump, migpath=None, types=None, force=False):
 
     for i in dump:
         metadata = i['metadata']
+        data = i['data']
         name = metadata['name']
         attrs = metadata['attributes']
+        integer = metadata['pkey-type'] == 'integer'
 
         if types and 'type' in attrs.keys() and attrs['type'] not in types:
             continue
 
         if not ds.collection_exists(name):
             ds.collection_create(name, metadata['pkey-type'], metadata['attributes'])
+            for key, row in list(data.items()):
+                pkey = int(key) if integer else key
+                ds.insert(name, row, pkey=pkey)
+
             print("Created missing collection {0}".format(name))
 
     for i in dump:

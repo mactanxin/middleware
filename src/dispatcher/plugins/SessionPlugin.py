@@ -142,7 +142,6 @@ def _init(dispatcher, plugin):
         i['ended_at'] = datetime.utcnow()
         dispatcher.datastore.update('sessions', i['id'], i)
 
-
     plugin.register_provider('session', SessionProvider)
     plugin.register_event_type('session.changed')
     plugin.register_event_type('session.message')
