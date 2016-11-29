@@ -1461,7 +1461,7 @@
         }
     },
     {
-         "metadata": {
+        "metadata": {
             "name": "alert.filters",
             "migration": "keep",
             "pkey-type": "native",
@@ -1473,10 +1473,10 @@
             "default": {
                 "emitter": "EMAIL",
                 "parameters": {
-                    "destination": null
+                    "%type": "alert-emitter-email",
+                    "addresses": []
                 },
-                "predicates": [
-                ]
+                "predicates": []
             }
         }
     },
