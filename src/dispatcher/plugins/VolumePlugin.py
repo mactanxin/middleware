@@ -2809,12 +2809,9 @@ def wait_for_cache(dispatcher, type, op, id):
 
 def simplify_topology(topology):
     def simplify_vdev(v):
-        unwanted = []
-        for prop in v:
+        for prop in list(v):
             if prop not in ('type', 'path', 'children', 'id'):
-                unwanted.append(prop)
-        for key in unwanted:
-            del v[key]
+                del v[prop]
 
     for name, grp in topology.items():
         for vdev in grp:
