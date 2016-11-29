@@ -45,23 +45,24 @@ class NTPServersProvider(Provider):
 
 
 @description("Runs an instant sync with an NTP Server")
+@accepts(str)
 class NTPServerSyncNowTask(Task):
     @classmethod
     def early_describe(cls):
         return "Syncronizing with NTP Server"
 
     def describe(self, address):
-        return TaskDescription("Syncronizing with NTP Server {name}", name=address)
+        return TaskDescription("Synchronizing with NTP Server {name}", name=address)
 
     def verify(self, address):
-        return ['system']
-
-    def run(self, address):
         if not address:
             raise TaskException(
                 errno.ENOENT,
                 'Please specify the address of an NTP server to sync with.'
             )
+        return ['system']
+
+    def run(self, address):
         try:
             system('ntpdate', '-u', address)
         except SubprocessException:
