@@ -1823,12 +1823,20 @@ class VolumeUnlockTask(Task):
 
             subtasks = []
             for vdev, _ in iterate_vdevs(vol['topology']):
+                path = self.dispatcher.call_sync(
+                    'disk.query',
+                    [('id', '=', vdev['id'])],
+                    {'single': True, 'select': 'path'}
+                )
+                if not path:
+                    path = vdev['path']
+
                 if vol['providers_presence'] == 'PART':
-                    vdev_conf = self.dispatcher.call_sync('disk.get_disk_config', vdev)
+                    vdev_conf = self.dispatcher.call_sync('disk.get_disk_config', path)
                     if not vdev_conf.get('encrypted'):
                         subtasks.append(self.run_subtask(
                             'disk.geli.attach',
-                            self.dispatcher.call_sync('disk.path_to_id', vdev['path']),
+                            self.dispatcher.call_sync('disk.path_to_id', path),
                             {
                                 'key': vol['encryption']['key'],
                                 'password': password
@@ -1837,7 +1845,7 @@ class VolumeUnlockTask(Task):
                 else:
                     subtasks.append(self.run_subtask(
                         'disk.geli.attach',
-                        self.dispatcher.call_sync('disk.path_to_id', vdev['path']),
+                        self.dispatcher.call_sync('disk.path_to_id', path),
                         {
                             'key': vol['encryption']['key'],
                             'password': password
