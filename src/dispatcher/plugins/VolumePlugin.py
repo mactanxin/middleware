@@ -119,16 +119,16 @@ class VolumeProvider(Provider):
             else:
                 topology = config['groups']
                 for vdev, _ in iterate_vdevs(topology):
-                    try:
-                        vdev['path'] = self.dispatcher.call_sync(
-                            'disk.partition_to_disk',
-                            vdev['path']
-                        )
-                    except RpcException as err:
-                        if err.code == errno.ENOENT:
-                            if encrypted:
-                                topology = vol['topology']
-                                break
+                    disk_info = self.dispatcher.call_sync(
+                        'disk.query',
+                        [('status.data_partition_path', '=', vdev['path'])],
+                        {'single': True, 'select': ('id', 'path')}
+                    )
+                    if not disk_info and encrypted:
+                        topology = vol['topology']
+                        break
+
+                    vdev['id'], vdev['path'] = disk_info
 
                 vol.update({
                     'rname': 'zpool:{0}'.format(vol['id']),
@@ -588,6 +588,13 @@ class VolumeCreateTask(ProgressTask):
                 self.join_subtasks(self.run_subtask('zfs.mount', name))
 
             self.set_progress(80)
+
+            for vdev, _ in iterate_vdevs(volume['topology']):
+                vdev['id'] = self.dispatcher.call_sync(
+                    'disk.query',
+                    [('path', '=', vdev['path'])],
+                    {'single': True, 'select': 'id'}
+                )
 
             pool = self.dispatcher.call_sync('zfs.pool.query', [('name', '=', name)], {'single': True})
             id = self.datastore.insert('volumes', {
@@ -1086,6 +1093,12 @@ class VolumeUpdateTask(ProgressTask):
             ))
 
             volume['topology'] = new_topology
+            for vdev, _ in iterate_vdevs(volume['topology']):
+                vdev['id'] = self.dispatcher.call_sync(
+                    'disk.query',
+                    [('path', '=', vdev['path'])],
+                    {'single': True, 'select': 'id'}
+                )
 
             self.datastore.update('volumes', volume['id'], volume)
             self.dispatcher.dispatch_event('volume.changed', {
@@ -1237,6 +1250,13 @@ class VolumeImportTask(Task):
                                 'slot': slot
                             }))
                             self.join_subtasks(self.run_subtask('disk.geli.ukey.del', disk_id, used_slot))
+
+            for vdev, _ in iterate_vdevs(new_topology):
+                vdev['id'] = self.dispatcher.call_sync(
+                    'disk.query',
+                    [('path', '=', vdev['path'])],
+                    {'single': True, 'select': 'id'}
+                )
 
             new_id = self.datastore.insert('volumes', {
                 'id': new_name,
