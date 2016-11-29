@@ -1211,21 +1211,7 @@ class VolumeImportTask(Task):
                 {'single': True, 'select': 'groups'}
             )
 
-            def simplify_vdev(v):
-                unwanted = []
-                for prop in v:
-                    if prop not in ('type', 'path', 'children'):
-                        unwanted.append(prop)
-                for key in unwanted:
-                    del v[key]
-
-            for name, grp in new_topology.items():
-                for vdev in grp:
-                    simplify_vdev(vdev)
-
-                    if 'children' in vdev:
-                        for child in vdev['children']:
-                            simplify_vdev(child)
+            simplify_topology(new_topology)
 
             if key or password:
                 slots_state = self.dispatcher.call_sync('disk.key_slots_by_paths', disks)
@@ -1441,10 +1427,10 @@ class VolumeReplaceTask(ProgressTask):
     def early_describe(cls):
         return "Replacing a disk in a volume"
 
-    def describe(self, id, vdev, disk, password=None):
+    def describe(self, id, vdev, path, password=None):
         return TaskDescription("Replacing disk a in volume {name}", name=id)
 
-    def verify(self, id, vdev, disk, password=None):
+    def verify(self, id, vdev, path, password=None):
         return ['zpool:{0}'.format(id)]
 
     def run(self, id, vdev, path, password=None):
@@ -1485,7 +1471,7 @@ class VolumeReplaceTask(ProgressTask):
                 'password': password
             }))
 
-            if encryption['slot'] is not 0:
+            if encryption['slot'] != 0:
                 self.join_subtasks(self.run_subtask('disk.geli.ukey.set', disk['id'], {
                     'key': encryption['key'],
                     'password': password,
@@ -1513,6 +1499,22 @@ class VolumeReplaceTask(ProgressTask):
 
         if spare:
             self.join_subtasks(self.run_subtask('zfs.pool.detach', id, vdev))
+
+        new_topology = self.dispatcher.call_sync(
+            'volume.query',
+            [('id', '=', id)],
+            {'single': True, 'select': 'topology'}
+        )
+        if new_topology:
+            vol = self.datastore.get_by_id('volumes', id)
+            simplify_topology(new_topology)
+            vol['topology'] = new_topology
+
+        self.datastore.update('volumes', id, vol)
+        self.dispatcher.dispatch_event('volume.changed', {
+            'operation': 'update',
+            'ids': [id]
+        })
 
 
 @description('Replaces failed disk in active volume')
@@ -2803,6 +2805,24 @@ def wait_for_cache(dispatcher, type, op, id):
         lambda: dispatcher.call_sync('{0}.query'.format(type), [('id', '=', id)], {'single': True}),
         300
     )
+
+
+def simplify_topology(topology):
+    def simplify_vdev(v):
+        unwanted = []
+        for prop in v:
+            if prop not in ('type', 'path', 'children', 'id'):
+                unwanted.append(prop)
+        for key in unwanted:
+            del v[key]
+
+    for name, grp in topology.items():
+        for vdev in grp:
+            simplify_vdev(vdev)
+
+            if 'children' in vdev:
+                for child in vdev['children']:
+                    simplify_vdev(child)
 
 
 def register_property_schemas(plugin):
