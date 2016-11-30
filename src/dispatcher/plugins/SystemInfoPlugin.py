@@ -49,7 +49,10 @@ from freenas.dispatcher.rpc import (
 )
 from lib.system import SubprocessException, system
 from lib.freebsd import get_sysctl
-from task import Provider, Task, TaskException, VerifyException, TaskAbortException, ValidationException, TaskDescription
+from task import (
+    Provider, Task, TaskException, VerifyException, TaskAbortException,
+    ValidationException, TaskDescription, TaskWarning,
+)
 from debug import AttachCommandOutput, AttachData
 
 if '/usr/local/lib' not in sys.path:
@@ -270,8 +273,14 @@ class SystemGeneralConfigureTask(Task):
             self.configstore.set('system.language', props['language'])
 
         if 'timezone' in props:
-            self.configstore.set('system.timezone', props['timezone'])
-            os.environ['TZ'] = props['timezone']
+            new = props['timezone']
+            old = self.configstore.get('system.timezone')
+            if new != old:
+                count = self.join_subtasks(self.run_subtask('calendar_task.change_timezone', new))[0]
+                self.add_warning(TaskWarning(
+                    errno.ENXIO, "{0} calendar tasks rescheduled from timezone '{1}' to '{2}'".format(count, old, new)))
+            self.configstore.set('system.timezone', new)
+            os.environ['TZ'] = new
 
         if 'console_keymap' in props:
             self.configstore.set(
