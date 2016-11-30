@@ -96,7 +96,10 @@ LoadPlugin write_graphite
     LogTraces true
     Interactive false
     Import "collectd-zfs"
+    Import "collectd-disktemp"
 
     <Module collectd-zfs>
+    </Module>
+    <Module collectd-disktemp>
     </Module>
 </Plugin>
