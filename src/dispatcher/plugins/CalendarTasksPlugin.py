@@ -138,6 +138,38 @@ class UpdateCalendarTask(Task):
 
 
 @accepts(str)
+@description('Reschedules all calendar tasks to new timezone')
+class ChangeTimezoneTask(Task):
+    @classmethod
+    def early_describe(cls):
+        return "Rescheduling calendar tasks to different timezone"
+
+    def describe(self, timezone):
+        return TaskDescription("Rescheduling calendar tasks to timezone: {0}".format(timezone))
+
+    def verify(self, timezone):
+        return ['system']
+
+    def run(self, timezone):
+        ids = []
+        for id, schedule in self.dispatcher.call_sync('scheduler.management.query', [], {'select': ['id', 'schedule']}):
+            schedule['timezone'] = timezone
+            try:
+                self.dispatcher.call_sync('scheduler.management.update', id, {'schedule': schedule})
+            except RpcException:
+                raise
+            else:
+                ids.append(id)
+
+        self.dispatcher.dispatch_event('calendar_task.changed', {
+            'operation': 'update',
+            'ids': ids
+        })
+
+        return len(ids)
+
+
+@accepts(str)
 @description('Deletes a calendar task')
 class DeleteCalendarTask(Task):
     @classmethod
@@ -259,4 +291,5 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('calendar_task.delete', DeleteCalendarTask)
     plugin.register_task_handler('calendar_task.run', RunCalendarTask)
     plugin.register_task_handler('calendar_task.command', CommandTask)
+    plugin.register_task_handler('calendar_task.change_timezone', ChangeTimezoneTask)
     plugin.register_event_type('calendar_task.changed')
