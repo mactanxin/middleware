@@ -82,6 +82,8 @@ class CreateCalendarTask(Task):
         if is_empty_schedule(task.get('schedule')):
             task['enabled'] = False
 
+        task['schedule']['timezone'] = self.dispatcher.call_sync('system.general.get_config')['timezone']
+
         try:
             tid = self.dispatcher.call_sync('scheduler.management.add', task)
         except RpcException:
@@ -125,6 +127,8 @@ class UpdateCalendarTask(Task):
         if 'schedule' in updated_params:
             if is_empty_schedule(updated_params['schedule']):
                 updated_params['enabled'] = False
+
+            updated_params['schedule']['timezone'] = self.dispatcher.call_sync('system.general.get_config')['timezone']
 
         try:
             self.dispatcher.call_sync('scheduler.management.update', id, updated_params)
