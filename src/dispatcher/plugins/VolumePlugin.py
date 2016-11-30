@@ -3155,7 +3155,7 @@ def _init(dispatcher, plugin):
 
                 if vdev['type'] == 'disk' and vdev['path'] == args['path']:
                     dispatcher.call_task_sync('zfs.pool.import', vol['guid'])
-                    dispatcher.call_task_sync('zfs.mount', vol['guid'], True)
+                    dispatcher.call_task_sync('zfs.mount', vol['id'], True)
 
     def scrub_snapshots():
         interval = dispatcher.configstore.get('middleware.snapshot_scrub_interval')
