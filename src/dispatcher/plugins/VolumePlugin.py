@@ -124,11 +124,12 @@ class VolumeProvider(Provider):
                         [('status.data_partition_path', '=', vdev['path'])],
                         {'single': True, 'select': ('id', 'path')}
                     )
-                    if not disk_info and encrypted:
-                        topology = vol['topology']
-                        break
-
-                    vdev['disk_id'], vdev['path'] = disk_info
+                    if not disk_info:
+                        if encrypted:
+                            topology = vol['topology']
+                            break
+                    else:
+                        vdev['disk_id'], vdev['path'] = disk_info
 
                 vol.update({
                     'rname': 'zpool:{0}'.format(vol['id']),
