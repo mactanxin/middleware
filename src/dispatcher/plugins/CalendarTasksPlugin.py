@@ -142,6 +142,7 @@ class UpdateCalendarTask(Task):
 
 
 @accepts(str)
+@returns(int)
 @description('Reschedules all calendar tasks to new timezone')
 class ChangeTimezoneTask(Task):
     @classmethod
@@ -149,7 +150,7 @@ class ChangeTimezoneTask(Task):
         return "Rescheduling calendar tasks to different timezone"
 
     def describe(self, timezone):
-        return TaskDescription("Rescheduling calendar tasks to timezone: {0}".format(timezone))
+        return TaskDescription("Rescheduling calendar tasks to timezone: {timezone}", timezone=timezone)
 
     def verify(self, timezone):
         return ['system']
@@ -158,12 +159,8 @@ class ChangeTimezoneTask(Task):
         ids = []
         for id, schedule in self.dispatcher.call_sync('scheduler.management.query', [], {'select': ['id', 'schedule']}):
             schedule['timezone'] = timezone
-            try:
-                self.dispatcher.call_sync('scheduler.management.update', id, {'schedule': schedule})
-            except RpcException:
-                raise
-            else:
-                ids.append(id)
+            self.dispatcher.call_sync('scheduler.management.update', id, {'schedule': schedule})
+            ids.append(id)
 
         self.dispatcher.dispatch_event('calendar_task.changed', {
             'operation': 'update',
