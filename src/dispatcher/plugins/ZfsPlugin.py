@@ -1636,7 +1636,7 @@ def _init(dispatcher, plugin):
         'properties': {
             'path': {'type': ['string', 'null']},
             'guid': {'type': 'string'},
-            'id': {'type': 'string'},
+            'disk_id': {'type': 'string'},
             'status': {
                 'type': 'string',
                 'readOnly': True

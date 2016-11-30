@@ -128,7 +128,7 @@ class VolumeProvider(Provider):
                         topology = vol['topology']
                         break
 
-                    vdev['id'], vdev['path'] = disk_info
+                    vdev['disk_id'], vdev['path'] = disk_info
 
                 vol.update({
                     'rname': 'zpool:{0}'.format(vol['id']),
@@ -590,7 +590,7 @@ class VolumeCreateTask(ProgressTask):
             self.set_progress(80)
 
             for vdev, _ in iterate_vdevs(volume['topology']):
-                vdev['id'] = self.dispatcher.call_sync(
+                vdev['disk_id'] = self.dispatcher.call_sync(
                     'disk.query',
                     [('path', '=', vdev['path'])],
                     {'single': True, 'select': 'id'}
@@ -1094,7 +1094,7 @@ class VolumeUpdateTask(ProgressTask):
 
             volume['topology'] = new_topology
             for vdev, _ in iterate_vdevs(volume['topology']):
-                vdev['id'] = self.dispatcher.call_sync(
+                vdev['disk_id'] = self.dispatcher.call_sync(
                     'disk.query',
                     [('path', '=', vdev['path'])],
                     {'single': True, 'select': 'id'}
@@ -1238,7 +1238,7 @@ class VolumeImportTask(Task):
                             self.join_subtasks(self.run_subtask('disk.geli.ukey.del', disk_id, used_slot))
 
             for vdev, _ in iterate_vdevs(new_topology):
-                vdev['id'] = self.dispatcher.call_sync(
+                vdev['disk_id'] = self.dispatcher.call_sync(
                     'disk.query',
                     [('path', '=', vdev['path'])],
                     {'single': True, 'select': 'id'}
@@ -1827,7 +1827,7 @@ class VolumeUnlockTask(Task):
             for vdev, _ in iterate_vdevs(vol['topology']):
                 path = self.dispatcher.call_sync(
                     'disk.query',
-                    [('id', '=', vdev['id'])],
+                    [('id', '=', vdev.get('disk_id', ''))],
                     {'single': True, 'select': 'path'}
                 )
                 if not path:
@@ -2810,7 +2810,7 @@ def wait_for_cache(dispatcher, type, op, id):
 def simplify_topology(topology):
     def simplify_vdev(v):
         for prop in list(v):
-            if prop not in ('type', 'path', 'children', 'id'):
+            if prop not in ('type', 'path', 'children', 'disk_id'):
                 del v[prop]
 
     for name, grp in topology.items():
