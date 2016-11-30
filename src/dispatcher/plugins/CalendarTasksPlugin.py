@@ -76,11 +76,13 @@ class CreateCalendarTask(Task):
         return ['system']
 
     def run(self, task):
-        if task['name'] in self.dispatcher.call_sync('scheduler.management.query', [], {'select': 'name'}):
+        if self.dispatcher.call_sync('scheduler.management.query', [('name', '=', task['name'])], {'count': True}):
             raise TaskException(errno.EEXIST, 'Task {0} already exists'.format(task['name']))
 
         if is_empty_schedule(task.get('schedule')):
             task['enabled'] = False
+
+        task['schedule']['timezone'] = self.dispatcher.call_sync('system.general.get_config')['timezone']
 
         try:
             tid = self.dispatcher.call_sync('scheduler.management.add', task)
@@ -126,6 +128,8 @@ class UpdateCalendarTask(Task):
             if is_empty_schedule(updated_params['schedule']):
                 updated_params['enabled'] = False
 
+            updated_params['schedule']['timezone'] = self.dispatcher.call_sync('system.general.get_config')['timezone']
+
         try:
             self.dispatcher.call_sync('scheduler.management.update', id, updated_params)
         except RpcException:
@@ -135,6 +139,35 @@ class UpdateCalendarTask(Task):
             'operation': 'update',
             'ids': [id]
         })
+
+
+@accepts(str)
+@returns(int)
+@description('Reschedules all calendar tasks to new timezone')
+class ChangeTimezoneTask(Task):
+    @classmethod
+    def early_describe(cls):
+        return "Rescheduling calendar tasks to different timezone"
+
+    def describe(self, timezone):
+        return TaskDescription("Rescheduling calendar tasks to timezone: {timezone}", timezone=timezone)
+
+    def verify(self, timezone):
+        return ['system']
+
+    def run(self, timezone):
+        ids = []
+        for id, schedule in self.dispatcher.call_sync('scheduler.management.query', [], {'select': ['id', 'schedule']}):
+            schedule['timezone'] = timezone
+            self.dispatcher.call_sync('scheduler.management.update', id, {'schedule': schedule})
+            ids.append(id)
+
+        self.dispatcher.dispatch_event('calendar_task.changed', {
+            'operation': 'update',
+            'ids': ids
+        })
+
+        return len(ids)
 
 
 @accepts(str)
@@ -259,4 +292,5 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('calendar_task.delete', DeleteCalendarTask)
     plugin.register_task_handler('calendar_task.run', RunCalendarTask)
     plugin.register_task_handler('calendar_task.command', CommandTask)
+    plugin.register_task_handler('calendar_task.change_timezone', ChangeTimezoneTask)
     plugin.register_event_type('calendar_task.changed')
