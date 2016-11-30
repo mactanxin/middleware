@@ -171,9 +171,10 @@ class ReplicationLinkProvider(Provider):
         link_cache.remove(name)
 
     @private
-    def datasets_from_link(self, link):
+    def local_datasets_from_link(self, link):
+        is_master, _ = self.get_replication_state(link)
         datasets = []
-        for dataset in link['datasets']:
+        for dataset in iterate_datasets(link['datasets'], is_master, local=True):
             if link['recursive']:
                 try:
                     dependencies = self.dispatcher.call_sync(
@@ -274,8 +275,10 @@ class ReplicationBaseTask(Task):
                 ))
 
     def set_datasets_mount_ro(self, link, readonly, client=None):
-        all_datasets = self.dispatcher.call_sync('replication.datasets_from_link', link)
-        parent_datasets = self.get_parent_datasets(link)
+        rpc_target = client or self.dispatcher
+        all_datasets = rpc_target.call_sync('replication.local_datasets_from_link', link)
+
+        parent_datasets = self.get_parent_datasets(all_datasets, link)
         if readonly:
             self.set_datasets_mount(parent_datasets, False, link['recursive'], client)
             self.set_datasets_readonly(all_datasets, True, client)
@@ -293,7 +296,7 @@ class ReplicationBaseTask(Task):
 
     def check_datasets_valid(self, link):
         datasets = q.query(
-            self.dispatcher.call_sync('replication.datasets_from_link', link),
+            self.dispatcher.call_sync('replication.local_datasets_from_link', link),
             select='name'
         )
         is_master, remote = self.get_replication_state(link)
@@ -302,7 +305,7 @@ class ReplicationBaseTask(Task):
         for dataset in datasets:
             for l in links:
                 l_datasets = q.query(
-                    self.dispatcher.call_sync('replication.datasets_from_link', l),
+                    self.dispatcher.call_sync('replication.local_datasets_from_link', l),
                     select='name'
                 )
                 l_is_master, remote = self.get_replication_state(l)
@@ -328,12 +331,11 @@ class ReplicationBaseTask(Task):
                         )
         return True
 
-    def get_parent_datasets(self, link):
-        datasets_to_replicate = self.dispatcher.call_sync('replication.datasets_from_link', link)
+    def get_parent_datasets(self, datasets, link):
         if not link['recursive']:
-            return datasets_to_replicate
+            return datasets
 
-        datasets_names = q.query(datasets_to_replicate, select='name')
+        datasets_names = q.query(datasets, select='name')
         len_sorted_datasets = sorted(datasets_names, key=lambda item: (len(item), item))
 
         parent_datasets = []
@@ -345,7 +347,7 @@ class ReplicationBaseTask(Task):
 
         result = []
         for dataset in parent_datasets:
-            result.append(q.query(datasets_to_replicate, ('name', '=', dataset), single=True))
+            result.append(q.query(datasets, ('name', '=', dataset), single=True))
 
         return result
 
@@ -381,16 +383,19 @@ class ReplicationCreateTask(ReplicationBaseTask):
                     errno.EINVAL,
                     'Automatic recovery to master is available only when bi-directional replication is selected'
                 )
+        else:
+            for datasets_pair in link['datasets']:
+                if datasets_pair['master'] != datasets_pair['slave']:
+                    raise VerifyException(
+                        errno.EINVAL,
+                        'Source and target datasets have to have the same names for bidirectional replication'
+                    )
 
         return ['replication']
 
     def run(self, link):
         if self.datastore.exists('replication.links', ('name', '=', link['name'])):
             raise TaskException(errno.EEXIST, 'Replication link with name {0} already exists'.format(link['name']))
-
-        for dataset in link['datasets']:
-            if not self.dispatcher.call_sync('zfs.dataset.query', [('name', '=', dataset)], {'single': True}):
-                raise TaskException(errno.ENOENT, 'Dataset {0} does not exist'.format(dataset))
 
         normalize(
             link,
@@ -417,6 +422,10 @@ class ReplicationCreateTask(ReplicationBaseTask):
 
         is_master, remote = self.get_replication_state(link)
         remote_client = get_freenas_peer_client(self, remote)
+
+        for dataset in iterate_datasets(link['datasets'], is_master):
+            if not self.dispatcher.call_sync('zfs.dataset.query', [('name', '=', dataset)], {'count': True}):
+                raise TaskException(errno.ENOENT, 'Dataset {0} does not exist'.format(dataset))
 
         remote_link = remote_client.call_sync('replication.get_one_local', link['name'])
         id = self.datastore.insert('replication.links', link)
@@ -468,10 +477,11 @@ class ReplicationPrepareSlaveTask(ReplicationBaseTask):
 
         if is_master:
             with self.dispatcher.get_lock('volumes'):
-                datasets_to_replicate = self.dispatcher.call_sync('replication.datasets_from_link', link)
+                datasets_to_replicate = self.dispatcher.call_sync('replication.local_datasets_from_link', link)
                 root = self.dispatcher.call_sync('volume.get_volumes_root')
 
                 for dataset in datasets_to_replicate:
+                    datasets_pair = first_or_default(lambda d: d['master'] == dataset['name'], link['datasets'])
                     if link['replicate_services']:
                         for share in self.dispatcher.call_sync('share.get_dependencies', os.path.join(root, dataset['name']), False, False):
                             remote_share = remote_client.call_sync(
@@ -499,80 +509,46 @@ class ReplicationPrepareSlaveTask(ReplicationBaseTask):
                                     'VM {0} already exists on {1}'.format(vms[0]['name'], remote)
                                 )
 
-                    sp_dataset = dataset['name'].split('/', 1)
-                    volume_name = sp_dataset[0]
-                    dataset_name = None
-                    if len(sp_dataset) == 2:
-                        dataset_name = sp_dataset[1]
+                    volume_name = dataset['name'].split('/', 1)[0]
 
                     vol = self.datastore.get_one('volumes', ('id', '=', volume_name))
                     if vol.get('encrypted'):
                         raise TaskException(
                             errno.EINVAL,
-                            'Encrypted volumes cannot be included in replication links: {0}'.format(volume_name)
+                            'Encrypted volumes cannot be source of replication: {0}'.format(volume_name)
                         )
+
+                    remote_volume_name = datasets_pair['slave'].split('/', 1)[0]
 
                     remote_volume = remote_client.call_sync(
                         'volume.query',
-                        [('id', '=', volume_name)],
+                        [('id', '=', remote_volume_name)],
                         {'single': True}
                     )
                     if remote_volume:
                         if remote_volume.get('encrypted'):
                             raise TaskException(
                                 errno.EINVAL,
-                                'Encrypted volumes cannot be included in replication links: {0}'.format(volume_name)
+                                'Encrypted volumes cannot be target of replication: {0}'.format(
+                                    remote_volume_name
+                                )
                             )
+                    else:
+                        raise TaskException(
+                            errno.ENOENT,
+                            'Volume {0} not found at slave. Please create it first.'.format(remote_volume_name)
+                        )
 
                     remote_dataset = remote_client.call_sync(
                         'zfs.dataset.query',
-                        [('name', '=', dataset['name'])],
-                        {'single': True}
+                        [('name', '=', datasets_pair['slave'])],
+                        {'single': True, 'count': True}
                     )
 
                     if not remote_dataset:
-                        if not remote_volume:
-                            raise TaskException(
-                                errno.ENOENT,
-                                'Volume {0} not found at slave. Please create it first.'.format(volume_name)
-                            )
-                        if dataset_name:
-                            for idx, sub_dataset in enumerate(dataset_name.split('/')):
-                                sub_dataset_name = volume_name + '/' + '/'.join(dataset_name.split('/')[0:idx+1])
-                                remote_sub_dataset = remote_client.call_sync(
-                                    'zfs.dataset.query',
-                                    [('name', '=', sub_dataset_name)],
-                                    {'single': True}
-                                )
-                                if not remote_sub_dataset:
-                                    local_sub_dataset = self.dispatcher.call_sync(
-                                        'zfs.dataset.query',
-                                        [('name', '=', sub_dataset_name)],
-                                        {'single': True}
-                                    )
-                                    try:
-                                        dataset_properties = {
-                                            'id': local_sub_dataset['name'],
-                                            'volume': local_sub_dataset['pool']
-                                        }
-                                        if local_sub_dataset['mountpoint']:
-                                            dataset_properties['mountpoint'] = local_sub_dataset['mountpoint']
-                                        dataset_properties['mounted'] = False
-                                        call_task_and_check_state(
-                                            remote_client,
-                                            'volume.dataset.create',
-                                            dataset_properties
-                                        )
-                                    except RpcException as e:
-                                        raise TaskException(
-                                            e.code,
-                                            'Cannot create exact duplicate of {0} on {1}. Message: {2}'.format(
-                                                sub_dataset_name,
-                                                remote,
-                                                e.message
-                                            ),
-                                            stacktrace=e.stacktrace
-                                        )
+                        raise TaskException(
+                            'Target dataset {0} not found on the target system'.format(datasets_pair['slave'])
+                        )
 
                 self.set_datasets_mount_ro(link, True, remote_client)
 
@@ -624,7 +600,7 @@ class ReplicationDeleteTask(ReplicationBaseTask):
 
             if scrub:
                 with self.dispatcher.get_lock('volumes'):
-                    datasets = reversed(self.dispatcher.call_sync('replication.datasets_from_link', link))
+                    datasets = reversed(self.dispatcher.call_sync('replication.local_datasets_from_link', link))
                     for dataset in datasets:
                         if len(dataset['name'].split('/')) == 1:
                             self.join_subtasks(self.run_subtask('volume.delete', dataset['name']))
@@ -693,7 +669,7 @@ class ReplicationUpdateTask(ReplicationBaseTask):
         updated_fields['update_date'] = str(datetime.utcnow())
 
         if 'datasets' in updated_fields:
-            for dataset in updated_fields['datasets']:
+            for dataset in iterate_datasets(updated_fields['datasets'], is_master):
                 if not self.dispatcher.call_sync('zfs.dataset.query', [('name', '=', dataset)], {'single': True}):
                     raise TaskException(errno.ENOENT, 'Dataset {0} does not exist'.format(dataset))
 
@@ -704,6 +680,14 @@ class ReplicationUpdateTask(ReplicationBaseTask):
                 )
 
         link.update(updated_fields)
+
+        if link['bidirectional']:
+            for datasets_pair in link['datasets']:
+                if datasets_pair['master'] != datasets_pair['slave']:
+                    raise TaskException(
+                        errno.EINVAL,
+                        'Source and target datasets have to have the same names for bidirectional replication'
+                    )
 
         partners = (link['master'], link['slave'])
         if 'master' in updated_fields:
@@ -858,15 +842,17 @@ class ReplicationSyncTask(ReplicationBaseTask):
             remote_client = get_freenas_peer_client(self, remote)
             if is_master:
                 with self.dispatcher.get_lock('volumes'):
-                    parent_datasets = self.get_parent_datasets(link)
+                    all_datasets = self.dispatcher.call_sync('replication.local_datasets_from_link', link)
+                    parent_datasets = self.get_parent_datasets(all_datasets, link)
 
                     for dataset in parent_datasets:
+                        datasets_pair = first_or_default(lambda d: d['master'] == dataset['name'], link['datasets'])
                         result = self.join_subtasks(self.run_subtask(
                             'replication.replicate_dataset',
-                            dataset['name'],
+                            datasets_pair['master'],
                             {
                                 'remote': remote,
-                                'remote_dataset': dataset['name'],
+                                'remote_dataset': datasets_pair['slave'],
                                 'recursive': link['recursive'],
                                 'nomount': True,
                                 'lifetime': link['snapshot_lifetime'],
@@ -1519,7 +1505,7 @@ class ReplicationRoleUpdateTask(ReplicationBaseTask):
             return
 
         is_master, remote = self.get_replication_state(link)
-        datasets = self.dispatcher.call_sync('replication.datasets_from_link', link)
+        datasets = self.dispatcher.call_sync('replication.local_datasets_from_link', link)
         current_readonly = self.dispatcher.call_sync(
             'zfs.dataset.query',
             [('name', '=', datasets[0]['name'])],
@@ -1577,7 +1563,7 @@ class ReplicationCheckDatasetsTask(ReplicationBaseTask):
 def get_services(dispatcher, service, relation, link_name):
     services = []
     link = dispatcher.call_task_sync('replication.get_latest_link', link_name)
-    datasets = dispatcher.call_sync('replication.datasets_from_link', link)
+    datasets = dispatcher.call_sync('replication.local_datasets_from_link', link)
     for dataset in datasets:
         dataset_path = dispatcher.call_sync('volume.get_dataset_path', dataset['name'])
         s = dispatcher.call_sync('{0}.get_dependencies'.format(service), dataset_path, False, False)
@@ -1590,10 +1576,18 @@ def get_services(dispatcher, service, relation, link_name):
 
 def get_replication_resources(dispatcher, link):
     resources = ['replication']
-    datasets = q.query(dispatcher.call_sync('replication.datasets_from_link', link), select='name')
+    datasets = q.query(dispatcher.call_sync('replication.local_datasets_from_link', link), select='name')
     for dataset in datasets:
         resources.append('zfs:{0}'.format(dataset))
     return resources
+
+
+def iterate_datasets(datasets, is_master, local=True):
+    for d in datasets:
+        if is_master and local:
+            yield d['master']
+        else:
+            yield d['slave']
 
 
 def _depends():
@@ -1627,7 +1621,7 @@ def _init(dispatcher, plugin):
             'update_date': {'type': 'string'},
             'datasets': {
                 'type': 'array',
-                'items': {'type': 'string'}
+                'items': {'$ref': 'datasets-replication-pair'}
             },
             'bidirectional': {'type': 'boolean'},
             'auto_recover': {'type': 'boolean'},
@@ -1664,6 +1658,15 @@ def _init(dispatcher, plugin):
             'uuid': {'type': ['string', 'null']},
             'type': {'$ref': 'snapshot-info-type'}
         }
+    })
+
+    plugin.register_schema_definition('datasets-replication-pair', {
+        'type': 'object',
+        'properties': {
+            'master': {'type': 'string'},
+            'slave': {'type': 'string'}
+        },
+        'additionalProperties': False
     })
 
     plugin.register_schema_definition('snapshot-info-type', {
@@ -1790,7 +1793,8 @@ def _init(dispatcher, plugin):
             updated_pools = list(set([d.split('/', 1)[0] for d in args['ids']]))
 
         for link in links:
-            related_pools = list(set([d.split('/', 1)[0] for d in link['datasets']]))
+            is_master, _ = dispatcher.call_sync('replication.get_replication_state', link)
+            related_pools = list(set([d.split('/', 1)[0] for d in iterate_datasets(link['datasets'], is_master)]))
             if any(p in related_pools for p in updated_pools):
                 dispatcher.update_resource(
                     'replication:{0}'.format(link['name']),
