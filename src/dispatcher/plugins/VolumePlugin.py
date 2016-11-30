@@ -3212,6 +3212,9 @@ def _init(dispatcher, plugin):
         volume = dispatcher.call_sync('volume.query', [('guid', '=', guid)], {'single': True})
         if not volume:
             return
+        
+        if volume['status'] in ('UNKNOWN', 'LOCKED'):
+            return
 
         if args['vdev_guid'] == guid:
             # Ignore root vdev state changes
