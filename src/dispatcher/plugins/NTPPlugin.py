@@ -44,6 +44,34 @@ class NTPServersProvider(Provider):
         return self.datastore.query_stream('ntpservers', *(filter or []), **(params or {}))
 
 
+@description("Runs an instant sync with an NTP Server")
+@accepts(str)
+class NTPServerSyncNowTask(Task):
+    @classmethod
+    def early_describe(cls):
+        return "Syncronizing with NTP Server"
+
+    def describe(self, address):
+        return TaskDescription("Synchronizing with NTP Server {name}", name=address)
+
+    def verify(self, address):
+        if not address:
+            raise TaskException(
+                errno.ENOENT,
+                'Please specify the address of an NTP server to sync with.'
+            )
+        return ['system']
+
+    def run(self, address):
+        try:
+            system('ntpdate', '-u', address)
+        except SubprocessException:
+            raise TaskException(
+                errno.EACCES,
+                'Server could not be reached.'
+            )
+
+
 @description("Adds new NTP Server")
 @accepts(h.all_of(
     h.ref('ntp-server'),
@@ -221,3 +249,4 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler("ntp_server.create", NTPServerCreateTask)
     plugin.register_task_handler("ntp_server.update", NTPServerUpdateTask)
     plugin.register_task_handler("ntp_server.delete", NTPServerDeleteTask)
+    plugin.register_task_handler("ntp_server.sync_now", NTPServerSyncNowTask)
