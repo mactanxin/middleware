@@ -340,6 +340,10 @@ class ConfigurationService(RpcService):
         ifaces = netif.list_interfaces()
         for i in range(2 if type == 'BRIDGE' else 0, 999):
             name = '{0}{1}'.format(type_map[type], i)
+
+            if type == 'BRIDGE' and 'brg{0}'.format(i) in list(ifaces.keys()):
+                continue
+
             if name not in list(ifaces.keys()) and not self.datastore.exists('network.interfaces', ('id', '=', name)):
                 return name
 
