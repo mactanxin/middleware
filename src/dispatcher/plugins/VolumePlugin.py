@@ -3241,7 +3241,7 @@ def _init(dispatcher, plugin):
                 if group != 'data':
                     continue
 
-                if vdev['type'] == 'disk' and vdev['path'] == args['path']:
+                if vdev['type'] == 'disk' and vdev['disk_id'] == args['id']:
                     dispatcher.call_task_sync('zfs.pool.import', vol['guid'])
                     dispatcher.call_task_sync('zfs.mount', vol['id'], True)
 
