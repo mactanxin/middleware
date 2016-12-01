@@ -253,7 +253,7 @@ def _init(dispatcher, plugin):
             'shutdown_timer': {'type': 'integer'},
             'monitor_user': {'type': 'string'},
             'monitor_password': {'type': 'string'},
-            'monitor_remote': {'type': 'boolean'},
+            'allow_remote_connections': {'type': 'boolean'},
             'auxiliary_users': {'type': ['string', 'null']},
             'email_notify': {'type': 'boolean'},
             'email_recipients': {'type': 'array', 'items': {'$ref': 'email'}},
