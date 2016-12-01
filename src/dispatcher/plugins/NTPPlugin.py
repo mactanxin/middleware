@@ -63,13 +63,17 @@ class NTPServerSyncNowTask(Task):
         return ['system']
 
     def run(self, address):
+        output = ""
         try:
-            system('ntpdate', '-u', address)
+            output = system('ntpdate', '-u', address)
         except SubprocessException:
             raise TaskException(
                 errno.EACCES,
                 'Server could not be reached.'
             )
+
+        output = output[0].split(':')[3].strip()
+        return output
 
 
 @description("Adds new NTP Server")
