@@ -79,8 +79,8 @@ class ReplicationLinkProvider(Provider):
     @generator
     def query(self, filter=None, params=None):
         def extend(obj):
-            if status_cache.is_valid(obj['name']):
-                obj['status'] = status_cache.get(obj['name'])
+            if status_cache.is_valid(obj['id']):
+                obj['status'] = status_cache.get(obj['id'])
             return obj
 
         links = link_cache.query()
@@ -148,17 +148,17 @@ class ReplicationLinkProvider(Provider):
         return is_master, remote
 
     @private
-    def put_status(self, name, status):
-        status_cache.put(name, status)
+    def put_status(self, id, status):
+        status_cache.put(id, status)
         self.dispatcher.dispatch_event('replication.changed', {
             'operation': 'update',
-            'ids': [name]
+            'ids': [id]
         })
 
     @private
-    def get_status(self, name):
-        if status_cache.is_valid(name):
-            return status_cache.get(name)
+    def get_status(self, id):
+        if status_cache.is_valid(id):
+            return status_cache.get(id)
         else:
             return None
 
@@ -836,8 +836,8 @@ class ReplicationSyncTask(ReplicationBaseTask):
         message = ''
         speed = 0
         remote_client = None
+        link = self.join_subtasks(self.run_subtask('replication.get_latest_link', name))[0]
         try:
-            link = self.join_subtasks(self.run_subtask('replication.get_latest_link', name))[0]
             is_master, remote = self.get_replication_state(link)
             remote_client = get_freenas_peer_client(self, remote)
             if is_master:
@@ -892,9 +892,9 @@ class ReplicationSyncTask(ReplicationBaseTask):
                 'size': total_size,
                 'speed': speed
             }
-            self.dispatcher.call_sync('replication.put_status', name, status_dict)
+            self.dispatcher.call_sync('replication.put_status', link['id'], status_dict)
             if remote_client:
-                remote_client.call_sync('replication.put_status', name, status_dict)
+                remote_client.call_sync('replication.put_status', link['id'], status_dict)
                 remote_client.disconnect()
 
 
@@ -1416,10 +1416,10 @@ class ReplicationGetLatestLinkTask(ReplicationBaseTask):
         try:
             client = get_freenas_peer_client(self, remote)
             remote_link = client.call_sync('replication.get_one_local', name)
-            status = client.call_sync('replication.get_status', name)
-            if not self.dispatcher.call_sync('replication.get_status', name):
+            status = client.call_sync('replication.get_status', local_link['id'])
+            if not self.dispatcher.call_sync('replication.get_status', local_link['id']):
                 if status:
-                    self.dispatcher.call_sync('replication.put_status', name, status)
+                    self.dispatcher.call_sync('replication.put_status', local_link['id'], status)
         except RpcException:
             pass
 
