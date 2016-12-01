@@ -518,37 +518,38 @@ class ReplicationPrepareSlaveTask(ReplicationBaseTask):
                             'Encrypted volumes cannot be source of replication: {0}'.format(volume_name)
                         )
 
-                    remote_volume_name = datasets_pair['slave'].split('/', 1)[0]
+                    if datasets_pair:
+                        remote_volume_name = datasets_pair['slave'].split('/', 1)[0]
 
-                    remote_volume = remote_client.call_sync(
-                        'volume.query',
-                        [('id', '=', remote_volume_name)],
-                        {'single': True}
-                    )
-                    if remote_volume:
-                        if remote_volume.get('encrypted'):
-                            raise TaskException(
-                                errno.EINVAL,
-                                'Encrypted volumes cannot be target of replication: {0}'.format(
-                                    remote_volume_name
+                        remote_volume = remote_client.call_sync(
+                            'volume.query',
+                            [('id', '=', remote_volume_name)],
+                            {'single': True}
+                        )
+                        if remote_volume:
+                            if remote_volume.get('encrypted'):
+                                raise TaskException(
+                                    errno.EINVAL,
+                                    'Encrypted volumes cannot be target of replication: {0}'.format(
+                                        remote_volume_name
+                                    )
                                 )
+                        else:
+                            raise TaskException(
+                                errno.ENOENT,
+                                'Volume {0} not found at slave. Please create it first.'.format(remote_volume_name)
                             )
-                    else:
-                        raise TaskException(
-                            errno.ENOENT,
-                            'Volume {0} not found at slave. Please create it first.'.format(remote_volume_name)
+
+                        remote_dataset = remote_client.call_sync(
+                            'zfs.dataset.query',
+                            [('name', '=', datasets_pair['slave'])],
+                            {'single': True, 'count': True}
                         )
 
-                    remote_dataset = remote_client.call_sync(
-                        'zfs.dataset.query',
-                        [('name', '=', datasets_pair['slave'])],
-                        {'single': True, 'count': True}
-                    )
-
-                    if not remote_dataset:
-                        raise TaskException(
-                            'Target dataset {0} not found on the target system'.format(datasets_pair['slave'])
-                        )
+                        if not remote_dataset:
+                            raise TaskException(
+                                'Target dataset {0} not found on the target system'.format(datasets_pair['slave'])
+                            )
 
                 self.set_datasets_mount_ro(link, True, remote_client)
 
