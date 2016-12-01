@@ -200,7 +200,7 @@
             "service.ups.shutdown_timer": 30,
             "service.ups.monitor_user": "upsmon",
             "service.ups.monitor_password": "fixmepass",
-            "service.ups.monitor_remote": false,
+            "service.ups.allow_remote_connections": false,
             "service.ups.auxiliary_users": "",
             "service.ups.email_notify": false,
             "service.ups.email_recipients": [],
