@@ -93,7 +93,7 @@ class FTPConfigureTask(Task):
 
         if node['only_anonymous'] and node['only_local']:
             errors.add(
-                (0, 'only_anonymous'), 'only_anonymous and only_local properties cannot be enabled together.'
+                (0, 'only_anonymous'), 'Anonymous only and local only types of authentication cannot be enabled together.'
             )
 
         if errors:
