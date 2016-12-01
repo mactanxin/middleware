@@ -214,7 +214,7 @@ class ReplicationLinkProvider(Provider):
         return get_services(self.dispatcher, 'vm', 'related', link_name)
 
 
-class ReplicationBaseTask(Task):
+class ReplicationBaseTask(ProgressTask):
     def get_replication_state(self, link):
         return self.dispatcher.call_sync(
             'replication.get_replication_state',
@@ -845,7 +845,8 @@ class ReplicationSyncTask(ReplicationBaseTask):
                     all_datasets = self.dispatcher.call_sync('replication.local_datasets_from_link', link)
                     parent_datasets = self.get_parent_datasets(all_datasets, link)
 
-                    for dataset in parent_datasets:
+                    ds_count = len(parent_datasets)
+                    for idx, dataset in enumerate(parent_datasets):
                         datasets_pair = first_or_default(lambda d: d['master'] == dataset['name'], link['datasets'])
                         result = self.join_subtasks(self.run_subtask(
                             'replication.replicate_dataset',
@@ -858,7 +859,11 @@ class ReplicationSyncTask(ReplicationBaseTask):
                                 'lifetime': link['snapshot_lifetime'],
                                 'followdelete': link['followdelete']
                             },
-                            link['transport_options']
+                            link['transport_options'],
+                            progress_callback=lambda p, m, e=None: self.chunk_progress(
+                                int((idx / ds_count) * 100), int(((idx + 1) / ds_count) * 100),
+                                '', p, m, e
+                            )
                         ))
 
                         total_size += result[0][1]
