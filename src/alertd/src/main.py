@@ -186,23 +186,33 @@ class Main(object):
     def emit_alert(self, alert):
         self.logger.debug('Emitting alert <id:{0}> (class {1})'.format(alert['id'], alert['class']))
         for i in self.datastore.query('alert.filters'):
-            for predicate in i['predicates']:
+            for predicate in i.get('predicates', []):
                 if predicate['operator'] not in operators_table:
                     continue
 
                 if not operators_table[predicate['operator']](alert[predicate['property']], predicate['value']):
                     break
             else:
-                emitter = self.emitters.get(i['emitter'])
-                if not emitter:
-                    self.logger.warning('Invalid emitter {0} for alert filter {1}'.format(i['emitter'], i['id']))
-                    continue
+                try:
+                    emitter = self.emitters.get(i['emitter'])
+                    if not emitter:
+                        self.logger.warning('Invalid emitter {0} for alert filter {1}'.format(i['emitter'], i['id']))
+                        continue
 
-                self.logger.debug('Alert <id:{0}> matched filter {1}'.format(alert['id'], i['id']))
-                if alert['send_count'] > 0:
-                    emitter.emit_again(alert, i['parameters'])
-                else:
-                    emitter.emit_first(alert, i['parameters'])
+                    self.logger.debug('Alert <id:{0}> matched filter {1}'.format(alert['id'], i['id']))
+                    if alert['send_count'] > 0:
+                        emitter.emit_again(alert, i['parameters'])
+                    else:
+                        emitter.emit_first(alert, i['parameters'])
+                except BaseException as err:
+                    # Failed to emit alert using alert emitter
+                    # XXX: generate another alert about that
+                    self.logger.error('Cannot emit alert <id:{0}> using {1}: {2}'.format(
+                        alert['id'],
+                        i['emitter'],
+                        str(err))
+                    )
+
 
         alert['send_count'] += 1
         alert['last_emitted_at'] = datetime.utcnow()
