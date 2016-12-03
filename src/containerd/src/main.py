@@ -782,7 +782,7 @@ class DockerHost(object):
                         if ev['Action'] == 'die':
                             state = details['State']
                             name = details['Name'][1:]
-                            if not state.get('Running') and state.get('ExitCode'):
+                            if not state.get('Running') and state.get('ExitCode') not in (None, 0, 137):
                                 self.context.client.call_sync('alert.emit', {
                                     'class': 'DockerContainerDied',
                                     'target': details['Name'],

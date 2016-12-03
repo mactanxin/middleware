@@ -213,7 +213,6 @@ class Main(object):
                         str(err))
                     )
 
-
         alert['send_count'] += 1
         alert['last_emitted_at'] = datetime.utcnow()
 
