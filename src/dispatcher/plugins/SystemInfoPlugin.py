@@ -557,7 +557,8 @@ class SystemRebootTask(Task):
             'class': 'SystemReboot',
             'user': self.user,
             'title': 'System reboot',
-            'description': 'System has been rebooted by {0}'.format(self.user)
+            'description': 'System has been rebooted by {0}'.format(self.user),
+            'one_shot': True
         })
 
         t = Thread(target=self.reboot_now, daemon=True)
@@ -595,7 +596,8 @@ class SystemHaltTask(Task):
             'class': 'SystemShutdown',
             'user': self.user,
             'title': 'System shutdown',
-            'description': 'System has been shut down by {0}'.format(self.user)
+            'description': 'System has been shut down by {0}'.format(self.user),
+            'one_shot': True
         })
 
         t = Thread(target=self.shutdown_now, daemon=True)
