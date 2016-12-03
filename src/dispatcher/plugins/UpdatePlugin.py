@@ -634,8 +634,7 @@ class DownloadUpdateTask(ProgressTask):
     def verify(self):
         if not update_cache.get('available', timeout=1):
             raise VerifyException(errno.ENOENT, (
-                'No updates currently available for download, try running '
-                'the `update.check` task'
+                'No updates currently available for download - check for new updates'
             ))
 
         block = self.dispatcher.resource_graph.get_resource(update_resource_string)
