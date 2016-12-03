@@ -35,6 +35,7 @@ import sys
 import random
 import re
 import tempfile
+from utils import human_readable_bytes
 from resources import Resource
 from cache import CacheStore
 from freenas.dispatcher.rpc import (
@@ -298,8 +299,8 @@ class UpdateHandler(object):
             self.progress = (progress * self._baseprogress) / 100
             if self.progress == 0:
                 self.progress = 1
-            display_size = ' Size: {0}'.format(size) if size else ''
-            display_rate = ' Rate: {0} B/s'.format(download_rate) if download_rate else ''
+            display_size = ' Size: {0} '.format(human_readable_bytes(size)) if size else ''
+            display_rate = ' Rate: {0} '.format(human_readable_bytes(download_rate, suffix='B/s')) if download_rate else ''
             self.details = 'Downloading: {0} Progress:{1}{2}{3}'.format(
                 self.pkgname, progress, display_size, display_rate
             )
