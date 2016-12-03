@@ -129,3 +129,10 @@ def is_port_open(portnum):
         if c.laddr[1] == int(portnum):
             return True
     return False
+
+
+def human_readable_bytes(num, suffix='B'):
+    for unit in ['','Ki','Mi','Gi','Ti','Pi','Ei','Zi']:
+        if abs(num) < 1024.0:
+            return "%3.1f%s%s" % (num, unit, suffix)
+        num /= 1024.0
