@@ -51,6 +51,18 @@ if __name__ == '__main__':
         def error(self, msg):
             print(msg)
 
+        class Values(object):
+            def __init__(self, *args, **kwargs):
+                self.plugin = ''
+                self.plugin_instance = ''
+                self.type = None
+                self.type_instance = None
+                self.values = None
+                self.meta = None
+
+            def dispatch(self):
+                pass
+
     collectd = CollectdDummy()
 else:
     import collectd
@@ -60,7 +72,6 @@ from freenas.dispatcher.rpc import RpcException
 from freenas.dispatcher.entity import EntitySubscriber
 
 PLUGIN_NAME = "disktemp"
-INTERVAL = 300  # seconds, so it is 5 minutes
 
 context = None
 ENTITY_SUBSCRIBERS = ['disk']
@@ -93,8 +104,11 @@ class Context(object):
             try:
                 self.client.connect('unix:')
                 self.client.login_service('collectd_{0}'.format(PLUGIN_NAME))
+                # enable streaming responses as they are needed but entitysubscriber for
+                # reliable performace and such
+                self.client.call_sync('management.enable_features', ['streaming_responses'])
                 self.start_entity_subscribers()
-                # self.wait_entity_subscribers()
+                self.wait_entity_subscribers()
                 return
             except (OSError, RpcException) as err:
                 collectd.warning(
@@ -113,7 +127,7 @@ class Context(object):
         self.connect()
 
     def disk_temps(self):
-        for disk in self.entity_subscribers['disk'].items.values():
+        for disk in self.entity_subscribers['disk'].query(('status.smart_info.temperature', '!=', None)):
             yield (disk['name'], disk['status']['smart_info']['temperature'])
 
 
@@ -131,6 +145,7 @@ def dispatch_value(name, instance, value, data_type='gauge'):
 def read():
     global context
     for name, temperature in context.disk_temps():
+        collectd.debug("Disk: {0} temperature: {1}".format(name, temperature))
         dispatch_value(name, 'temperature', temperature)
 
 
@@ -141,4 +156,4 @@ def init():
 
 
 collectd.register_init(init)
-collectd.register_read(read, INTERVAL)
+collectd.register_read(read)
