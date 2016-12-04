@@ -72,7 +72,6 @@ from freenas.dispatcher.rpc import RpcException
 from freenas.dispatcher.entity import EntitySubscriber
 
 PLUGIN_NAME = "disktemp"
-INTERVAL = 300  # seconds, so it is 5 minutes
 
 context = None
 ENTITY_SUBSCRIBERS = ['disk']
@@ -157,4 +156,4 @@ def init():
 
 
 collectd.register_init(init)
-collectd.register_read(read, INTERVAL)
+collectd.register_read(read)
