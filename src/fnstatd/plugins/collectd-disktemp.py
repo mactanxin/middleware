@@ -70,7 +70,6 @@ import time
 from freenas.dispatcher.client import Client, ClientError
 from freenas.dispatcher.rpc import RpcException
 from freenas.dispatcher.entity import EntitySubscriber
-from freenas.utils import query as q
 
 PLUGIN_NAME = "disktemp"
 INTERVAL = 300  # seconds, so it is 5 minutes
@@ -106,8 +105,11 @@ class Context(object):
             try:
                 self.client.connect('unix:')
                 self.client.login_service('collectd_{0}'.format(PLUGIN_NAME))
+                # enable streaming responses as they are needed but entitysubscriber for
+                # reliable performace and such
+                self.client.call_sync('management.enable_features', ['streaming_responses'])
                 self.start_entity_subscribers()
-                # self.wait_entity_subscribers()
+                self.wait_entity_subscribers()
                 return
             except (OSError, RpcException) as err:
                 collectd.warning(
@@ -126,10 +128,7 @@ class Context(object):
         self.connect()
 
     def disk_temps(self):
-        for disk in q.query(
-            self.entity_subscribers['disk'].items.values(),
-            ('status.smart_info.temperature', '!=', None)
-        ):
+        for disk in self.entity_subscribers['disk'].query(('status.smart_info.temperature', '!=', None)):
             yield (disk['name'], disk['status']['smart_info']['temperature'])
 
 
@@ -147,6 +146,7 @@ def dispatch_value(name, instance, value, data_type='gauge'):
 def read():
     global context
     for name, temperature in context.disk_temps():
+        collectd.debug("Disk: {0} temperature: {1}".format(name, temperature))
         dispatch_value(name, 'temperature', temperature)
 
 
