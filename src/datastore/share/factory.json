@@ -647,6 +647,14 @@
     {
         "data": {
             "858efb54-f5dc-4207-acb6-8ba793984794": {
+                "launchd": {
+                    "RunAtLoad": true,
+                    "Label": "net.sourceforge.netatalk.netatalk",
+                    "ProgramArguments": [
+                        "/usr/local/sbin/netatalk",
+                        "-d"
+                    ]
+                },
                 "rcng": {
                     "rc-scripts": "netatalk"
                 },
@@ -655,6 +663,35 @@
                 "name": "afp"
             },
             "de07173c-fcaa-47ce-a044-facef514581f": {
+                "launchd": [
+                    {
+                        "RunAtLoad": true,
+                        "Label": "org.samba.smbd",
+                        "ProgramArguments": [
+                            "/usr/local/sbin/smbd",
+                            "--foreground",
+                            "--configfile=/usr/local/etc/smb4.conf"
+                        ]
+                    },
+                    {
+                        "RunAtLoad": true,
+                        "Label": "org.samba.nmbd",
+                        "ProgramArguments": [
+                            "/usr/local/sbin/nmbd",
+                            "--foreground",
+                            "--configfile=/usr/local/etc/smb4.conf"
+                        ]
+                    },
+                                        {
+                        "RunAtLoad": true,
+                        "Label": "org.samba.winbindd",
+                        "ProgramArguments": [
+                            "/usr/local/sbin/winbindd",
+                            "--foreground",
+                            "--configfile=/usr/local/etc/smb4.conf"
+                        ]
+                    }
+                ],
                 "rcng": {
                     "rc-scripts": "samba_server"
                 },
@@ -776,6 +813,16 @@
                 "name": "ftp"
             },
             "702dd24d-bf1a-4d36-b69b-c96971b37a9d": {
+                "launchd": {
+                    "Label": "net.sourceforge.net-snmp.snmpd",
+                    "RunAtLoad": true,
+                    "ProgramArguments": [
+                        "/usr/local/sbin/snmpd",
+                        "-f",
+                        "-c", "/usr/local/etc/snmpd.conf",
+                        "-Ls5d"
+                    ]
+                },
                 "rcng": {
                     "rc-scripts": "snmpd"
                 },
