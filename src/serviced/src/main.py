@@ -353,10 +353,12 @@ class Context(object):
                             self.logger.info('New child process {0}, parent {1}'.format(ev.ident, ev.data))
                             pjob = self.job_by_pid(ev.data)
                             if not pjob:
+                                self.untrack_pid(ev.ident)
                                 continue
 
                             # Stop tracking at session ID boundary
                             if pjob.sid != os.getsid(ev.ident):
+                                self.untrack_pid(ev.ident)
                                 continue
 
                             job = Job(self)
