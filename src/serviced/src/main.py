@@ -70,6 +70,7 @@ class Job(object):
         self.program = None
         self.program_arguments = []
         self.pid = None
+        self.sid = None
         self.plist = None
         self.started_at = None
         self.exited_at = None
@@ -92,7 +93,7 @@ class Job(object):
 
     @property
     def children(self):
-        return
+        return (j for j in self.context.jobs if j.parent is self)
 
     def load(self, plist):
         self.id = plist.get('ID', str(uuid.uuid4()))
@@ -126,13 +127,25 @@ class Job(object):
             self.start()
 
     def load_anonymous(self, parent, pid):
-        self.parent = parent
-        self.id = str(uuid.uuid4())
-        self.pid = pid
-        self.label = 'anonymous@{0}'.format(self.pid)
-        self.logger = logging.getLogger('Job:{0}'.format(self.label))
-        self.anonymous = True
-        self.state = JobState.RUNNING
+        try:
+            proc = bsd.kinfo_getproc(pid)
+            command = proc.command
+        except LookupError:
+            # Exited too quickly, but let's add it anyway - it will be removed in next event
+            command = 'unknown'
+
+        with self.cv:
+            self.parent = parent
+            self.id = str(uuid.uuid4())
+            self.pid = pid
+            self.label = 'anonymous.{0}@{1}'.format(command, self.pid)
+            self.logger = logging.getLogger('Job:{0}'.format(self.label))
+            self.anonymous = True
+            self.state = JobState.RUNNING
+            self.cv.notify_all()
+
+    def unload(self):
+        del self.context.jobs[self.id]
 
     def start(self):
         self.logger.info('Starting job')
@@ -164,13 +177,22 @@ class Job(object):
         self.logger.info('Stopping job')
         self.state = JobState.DYING
         with self.cv:
+            if self.state == JobState.STOPPED:
+                return
+
             try:
                 os.kill(self.pid, signal.SIGTERM)
-            except:
-                pass
+            except ProcessLookupError:
+                # Already dead
+                with self.cv:
+                    self.state = JobState.STOPPED
+                    self.notify()
 
             if not self.cv.wait_for(lambda: self.state == JobState.STOPPED, self.exit_timeout):
                 os.kill(self.pid, signal.SIGKILL)
+
+            if not self.cv.wait_for(lambda: self.state == JobState.STOPPED, self.exit_timeout):
+                self.logger.error('Unkillable process {0}'.format(self.pid))
 
     def pid_event(self, ev):
         if ev.fflags & select.KQ_NOTE_EXEC:
@@ -183,9 +205,11 @@ class Job(object):
             argv = list(proc.argv)
             self.logger.debug('Job did exec() into {0}'.format(argv))
             if argv == self.program_arguments and not self.did_exec:
-                self.did_exec = True
-                self.state = JobState.RUNNING
-                self.notify()
+                with self.cv:
+                    self.sid = os.getsid(self.pid)
+                    self.did_exec = True
+                    self.state = JobState.RUNNING
+                    self.cv.notify_all()
 
         if ev.fflags & select.KQ_NOTE_FORK:
             self.logger.debug('Job has forked, child pid is {0}'.format(ev.data))
@@ -196,13 +220,16 @@ class Job(object):
             except BaseException as err:
                 logging.debug('waitpid error: {0}'.format(err))
 
-            self.logger.info('Job has exited')
-            self.pid = None
-            self.state = JobState.STOPPED
-            self.last_exit_code = ev.data
+            with self.cv:
+                self.logger.info('Job has exited')
+                self.pid = None
+                self.state = JobState.STOPPED
+                self.last_exit_code = ev.data
 
-            if self.anonymous:
-                del self.context.jobs[self.id]
+                if self.anonymous:
+                    del self.context.jobs[self.id]
+
+                self.cv.notify_all()
 
     def notify(self):
         pass
@@ -252,7 +279,12 @@ class ControlService(RpcService):
         self.context.jobs[job.id] = job
 
     def unload(self, name_or_id):
-        pass
+        job = first_or_default(lambda j: j.label == name_or_id or j.id == name_or_id, self.context.jobs.values())
+        if not job:
+            raise RpcException(errno.ENOENT, 'Job {0} not found'.format(name_or_id))
+
+        job.stop()
+        job.unload()
 
     def start(self, name_or_id):
         job = first_or_default(lambda j: j.label == name_or_id or j.id == name_or_id, self.context.jobs.values())
@@ -262,7 +294,11 @@ class ControlService(RpcService):
         job.start()
 
     def stop(self, name_or_id):
-        pass
+        job = first_or_default(lambda j: j.label == name_or_id or j.id == name_or_id, self.context.jobs.values())
+        if not job:
+            raise RpcException(errno.ENOENT, 'Job {0} not found'.format(name_or_id))
+
+        job.stop()
 
 
 class Context(object):
@@ -316,9 +352,17 @@ class Context(object):
                         if ev.fflags & select.KQ_NOTE_CHILD:
                             self.logger.info('New child process {0}, parent {1}'.format(ev.ident, ev.data))
                             pjob = self.job_by_pid(ev.data)
+                            if not pjob:
+                                continue
+
+                            # Stop tracking at session ID boundary
+                            if pjob.sid != os.getsid(ev.ident):
+                                continue
+
                             job = Job(self)
                             job.load_anonymous(pjob, ev.ident)
                             self.jobs[job.id] = job
+                            self.logger.info('Added job {0}'.format(job.label))
 
     def track_pid(self, pid):
         ev = select.kevent(
