@@ -51,6 +51,18 @@ if __name__ == '__main__':
         def error(self, msg):
             print(msg)
 
+        class Values(object):
+            def __init__(self, *args, **kwargs):
+                self.plugin = ''
+                self.plugin_instance = ''
+                self.type = None
+                self.type_instance = None
+                self.values = None
+                self.meta = None
+
+            def dispatch(self):
+                pass
+
     collectd = CollectdDummy()
 else:
     import collectd
@@ -58,6 +70,7 @@ import time
 from freenas.dispatcher.client import Client, ClientError
 from freenas.dispatcher.rpc import RpcException
 from freenas.dispatcher.entity import EntitySubscriber
+from freenas.utils import query as q
 
 PLUGIN_NAME = "disktemp"
 INTERVAL = 300  # seconds, so it is 5 minutes
@@ -113,7 +126,10 @@ class Context(object):
         self.connect()
 
     def disk_temps(self):
-        for disk in self.entity_subscribers['disk'].items.values():
+        for disk in q.query(
+            self.entity_subscribers['disk'].items.values(),
+            ('status.smart_info.temperature', '!=', None)
+        ):
             yield (disk['name'], disk['status']['smart_info']['temperature'])
 
 
