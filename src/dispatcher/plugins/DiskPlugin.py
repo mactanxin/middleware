@@ -63,7 +63,7 @@ SMART_ALERT_MAP = {
     'WARN': ('SmartWarn', 'S.M.A.R.T status warning'),
     'FAIL': ('SmartFail', 'S.M.A.R.T status failing')
 }
-multipaths = -1
+
 diskinfo_cache = CacheStore()
 logger = logging.getLogger('DiskPlugin')
 
@@ -1060,8 +1060,6 @@ def get_disk_by_lunid(lunid):
 
 
 def clean_multipaths(dispatcher):
-    global multipaths
-
     dispatcher.threaded(geom.scan)
     cls = geom.class_by_name('MULTIPATH')
     if cls:
@@ -1072,8 +1070,6 @@ def clean_multipaths(dispatcher):
                 lambda args: args['path'] == '/dev/multipath/{0}'.format(i.name),
                 lambda: system('/sbin/gmultipath', 'destroy', i.name)
             )
-
-    multipaths = -1
 
 
 def clean_mirrors(dispatcher):
@@ -1093,10 +1089,14 @@ def clean_mirrors(dispatcher):
 
 
 def get_multipath_name():
-    global multipaths
+    for i in ('/dev/multipath/mpath{0}'.format(n) for n in range(0, 1000)):
+        if os.path.exists(i):
+            continue
 
-    multipaths += 1
-    return 'mpath{0}'.format(multipaths)
+        if get_disk_by_path(i):
+            continue
+
+        return os.path.basename(i)
 
 
 def attach_to_multipath(dispatcher, disk, ds_disk, path):
