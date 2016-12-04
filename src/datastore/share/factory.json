@@ -714,22 +714,6 @@
                 "etcd-group": "ntpd",
                 "name": "ntpd"
             },
-            "721f2d5e-8395-4477-a01a-d23330a37752": {
-                "launchd": {
-                    "RunAtLoad": true,
-                    "ProgramArguments": [
-                        "/usr/sbin/devd",
-                        "-d"
-                    ],
-                    "Label": "org.freebsd.devd"
-                },
-                "rcng": {
-                    "rc-scripts": "devd"
-                },
-                "builtin": true,
-                "pidfile": "/var/run/devd.pid",
-                "name": "devd"
-            },
             "f742eccc-f912-4b9c-8ed5-90f6aa1ed74e": {
                 "launchd": {
                     "RunAtLoad": true,
@@ -750,6 +734,14 @@
                 "name": "sshd"
             },
             "77c31bda-a90a-495a-8d58-0063981eec67": {
+                "launchd": {
+                    "Label": "org.syslog-ng.syslog-ng",
+                    "RunAtLoad": true,
+                    "ProgramArguments": [
+                        "/usr/local/sbin/syslog-ng",
+                        "-F"
+                    ]
+                },
                 "rcng": {
                     "rc-scripts": "syslog-ng"
                 },
@@ -758,6 +750,15 @@
                 "name": "syslog"
             },
             "dfc8c5c9-6825-43b3-bdfa-45466d0f77d1": {
+                "launchd": {
+                    "Label": "com.nginx.nginx",
+                    "RunAtLoad": true,
+                    "ProgramArguments": [
+                        "/usr/local/sbin/nginx",
+                        "-g",
+                        "daemon off;"
+                    ]
+                },
                 "rcng": {
                     "rc-scripts": "nginx"
                 },
