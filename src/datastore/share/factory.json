@@ -706,6 +706,17 @@
                 "name": "smb"
             },
             "ffd1ea3f-36e3-4cfa-8a1e-9bada0defb76": {
+                "launchd": {
+                    "Label": "org.ntp.ntpd",
+                    "RunAtLoad": "yes",
+                    "ProgramArguments": [
+                        "/usr/sbin/ntpd",
+                        "-n",
+                        "-g",
+                        "-c", "/etc/ntp.conf",
+                        "-f", "/var/db/ntpd.drift"
+                    ]
+                },
                 "rcng": {
                     "rc-scripts": "ntpd"
                 },
@@ -732,6 +743,32 @@
                 "get_config_rpc": "service.sshd.get_config",
                 "task": "service.sshd.update",
                 "name": "sshd"
+            },
+            "9bb0873b-ba88-11e6-9cdc-000c293ba8c9": {
+                "launchd": {
+                    "Label": "org.freedesktop.dbus-system",
+                    "RunAtLoad": true,
+                    "ProgramArguments": [
+                        "/usr/local/bin/dbus-daemon",
+                        "--system",
+                        "--nofork"
+                    ]
+                },
+                "builtin": true,
+                "name": "dbus"
+            },
+            "65aa0301-ba8c-11e6-bc7b-000c293ba8c9": {
+                "launchd": {
+                    "Label": "com.vmware.guestd",
+                    "RunAtLoad": true,
+                    "ProgramArguments": [
+                        "/usr/local/bin/vmtoolsd",
+                        "-c", "/usr/local/share/vmware-tools/tools.conf",
+                        "-p", "/usr/local/lib/open-vm-tools/plugins/vmsvc"
+                    ]
+                },
+                "builtin": true,
+                "name": "vmtoolsd"
             },
             "77c31bda-a90a-495a-8d58-0063981eec67": {
                 "launchd": {
@@ -773,6 +810,17 @@
                 "builtin": true,
                 "pidfile": "/var/run/powerd.pid",
                 "name": "powerd"
+            },
+            "1f5b9ebf-bb00-11e6-afca-0cc47a3511b4": {
+                "launchd": {
+                    "Label": "org.freebsd.rtsold",
+                    "RunAtLoad": true,
+                    "ProgramArguments": [
+                        "/usr/sbin/rtsold",
+                        "-a",
+                        "-f"
+                    ]
+                }
             },
             "77c47b78-9bf3-4ba7-aa76-8cb99a8da4a3": {
                 "rcng": {
@@ -834,6 +882,14 @@
                 "name": "snmp"
             },
             "7498b5d8-457f-442b-bf48-ed29d8db5fc5": {
+                "launchd": {
+                    "Label": "org.collectd.collectd",
+                    "RunAtLoad": true,
+                    "ProgramArguments": [
+                        "/usr/local/sbin/collectd",
+                        "-f"
+                    ]
+                },
                 "rcng": {
                     "rc-scripts": "collectd"
                 },
