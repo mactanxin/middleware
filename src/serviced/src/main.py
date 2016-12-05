@@ -307,7 +307,7 @@ class Context(object):
         self.server = None
         self.client = None
         self.jobs = {}
-        self.kq = None
+        self.kq = select.kqueue()
         self.devnull = os.open('/dev/null', os.O_RDWR)
         self.logger = logging.getLogger('Context')
         self.rpc = RpcContext()
@@ -339,7 +339,6 @@ class Context(object):
         return job
 
     def event_loop(self):
-        self.kq = select.kqueue()
         while True:
             with contextlib.suppress(InterruptedError):
                 for ev in self.kq.control(None, MAX_EVENTS):
