@@ -1031,15 +1031,15 @@
                 "pidfile": "/var/run/dispatcher.pid",
                 "name": "dispatcher"
             },
-            "42ee6d97-3bbb-4dc4-bc30-95776167cb1d": {
-                "rcng": {
-                    "rc-scripts": "gui"
-                },
-                "builtin": true,
-                "pidfile": "/var/run/node.pid",
-                "name": "gui"
-            },
             "d33f4044-aa6b-4839-8b0d-16aeafc626f8": {
+                "launchd": {
+                    "Label": "com.apple.mdnsd",
+                    "RunAtLoad": true,
+                    "ProgramArguments": [
+                        "/usr/local/sbin/mdnsd",
+                        "-debug"
+                    ]
+                },
                 "rcng": {
                     "rc-scripts": "mdnsd"
                 },
@@ -1073,6 +1073,15 @@
                 "name": "rtsold"
             },
             "793867c5-bf29-4464-b7f1-7b77a9e2b97c": {
+                "launchd": {
+                    "Label": "org.freebsd.ctld",
+                    "RunAtLoad": true,
+                    "ProgramArguments": [
+                        "/usr/sbin/ctld",
+                        "-u",
+                        "-d"
+                    ]
+                },
                 "rcng": {
                     "rc-scripts": "ctld"
                 },
