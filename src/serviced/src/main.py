@@ -163,7 +163,6 @@ class Job(object):
                 group = grp.getgrnam(self.group)
                 os.setgid(group.gr_gid)
 
-            self.logger.debug('About to exec: {0}, {1}'.format(self.program, self.program_arguments))
             bsd.closefrom(3)
             os.setsid()
             os.execvpe(self.program, self.program_arguments, self.environment)
@@ -215,13 +214,15 @@ class Job(object):
             self.logger.debug('Job has forked, child pid is {0}'.format(ev.data))
 
         if ev.fflags & select.KQ_NOTE_EXIT:
-            try:
-                pid, status, rusage = os.wait4(self.pid, 0)
-            except BaseException as err:
-                logging.debug('waitpid error: {0}'.format(err))
+            if not self.parent:
+                # We need to reap direct children
+                try:
+                    os.waitpid(self.pid, 0)
+                except BaseException as err:
+                    self.logger.debug('waitpid() error: {0}'.format(err))
 
             with self.cv:
-                self.logger.info('Job has exited')
+                self.logger.info('Job has exited with code {0}'.format(ev.data))
                 self.pid = None
                 self.state = JobState.STOPPED
                 self.last_exit_code = ev.data
