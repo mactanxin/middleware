@@ -4,7 +4,7 @@
 #
 
 # PROVIDE: serviced
-# REQUIRE: datastore dispatcher
+# REQUIRE: datastore dispatcher ix-network
 # BEFORE: FILESYSTEMS
 
 . /etc/rc.subr
