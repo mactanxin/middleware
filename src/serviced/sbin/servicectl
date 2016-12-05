@@ -46,7 +46,7 @@ def list(v=False):
 
     def branch(parent, indent):
         for job in (j for j in jobs if j['ParentID'] == parent):
-            print('{0:<8} {1:<8} {2}{3}'.format(job['PID'], job['State'] or -1, '    ' * indent, job['Label']))
+            print('{0:<8} {1:<8} {2}{3}'.format(job['PID'] or '', job['State'] or '', '    ' * indent, job['Label']))
             branch(job['ID'], indent + 1)
 
     if v:
