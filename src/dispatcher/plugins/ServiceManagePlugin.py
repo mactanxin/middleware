@@ -562,6 +562,27 @@ def _init(dispatcher, plugin):
             'name': svc['name']
         })
 
+    def on_serviced_started(args):
+        if args['name'] != 'serviced.control':
+            return
+
+        for svc in dispatcher.datastore.query('service_definitions'):
+            logger.debug('Loading service {0}'.format(svc['name']))
+            enb = dispatcher.configstore.get('service.{0}.enable', svc['name'])
+
+            if 'launchd' in svc and enb:
+                if isinstance(svc['launchd'], dict):
+                    svc['launchd'] = [svc['launchd']]
+
+                for plist in svc['launchd']:
+                    try:
+                        dispatcher.call_sync('serviced.control.load', plist)
+                    except RpcException as err:
+                        logger.error('Cannot load service {0}: {1}'.format(svc['name'], err))
+                        continue
+
+            plugin.register_resource(Resource('service:{0}'.format(svc['name'])), parents=['system'])
+
     plugin.register_schema_definition('service', {
         'type': 'object',
         'additionalProperties': False,
@@ -589,12 +610,10 @@ def _init(dispatcher, plugin):
     })
 
     plugin.register_event_handler("service.rc.command", on_rc_command)
+    plugin.register_event_handler("plugin.service_resume", on_serviced_started)
     plugin.register_task_handler("service.manage", ServiceManageTask)
     plugin.register_task_handler("service.update", UpdateServiceConfigTask)
     plugin.register_provider("service", ServiceInfoProvider)
     plugin.register_event_type("service.changed")
-
-    for svc in dispatcher.datastore.query('service_definitions'):
-        plugin.register_resource(Resource('service:{0}'.format(svc['name'])), parents=['system'])
 
     plugin.register_debug_hook(collect_debug)
