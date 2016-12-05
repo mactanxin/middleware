@@ -145,7 +145,7 @@ def create_swap(dispatcher, disks):
         name = get_swap_name()
         disk_a, disk_b = pair
         logger.info('Creating swap partition %s from disks: %s, %s', name, disk_a, disk_b)
-        system('/sbin/gmirror', 'label', '-b', 'prefer', name, disk_a, disk_b)
+        system('/sbin/gmirror', 'create', '-b', 'prefer', name, disk_a, disk_b)
         system('/sbin/swapon', '/dev/mirror/{0}'.format(name))
         configure_dumpdev('/dev/mirror/{0}'.format(name))
 
