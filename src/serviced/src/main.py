@@ -174,6 +174,7 @@ class Job(object):
 
     def stop(self):
         self.logger.info('Stopping job')
+        self.did_exec = False
         self.state = JobState.DYING
         with self.cv:
             if self.state == JobState.STOPPED:
@@ -211,7 +212,7 @@ class Job(object):
                     self.cv.notify_all()
 
         if ev.fflags & select.KQ_NOTE_FORK:
-            self.logger.debug('Job has forked, child pid is {0}'.format(ev.data))
+            self.logger.debug('Job has forked')
 
         if ev.fflags & select.KQ_NOTE_EXIT:
             if not self.parent:
