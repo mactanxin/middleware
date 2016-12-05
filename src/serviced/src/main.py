@@ -307,7 +307,7 @@ class Context(object):
         self.client = None
         self.jobs = {}
         self.kq = None
-        self.devnull = os.open('/dev/null', os.O_RDONLY)
+        self.devnull = os.open('/dev/null', os.O_RDWR)
         self.logger = logging.getLogger('Context')
         self.rpc = RpcContext()
         self.rpc.register_service_instance('serviced.management', ManagementService(self))
@@ -357,8 +357,11 @@ class Context(object):
                                 continue
 
                             # Stop tracking at session ID boundary
-                            if pjob.sid != os.getsid(ev.ident):
-                                self.untrack_pid(ev.ident)
+                            try:
+                                if pjob.sid != os.getsid(ev.ident):
+                                    self.untrack_pid(ev.ident)
+                                    continue
+                            except ProcessLookupError:
                                 continue
 
                             job = Job(self)
