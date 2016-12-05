@@ -1886,6 +1886,7 @@ def collect_debug(dispatcher):
     yield AttachData('vm-config', dumps(list(dispatcher.call_sync('vm.config.get_config')), indent=4))
     yield AttachData('vm-templates-query', dumps(list(dispatcher.call_sync('vm.template.query')), indent=4))
     yield AttachData('vm-snapshot-query', dumps(list(dispatcher.call_sync('vm.snapshot.query')), indent=4))
+    yield AttachData('hw-support', dumps(dispatcher.call_sync('vm.get_hw_vm_capabilities'), indent=4))
 
 
 def _depends():
