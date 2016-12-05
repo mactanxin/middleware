@@ -69,19 +69,10 @@ kld_list="dtraceall ipmi fuse if_cxgbe"
 gateway_enable="YES"
 ipv6_activate_all_interfaces="YES"
 rtsold_enable="YES"
-dbus_enable="YES"
-
-# AppCafe related services
-syscache_enable="YES"
-appcafe_enable="YES"
 
 ataidle_enable="YES"
 vboxnet_enable="YES"
 watchdogd_enable="NO"
-
-collectd_enable="YES"
-ntpd_enable="YES"
-ntpd_sync_on_start="YES"
 
 % if config.get("service.ipfs.enable"):
 ipfs_go_enable="YES"
