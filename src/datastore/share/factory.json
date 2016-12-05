@@ -811,17 +811,6 @@
                 "pidfile": "/var/run/powerd.pid",
                 "name": "powerd"
             },
-            "1f5b9ebf-bb00-11e6-afca-0cc47a3511b4": {
-                "launchd": {
-                    "Label": "org.freebsd.rtsold",
-                    "RunAtLoad": true,
-                    "ProgramArguments": [
-                        "/usr/sbin/rtsold",
-                        "-a",
-                        "-f"
-                    ]
-                }
-            },
             "77c47b78-9bf3-4ba7-aa76-8cb99a8da4a3": {
                 "rcng": {
                     "rc-scripts": [
@@ -851,6 +840,14 @@
                 "name": "nfs"
             },
             "0a7ff372-9808-411b-b3aa-59a6f3f9a7b2": {
+                "launchd": {
+                    "Label": "org.proftpd.proftpd",
+                    "RunAtLoad": true,
+                    "ProgramArguments": [
+                        "/usr/local/sbin/proftpd",
+                        "-n"
+                    ]
+                },
                 "rcng": {
                     "rc-scripts": "proftpd"
                 },
@@ -917,6 +914,17 @@
                 "name": "ipfs"
             },
             "fd2c3dcd-6959-4dab-8750-65f2a0221fe6": {
+                "launchd": {
+                    "Label": "org.samba.rsyncd",
+                    "RunAtLoad": true,
+                    "ProgramArguments": [
+                        "/usr/local/bin/rsync",
+                        "--daemon",
+                        "--no-detach",
+                        "--config",
+                        "/usr/local/etc/rsync/rsyncd.conf"
+                    ]
+                },
                 "rcng": {
                     "rc-scripts": "rsyncd"
                 },
@@ -1048,6 +1056,15 @@
                 "name": "lldp"
             },
             "9137a2bd-c45f-4b6e-ad4e-45d2fd858cac": {
+                "launchd": {
+                    "Label": "org.freebsd.rtsold",
+                    "RunAtLoad": true,
+                    "ProgramArguments": [
+                        "/usr/sbin/rtsold",
+                        "-a",
+                        "-f"
+                    ]
+                },
                 "rcng": {
                     "rc-scripts": "rtsold"
                 },
