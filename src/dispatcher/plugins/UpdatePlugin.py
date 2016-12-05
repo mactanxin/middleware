@@ -35,6 +35,7 @@ import sys
 import random
 import re
 import tempfile
+from freenas.utils import human_readable_bytes
 from resources import Resource
 from cache import CacheStore
 from freenas.dispatcher.rpc import (
@@ -298,8 +299,8 @@ class UpdateHandler(object):
             self.progress = (progress * self._baseprogress) / 100
             if self.progress == 0:
                 self.progress = 1
-            display_size = ' Size: {0}'.format(size) if size else ''
-            display_rate = ' Rate: {0} B/s'.format(download_rate) if download_rate else ''
+            display_size = ' Size: {0} '.format(human_readable_bytes(size)) if size else ''
+            display_rate = ' Rate: {0} '.format(human_readable_bytes(download_rate, suffix='/s')) if download_rate else ''
             self.details = 'Downloading: {0} Progress:{1}{2}{3}'.format(
                 self.pkgname, progress, display_size, display_rate
             )
@@ -633,8 +634,7 @@ class DownloadUpdateTask(ProgressTask):
     def verify(self):
         if not update_cache.get('available', timeout=1):
             raise VerifyException(errno.ENOENT, (
-                'No updates currently available for download, try running '
-                'the `update.check` task'
+                'No updates currently available for download - check for new updates'
             ))
 
         block = self.dispatcher.resource_graph.get_resource(update_resource_string)
