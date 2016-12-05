@@ -45,7 +45,6 @@ neighbord_enable="YES"
 clid_enable="YES"
 restd_enable="YES"
 syslogd_enable="NO"
-syslog_ng_enable="YES"
 # turbo boost
 performance_cpu_freq="HIGH"
 
@@ -71,8 +70,6 @@ gateway_enable="YES"
 ipv6_activate_all_interfaces="YES"
 rtsold_enable="YES"
 dbus_enable="YES"
-mdnsd_enable="YES"
-nginx_enable="YES"
 
 # AppCafe related services
 syscache_enable="YES"
@@ -86,45 +83,10 @@ collectd_enable="YES"
 ntpd_enable="YES"
 ntpd_sync_on_start="YES"
 
-ctld_flags="-u"
-
-# Selectively enable services for now
-% for svc in ds.query("service_definitions", ('name', 'in', ['afp', 'ctl', 'ftp', 'glusterd', 'lldp', 'rsyncd', 'smartd', 'snmp', 'sshd', 'tftpd', 'webdav', 'iscsid'])):
-    % if config.get("service.{0}.enable".format(svc["name"])):
-${svc['rcng']['rc-scripts']}_enable="YES"
-    % else:
-${svc['rcng']['rc-scripts']}_enable="NO"
-    % endif
-% endfor
-
-% if config.get("service.smb.enable"):
-samba_server_enable="YES"
-##% if ! dirsrv_enabled domaincontroller
-smbd_enable="YES"
-nmbd_enable="YES"
-winbindd_enable="YES"
-##% endif
-% endif
-% if config.get("service.dyndns.enable"):
-inadynmt_enable="YES"
-% endif
-
 % if config.get("service.ipfs.enable"):
 ipfs_go_enable="YES"
 % endif
 ipfs_go_path="${config.get("service.ipfs.path")}"
-
-ladvd_flags="-a\
-% if lldp_config['save_description']:
- -z\
-% endif
-% if lldp_config['country_code']:
- -c ${lldp_config['country_code']}\
-% endif
-% if lldp_config['location']:
- -l \"${lldp_config['location']}\"\
-% endif
-"
 
 % if nfs_config['enable']:
 %  if nfs_config['v4']:
@@ -169,28 +131,6 @@ rpc_lockd_flags="${nfs_ips}\
 rpcbind_flags="${nfs_ips}"
 % endif
 
-% if smartd_config['interval']:
-smartd_flags="-i ${smartd_config['interval']*60}"
-% endif
-
-snmpd_conffile="/usr/local/etc/snmpd.conf"
-snmpd_flags="-Ls5d"
-
-tftpd_flags="-s -u ${tftp_config['username']} -U ${perm_to_oct_string(tftp_config['umask'])}\
-% if tftp_config['port'] != 69:
- -a :${tftp_config['port']}\
-% endif
-% if tftp_config['allow_new_files']:
- -c\
-% endif
-% if tftp_config['auxiliary']:
- ${tftp_config['auxiliary']}\
-% endif
-% if tftp_config['path']:
- ${tftp_config['path']}\
-% endif
-"
-
 % if ups_config['mode'] == 'MASTER' and ups_config['enable']:
 nut_enable="YES"
 nut_upslog_ups="${ups_config['identifier']}"
@@ -222,17 +162,4 @@ dumpdir="/data/crash"
 savecore_flags="-z -m 5"
 % if adv_config.get('uploadcrash'):
 ix_diagnose_enable="YES"
-% endif
-
-% if adv_config.get('powerd'):
-powerd_enable="YES"
-% endif
-
-% if config.get("service.openvpn.enable"):
-openvpn_enable="YES"
-openvpn_configfile="/usr/local/etc/openvpn/openvpn.conf"
-% endif
-
-% if config.get("service.consul.enable"):
-consul_enable="YES"
 % endif
