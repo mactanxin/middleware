@@ -1262,7 +1262,7 @@ class DockerService(RpcService):
                 else:
                     result.append({
                         'id': image['Id'],
-                        'names': image['RepoTags'],
+                        'names': image['RepoTags'] or [image['Id']],
                         'size': image['VirtualSize'],
                         'labels': image['Labels'],
                         'hosts': [host.vm.id],
