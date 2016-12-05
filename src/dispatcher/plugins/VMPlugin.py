@@ -51,6 +51,7 @@ from freenas.utils import first_or_default, normalize, deep_update, process_temp
 from utils import save_config, load_config, delete_config
 from freenas.utils.decorators import throttle
 from freenas.utils.copytree import copytree
+from debug import AttachData, AttachDirectory, AttachCommandOutput
 
 
 VM_OUI = '00:a0:98'  # NetApp
@@ -1875,6 +1876,18 @@ def fetch_templates(dispatcher):
     dispatcher.call_task_sync('vm.template.fetch')
 
 
+def collect_debug(dispatcher):
+    yield AttachDirectory('vm-templates', dispatcher.call_sync('system_dataset.request_directory', 'vm_templates'))
+    yield AttachCommandOutput(
+        'vm-images',
+        ['ls', '-LRl', dispatcher.call_sync('system_dataset.request_directory', 'vm_image_cache')]
+    )
+    yield AttachData('vm-query', dumps(list(dispatcher.call_sync('vm.query')), indent=4))
+    yield AttachData('vm-config', dumps(list(dispatcher.call_sync('vm.config.get_config')), indent=4))
+    yield AttachData('vm-templates-query', dumps(list(dispatcher.call_sync('vm.template.query')), indent=4))
+    yield AttachData('vm-snapshot-query', dumps(list(dispatcher.call_sync('vm.snapshot.query')), indent=4))
+
+
 def _depends():
     return ['VolumePlugin']
 
@@ -2270,3 +2283,5 @@ def _init(dispatcher, plugin):
     plugin.register_event_type('vm.snapshot.changed')
 
     plugin.register_event_handler('zfs.snapshot.changed', on_snapshot_change)
+
+    plugin.register_debug_hook(collect_debug)

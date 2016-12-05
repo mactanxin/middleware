@@ -27,7 +27,6 @@
 
 import re
 import copy
-import json
 import errno
 import gevent
 import dockerfile_parse
@@ -44,6 +43,8 @@ from datastore.config import ConfigNode
 from freenas.utils import normalize, query as q, first_or_default
 from freenas.utils.decorators import throttle
 from freenas.dispatcher.rpc import generator, accepts, returns, SchemaHelper as h, RpcException, description, private
+from freenas.dispatcher.jsonenc import loads, dumps
+from debug import AttachData
 
 logger = logging.getLogger(__name__)
 containers = None
@@ -322,7 +323,7 @@ class DockerImagesProvider(Provider):
 
         if 'org.freenas.volumes' in labels:
             try:
-                j = json.loads(labels['org.freenas.volumes'])
+                j = loads(labels['org.freenas.volumes'])
             except ValueError:
                 pass
             else:
@@ -338,7 +339,7 @@ class DockerImagesProvider(Provider):
 
         if 'org.freenas.static_volumes' in labels:
             try:
-                j = json.loads(labels['org.freenas.static_volumes'])
+                j = loads(labels['org.freenas.static_volumes'])
             except ValueError:
                 pass
             else:
@@ -350,7 +351,7 @@ class DockerImagesProvider(Provider):
 
         if 'org.freenas.settings' in labels:
             try:
-                j = json.loads(labels['org.freenas.settings'])
+                j = loads(labels['org.freenas.settings'])
             except ValueError:
                 pass
             else:
@@ -1054,6 +1055,15 @@ class DockerCollectionDeleteTask(Task):
         })
 
 
+def collect_debug(dispatcher):
+    yield AttachData('hosts-query', dumps(list(dispatcher.call_sync('docker.host.query')), indent=4))
+    yield AttachData('containers-query', dumps(list(dispatcher.call_sync('docker.container.query')), indent=4))
+    yield AttachData('images-query', dumps(list(dispatcher.call_sync('docker.image.query')), indent=4))
+    yield AttachData('collections-query', dumps(list(dispatcher.call_sync('docker.collection.query')), indent=4))
+    yield AttachData('containerd-containers', dumps(list(dispatcher.call_sync(CONTAINERS_QUERY)), indent=4))
+    yield AttachData('containerd-images', dumps(list(dispatcher.call_sync(IMAGES_QUERY)), indent=4))
+
+
 def _depends():
     return ['VMPlugin']
 
@@ -1283,6 +1293,8 @@ def _init(dispatcher, plugin):
     plugin.attach_hook('vm.pre_destroy', vm_pre_destroy)
 
     dispatcher.register_resource(Resource('docker'))
+
+    plugin.register_debug_hook(collect_debug)
 
     def resource_hook_condition(id, updated_params):
         return 'name' in updated_params
