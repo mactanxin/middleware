@@ -843,7 +843,7 @@ class DockerImageDeleteTask(DockerBaseTask):
         return 'Deleting docker image'
 
     def describe(self, name, hostid=None):
-        return TaskDescription('Deleting docker image {name}'.format(name=name))
+        return TaskDescription('Deleting docker image {name}', name=name)
 
     def verify(self, name, hostid=None):
         host = self.datastore.get_by_id('vms', hostid) or {}
@@ -888,6 +888,30 @@ class DockerImageDeleteTask(DockerBaseTask):
             lambda: delete_image(),
             600
         )
+
+
+@description('Removes all previously cached container images')
+class DockerImageFlushTask(DockerBaseTask):
+    @classmethod
+    def early_describe(cls):
+        return 'Deleting all docker images'
+
+    def describe(self):
+        return TaskDescription('Deleting all docker images')
+
+    def verify(self):
+        return ['docker']
+
+    def run(self):
+        subtasks = []
+        self.set_progress(0, 'Deleting docker images')
+        for image in self.dispatcher.call_sync('docker.image.query', [], {'select': 'names.0'}):
+            subtasks.append(self.run_subtask('docker.image.delete', image))
+
+        subtasks_cnt = len(subtasks)
+        for idx, t in enumerate(subtasks):
+            self.join_subtasks(t)
+            self.set_progress(int((idx / subtasks_cnt) * 100), 'Deleting docker images')
 
 
 @private
@@ -1269,6 +1293,7 @@ def _init(dispatcher, plugin):
 
     plugin.register_task_handler('docker.image.pull', DockerImagePullTask)
     plugin.register_task_handler('docker.image.delete', DockerImageDeleteTask)
+    plugin.register_task_handler('docker.image.flush', DockerImageFlushTask)
 
     plugin.register_task_handler('docker.host.update_resource', DockerUpdateHostResourceTask)
     plugin.register_task_handler('docker.host.rollback_resource', DockerRollbackHostResourceTask)
