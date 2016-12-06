@@ -28,6 +28,7 @@
 import os
 import errno
 import logging
+import signal
 from task import Task, Provider, TaskException, TaskDescription, ValidationException, query
 from debug import AttachFile, AttachCommandOutput
 from resources import Resource
@@ -91,6 +92,15 @@ class ServiceInfoProvider(Provider):
         if not svc:
             raise RpcException(errno.ENOENT, 'Service {0} not found'.format(service))
 
+        if 'launchd' in svc:
+            launchd = service['launchd']
+            plists = [launchd] if isinstance(launchd, dict) else launchd
+
+            for i in plists:
+                self.dispatcher.call_sync('serviced.job.start', i['Label'])
+
+            return
+
         if 'rcng' not in svc:
             if 'start_rpc' in svc:
                 try:
@@ -134,6 +144,15 @@ class ServiceInfoProvider(Provider):
         if not svc:
             raise RpcException(errno.ENOENT, 'Service {0} not found'.format(service))
 
+        if 'launchd' in svc:
+            launchd = service['launchd']
+            plists = [launchd] if isinstance(launchd, dict) else launchd
+
+            for i in plists:
+                self.dispatcher.call_sync('serviced.job.stop', i['Label'])
+
+            return
+
         if 'rcng' not in svc:
             if 'stop_rpc' in svc:
                 try:
@@ -173,40 +192,19 @@ class ServiceInfoProvider(Provider):
     @private
     @accepts(str)
     def reload(self, service):
-        svc = self.datastore.get_one('service_definitions', ('name', '=', service))
-        status = self.query([('name', '=', service)], {'single': True})
+        svc = self.query([('name', '=', service)], {'single': True})
         if not svc:
             raise RpcException(errno.ENOENT, 'Service {0} not found'.format(service))
 
-        rc_scripts = svc['rcng']['rc-scripts']
-        reload_scripts = svc['rcng'].get('reload', rc_scripts)
-
-        if status['state'] != 'RUNNING':
+        if svc['state'] != 'RUNNING':
             return
 
-        if type(rc_scripts) is str:
-            try:
-                system("/usr/sbin/service", rc_scripts, 'onereload')
-            except SubprocessException as e:
-                raise RpcException(
-                    errno.ENOENT,
-                    "Whilst reloading service {0} command 'service {1} onereload'".format(service, rc_scripts) +
-                    " failed with error: {0}".format(e.err)
-                )
-
-        elif type(rc_scripts) is list:
-            for i in rc_scripts:
-                if i not in reload_scripts:
-                        continue
-
+        if svc['pid']:
+            for p in svc['pid']:
                 try:
-                    system("/usr/sbin/service", i, 'onereload')
-                except SubprocessException as e:
-                    raise RpcException(
-                        errno.ENOENT,
-                        "Whilst reloading service {0} command 'service {1} onereload'".format(service, i) +
-                        " failed the following error occured: {0}".format(e.err)
-                    )
+                    os.kill(p, signal.SIGHUP)
+                except ProcessLookupError:
+                    continue
 
     @private
     @accepts(str)
@@ -225,6 +223,16 @@ class ServiceInfoProvider(Provider):
                 self.dispatcher.call_sync(hook_rpc)
             except RpcException:
                 pass
+            return
+
+        if 'launchd' in svc:
+            launchd = svc['launchd']
+            plists = [launchd] if isinstance(launchd, dict) else launchd
+
+            for i in plists:
+                self.dispatcher.call_sync('serviced.job.stop', i['Label'])
+                self.dispatcher.call_sync('serviced.job.start', i['Label'])
+
             return
 
         rc_scripts = svc['rcng']['rc-scripts']
@@ -320,24 +328,36 @@ class ServiceManageTask(Task):
                     action, name, e
                 ))
 
-        if 'rcng' not in service:
-            raise TaskException(errno.ENOTSUP, 'Operation not supported by the service')
+        if 'launchd' in service:
+            launchd = service['launchd']
+            plists = [launchd] if isinstance(launchd, dict) else launchd
 
-        rc_scripts = service['rcng'].get('rc-scripts')
-        reload_scripts = service['rcng'].get('reload', rc_scripts)
-        try:
-            if type(rc_scripts) is str:
-                system("/usr/sbin/service", rc_scripts, 'one' + action)
+            for i in plists:
+                if action == 'reload':
+                    pass
 
-            if type(rc_scripts) is list:
-                for i in rc_scripts:
-                    if action == 'reload' and i not in reload_scripts:
-                        continue
+                if action in ('stop', 'restart'):
+                    self.dispatcher.call_sync('serviced.job.stop', i['Label'])
 
-                    system("/usr/sbin/service", i, 'one' + action)
+                if action in ('start', 'restart'):
+                    self.dispatcher.call_sync('serviced.job.start', i['Label'])
 
-        except SubprocessException as e:
-            raise TaskException(errno.EBUSY, e.err)
+        elif 'rcng' in service:
+            rc_scripts = service['rcng'].get('rc-scripts')
+            reload_scripts = service['rcng'].get('reload', rc_scripts)
+            try:
+                if type(rc_scripts) is str:
+                    system("/usr/sbin/service", rc_scripts, 'one' + action)
+
+                if type(rc_scripts) is list:
+                    for i in rc_scripts:
+                        if action == 'reload' and i not in reload_scripts:
+                            continue
+
+                        system("/usr/sbin/service", i, 'one' + action)
+
+            except SubprocessException as e:
+                raise TaskException(errno.EBUSY, e.err)
 
         self.dispatcher.dispatch_event('service.changed', {
             'operation': 'update',
@@ -460,9 +480,10 @@ def get_status(dispatcher, datastore, service):
             states = []
 
             for i in plists:
-                job = dispatcher.call_sync('serviced.control.get', i['Label'])
+                job = dispatcher.call_sync('serviced.job.get', i['Label'])
                 states.append(job['State'])
-                pids.append(job['PID'])
+                if job['PID']:
+                    pids.append(job['PID'])
 
             for i in ('RUNNING', 'STOPPED'):
                 if all(s == i for s in states):
@@ -563,7 +584,7 @@ def _init(dispatcher, plugin):
         })
 
     def on_serviced_started(args):
-        if args['name'] != 'serviced.control':
+        if args['name'] != 'serviced.job':
             return
 
         for svc in dispatcher.datastore.query('service_definitions'):
@@ -576,12 +597,20 @@ def _init(dispatcher, plugin):
 
                 for plist in svc['launchd']:
                     try:
-                        dispatcher.call_sync('serviced.control.load', plist)
+                        dispatcher.call_sync('serviced.job.load', plist)
                     except RpcException as err:
                         logger.error('Cannot load service {0}: {1}'.format(svc['name'], err))
                         continue
 
             plugin.register_resource(Resource('service:{0}'.format(svc['name'])), parents=['system'])
+
+    def on_job_changed(args):
+        svc = dispatcher.datastore.get_one('service_definitions', ('launchd.Label', '=', args['Label']))
+        if svc:
+            dispatcher.emit_event('service.changed', {
+                'operation': 'update',
+                'ids': [svc['id']]
+            })
 
     plugin.register_schema_definition('service', {
         'type': 'object',
@@ -613,6 +642,8 @@ def _init(dispatcher, plugin):
     })
 
     plugin.register_event_handler("service.rc.command", on_rc_command)
+    plugin.register_event_handler("serviced.job.started", on_job_changed)
+    plugin.register_event_handler("serviced.job.stopped", on_job_changed)
     plugin.register_event_handler("plugin.service_resume", on_serviced_started)
     plugin.register_task_handler("service.manage", ServiceManageTask)
     plugin.register_task_handler("service.update", UpdateServiceConfigTask)
