@@ -40,7 +40,7 @@ DEFAULT_TIMEOUT = 10
 
 def list(v=False):
     client = create_client()
-    jobs = client.call_sync('serviced.control.query')
+    jobs = client.call_sync('serviced.job.query')
     if not v:
         print('PID      Status   Label')
 
@@ -62,7 +62,7 @@ def load(*filenames):
         with open(i, 'r') as f:
             try:
                 plist = json.load(f)
-                client.call_sync('serviced.control.load', plist)
+                client.call_sync('serviced.job.load', plist)
             except ValueError as err:
                 print('Unreadable JSON file: {0}'.format(err), file=sys.stderr)
                 sys.exit(1)
@@ -76,7 +76,7 @@ def load(*filenames):
 def start(label):
     client = create_client()
     try:
-        client.call_sync('serviced.control.start', label)
+        client.call_sync('serviced.job.start', label)
     except RpcException as err:
         print('Failed to start job: {0}'.format(err), file=sys.stderr)
         sys.exit(1)
@@ -87,7 +87,7 @@ def start(label):
 def stop(label):
     client = create_client()
     try:
-        client.call_sync('serviced.control.stop', label)
+        client.call_sync('serviced.job.stop', label)
     except RpcException as err:
         print('Failed to stop job: {0}'.format(err), file=sys.stderr)
         sys.exit(1)
@@ -98,7 +98,7 @@ def stop(label):
 def unload(label):
     client = create_client()
     try:
-        client.call_sync('serviced.control.unload', label)
+        client.call_sync('serviced.job.unload', label)
     except RpcException as err:
         print('Failed to unload job: {0}'.format(err), file=sys.stderr)
         sys.exit(1)

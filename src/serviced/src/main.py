@@ -63,6 +63,7 @@ class Job(object):
     def __init__(self, context):
         self.context = context
         self.anonymous = False
+        self.disabled = False
         self.logger = None
         self.id = None
         self.label = None
@@ -89,6 +90,7 @@ class Job(object):
         self.group = None
         self.umask = None
         self.last_exit_code = None
+        self.failure_reason = None
         self.did_exec = False
         self.environment = {}
         self.respawns = 0
@@ -108,6 +110,7 @@ class Job(object):
         self.program_arguments = plist.get('ProgramArguments', [])
         self.stdout_path = plist.get('StandardOutPath')
         self.stderr_path = plist.get('StandardErrorPath')
+        self.disabled = bool(plist.get('Disabled', False))
         self.run_at_load = bool(plist.get('RunAtLoad', False))
         self.keep_alive = bool(plist.get('KeepAlive', False))
         self.throttle_interval = int(plist.get('ThrottleInterval', 0))
@@ -179,12 +182,12 @@ class Job(object):
         self.logger.debug('Started as PID {0}'.format(pid))
         self.pid = pid
         self.context.track_pid(self.pid)
+        self.did_exec = False
         os.waitpid(self.pid, os.WUNTRACED)
         os.kill(self.pid, signal.SIGCONT)
 
     def stop(self):
         self.logger.info('Stopping job')
-        self.did_exec = False
         self.state = JobState.DYING
         with self.cv:
             if self.state == JobState.STOPPED:
@@ -195,8 +198,7 @@ class Job(object):
             except ProcessLookupError:
                 # Already dead
                 with self.cv:
-                    self.state = JobState.STOPPED
-                    self.notify()
+                    self.set_state(JobState.STOPPED)
 
             if not self.cv.wait_for(lambda: self.state == JobState.STOPPED, self.exit_timeout):
                 os.kill(self.pid, signal.SIGKILL)
@@ -223,8 +225,7 @@ class Job(object):
                         return
 
                     self.did_exec = True
-                    self.state = JobState.RUNNING
-                    self.cv.notify_all()
+                    self.set_state(JobState.RUNNING)
                     self.context.provide(self.provides)
 
         if ev.fflags & select.KQ_NOTE_FORK:
@@ -241,16 +242,30 @@ class Job(object):
             with self.cv:
                 self.logger.info('Job has exited with code {0}'.format(ev.data))
                 self.pid = None
-                self.state = JobState.STOPPED
                 self.last_exit_code = ev.data
+                self.set_state(JobState.STOPPED)
 
                 if self.anonymous:
                     del self.context.jobs[self.id]
 
                 self.cv.notify_all()
 
-    def notify(self):
-        pass
+    def set_state(self, new_state):
+        # Must run locked
+        if self.state != JobState.RUNNING and new_state == JobState.RUNNING:
+            self.context.client.emit_event('serviced.job.started', {
+                'ID': self.id,
+                'Label': self.label
+            })
+
+        if self.state != JobState.STOPPED and new_state == JobState.STOPPED:
+            self.context.client.emit_event('serviced.job.stopped', {
+                'ID': self.id,
+                'Label': self.label
+            })
+
+        self.state = new_state
+        self.cv.notify_all()
 
     def __getstate__(self):
         ret = {
@@ -285,7 +300,7 @@ class ManagementService(RpcService):
         self.context = context
 
 
-class ControlService(RpcService):
+class JobService(RpcService):
     def __init__(self, context):
         self.context = context
 
@@ -314,7 +329,7 @@ class ControlService(RpcService):
             if not job:
                 raise RpcException(errno.ENOENT, 'Job {0} not found'.format(name_or_id))
 
-        job.start()
+            job.start()
 
     def stop(self, name_or_id):
         with self.context.lock:
@@ -344,7 +359,7 @@ class Context(object):
         self.logger = logging.getLogger('Context')
         self.rpc = RpcContext()
         self.rpc.register_service_instance('serviced.management', ManagementService(self))
-        self.rpc.register_service_instance('serviced.control', ControlService(self))
+        self.rpc.register_service_instance('serviced.job', JobService(self))
 
     def init_dispatcher(self):
         def on_error(reason, **kwargs):
@@ -440,7 +455,7 @@ class Context(object):
                 self.client.connect('unix:')
                 self.client.login_service('serviced')
                 self.client.enable_server(self.rpc)
-                self.client.resume_service('serviced.control')
+                self.client.resume_service('serviced.job')
                 self.client.resume_service('serviced.management')
                 return
             except (OSError, RpcException) as err:
