@@ -96,7 +96,6 @@ class AlertsProvider(Provider):
     def dismiss_all(self):
         alert_list = self.query([('dismissed', '=', False)])
         for alert in alert_list:
-
             alert.update({
                 'dismissed': True,
                 'dismissed_at': datetime.utcnow()
