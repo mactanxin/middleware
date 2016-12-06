@@ -90,6 +90,23 @@ class AlertsProvider(Provider):
             'ids': [id]
         })
 
+
+    @description("Dismisses/Deletes all alerts from the database")
+    @accepts()
+    def dismiss_all(self):
+        alert_list = self.query([('dismissed', '=', False)])
+        for alert in alert_list:
+            alert.update({
+                'dismissed': True,
+                'dismissed_at': datetime.utcnow()
+            })
+
+            self.datastore.update('alerts', alert['id'], alert)
+            self.dispatcher.dispatch_event('alert.changed', {
+                'operation': 'update',
+                'ids': [alert['id']]
+            })
+
     @private
     @description("Emits an event for the provided alert")
     @accepts(h.all_of(
