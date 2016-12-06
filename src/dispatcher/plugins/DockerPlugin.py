@@ -523,7 +523,7 @@ class DockerContainerCreateTask(DockerBaseTask):
         return 'Creating a Docker container'
 
     def describe(self, container):
-        return TaskDescription('Creating Docker container {name}'.format(name=container['names'][0]))
+        return TaskDescription('Creating Docker container {name}', name=container['names'][0])
 
     def verify(self, container):
         if not container.get('names'):
@@ -654,7 +654,7 @@ class DockerContainerDeleteTask(ProgressTask):
         name = self.dispatcher.call_sync(
             'docker.container.query', [('id', '=', id)], {'single': True, 'select': 'names.0'}
         )
-        return TaskDescription('Deleting Docker container {name}'.format(name=name or id))
+        return TaskDescription('Deleting Docker container {name}', name=name or id)
 
     def verify(self, id):
         hostname = None
@@ -688,7 +688,7 @@ class DockerContainerStartTask(Task):
         name = self.dispatcher.call_sync(
             'docker.container.query', [('id', '=', id)], {'single': True, 'select': 'names.0'}
         )
-        return TaskDescription('Starting container {name}'.format(name=name or id))
+        return TaskDescription('Starting container {name}', name=name or id)
 
     def verify(self, id):
         hostname = None
@@ -722,7 +722,7 @@ class DockerContainerStopTask(Task):
         name = self.dispatcher.call_sync(
             'docker.container.query', [('id', '=', id)], {'single': True, 'select': 'names.0'}
         )
-        return TaskDescription('Stopping container {name}'.format(name=name or id))
+        return TaskDescription('Stopping container {name}', name=name or id)
 
     def verify(self, id):
         hostname = None
@@ -753,7 +753,7 @@ class DockerImagePullTask(DockerBaseTask):
         return 'Pulling docker image'
 
     def describe(self, name, hostid):
-        return TaskDescription('Pulling docker image {name}'.format(name=name))
+        return TaskDescription('Pulling docker image {name}', name=name)
 
     def verify(self, name, hostid):
         host = self.datastore.get_by_id('vms', hostid) or {}
