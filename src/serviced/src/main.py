@@ -99,6 +99,7 @@ class Job(object):
         return (j for j in self.context.jobs if j.parent is self)
 
     def load(self, plist):
+        self.state = JobState.STOPPED
         self.id = plist.get('ID', str(uuid.uuid4()))
         self.label = plist.get('Label')
         self.program = plist.get('Program')
@@ -367,7 +368,8 @@ class Context(object):
                     if job.state == JobState.STOPPED and job.requires <= self.provides:
                         job.start()
 
-        Timer(2, doit).start()
+        if targets:
+            Timer(2, doit).start()
 
     def job_by_pid(self, pid):
         job = first_or_default(lambda j: j.pid == pid, self.jobs.values())
