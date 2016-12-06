@@ -667,6 +667,7 @@
                     {
                         "RunAtLoad": true,
                         "Label": "org.samba.smbd",
+                        "Requires": ["logging"],
                         "ProgramArguments": [
                             "/usr/local/sbin/smbd",
                             "--foreground",
@@ -676,6 +677,7 @@
                     {
                         "RunAtLoad": true,
                         "Label": "org.samba.nmbd",
+                        "Requires": ["logging"],
                         "ProgramArguments": [
                             "/usr/local/sbin/nmbd",
                             "--foreground",
@@ -685,6 +687,7 @@
                                         {
                         "RunAtLoad": true,
                         "Label": "org.samba.winbindd",
+                        "Requires": ["logging"],
                         "ProgramArguments": [
                             "/usr/local/sbin/winbindd",
                             "--foreground",
@@ -728,6 +731,7 @@
             "f742eccc-f912-4b9c-8ed5-90f6aa1ed74e": {
                 "launchd": {
                     "RunAtLoad": true,
+                    "Requires": ["logging"],
                     "ProgramArguments": [
                         "/usr/sbin/sshd",
                         "-D"
@@ -774,6 +778,7 @@
                 "launchd": {
                     "Label": "org.syslog-ng.syslog-ng",
                     "RunAtLoad": true,
+                    "Provides": ["logging"],
                     "ProgramArguments": [
                         "/usr/local/sbin/syslog-ng",
                         "-F"
@@ -843,6 +848,7 @@
                 "launchd": {
                     "Label": "org.proftpd.proftpd",
                     "RunAtLoad": true,
+                    "Requires": ["logging"],
                     "ProgramArguments": [
                         "/usr/local/sbin/proftpd",
                         "-n"
@@ -862,6 +868,7 @@
                 "launchd": {
                     "Label": "net.sourceforge.net-snmp.snmpd",
                     "RunAtLoad": true,
+                    "Requires": ["logging"],
                     "ProgramArguments": [
                         "/usr/local/sbin/snmpd",
                         "-f",

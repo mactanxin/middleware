@@ -40,11 +40,12 @@ import contextlib
 import pwd
 import grp
 import bsd
-from threading import Thread, Condition, Timer
+from threading import Thread, Condition, Timer, RLock
 from freenas.dispatcher.rpc import RpcContext, RpcService, RpcException, generator
 from freenas.dispatcher.client import Client, ClientError
 from freenas.dispatcher.server import Server
 from freenas.utils import configure_logging, first_or_default, query as q
+from freenas.utils.trace_logger import TRACE
 
 
 DEFAULT_SOCKET_ADDRESS = 'unix:///var/run/serviced.sock'
@@ -66,6 +67,8 @@ class Job(object):
         self.id = None
         self.label = None
         self.parent = None
+        self.provides = set()
+        self.requires = set()
         self.state = JobState.UNKNOWN
         self.program = None
         self.program_arguments = []
@@ -99,6 +102,8 @@ class Job(object):
         self.id = plist.get('ID', str(uuid.uuid4()))
         self.label = plist.get('Label')
         self.program = plist.get('Program')
+        self.requires = set(plist.get('Requires', []))
+        self.provides = set(plist.get('Provides', []))
         self.program_arguments = plist.get('ProgramArguments', [])
         self.stdout_path = plist.get('StandardOutPath')
         self.stderr_path = plist.get('StandardErrorPath')
@@ -148,6 +153,9 @@ class Job(object):
         del self.context.jobs[self.id]
 
     def start(self):
+        if not self.requires <= self.context.provides:
+            return
+
         self.logger.info('Starting job')
         pid = os.fork()
         if pid == 0:
@@ -167,6 +175,7 @@ class Job(object):
             os.setsid()
             os.execvpe(self.program, self.program_arguments, self.environment)
 
+        self.logger.debug('Started as PID {0}'.format(pid))
         self.pid = pid
         self.context.track_pid(self.pid)
         os.waitpid(self.pid, os.WUNTRACED)
@@ -206,10 +215,16 @@ class Job(object):
             self.logger.debug('Job did exec() into {0}'.format(argv))
             if argv == self.program_arguments and not self.did_exec:
                 with self.cv:
-                    self.sid = os.getsid(self.pid)
+                    try:
+                        self.sid = os.getsid(self.pid)
+                    except ProcessLookupError:
+                        # Exited too quickly after exec()
+                        return
+
                     self.did_exec = True
                     self.state = JobState.RUNNING
                     self.cv.notify_all()
+                    self.context.provide(self.provides)
 
         if ev.fflags & select.KQ_NOTE_FORK:
             self.logger.debug('Job has forked')
@@ -243,6 +258,8 @@ class Job(object):
             'Label': self.label,
             'Program': self.program,
             'ProgramArguments': self.program_arguments,
+            'Provides': list(self.provides),
+            'Requires': list(self.requires),
             'RunAtLoad': self.run_at_load,
             'KeepAlive': self.keep_alive,
             'State': self.state.name,
@@ -276,31 +293,35 @@ class ControlService(RpcService):
         return q.query(self.context.jobs.values(), *(filter or []), **(params or {}))
 
     def load(self, plist):
-        job = Job(self.context)
-        job.load(plist)
-        self.context.jobs[job.id] = job
+        with self.context.lock:
+            job = Job(self.context)
+            job.load(plist)
+            self.context.jobs[job.id] = job
 
     def unload(self, name_or_id):
-        job = first_or_default(lambda j: j.label == name_or_id or j.id == name_or_id, self.context.jobs.values())
-        if not job:
-            raise RpcException(errno.ENOENT, 'Job {0} not found'.format(name_or_id))
+        with self.context.lock:
+            job = first_or_default(lambda j: j.label == name_or_id or j.id == name_or_id, self.context.jobs.values())
+            if not job:
+                raise RpcException(errno.ENOENT, 'Job {0} not found'.format(name_or_id))
 
-        job.stop()
-        job.unload()
+            job.stop()
+            job.unload()
 
     def start(self, name_or_id):
-        job = first_or_default(lambda j: j.label == name_or_id or j.id == name_or_id, self.context.jobs.values())
-        if not job:
-            raise RpcException(errno.ENOENT, 'Job {0} not found'.format(name_or_id))
+        with self.context.lock:
+            job = first_or_default(lambda j: j.label == name_or_id or j.id == name_or_id, self.context.jobs.values())
+            if not job:
+                raise RpcException(errno.ENOENT, 'Job {0} not found'.format(name_or_id))
 
         job.start()
 
     def stop(self, name_or_id):
-        job = first_or_default(lambda j: j.label == name_or_id or j.id == name_or_id, self.context.jobs.values())
-        if not job:
-            raise RpcException(errno.ENOENT, 'Job {0} not found'.format(name_or_id))
+        with self.context.lock:
+            job = first_or_default(lambda j: j.label == name_or_id or j.id == name_or_id, self.context.jobs.values())
+            if not job:
+                raise RpcException(errno.ENOENT, 'Job {0} not found'.format(name_or_id))
 
-        job.stop()
+            job.stop()
 
 
 class Context(object):
@@ -308,6 +329,8 @@ class Context(object):
         self.server = None
         self.client = None
         self.jobs = {}
+        self.provides = set()
+        self.lock = RLock()
         self.kq = select.kqueue()
         self.devnull = os.open('/dev/null', os.O_RDWR)
         self.logger = logging.getLogger('Context')
@@ -335,6 +358,17 @@ class Context(object):
         thread.daemon = True
         thread.start()
 
+    def provide(self, targets):
+        def doit():
+            self.logger.debug('Adding dependency targets: {0}'.format(', '.join(targets)))
+            with self.lock:
+                self.provides |= targets
+                for job in self.jobs.values():
+                    if job.state == JobState.STOPPED and job.requires <= self.provides:
+                        job.start()
+
+        Timer(2, doit).start()
+
     def job_by_pid(self, pid):
         job = first_or_default(lambda j: j.pid == pid, self.jobs.values())
         return job
@@ -343,7 +377,7 @@ class Context(object):
         while True:
             with contextlib.suppress(InterruptedError):
                 for ev in self.kq.control(None, MAX_EVENTS):
-                    self.logger.debug('New event: {0}'.format(ev))
+                    self.logger.log(TRACE, 'New event: {0}'.format(ev))
                     if ev.filter == select.KQ_FILTER_PROC:
                         job = self.job_by_pid(ev.ident)
                         if job:
@@ -411,6 +445,7 @@ class Context(object):
         configure_logging('/var/log/serviced.log', 'DEBUG')
 
         setproctitle.setproctitle('serviced')
+        self.logger.info('Started')
         self.init_dispatcher()
         self.init_server(args.s)
         self.event_loop()
