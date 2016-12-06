@@ -27,10 +27,7 @@
 
 import os
 import errno
-import gevent
-import gevent.pool
 import logging
-
 from task import Task, Provider, TaskException, TaskDescription, ValidationException, query
 from debug import AttachFile, AttachCommandOutput
 from resources import Resource
@@ -62,34 +59,10 @@ class ServiceInfoProvider(Provider):
                 entry['pid'] = pid
 
             entry['builtin'] = i['builtin']
+            entry['config'] = self.get_service_config(i['id'])
             return entry
 
-        # Running extend sequentially might take too long due to the number of services
-        # and `service ${name} onestatus`. To workaround that run it in parallel using gevent
-        result = self.datastore.query('service_definitions', *(filter or []))
-        if result is None:
-            return result
-        jobs = {
-            gevent.spawn(extend, entry): entry
-            for entry in result
-        }
-        gevent.joinall(list(jobs.keys()), timeout=15)
-        group = gevent.pool.Group()
-
-        def result(greenlet):
-            if greenlet.value is None:
-                entry = jobs.get(greenlet)
-                return {
-                    'name': entry['name'],
-                    'state': 'UNKNOWN',
-                    'builtin': entry['builtin'],
-                }
-            else:
-                return greenlet.value
-
-        result = group.map(result, jobs)
-        result = list(map(lambda s: extend_dict(s, {'config': self.get_service_config(s['id'])}), result))
-        return q.query(result, *(filter or []), stream=True, **(params or {}))
+        return self.datastore.query_stream('service_definitions', *(filter or []), callback=extend, **(params or {}))
 
     @accepts(str)
     @returns(h.object())
@@ -476,6 +449,33 @@ def get_status(dispatcher, datastore, service):
         except RpcException:
             state = 'STOPPED'
 
+    elif 'launchd' in service:
+        state = 'UNKNOWN'
+        pid = None
+
+        try:
+            launchd = service['launchd']
+            plists = [launchd] if isinstance(launchd, dict) else launchd
+            pids = []
+            states = []
+
+            for i in plists:
+                job = dispatcher.call_sync('serviced.control.get', i['Label'])
+                states.append(job['State'])
+                pids.append(job['PID'])
+
+            for i in ('RUNNING', 'STOPPED'):
+                if all(s == i for s in states):
+                    state = i
+                    pid = pids
+
+        except RpcException as err:
+            state = 'STOPPED' if err.code == errno.ENOENT else 'UNKNOWN'
+            pid = None
+        except KeyError:
+            state = 'UNKNOWN'
+            pid = None
+
     elif 'pidfile' in service:
         state = 'RUNNING'
         pid = None
@@ -588,7 +588,10 @@ def _init(dispatcher, plugin):
         'additionalProperties': False,
         'properties': {
             'id': {'type': 'string'},
-            'pid': {'type': 'integer'},
+            'pid': {
+                'type': ['array', 'null'],
+                'items': {'type': 'integer'}
+            },
             'builtin': {'type': 'boolean'},
             'state': {'$ref': 'service-state'},
             'config': {'$ref': 'service-config'}

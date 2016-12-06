@@ -324,6 +324,13 @@ class ControlService(RpcService):
 
             job.stop()
 
+    def get(self, name_or_id):
+        job = first_or_default(lambda j: j.label == name_or_id or j.id == name_or_id, self.context.jobs.values())
+        if not job:
+            raise RpcException(errno.ENOENT, 'Job {0} not found'.format(name_or_id))
+
+        return job.__getstate__()
+
 
 class Context(object):
     def __init__(self):
