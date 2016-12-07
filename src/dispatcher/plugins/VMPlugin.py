@@ -1883,7 +1883,7 @@ def collect_debug(dispatcher):
         ['ls', '-LRl', dispatcher.call_sync('system_dataset.request_directory', 'vm_image_cache')]
     )
     yield AttachData('vm-query', dumps(list(dispatcher.call_sync('vm.query')), indent=4))
-    yield AttachData('vm-config', dumps(list(dispatcher.call_sync('vm.config.get_config')), indent=4))
+    yield AttachData('vm-config', dumps(dispatcher.call_sync('vm.config.get_config'), indent=4))
     yield AttachData('vm-templates-query', dumps(list(dispatcher.call_sync('vm.template.query')), indent=4))
     yield AttachData('vm-snapshot-query', dumps(list(dispatcher.call_sync('vm.snapshot.query')), indent=4))
     yield AttachData('hw-support', dumps(dispatcher.call_sync('vm.get_hw_vm_capabilities'), indent=4))
