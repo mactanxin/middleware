@@ -40,6 +40,7 @@ import contextlib
 import pwd
 import grp
 import bsd
+import contextlib
 from threading import Thread, Condition, Timer, RLock
 from freenas.dispatcher.rpc import RpcContext, RpcService, RpcException, generator, get_sender
 from freenas.dispatcher.client import Client, ClientError
@@ -115,6 +116,7 @@ class Job(object):
         self.disabled = bool(plist.get('Disabled', False))
         self.run_at_load = bool(plist.get('RunAtLoad', False))
         self.keep_alive = bool(plist.get('KeepAlive', False))
+        self.supports_checkin = bool(plist.get('SupportsCheckin', False))
         self.throttle_interval = int(plist.get('ThrottleInterval', 0))
         self.environment = plist.get('EnvironmentVariables', {})
         self.user = plist.get('UserName')
@@ -214,6 +216,7 @@ class Job(object):
 
     def checkin(self):
         with self.cv:
+            self.logger.info('Service check-in')
             if self.supports_checkin:
                 self.set_state(JobState.RUNNING)
                 self.context.provide(self.provides)
@@ -474,7 +477,8 @@ class Context(object):
             0, 0, 0
         )
 
-        self.kq.control([ev], 0)
+        with contextlib.suppress(FileNotFoundError):
+            self.kq.control([ev], 0)
 
     def connect(self):
         while True:
