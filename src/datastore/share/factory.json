@@ -1293,7 +1293,7 @@
                 "launchd": {
                     "Label": "org.freenas.neighbord",
                     "RunAtLoad": true,
-                    "SupportsCheckin": true
+                    "SupportsCheckin": true,
                     "Program": "/usr/local/sbin/neighbord"
                 },
                 "builtin": true,
