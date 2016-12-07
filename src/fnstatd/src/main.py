@@ -54,6 +54,7 @@ from datastore import DatastoreException, get_datastore
 from ringbuffer import MemoryRingBuffer, PersistentRingBuffer
 from freenas.utils.debug import DebugService
 from freenas.utils import configure_logging, to_timedelta, materialized_paths_to_tree
+from freenas.serviced import checkin
 
 
 DEFAULT_CONFIGFILE = '/usr/local/etc/middleware.conf'
@@ -540,6 +541,9 @@ class Main(object):
     def dispatcher_error(self, error):
         self.die()
 
+    def checkin(self):
+        checkin()
+
     def main(self):
         parser = argparse.ArgumentParser()
         parser.add_argument('-c', metavar='CONFIG', default=DEFAULT_CONFIGFILE, help='Middleware config file')
@@ -559,6 +563,7 @@ class Main(object):
         self.init_database()
         self.server.start()
         self.logger.info('Started')
+        self.checkin()
         self.client.wait_forever()
 
 
