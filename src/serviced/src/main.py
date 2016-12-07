@@ -85,9 +85,9 @@ class Job(object):
         self.supports_checkin = False
         self.throttle_interval = 0
         self.exit_timeout = 10
-        self.stdout_fd = self.context.devnull
+        self.stdout_fd = None
         self.stdout_path = None
-        self.stderr_fd = self.context.devnull
+        self.stderr_fd = None
         self.stderr_path = None
         self.run_at_load = False
         self.user = None
@@ -170,6 +170,14 @@ class Job(object):
             pid = os.fork()
             if pid == 0:
                 os.kill(os.getpid(), signal.SIGSTOP)
+
+                if not self.stdout_fd and not self.stderr_fd:
+                    self.stdout_fd = self.stderr_fd = os.open('/var/tmp/{0}.{1}.log'.format(
+                        self.label, os.getpid()),
+                        os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
+                        0o600
+                    )
+
                 os.dup2(sys.stdout.fileno(), self.stdout_fd)
                 os.dup2(sys.stderr.fileno(), self.stderr_fd)
 
