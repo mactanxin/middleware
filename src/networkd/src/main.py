@@ -1227,7 +1227,10 @@ class Main(object):
         self.init_routing_socket()
         self.client.resume_service('networkd.configuration')
         self.client.resume_service('networkd.debug')
-        self.configure_network()
+
+        for i in self.configure_network():
+            self.logger.info('Initial network configuration: {0}, {1}'.format(*i))
+
         self.checkin()
         self.logger.info('Started')
         self.client.wait_forever()
