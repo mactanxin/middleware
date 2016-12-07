@@ -1740,7 +1740,7 @@ def _init(dispatcher, plugin):
         dispatcher.test_or_wait_for_event(
             'service.changed',
             lambda ar:
-                ar['id'] == sshd_service['id'] and
+                sshd_service['id'] in ar['ids'] and
                 dispatcher.call_sync(
                     'service.query',
                     [('name', '=', 'sshd')],
