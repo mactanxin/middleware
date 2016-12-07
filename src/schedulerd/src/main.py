@@ -43,6 +43,7 @@ from freenas.dispatcher.client import Client, ClientError
 from freenas.utils import configure_logging
 from freenas.utils.query import query
 from freenas.utils.debug import DebugService
+from freenas.serviced import checkin
 
 
 DEFAULT_CONFIGFILE = '/usr/local/etc/middleware.conf'
@@ -271,6 +272,9 @@ class Context(object):
     def emit_event(self, name, params):
         self.client.emit_event(name, params)
 
+    def checkin(self):
+        checkin()
+
     def main(self):
         parser = argparse.ArgumentParser()
         parser.add_argument('-c', metavar='CONFIG', default=DEFAULT_CONFIGFILE, help='Middleware config file')
@@ -282,6 +286,7 @@ class Context(object):
         self.init_datastore()
         self.init_scheduler()
         self.init_dispatcher()
+        self.checkin()
         self.client.wait_forever()
 
 
