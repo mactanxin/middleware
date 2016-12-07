@@ -93,7 +93,7 @@ class ServiceInfoProvider(Provider):
             raise RpcException(errno.ENOENT, 'Service {0} not found'.format(service))
 
         if 'launchd' in svc:
-            launchd = service['launchd']
+            launchd = svc['launchd']
             plists = [launchd] if isinstance(launchd, dict) else launchd
 
             for i in plists:
@@ -145,7 +145,7 @@ class ServiceInfoProvider(Provider):
             raise RpcException(errno.ENOENT, 'Service {0} not found'.format(service))
 
         if 'launchd' in svc:
-            launchd = service['launchd']
+            launchd = svc['launchd']
             plists = [launchd] if isinstance(launchd, dict) else launchd
 
             for i in plists:
@@ -589,7 +589,7 @@ def _init(dispatcher, plugin):
 
         for svc in dispatcher.datastore.query('service_definitions'):
             logger.debug('Loading service {0}'.format(svc['name']))
-            enb = dispatcher.configstore.get('service.{0}.enable', svc['name'])
+            enb = svc['builtin'] or dispatcher.configstore.get('service.{0}.enable'.format(svc['name']))
 
             if 'launchd' in svc and enb:
                 if isinstance(svc['launchd'], dict):
@@ -617,6 +617,7 @@ def _init(dispatcher, plugin):
         'additionalProperties': False,
         'properties': {
             'id': {'type': 'string'},
+            'error': {'type': ['string', 'null']},
             'pid': {
                 'type': ['array', 'null'],
                 'items': {'type': 'integer'}
