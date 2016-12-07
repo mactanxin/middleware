@@ -1327,7 +1327,8 @@ class DockerService(RpcService):
                     )
                 )
 
-        if q.get(container, 'bridge.enable'):
+        bridge_enabled = q.get(container, 'bridge.enable')
+        if bridge_enabled:
             networking_config = host.connection.create_networking_config({
                 'external': host.connection.create_endpoint_config(
                     ipv4_address=q.get(container, 'bridge.address')
@@ -1351,6 +1352,7 @@ class DockerService(RpcService):
                         'mode': 'ro' if i['readonly'] else 'rw'
                     } for i in container['volumes']
                 },
+                network_mode='external' if bridge_enabled else 'default'
             )
         }
 
