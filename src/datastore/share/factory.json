@@ -817,6 +817,56 @@
                 "name": "powerd"
             },
             "77c47b78-9bf3-4ba7-aa76-8cb99a8da4a3": {
+                "launchd": [
+                    {
+                        "Label": "org.freebsd.rpcbind",
+                        "RunAtLoad": true,
+                        "ProgramArguments": [
+                            "/usr/sbin/rpcbind",
+                            "-d"
+                        ]
+                    },
+                    {
+                        "Label": "org.freebsd.nfsd",
+                        "RunAtLoad": true,
+                        "ProgramArguments": [
+                            "/usr/sbin/nfsd",
+                            "-d"
+                        ]
+                    },
+                    {
+                        "Label": "org.freebsd.mountd",
+                        "RunAtLoad": true,
+                        "ProgramArguments": [
+                            "/usr/sbin/mountd",
+                            "-d"
+                        ]
+                    },
+                    {
+                        "Label": "org.freebsd.statd",
+                        "RunAtLoad": true,
+                        "ProgramArguments": [
+                            "/usr/sbin/rpc.statd",
+                            "-d"
+                        ]
+                    },
+                    {
+                        "Label": "org.freebsd.lockd",
+                        "RunAtLoad": true,
+                        "ProgramArguments": [
+                            "/usr/sbin/rpc.lockd",
+                            "-d"
+                        ]
+                    },
+                    {
+                        "Label": "org.freebsd.gssd",
+                        "RunAtLoad": true,
+                        "ProgramArguments": [
+                            "/usr/sbin/gssd",
+                            "-d"
+                        ]
+                    }
+                ],
                 "rcng": {
                     "rc-scripts": [
                         "rpcbind",
@@ -1132,6 +1182,13 @@
                 "name": "consul"
             },
             "98d512f6-9111-11e6-91a2-000c2924b2c6": {
+                "launchd": {
+                    "Label": "org.freebsd.ypbind",
+                    "ProgramArguments": [
+                        "/usr/sbin/ypbind",
+                        "-d"
+                    ]
+                },
                 "rcng": {
                     "rc-scripts": "ypbind"
                 },
