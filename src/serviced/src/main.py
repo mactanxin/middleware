@@ -178,8 +178,8 @@ class Job(object):
                         0o600
                     )
 
-                os.dup2(sys.stdout.fileno(), self.stdout_fd)
-                os.dup2(sys.stderr.fileno(), self.stderr_fd)
+                os.dup2(self.stdout_fd, sys.stdout.fileno())
+                os.dup2(self.stderr_fd, sys.stderr.fileno())
 
                 if self.user:
                     user = pwd.getpwnam(self.user)
@@ -378,6 +378,7 @@ class JobService(RpcService):
 
     def checkin(self):
         sender = get_sender()
+        logging.warning(sender.credentials)
         job = self.context.job_by_pid(sender.credentials['pid'])
         if not job:
             raise RpcException(errno.EINVAL, 'Unknown job')
