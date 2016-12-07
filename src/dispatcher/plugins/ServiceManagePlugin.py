@@ -490,6 +490,10 @@ def get_status(dispatcher, datastore, service):
                     state = i
                     pid = pids
 
+            if any(s == 'ERROR' for s in states):
+                state = 'ERROR'
+                pid = None
+
         except RpcException as err:
             state = 'STOPPED' if err.code == errno.ENOENT else 'UNKNOWN'
             pid = None
@@ -630,7 +634,7 @@ def _init(dispatcher, plugin):
 
     plugin.register_schema_definition('service-state', {
         'type': 'string',
-        'enum': ['RUNNING', 'STOPPED', 'UNKNOWN']
+        'enum': ['RUNNING', 'STARTING', 'STOPPING', 'STOPPED', 'ERROR', 'UNKNOWN']
     })
 
     plugin.register_schema_definition('service-config', {
