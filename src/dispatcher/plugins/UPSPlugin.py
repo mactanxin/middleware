@@ -121,8 +121,10 @@ class UPSProvider(Provider):
         try:
             for i in rc_scripts:
                 system("/usr/sbin/service", i, 'onestatus')
-        except SubprocessException as e:
-            raise TaskException(errno.EBUSY, e.err)
+        except SubprocessException:
+            raise RpcException(errno.ENOENT, "UPS service is not running")
+        else:
+            return 'RUNNING'
 
     @private
     def service_stop(self):
