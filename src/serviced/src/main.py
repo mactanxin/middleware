@@ -41,7 +41,7 @@ import pwd
 import grp
 import bsd
 from threading import Thread, Condition, Timer, RLock
-from freenas.dispatcher.rpc import RpcContext, RpcService, RpcException, generator
+from freenas.dispatcher.rpc import RpcContext, RpcService, RpcException, generator, get_sender
 from freenas.dispatcher.client import Client, ClientError
 from freenas.dispatcher.server import Server
 from freenas.utils import configure_logging, first_or_default, query as q
@@ -54,9 +54,11 @@ MAX_EVENTS = 16
 
 class JobState(enum.Enum):
     UNKNOWN = 'UNKNOWN'
+    STARTING = 'STARTING'
     STOPPED = 'STOPPED'
+    STOPPING = 'STOPPING'
     RUNNING = 'RUNNING'
-    DYING = 'DYING'
+    ERROR = 'ERROR'
 
 
 class Job(object):
@@ -79,6 +81,7 @@ class Job(object):
         self.started_at = None
         self.exited_at = None
         self.keep_alive = False
+        self.supports_checkin = False
         self.throttle_interval = 0
         self.exit_timeout = 10
         self.stdout_fd = self.context.devnull
@@ -91,7 +94,6 @@ class Job(object):
         self.umask = None
         self.last_exit_code = None
         self.failure_reason = None
-        self.did_exec = False
         self.environment = {}
         self.respawns = 0
         self.cv = Condition()
@@ -157,41 +159,45 @@ class Job(object):
         del self.context.jobs[self.id]
 
     def start(self):
-        if not self.requires <= self.context.provides:
-            return
+        with self.cv:
+            if not self.requires <= self.context.provides:
+                return
 
-        self.logger.info('Starting job')
-        pid = os.fork()
-        if pid == 0:
-            os.kill(os.getpid(), signal.SIGSTOP)
-            os.dup2(sys.stdout.fileno(), self.stdout_fd)
-            os.dup2(sys.stderr.fileno(), self.stderr_fd)
+            self.logger.info('Starting job')
 
-            if self.user:
-                user = pwd.getpwnam(self.user)
-                os.setuid(user.pw_uid)
+            pid = os.fork()
+            if pid == 0:
+                os.kill(os.getpid(), signal.SIGSTOP)
+                os.dup2(sys.stdout.fileno(), self.stdout_fd)
+                os.dup2(sys.stderr.fileno(), self.stderr_fd)
 
-            if self.user:
-                group = grp.getgrnam(self.group)
-                os.setgid(group.gr_gid)
+                if self.user:
+                    user = pwd.getpwnam(self.user)
+                    os.setuid(user.pw_uid)
 
-            bsd.closefrom(3)
-            os.setsid()
-            os.execvpe(self.program, self.program_arguments, self.environment)
+                if self.user:
+                    group = grp.getgrnam(self.group)
+                    os.setgid(group.gr_gid)
 
-        self.logger.debug('Started as PID {0}'.format(pid))
-        self.pid = pid
-        self.context.track_pid(self.pid)
-        self.did_exec = False
+                bsd.closefrom(3)
+                os.setsid()
+                os.execvpe(self.program, self.program_arguments, self.environment)
+
+            self.logger.debug('Started as PID {0}'.format(pid))
+            self.pid = pid
+            self.context.track_pid(self.pid)
+            self.set_state(JobState.STARTING)
+
         os.waitpid(self.pid, os.WUNTRACED)
         os.kill(self.pid, signal.SIGCONT)
 
     def stop(self):
-        self.logger.info('Stopping job')
-        self.state = JobState.DYING
         with self.cv:
             if self.state == JobState.STOPPED:
                 return
+
+            self.logger.info('Stopping job')
+            self.set_state(JobState.STOPPING)
 
             try:
                 os.kill(self.pid, signal.SIGTERM)
@@ -206,6 +212,12 @@ class Job(object):
             if not self.cv.wait_for(lambda: self.state == JobState.STOPPED, self.exit_timeout):
                 self.logger.error('Unkillable process {0}'.format(self.pid))
 
+    def checkin(self):
+        with self.cv:
+            if self.supports_checkin:
+                self.set_state(JobState.RUNNING)
+                self.context.provide(self.provides)
+
     def pid_event(self, ev):
         if ev.fflags & select.KQ_NOTE_EXEC:
             try:
@@ -216,7 +228,7 @@ class Job(object):
 
             argv = list(proc.argv)
             self.logger.debug('Job did exec() into {0}'.format(argv))
-            if argv == self.program_arguments and not self.did_exec:
+            if argv == self.program_arguments and self.state == JobState.STARTING:
                 with self.cv:
                     try:
                         self.sid = os.getsid(self.pid)
@@ -224,12 +236,9 @@ class Job(object):
                         # Exited too quickly after exec()
                         return
 
-                    self.did_exec = True
-                    self.set_state(JobState.RUNNING)
-                    self.context.provide(self.provides)
-
-        if ev.fflags & select.KQ_NOTE_FORK:
-            self.logger.debug('Job has forked')
+                    if not self.supports_checkin:
+                        self.set_state(JobState.RUNNING)
+                        self.context.provide(self.provides)
 
         if ev.fflags & select.KQ_NOTE_EXIT:
             if not self.parent:
@@ -243,12 +252,15 @@ class Job(object):
                 self.logger.info('Job has exited with code {0}'.format(ev.data))
                 self.pid = None
                 self.last_exit_code = ev.data
-                self.set_state(JobState.STOPPED)
+
+                if self.state == JobState.STOPPING:
+                    self.set_state(JobState.STOPPED)
+                else:
+                    self.failure_reason = 'Process died with exit code {0}'.format(self.last_exit_code)
+                    self.set_state(JobState.ERROR)
 
                 if self.anonymous:
                     del self.context.jobs[self.id]
-
-                self.cv.notify_all()
 
     def set_state(self, new_state):
         # Must run locked
@@ -262,6 +274,13 @@ class Job(object):
             self.context.client.emit_event('serviced.job.stopped', {
                 'ID': self.id,
                 'Label': self.label
+            })
+
+        if self.state != JobState.ERROR and new_state == JobState.ERROR:
+            self.context.client.emit_event('serviced.job.error', {
+                'ID': self.id,
+                'Label': self.label,
+                'Reason': self.failure_reason
             })
 
         self.state = new_state
@@ -345,6 +364,14 @@ class JobService(RpcService):
             raise RpcException(errno.ENOENT, 'Job {0} not found'.format(name_or_id))
 
         return job.__getstate__()
+
+    def checkin(self):
+        sender = get_sender()
+        job = self.context.job_by_pid(sender.credentials['pid'])
+        if not job:
+            raise RpcException(errno.EINVAL, 'Unknown job')
+
+        job.checkin()
 
 
 class Context(object):
