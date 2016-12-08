@@ -75,7 +75,7 @@ from vnc import app
 from mgmt import ManagementNetwork
 from ec2 import EC2MetadataServer
 from proxy import ReverseProxyServer
-from dhcp.client import Client as DhcpClient
+import dhcp.client as dhcp
 
 
 BOOTROM_PATH = '/usr/local/share/uefi-firmware/BHYVE_UEFI.fd'
@@ -153,17 +153,16 @@ def get_interactive(details):
     return config.get('Tty') and config.get('OpenStdin')
 
 
-def get_rand_macaddress():
-    return "02:42:ac:%02x:%02x:%02x" % (
-        random.randint(0x00, 0x7F), random.randint(0x00, 0xFF), random.randint(0x00, 0xFF))
-
-
-def get_dhcp_lease(interface, hostname):
-    mac = get_rand_macaddress()
-    c = DhcpClient(interface, hostname)
-    c.hwaddr = mac
+def get_dhcp_lease(context, interface, hostname):
+    c = dhcp.Client(interface, hostname)
+    c.hwaddr = context.client.call_sync('vm.generate_mac')
     c.start()
-    return c.wait_for_bind().__getstate__()
+    lease = c.wait_for_bind(timeout=30).__getstate__()
+    if c.state == dhcp.State.BOUND:
+        return lease
+    else:
+        c.stop()
+        raise RpcException(errno.EACCES, 'Failed to obtain DHCP lease: {0}'.format(lease.error))
 
 
 class BinaryRingBuffer(object):
@@ -1346,13 +1345,13 @@ class DockerService(RpcService):
         if bridge_enabled:
             dhcp_enabled = q.get(container, 'bridge.dhcp')
             if dhcp_enabled:
-                lease = get_dhcp_lease('em0', container['name'])
+                lease = get_dhcp_lease(self.context, 'em0', container['name'])
                 ipv4 = lease['client_ip']
                 macaddr = lease['client_mac']
                 labels.append('org.freenas.dhcp')
             else:
                 ipv4 = q.get(container, 'bridge.address')
-                macaddr = get_rand_macaddress()
+                macaddr = self.context.client.call_sync('vm.generate_mac')
 
             networking_config = host.connection.create_networking_config({
                 'external': host.connection.create_endpoint_config(
