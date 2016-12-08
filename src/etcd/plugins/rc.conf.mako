@@ -24,6 +24,7 @@ fsck_y_enable="YES"
 synchronous_dhclient="YES"
 zfs_enable="YES"
 devd_enable="NO"
+vmware_guestd_enable="NO"
 
 # middleware10
 dispatcher_enable="YES"
@@ -49,12 +50,6 @@ syslogd_enable="NO"
 performance_cpu_freq="HIGH"
 
 devfs_system_ruleset="usbrules"
-
-# open-vm-tools
-vmware_guest_vmblock_enable="YES"
-vmware_guest_vmhgfs_enable="YES"
-vmware_guest_vmmemctl_enable="YES"
-vmware_guest_vmxnet_enable="YES"
 
 # Do not mark to autodetach otherwise ZFS get very unhappy
 geli_autodetach="NO"

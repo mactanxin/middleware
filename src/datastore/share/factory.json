@@ -765,11 +765,8 @@
                 "launchd": {
                     "Label": "com.vmware.guestd",
                     "RunAtLoad": true,
-                    "ProgramArguments": [
-                        "/usr/local/bin/vmtoolsd",
-                        "-c", "/usr/local/share/vmware-tools/tools.conf",
-                        "-p", "/usr/local/lib/open-vm-tools/plugins/vmsvc"
-                    ]
+                    "Program": "/usr/local/libexec/vmtoolsd_wrapper",
+                    "SupportsCheckin": true
                 },
                 "builtin": true,
                 "name": "vmtoolsd"
