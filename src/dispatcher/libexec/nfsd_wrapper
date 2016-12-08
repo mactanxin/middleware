@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/local/bin/python3
 #
 # Copyright (c) 2016 iXsystems, Inc.
 # All rights reserved.
@@ -29,6 +29,7 @@ import os
 import sys
 import subprocess
 import signal
+import setproctitle
 from bsd import sysctl
 from datastore import get_datastore
 from datastore.config import ConfigStore, ConfigNode
@@ -81,6 +82,7 @@ def start_process(label):
 
 
 def main():
+    setproctitle.setproctitle('nfsd master process')
     sysctl.sysctlbyname('vfs.nfsd.server_max_nfsvers', new=nfsvers)
     procs = [
         start_process('org.freebsd.rpcbind'),
