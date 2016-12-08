@@ -358,7 +358,8 @@ class JobService(RpcService):
 
     @generator
     def query(self, filter=None, params=None):
-        return q.query(self.context.jobs.values(), *(filter or []), **(params or {}))
+        with self.context.lock:
+            return q.query(self.context.jobs.values(), *(filter or []), **(params or {}))
 
     def load(self, plist):
         with self.context.lock:
@@ -392,11 +393,12 @@ class JobService(RpcService):
             job.stop()
 
     def get(self, name_or_id):
-        job = first_or_default(lambda j: j.label == name_or_id or j.id == name_or_id, self.context.jobs.values())
-        if not job:
-            raise RpcException(errno.ENOENT, 'Job {0} not found'.format(name_or_id))
+        with self.context.lock:
+            job = first_or_default(lambda j: j.label == name_or_id or j.id == name_or_id, self.context.jobs.values())
+            if not job:
+                raise RpcException(errno.ENOENT, 'Job {0} not found'.format(name_or_id))
 
-        return job.__getstate__()
+            return job.__getstate__()
 
     def checkin(self):
         sender = get_sender()
