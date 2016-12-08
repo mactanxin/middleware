@@ -234,16 +234,17 @@ class Job(object):
         if ev.fflags & select.KQ_NOTE_EXEC:
             try:
                 proc = bsd.kinfo_getproc(self.pid)
+                argv = list(proc.argv)
+                command = proc.command
             except LookupError:
                 # Exited too quickly, exit info will be catched in another event
                 return
 
-            argv = list(proc.argv)
             self.logger.debug('Job did exec() into {0}'.format(argv))
 
             if self.anonymous:
                 # Update label for anonymous jobs
-                self.label = 'anonymous.{0}@{1}'.format(proc.command, self.pid)
+                self.label = 'anonymous.{0}@{1}'.format(command, self.pid)
 
             if self.state == JobState.STARTING:
                 with self.cv:
