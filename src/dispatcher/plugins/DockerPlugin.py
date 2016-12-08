@@ -301,6 +301,7 @@ class DockerImagesProvider(Provider):
             'version': labels.get('org.freenas.version'),
             'bridge': {
                 'enable': labels.get('org.freenas.bridged') == 'true',
+                'dhcp': labels.get('org.freenas.dhcp') == 'true',
                 'address': None
             },
             'ports': [],
