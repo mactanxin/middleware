@@ -301,6 +301,7 @@ class DockerImagesProvider(Provider):
             'version': labels.get('org.freenas.version'),
             'bridge': {
                 'enable': labels.get('org.freenas.bridged') == 'true',
+                'dhcp': labels.get('org.freenas.dhcp') == 'true',
                 'address': None
             },
             'ports': [],
@@ -637,7 +638,7 @@ class DockerContainerCreateTask(DockerBaseTask):
         self.dispatcher.exec_and_wait_for_event(
             'docker.container.changed',
             match_fn,
-            lambda: self.dispatcher.call_sync('containerd.docker.create', container),
+            lambda: self.dispatcher.call_sync('containerd.docker.create', container, timeout=100),
             600
         )
         self.set_progress(100, 'Finished')
@@ -1464,6 +1465,7 @@ def _init(dispatcher, plugin):
         'additionalProperties': False,
         'properties': {
             'enable': {'type': 'boolean'},
+            'dhcp': {'type': 'boolean'},
             'address': {'type': ['string', 'null']}
         }
     })
