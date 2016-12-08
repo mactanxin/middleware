@@ -655,9 +655,6 @@
                         "-d"
                     ]
                 },
-                "rcng": {
-                    "rc-scripts": "netatalk"
-                },
                 "builtin": false,
                 "task": "service.afp.update",
                 "name": "afp"
@@ -695,14 +692,6 @@
                         ]
                     }
                 ],
-                "rcng": {
-                    "rc-scripts": "samba_server"
-                },
-                "pidfile": [
-                    "/var/run/samba4/smbd.pid",
-                    "/var/run/samba4/nmbd.pid",
-                    "/var/run/samba4/winbindd.pid"
-                ],
                 "builtin": false,
                 "task": "service.smb.update",
                 "get_config_rpc": "service.smb.get_config",
@@ -720,10 +709,6 @@
                         "-f", "/var/db/ntpd.drift"
                     ]
                 },
-                "rcng": {
-                    "rc-scripts": "ntpd"
-                },
-                "pidfile": "/var/run/ntpd.pid",
                 "builtin": true,
                 "etcd-group": "ntpd",
                 "name": "ntpd"
@@ -738,12 +723,8 @@
                     ],
                     "Label": "com.openssh.sshd"
                 },
-                "rcng": {
-                    "rc-scripts": "sshd"
-                },
-                "builtin": false,
                 "etcd-group": "sshd",
-                "pidfile": "/var/run/sshd.pid",
+                "builtin": false,
                 "get_config_rpc": "service.sshd.get_config",
                 "task": "service.sshd.update",
                 "name": "sshd"
@@ -782,11 +763,7 @@
                         "-F"
                     ]
                 },
-                "rcng": {
-                    "rc-scripts": "syslog-ng"
-                },
                 "builtin": true,
-                "pidfile": "/var/run/syslog.pid",
                 "name": "syslog"
             },
             "dfc8c5c9-6825-43b3-bdfa-45466d0f77d1": {
@@ -800,11 +777,7 @@
                         "daemon off;"
                     ]
                 },
-                "rcng": {
-                    "rc-scripts": "nginx"
-                },
                 "builtin": true,
-                "pidfile": "/var/run/nginx.pid",
                 "name": "nginx"
             },
             "69e1f6ef-8171-47c0-bb5f-22f3c8cce517": {
@@ -818,65 +791,16 @@
             "77c47b78-9bf3-4ba7-aa76-8cb99a8da4a3": {
                 "launchd": [
                     {
-                        "Label": "org.freebsd.rpcbind",
-                        "RunAtLoad": true,
-                        "Requires": ["logging", "etc"]
-                    },
-                    {
                         "Label": "org.freebsd.nfsd",
                         "RunAtLoad": true,
-                        "Requires": ["logging", "etc"]
-                    },
-                    {
-                        "Label": "org.freebsd.mountd",
-                        "RunAtLoad": true,
-                        "Requires": ["logging", "etc"]
-                    },
-                    {
-                        "Label": "org.freebsd.statd",
-                        "RunAtLoad": true,
-                        "Requires": ["logging", "etc"]
-                    },
-                    {
-                        "Label": "org.freebsd.lockd",
-                        "RunAtLoad": true,
-                        "Requires": ["logging", "etc"]
-                    },
-                    {
-                        "Label": "org.freebsd.gssd",
-                        "RunAtLoad": true,
-                        "Requires": ["logging", "etc"],
-                        "ProgramArguments": [
-                            "/usr/sbin/gssd",
-                            "-d"
-                        ]
+                        "Requires": ["logging", "etc", "networking"],
+                        "SupportsCheckin": true,
+                        "Program": "/usr/local/libexec/nfsd_wrapper"
                     }
-                ],
-                "rcng": {
-                    "rc-scripts": [
-                        "rpcbind",
-                        "nfsd",
-                        "mountd",
-                        "statd",
-                        "lockd",
-                        "gssd"
-                    ],
-                    "reload": [
-                        "mountd"
-                    ]
-                },
-                "pidfile": [
-                    "/var/run/rpcbind.pid",
-                    "/var/run/nfsd.pid",
-                    "/var/run/mountd.pid",
-                    "/var/run/rpc.statd.pid",
-                    "/var/run/rpc.lockd.pid",
-                    "/var/run/gssd.pid"
                 ],
                 "builtin": false,
                 "etcd-group": "nfs",
                 "get_config_rpc": "service.nfs.get_config",
-                "get_arguments_rpc": "service.nfs.get_arguments",
                 "task": "service.nfs.update",
                 "name": "nfs"
             },
