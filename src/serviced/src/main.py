@@ -193,7 +193,10 @@ class Job(object):
 
                 bsd.closefrom(3)
                 os.setsid()
-                os.execvpe(self.program, self.program_arguments, self.environment)
+                try:
+                    os.execvpe(self.program, self.program_arguments, self.environment)
+                except:
+                    sys.exit(254)
 
             self.logger.debug('Started as PID {0}'.format(pid))
             self.pid = pid
