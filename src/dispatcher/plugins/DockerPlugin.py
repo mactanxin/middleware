@@ -638,7 +638,7 @@ class DockerContainerCreateTask(DockerBaseTask):
         self.dispatcher.exec_and_wait_for_event(
             'docker.container.changed',
             match_fn,
-            lambda: self.dispatcher.call_sync('containerd.docker.create', container),
+            lambda: self.dispatcher.call_sync('containerd.docker.create', container, timeout=100),
             600
         )
         self.set_progress(100, 'Finished')
