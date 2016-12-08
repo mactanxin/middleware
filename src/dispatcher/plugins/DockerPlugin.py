@@ -1465,6 +1465,7 @@ def _init(dispatcher, plugin):
         'additionalProperties': False,
         'properties': {
             'enable': {'type': 'boolean'},
+            'dhcp': {'type': 'boolean'},
             'address': {'type': ['string', 'null']}
         }
     })
