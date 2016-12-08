@@ -2349,7 +2349,7 @@ class DatasetDeleteTask(Task):
 
             self.join_subtasks(self.run_subtask('zfs.destroy', id))
         except RpcException as err:
-            if err.code == errno.EBUSY:
+            if err.code == errno.EBUSY and ds['type'] == 'FILESYSTEM':
                 # Find out what's holding unmount or destroy
                 files = self.dispatcher.call_sync('filesystem.get_open_files', ds['mountpoint'])
                 if len(files) == 1:
