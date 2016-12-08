@@ -75,6 +75,7 @@ from vnc import app
 from mgmt import ManagementNetwork
 from ec2 import EC2MetadataServer
 from proxy import ReverseProxyServer
+from dhcp.client import Client as DhcpClient
 
 
 BOOTROM_PATH = '/usr/local/share/uefi-firmware/BHYVE_UEFI.fd'
@@ -150,6 +151,19 @@ def get_interactive(details):
         return False
 
     return config.get('Tty') and config.get('OpenStdin')
+
+
+def get_rand_macaddress():
+    return "02:42:ac:%02x:%02x:%02x" % (
+        random.randint(0x00, 0x7F), random.randint(0x00, 0xFF), random.randint(0x00, 0xFF))
+
+
+def get_dhcp_lease(interface, hostname):
+    mac = get_rand_macaddress()
+    c = DhcpClient(interface, hostname)
+    c.hwaddr = mac
+    c.start()
+    return c.wait_for_bind().__getstate__()
 
 
 class BinaryRingBuffer(object):
@@ -1243,6 +1257,7 @@ class DockerService(RpcService):
                     'exec_ids': details['ExecIDs'] or [],
                     'bridge': {
                         'enabled': external is not None,
+                        'dhcp': 'org.freenas.dhcp' in details['Config']['Labels'],
                         'address': external['IPAddress'] if external else None
                     }
                 })
@@ -1329,9 +1344,19 @@ class DockerService(RpcService):
 
         bridge_enabled = q.get(container, 'bridge.enable')
         if bridge_enabled:
+            dhcp_enabled = q.get(container, 'bridge.dhcp')
+            if dhcp_enabled:
+                lease = get_dhcp_lease('em0', container['name'])
+                ipv4 = lease['client_ip']
+                macaddr = lease['client_mac']
+                labels.append('org.freenas.dhcp')
+            else:
+                ipv4 = q.get(container, 'bridge.address')
+                macaddr = get_rand_macaddress()
+
             networking_config = host.connection.create_networking_config({
                 'external': host.connection.create_endpoint_config(
-                    ipv4_address=q.get(container, 'bridge.address')
+                    ipv4_address=ipv4
                 )
             })
             labels.append('org.freenas.bridged')
@@ -1368,6 +1393,9 @@ class DockerService(RpcService):
 
         if container.get('hostname'):
             create_args['hostname'] = container['hostname']
+
+        if bridge_enabled:
+            create_args['mac_address'] = macaddr
 
         try:
             host.connection.create_container(**create_args)
