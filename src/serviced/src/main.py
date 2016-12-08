@@ -240,6 +240,11 @@ class Job(object):
 
             argv = list(proc.argv)
             self.logger.debug('Job did exec() into {0}'.format(argv))
+
+            if self.anonymous:
+                # Update label for anonymous jobs
+                self.label = 'anonymous.{0}@{1}'.format(proc.command, self.pid)
+
             if self.state == JobState.STARTING:
                 with self.cv:
                     try:
