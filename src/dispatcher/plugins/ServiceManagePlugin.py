@@ -101,40 +101,15 @@ class ServiceInfoProvider(Provider):
 
             return
 
-        if 'rcng' not in svc:
-            if 'start_rpc' in svc:
-                try:
-                    self.dispatcher.call_sync(svc['start_rpc'])
-                    return True
-                except RpcException:
-                    raise RpcException(
-                        errno.ENOENT,
-                        "Whilst starting service {0} rpc '{1}' failed".format(service, svc['start_rpc'])
-                    )
-            else:
-                return
-
-        rc_scripts = svc['rcng']['rc-scripts']
-
-        if type(rc_scripts) is str:
+        if 'start_rpc' in svc:
             try:
-                system("/usr/sbin/service", rc_scripts, 'onestart')
-            except SubprocessException as e:
+                self.dispatcher.call_sync(svc['start_rpc'])
+                return True
+            except RpcException:
                 raise RpcException(
                     errno.ENOENT,
-                    "Whilst starting service {0} command 'service {1} onestart'".format(service, rc_scripts) +
-                    " failed with error: {0}".format(e.err)
+                    "Whilst starting service {0} rpc '{1}' failed".format(service, svc['start_rpc'])
                 )
-        elif type(rc_scripts) is list:
-            for i in rc_scripts:
-                try:
-                    system("/usr/sbin/service", i, 'onestart')
-                except SubprocessException as e:
-                    raise RpcException(
-                        errno.ENOENT,
-                        "Whilst starting service {0} command 'service {1} onestart'".format(service, i) +
-                        " failed the following error occured: {0}".format(e.err)
-                    )
 
     @private
     @accepts(str)
@@ -153,41 +128,15 @@ class ServiceInfoProvider(Provider):
 
             return
 
-        if 'rcng' not in svc:
-            if 'stop_rpc' in svc:
-                try:
-                    self.dispatcher.call_sync(svc['stop_rpc'])
-                    return True
-                except RpcException:
-                    raise RpcException(
-                        errno.ENOENT,
-                        "Whilst starting service {0} rpc '{1}' failed".format(service, svc['stop_rpc']) 
-                    )
-            else:
-                return
-
-        rc_scripts = svc['rcng']['rc-scripts']
-
-        if type(rc_scripts) is str:
+        if 'stop_rpc' in svc:
             try:
-                system("/usr/sbin/service", rc_scripts, 'onestop')
-            except SubprocessException as e:
+                self.dispatcher.call_sync(svc['stop_rpc'])
+                return True
+            except RpcException:
                 raise RpcException(
                     errno.ENOENT,
-                    "Whilst stopping service {0} command 'service {1} onestop'".format(service, rc_scripts) +
-                    " failed with error: {0}".format(e.err)
+                    "Whilst starting service {0} rpc '{1}' failed".format(service, svc['stop_rpc'])
                 )
-
-        elif type(rc_scripts) is list:
-            for i in rc_scripts:
-                try:
-                    system("/usr/sbin/service", i, 'onestop')
-                except SubprocessException as e:
-                    raise RpcException(
-                        errno.ENOENT,
-                        "Whilst stopping service {0} command 'service {1} onestop'".format(service, i) +
-                        " failed the following error occured: {0}".format(e.err)
-                    )
 
     @private
     @accepts(str)
@@ -234,29 +183,6 @@ class ServiceInfoProvider(Provider):
                 self.dispatcher.call_sync('serviced.job.start', i['Label'])
 
             return
-
-        rc_scripts = svc['rcng']['rc-scripts']
-
-        if type(rc_scripts) is str:
-            try:
-                system("/usr/sbin/service", rc_scripts, 'onerestart')
-            except SubprocessException as e:
-                raise RpcException(
-                    errno.ENOENT,
-                    "Whilst restarting service {0} command 'service {1} onerestart'".format(service, rc_scripts) +
-                    " failed with error: {0}".format(e.err)
-                )
-
-        elif type(rc_scripts) is list:
-            for i in rc_scripts:
-                try:
-                    system("/usr/sbin/service", i, 'onerestart')
-                except SubprocessException as e:
-                    raise RpcException(
-                        errno.ENOENT,
-                        "Whilst restarting service {0} command 'service {1} onerestart'".format(service, i) +
-                        " failed the following error occured: {0}".format(e.err)
-                    )
 
     @private
     @accepts(str, bool, bool)
@@ -341,23 +267,6 @@ class ServiceManageTask(Task):
 
                 if action in ('start', 'restart'):
                     self.dispatcher.call_sync('serviced.job.start', i['Label'])
-
-        elif 'rcng' in service:
-            rc_scripts = service['rcng'].get('rc-scripts')
-            reload_scripts = service['rcng'].get('reload', rc_scripts)
-            try:
-                if type(rc_scripts) is str:
-                    system("/usr/sbin/service", rc_scripts, 'one' + action)
-
-                if type(rc_scripts) is list:
-                    for i in rc_scripts:
-                        if action == 'reload' and i not in reload_scripts:
-                            continue
-
-                        system("/usr/sbin/service", i, 'one' + action)
-
-            except SubprocessException as e:
-                raise TaskException(errno.EBUSY, e.err)
 
         self.dispatcher.dispatch_event('service.changed', {
             'operation': 'update',
