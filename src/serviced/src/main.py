@@ -159,6 +159,7 @@ class Job(object):
             self.cv.notify_all()
 
     def unload(self):
+        self.logger.info('Unloading job')
         del self.context.jobs[self.id]
 
     def start(self):
@@ -251,6 +252,7 @@ class Job(object):
         if self.anonymous:
             # Update label for anonymous jobs
             self.label = 'anonymous.{0}@{1}'.format(command, self.pid)
+            self.logger = logging.getLogger('Job:{0}'.format(self.label))
 
         if self.state == JobState.STARTING:
             with self.cv:
@@ -326,6 +328,9 @@ class Job(object):
             'LastExitStatus': self.last_exit_code,
             'PID': self.pid
         }
+
+        if self.failure_reason:
+            ret['FailureReason'] = self.failure_reason
 
         if self.stdout_path:
             ret['StandardOutPath'] = self.stdout_path

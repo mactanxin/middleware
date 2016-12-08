@@ -35,8 +35,7 @@ from resources import Resource
 from freenas.dispatcher.rpc import RpcException, description, accepts, private, returns, generator
 from freenas.dispatcher.rpc import SchemaHelper as h
 from datastore.config import ConfigNode
-from lib.system import system, SubprocessException
-from freenas.utils import extend as extend_dict, query as q
+from freenas.utils import extend as extend_dict, first_or_default, query as q
 
 
 logger = logging.getLogger('ServiceManagePlugin')
@@ -49,11 +48,12 @@ class ServiceInfoProvider(Provider):
     @generator
     def query(self, filter=None, params=None):
         def extend(i):
-            state, pid = get_status(self.dispatcher, self.datastore, i)
+            state, error, pid = get_status(self.dispatcher, self.datastore, i)
             entry = {
                 'id': i['id'],
                 'name': i['name'],
                 'state': state,
+                'error': error
             }
 
             if pid is not None:
@@ -191,7 +191,7 @@ class ServiceInfoProvider(Provider):
         if not svc:
             raise RpcException(errno.ENOENT, 'Service {0} not found'.format(service))
 
-        state, pid = get_status(self.dispatcher, self.datastore, svc)
+        state, _, pid = get_status(self.dispatcher, self.datastore, svc)
         node = ConfigNode('service.{0}'.format(service), self.configstore)
 
         if node['enable'].value and state != 'RUNNING':
@@ -233,7 +233,7 @@ class ServiceManageTask(Task):
             raise TaskException(errno.ENOENT, 'Service {0} not found'.format(id))
 
         service = self.datastore.get_by_id('service_definitions', id)
-        state, pid = get_status(self.dispatcher, self.datastore, service)
+        state, _, pid = get_status(self.dispatcher, self.datastore, service)
         hook_rpc = service.get('{0}_rpc'.format(action))
         name = service['name']
 
@@ -314,6 +314,8 @@ class UpdateServiceConfigTask(Task):
         restart = False
         reload = False
         updated_config = updated_fields.get('config')
+        enable = not node['enable'].value and updated_config['enable']
+        disable = node['enable'].value and not updated_config['enable']
 
         if updated_config is None:
             return
@@ -361,6 +363,13 @@ class UpdateServiceConfigTask(Task):
                             del updated_config['enable']
                             break
 
+        if 'launchd' in service_def:
+            if enable:
+                load_job(self.dispatcher, service_def)
+
+            if disable:
+                unload_job(self.dispatcher, service_def)
+
         self.dispatcher.call_sync('etcd.generation.generate_group', 'services')
         self.dispatcher.call_sync('service.apply_state', service_def['name'], restart, reload, timeout=120)
         self.dispatcher.dispatch_event('service.changed', {
@@ -369,9 +378,34 @@ class UpdateServiceConfigTask(Task):
         })
 
 
+def load_job(dispatcher, svc):
+    if isinstance(svc['launchd'], dict):
+        svc['launchd'] = [svc['launchd']]
+
+    for plist in svc['launchd']:
+        try:
+            dispatcher.call_sync('serviced.job.load', plist)
+        except RpcException as err:
+            if err.code != errno.EEXIST:
+                raise
+
+
+def unload_job(dispatcher, svc):
+    if isinstance(svc['launchd'], dict):
+        svc['launchd'] = [svc['launchd']]
+
+    for plist in svc['launchd']:
+        try:
+            dispatcher.call_sync('serviced.job.unload', plist['Label'])
+        except RpcException as err:
+            if err.code != errno.ENOENT:
+                raise
+
+
 def get_status(dispatcher, datastore, service):
     if 'status_rpc' in service:
         state = 'RUNNING'
+        error = None
         pid = None
         try:
             dispatcher.call_sync(service['status_rpc'])
@@ -380,27 +414,31 @@ def get_status(dispatcher, datastore, service):
 
     elif 'launchd' in service:
         state = 'UNKNOWN'
+        error = None
         pid = None
 
         try:
             launchd = service['launchd']
             plists = [launchd] if isinstance(launchd, dict) else launchd
             pids = []
+            errors = []
             states = []
 
             for i in plists:
                 job = dispatcher.call_sync('serviced.job.get', i['Label'])
                 states.append(job['State'])
+                errors.append(job.get('FailureReason'))
                 if job['PID']:
                     pids.append(job['PID'])
 
-            for i in ('RUNNING', 'STOPPED'):
+            for i in ('RUNNING', 'STOPPED', 'STARTING', 'STOPPING'):
                 if all(s == i for s in states):
                     state = i
                     pid = pids
 
             if any(s == 'ERROR' for s in states):
                 state = 'ERROR'
+                error = first_or_default(lambda e: e, errors)
                 pid = None
 
         except RpcException as err:
@@ -410,59 +448,24 @@ def get_status(dispatcher, datastore, service):
             state = 'UNKNOWN'
             pid = None
 
-    elif 'pidfile' in service:
-        state = 'RUNNING'
-        pid = None
-        pidfiles = service['pidfile'] \
-            if isinstance(service['pidfile'], list) \
-            else [service['pidfile']]
-
-        for p in pidfiles:
-            # Check if process is alive by reading pidfile
-            try:
-                with open(p, 'r') as fd:
-                    pid = int(fd.read().strip())
-            except IOError:
-                pid = None
-                state = 'STOPPED'
-            except ValueError:
-                pid = None
-                state = 'STOPPED'
-            else:
-                try:
-                    os.kill(pid, 0)
-                except OSError:
-                    state = 'UNKNOWN'
-
-    elif 'rcng' in service and 'rc-scripts' in service['rcng']:
-        rc_scripts = service['rcng']['rc-scripts']
-        pid = None
-        state = 'RUNNING'
-        try:
-            if type(rc_scripts) is str:
-                system("/usr/sbin/service", rc_scripts, 'onestatus')
-
-            if type(rc_scripts) is list:
-                for x in rc_scripts:
-                    system("/usr/sbin/service", x, 'onestatus')
-        except SubprocessException:
-            state = 'STOPPED'
-
     elif 'dependencies' in service:
         pid = None
+        error = None
         state = 'RUNNING'
 
         for i in service['dependencies']:
             d_service = datastore.get_one('service_definitions', ('id', '=', i))
-            d_state, d_pid = get_status(dispatcher, datastore, d_service)
+            d_state, d_error, d_pid = get_status(dispatcher, datastore, d_service)
             if d_state != 'RUNNING':
                 state = d_state
+                error = d_error
 
     else:
         pid = None
+        error = None
         state = 'UNKNOWN'
 
-    return state, pid
+    return state, error, pid
 
 
 def collect_debug(dispatcher):
@@ -502,18 +505,14 @@ def _init(dispatcher, plugin):
 
         for svc in dispatcher.datastore.query('service_definitions'):
             logger.debug('Loading service {0}'.format(svc['name']))
-            enb = svc['builtin'] or dispatcher.configstore.get('service.{0}.enable'.format(svc['name']))
+            enb = svc.get('builtin') or dispatcher.configstore.get('service.{0}.enable'.format(svc['name']))
 
             if 'launchd' in svc and enb:
-                if isinstance(svc['launchd'], dict):
-                    svc['launchd'] = [svc['launchd']]
-
-                for plist in svc['launchd']:
-                    try:
-                        dispatcher.call_sync('serviced.job.load', plist)
-                    except RpcException as err:
-                        logger.error('Cannot load service {0}: {1}'.format(svc['name'], err))
-                        continue
+                try:
+                    load_job(dispatcher, svc)
+                except RpcException as err:
+                    logger.error('Cannot load service {0}: {1}'.format(svc['name'], err))
+                    continue
 
             plugin.register_resource(Resource('service:{0}'.format(svc['name'])), parents=['system'])
 
@@ -558,6 +557,7 @@ def _init(dispatcher, plugin):
     plugin.register_event_handler("service.rc.command", on_rc_command)
     plugin.register_event_handler("serviced.job.started", on_job_changed)
     plugin.register_event_handler("serviced.job.stopped", on_job_changed)
+    plugin.register_event_handler("serviced.job.error", on_job_changed)
     plugin.register_event_handler("plugin.service_resume", on_serviced_started)
     plugin.register_task_handler("service.manage", ServiceManageTask)
     plugin.register_task_handler("service.update", UpdateServiceConfigTask)
