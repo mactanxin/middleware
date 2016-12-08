@@ -43,6 +43,7 @@ from freenas.dispatcher.client import Client, ClientError
 from freenas.dispatcher.rpc import RpcService, RpcException
 from freenas.utils import configure_logging
 from freenas.utils.debug import DebugService
+from freenas.serviced import checkin
 
 
 DEFAULT_CONFIGFILE = '/usr/local/etc/middleware.conf'
@@ -251,6 +252,9 @@ class Main(object):
                 if last_emission + timedelta(seconds=interval) <= datetime.utcnow():
                     self.emit_alert(i)
 
+    def checkin(self):
+        checkin()
+
     def main(self):
         parser = argparse.ArgumentParser()
         parser.add_argument('-c', metavar='CONFIG', default=DEFAULT_CONFIGFILE, help='Middleware config file')
@@ -264,6 +268,7 @@ class Main(object):
         self.init_dispatcher()
         self.scan_plugins()
         self.init_reminder()
+        self.checkin()
         self.client.wait_forever()
 
 

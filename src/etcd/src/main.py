@@ -28,7 +28,7 @@
 
 import os
 import sys
-import socket
+import signal
 import logging
 import argparse
 import json
@@ -241,7 +241,8 @@ class Main(object):
         self.client.emit_event(name, params)
 
     def checkin(self):
-        self.checkin()
+        checkin()
+        os.kill(1, signal.SIGHUP)
 
     def main(self):
         parser = argparse.ArgumentParser()
