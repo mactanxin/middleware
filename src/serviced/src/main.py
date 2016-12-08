@@ -400,7 +400,6 @@ class JobService(RpcService):
 
     def checkin(self):
         sender = get_sender()
-        logging.warning(sender.credentials)
         job = self.context.job_by_pid(sender.credentials['pid'])
         if not job:
             raise RpcException(errno.EINVAL, 'Unknown job')
