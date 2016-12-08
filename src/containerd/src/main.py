@@ -162,7 +162,7 @@ def get_dhcp_lease(context, interface, hostname):
         return lease
     else:
         c.stop()
-        raise RpcException(errno.EACCES, 'Failed to obtain DHCP lease: {0}'.format(lease.error))
+        raise RpcException(errno.EACCES, 'Failed to obtain DHCP lease: {0}'.format(c.error))
 
 
 class BinaryRingBuffer(object):
