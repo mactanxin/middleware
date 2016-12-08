@@ -746,7 +746,7 @@
                 "launchd": {
                     "Label": "com.vmware.guestd",
                     "RunAtLoad": true,
-                    "Program": "/usr/local/libexec/vmtoolsd_wrapper",
+                    "Program": "/usr/local/libexec/dispatcher/vmtoolsd_wrapper",
                     "SupportsCheckin": true
                 },
                 "builtin": true,
@@ -795,7 +795,7 @@
                         "RunAtLoad": true,
                         "Requires": ["logging", "etc", "networking"],
                         "SupportsCheckin": true,
-                        "Program": "/usr/local/libexec/nfsd_wrapper"
+                        "Program": "/usr/local/libexec/dispatcher/nfsd_wrapper"
                     }
                 ],
                 "builtin": false,
@@ -996,14 +996,10 @@
             "12b2673e-678c-4c5d-8e5b-08af9db31592": {
                 "launchd": {
                     "Label": "com.github.sspans.ladvd",
-                    "RunAtLoad": true
-                },
-                "rcng": {
-                    "rc-scripts": "ladvd"
+                    "RunAtLoad": true,
+                    "Program": "/usr/local/libexec/dispatcher/ladvd_wrapper"
                 },
                 "builtin": false,
-                "pidfile": "/var/run/ladvd.pid",
-                "get_arguments_rpc": "service.lldp.get_arguments",
                 "name": "lldp"
             },
             "9137a2bd-c45f-4b6e-ad4e-45d2fd858cac": {
