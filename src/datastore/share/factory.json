@@ -823,47 +823,27 @@
                     {
                         "Label": "org.freebsd.rpcbind",
                         "RunAtLoad": true,
-                        "Requires": ["logging", "etc"],
-                        "ProgramArguments": [
-                            "/usr/sbin/rpcbind",
-                            "-d"
-                        ]
+                        "Requires": ["logging", "etc"]
                     },
                     {
                         "Label": "org.freebsd.nfsd",
                         "RunAtLoad": true,
-                        "Requires": ["logging", "etc"],
-                        "ProgramArguments": [
-                            "/usr/sbin/nfsd",
-                            "-d"
-                        ]
+                        "Requires": ["logging", "etc"]
                     },
                     {
                         "Label": "org.freebsd.mountd",
                         "RunAtLoad": true,
-                        "Requires": ["logging", "etc"],
-                        "ProgramArguments": [
-                            "/usr/sbin/mountd",
-                            "-d"
-                        ]
+                        "Requires": ["logging", "etc"]
                     },
                     {
                         "Label": "org.freebsd.statd",
                         "RunAtLoad": true,
-                        "Requires": ["logging", "etc"],
-                        "ProgramArguments": [
-                            "/usr/sbin/rpc.statd",
-                            "-d"
-                        ]
+                        "Requires": ["logging", "etc"]
                     },
                     {
                         "Label": "org.freebsd.lockd",
                         "RunAtLoad": true,
-                        "Requires": ["logging", "etc"],
-                        "ProgramArguments": [
-                            "/usr/sbin/rpc.lockd",
-                            "-d"
-                        ]
+                        "Requires": ["logging", "etc"]
                     },
                     {
                         "Label": "org.freebsd.gssd",
@@ -899,6 +879,7 @@
                 "builtin": false,
                 "etcd-group": "nfs",
                 "get_config_rpc": "service.nfs.get_config",
+                "get_arguments_rpc": "service.nfs.get_arguments",
                 "task": "service.nfs.update",
                 "name": "nfs"
             },
