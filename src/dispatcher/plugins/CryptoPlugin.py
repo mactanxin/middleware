@@ -316,9 +316,20 @@ class CertificateCreateTask(Task):
                 x509.set_issuer(signing_x509.get_subject())
                 x509.sign(signkey, certificate['digest_algorithm'])
 
-                certificate['not_before'] = get_utc_string_from_asn1generalizedtime(
-                    x509.get_notBefore().decode('utf-8'))
-                certificate['not_after'] = get_utc_string_from_asn1generalizedtime(x509.get_notAfter().decode('utf-8'))
+                try:
+                    notbefore = x509.get_notBefore().decode('utf-8')
+                except AttributeError:
+                    certificate['not_before'] = None
+                else:
+                    certificate['not_before'] = get_utc_string_from_asn1generalizedtime(notbefore)
+
+                try:
+                    notafter = x509.get_notAfter().decode('utf-8')
+                except AttributeError:
+                    certificate['not_after'] = None
+                else:
+                    certificate['not_after'] = get_utc_string_from_asn1generalizedtime(notafter)
+
                 certificate['serial'] = str(x509.get_serial_number())
                 certificate['certificate'] = crypto.dump_certificate(crypto.FILETYPE_PEM, x509).decode('utf-8')
                 certificate['privatekey'] = crypto.dump_privatekey(crypto.FILETYPE_PEM, key).decode('utf-8')
