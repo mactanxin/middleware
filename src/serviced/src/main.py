@@ -77,6 +77,7 @@ class Job(object):
         self.program = None
         self.program_arguments = []
         self.pid = None
+        self.pgid = None
         self.sid = None
         self.plist = None
         self.started_at = None
@@ -243,6 +244,7 @@ class Job(object):
                 with self.cv:
                     try:
                         self.sid = os.getsid(self.pid)
+                        self.pgid = os.getpgid(self.pid)
                     except ProcessLookupError:
                         # Exited too quickly after exec()
                         return
@@ -455,7 +457,7 @@ class Context(object):
 
                             # Stop tracking at session ID boundary
                             try:
-                                if pjob.sid != os.getsid(ev.ident):
+                                if pjob.pgid != os.getpgid(ev.ident):
                                     self.untrack_pid(ev.ident)
                                     continue
                             except ProcessLookupError:
