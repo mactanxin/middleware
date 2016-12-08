@@ -232,54 +232,60 @@ class Job(object):
 
     def pid_event(self, ev):
         if ev.fflags & select.KQ_NOTE_EXEC:
-            try:
-                proc = bsd.kinfo_getproc(self.pid)
-                argv = list(proc.argv)
-                command = proc.command
-            except LookupError:
-                # Exited too quickly, exit info will be catched in another event
-                return
-
-            self.logger.debug('Job did exec() into {0}'.format(argv))
-
-            if self.anonymous:
-                # Update label for anonymous jobs
-                self.label = 'anonymous.{0}@{1}'.format(command, self.pid)
-
-            if self.state == JobState.STARTING:
-                with self.cv:
-                    try:
-                        self.sid = os.getsid(self.pid)
-                        self.pgid = os.getpgid(self.pid)
-                    except ProcessLookupError:
-                        # Exited too quickly after exec()
-                        return
-
-                    if not self.supports_checkin:
-                        self.set_state(JobState.RUNNING)
-                        self.context.provide(self.provides)
+            self.pid_exec(ev)
 
         if ev.fflags & select.KQ_NOTE_EXIT:
-            if not self.parent:
-                # We need to reap direct children
-                try:
-                    os.waitpid(self.pid, 0)
-                except BaseException as err:
-                    self.logger.debug('waitpid() error: {0}'.format(err))
+            self.pid_exit(ev)
 
+    def pid_exec(self, ev):
+        try:
+            proc = bsd.kinfo_getproc(self.pid)
+            argv = list(proc.argv)
+            command = proc.command
+        except LookupError:
+            # Exited too quickly, exit info will be catched in another event
+            return
+
+        self.logger.debug('Job did exec() into {0}'.format(argv))
+
+        if self.anonymous:
+            # Update label for anonymous jobs
+            self.label = 'anonymous.{0}@{1}'.format(command, self.pid)
+
+        if self.state == JobState.STARTING:
             with self.cv:
-                self.logger.info('Job has exited with code {0}'.format(ev.data))
-                self.pid = None
-                self.last_exit_code = ev.data
+                try:
+                    self.sid = os.getsid(self.pid)
+                    self.pgid = os.getpgid(self.pid)
+                except ProcessLookupError:
+                    # Exited too quickly after exec()
+                    return
 
-                if self.state == JobState.STOPPING:
-                    self.set_state(JobState.STOPPED)
-                else:
-                    self.failure_reason = 'Process died with exit code {0}'.format(self.last_exit_code)
-                    self.set_state(JobState.ERROR)
+                if not self.supports_checkin:
+                    self.set_state(JobState.RUNNING)
+                    self.context.provide(self.provides)
 
-                if self.anonymous:
-                    del self.context.jobs[self.id]
+    def pid_exit(self, ev):
+        if not self.parent:
+            # We need to reap direct children
+            try:
+                os.waitpid(self.pid, 0)
+            except BaseException as err:
+                self.logger.debug('waitpid() error: {0}'.format(err))
+
+        with self.cv:
+            self.logger.info('Job has exited with code {0}'.format(ev.data))
+            self.pid = None
+            self.last_exit_code = ev.data
+
+            if self.state == JobState.STOPPING:
+                self.set_state(JobState.STOPPED)
+            else:
+                self.failure_reason = 'Process died with exit code {0}'.format(self.last_exit_code)
+                self.set_state(JobState.ERROR)
+
+            if self.anonymous:
+                del self.context.jobs[self.id]
 
     def set_state(self, new_state):
         # Must run locked
