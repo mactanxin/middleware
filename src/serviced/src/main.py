@@ -240,7 +240,7 @@ class Job(object):
 
             argv = list(proc.argv)
             self.logger.debug('Job did exec() into {0}'.format(argv))
-            if argv == self.program_arguments and self.state == JobState.STARTING:
+            if self.state == JobState.STARTING:
                 with self.cv:
                     try:
                         self.sid = os.getsid(self.pid)
