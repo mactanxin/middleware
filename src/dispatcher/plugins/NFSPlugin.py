@@ -47,9 +47,8 @@ class NFSProvider(Provider):
         return ConfigNode('service.nfs', self.configstore).__getstate__()
 
     @private
-    @accepts(str)
     def get_arguments(self, label):
-        nfs = ConfigNode('service.nfs', self.configstore).__getstate__()
+        nfs = self.get_config()
         ips = sum([['-h', x] for x in nfs['bind_addresses']], [])
 
         if label == 'org.freebsd.rpcbind':

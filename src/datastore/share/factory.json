@@ -1073,11 +1073,16 @@
                 "name": "mdns"
             },
             "12b2673e-678c-4c5d-8e5b-08af9db31592": {
+                "launchd": {
+                    "Label": "com.github.sspans.ladvd",
+                    "RunAtLoad": true
+                },
                 "rcng": {
                     "rc-scripts": "ladvd"
                 },
                 "builtin": false,
                 "pidfile": "/var/run/ladvd.pid",
+                "get_arguments_rpc": "service.lldp.get_arguments",
                 "name": "lldp"
             },
             "9137a2bd-c45f-4b6e-ad4e-45d2fd858cac": {
