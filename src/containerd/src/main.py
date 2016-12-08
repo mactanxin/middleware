@@ -153,7 +153,8 @@ def get_interactive(details):
     return config.get('Tty') and config.get('OpenStdin')
 
 
-def get_dhcp_lease(context, interface, hostname):
+def get_dhcp_lease(context, hostname):
+    interface = context.client.call_sync('networkd.configuration.get_default_interface')
     c = dhcp.Client(interface, hostname)
     c.hwaddr = context.client.call_sync('vm.generate_mac')
     c.start()
@@ -1362,7 +1363,7 @@ class DockerService(RpcService):
         if bridge_enabled:
             dhcp_enabled = q.get(container, 'bridge.dhcp')
             if dhcp_enabled:
-                lease = get_dhcp_lease(self.context, 'em0', container['name'])
+                lease = get_dhcp_lease(self.context, container['name'])
                 ipv4 = lease['client_ip']
                 macaddr = lease['client_mac']
                 labels.append('org.freenas.dhcp')
