@@ -448,7 +448,6 @@ class Context(object):
                             continue
 
                         if ev.fflags & select.KQ_NOTE_CHILD:
-                            self.logger.info('New child process {0}, parent {1}'.format(ev.ident, ev.data))
                             pjob = self.job_by_pid(ev.data)
                             if not pjob:
                                 self.untrack_pid(ev.ident)
