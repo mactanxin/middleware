@@ -47,6 +47,7 @@ PROVIDERS = {
     'dhis.org': 'default@dhis.org',
     'majimoto.net': 'default@majimoto.net',
     'zerigo.com': 'default@zerigo.com',
+    'google.com': 'default@domains.google.com',
 }
 
 
