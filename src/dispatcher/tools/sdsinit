@@ -164,5 +164,6 @@ if __name__ == '__main__':
         logger.info('New system dataset pool: freenas-boot')
         pool = cs.get('system.dataset.pool')
         create_system_dataset(dsid, pool)
+
     mount_system_dataset(dsid, pool, SYSTEM_DIR)
     link_directories()
