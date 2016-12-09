@@ -3237,6 +3237,9 @@ def _init(dispatcher, plugin):
     @sync
     def on_disk_attached(args):
         for vol in dispatcher.call_sync('volume.query', [('status', '=', 'UNKNOWN')]):
+            if vol.get('key_encrypted') or vol.get('password_encrypted'):
+                continue
+
             for vdev, group in iterate_vdevs(vol['topology']):
                 if group != 'data':
                     continue
