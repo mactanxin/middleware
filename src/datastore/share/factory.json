@@ -915,11 +915,13 @@
                 "name": "smartd"
             },
             "638dde98-3f61-487e-9da7-47093a6beb7a": {
-                "rcng": {
-                    "rc-scripts": "tftpd"
+                "launchd": {
+                    "Label": "org.freenas.tftpd",
+                    "RunAtLoad": true,
+                    "SupportsCheckin": true,
+                    "Program": "/usr/local/libexec/dispatcher/tftpd_wrapper"
                 },
                 "builtin": false,
-                "pidfile": "/var/run/tftpd.pid",
                 "get_config_rpc": "service.tftpd.get_config",
                 "task": "service.tftpd.update",
                 "name": "tftpd"
