@@ -159,12 +159,16 @@ def get_dhcp_lease(context, container_name, dockerhost_id):
     interface = [i.get('target') for i in interfaces if i.get('mode') == 'BRIDGED']
     if not interface:
         raise RpcException(
-            errno.EEXIST, 'Failed to retrieve DHCP target interface, '
-                          'no BRIDGED interfaces found on docker host : {0}'.format(dockerhost_name))
+            errno.EEXIST,
+            'Failed to retrieve DHCP target interface, '
+            'no BRIDGED interfaces found on docker host : {0}'.format(dockerhost_name)
+        )
     if len(interface) > 1:
         raise RpcException(
-            errno.EEXIST, 'Failed to retrieve DHCP target interface, '
-                          'multiple BRIDGED interfaces found on docker host : {0}'.format(dockerhost_name))
+            errno.EEXIST,
+            'Failed to retrieve DHCP target interface, '
+            'multiple BRIDGED interfaces found on docker host : {0}'.format(dockerhost_name)
+        )
     c = dhcp.Client(interface[0], dockerhost_name+'.'+container_name)
     c.hwaddr = context.client.call_sync('vm.generate_mac')
     c.start()
