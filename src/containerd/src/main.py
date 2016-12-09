@@ -204,6 +204,7 @@ class VirtualMachine(object):
         self.thread = None
         self.exiting = False
         self.docker_host = None
+        self.interfaces_mappings = []
         self.network_ready = Event()
         self.logger = logging.getLogger('VM:{0}'.format(self.name))
 
@@ -388,10 +389,13 @@ class VirtualMachine(object):
             os.unlink(self.vnc_socket)
 
     def init_tap(self, name, nic, mac):
+        iface_mapping = {}
         try:
             iface = netif.get_interface(netif.create_interface('tap'))
             iface.description = 'vm:{0}:{1}'.format(self.name, name)
             iface.up()
+            iface_mapping['tap'] = iface.name
+            iface_mapping['mode'] = nic['mode']
 
             if nic['mode'] == 'BRIDGED':
                 if nic.get('bridge'):
@@ -426,9 +430,11 @@ class VirtualMachine(object):
                         raise RpcException(errno.ENOENT, 'Target interface {0} does not exist'.format(bridge_if))
 
                     if isinstance(target_if, netif.BridgeInterface):
+                        iface_mapping['target'] = first_or_default(lambda i: 'tap' not in i, target_if.members)
                         target_if.add_member(iface.name)
                         self.logger.debug('{0} is a bridge. Adding {1}'.format(bridge_if, name))
                     else:
+                        iface_mapping['target'] = target_if.name
                         bridges = list(b for b in netif.list_interfaces().keys())
                         for b in bridges:
                             if not b.startswith(('brg', 'bridge')):
@@ -453,13 +459,16 @@ class VirtualMachine(object):
                             )
 
             if nic['mode'] == 'MANAGEMENT':
+                iface_mapping['target'] = 'mgmt0'
                 mgmt = netif.get_interface('mgmt0', bridge=True)
                 mgmt.add_member(iface.name)
 
             if nic['mode'] == 'NAT':
+                iface_mapping['target'] = 'nat0'
                 mgmt = netif.get_interface('nat0', bridge=True)
                 mgmt.add_member(iface.name)
 
+            self.interfaces_mappings.append(iface_mapping)
             self.tap_interfaces[iface] = mac
             return iface.name
         except (KeyError, OSError) as err:
@@ -1156,6 +1165,14 @@ class ManagementService(RpcService):
     @private
     def get_mgmt_allocations(self):
         return [i.__getstate__() for i in self.context.mgmt.allocations.values()]
+
+    @private
+    def get_netif_mappings(self, id):
+        vm = self.context.vms.get(id)
+        if not vm:
+            raise RpcException(errno.ENOENT, 'VM {0} is not running'.format(id))
+
+        return vm.interfaces_mappings
 
     @private
     def call_vmtools(self, id, fn, *args):
