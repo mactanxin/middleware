@@ -949,13 +949,16 @@ class ZfsDatasetCreateTask(Task):
                 del props['sparse']
 
             for k, v in props.items():
-                if v.get('value'):
+                if v.get('value') is not None:
                     params[k] = v['value']
                     continue
 
-                if v.get('parsed'):
+                if v.get('parsed') is not None:
                     params[k] = libzfs.serialize_zfs_prop(k, v['parsed'])
                     continue
+
+            if 'refreservation' in params:
+                sparse = True
 
             zfs = get_zfs()
             pool = zfs.get(path.split('/')[0])
