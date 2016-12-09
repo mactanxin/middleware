@@ -29,12 +29,39 @@ import os
 import errno
 import uuid
 import hashlib
+import ipaddress
 import ctl
 from debug import AttachFile
+from utils import is_port_open
 from task import Task, Provider, VerifyException, TaskDescription, TaskException
 from freenas.dispatcher.rpc import RpcException, description, accepts, returns, private, generator
 from freenas.dispatcher.rpc import SchemaHelper as h
 from freenas.utils import normalize, query as q
+
+
+def validate_portal_config(updated_fields):
+    if updated_fields.get('listen'):
+        for host in updated_fields['listen']:
+            if not host['address']:
+                raise VerifyException(errno.EINVAL, 'Please provide a valid IP address')
+            else:
+                try:
+                    ipaddress.ip_address(host['address'])
+                except ValueError as e:
+                    raise VerifyException(errno.EINVAL, str(e))
+
+            if host['port'] not in range(1024, 65535):
+                raise VerifyException(errno.EINVAL, 'Please provide a port value between 1024 and 65535')
+
+
+def validate_portal_port(updated_fields):
+    if updated_fields.get('listen'):
+        for host in updated_fields['listen']:
+            if not not is_port_open(host['port']):
+                raise TaskException(
+                    errno.EFAULT,
+                    'Provided port {} is already in use'.format(host['port'])
+                )
 
 
 @description("Provides info about configured iSCSI shares")
@@ -443,9 +470,11 @@ class CreateISCSIPortalTask(Task):
         return TaskDescription('Creating iSCSI portal {name}', name=portal.get('id', ''))
 
     def verify(self, portal):
+        validate_portal_config(portal)
         return ['system']
 
     def run(self, portal):
+        validate_portal_port(portal)
         normalize(portal, {
             'id': self.datastore.collection_get_next_pkey('iscsi.portals', 'pg'),
             'discovery_auth_group': None,
@@ -474,9 +503,11 @@ class UpdateISCSIPortalTask(Task):
         return TaskDescription('Updating iSCSI portal {name}', name=id)
 
     def verify(self, id, updated_params):
+        validate_portal_config(updated_params)
         return ['system']
 
     def run(self, id, updated_params):
+        validate_portal_port(updated_params)
         if not self.datastore.exists('iscsi.portals', ('id', '=', id)):
             raise TaskException(errno.ENOENT, 'Portal {0} does not exist'.format(id))
 
