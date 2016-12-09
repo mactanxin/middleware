@@ -1,3 +1,4 @@
 #!/bin/sh
 LIBDIR=/usr/local/lib/dispatcher/src
+/usr/local/sbin/sdsinit
 exec /usr/local/bin/python3 -u $LIBDIR/run.py $*
