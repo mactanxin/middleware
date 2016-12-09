@@ -41,7 +41,7 @@ def _init(dispatcher, plugin):
         if volume['status'] == 'ONLINE' and alert:
             dispatcher.call_sync('alert.cancel', alert['id'])
 
-        if volume['status'] != 'ONLINE' and volume['id'] and not alert:
+        if volume['status'] not in ('ONLINE', 'LOCKED') and volume['id'] and not alert:
             dispatcher.rpc.call_sync('alert.emit', {
                 'class': 'VolumeDegraded',
                 'target': volume['id'],
