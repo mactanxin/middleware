@@ -31,10 +31,22 @@ import uuid
 import hashlib
 import ctl
 from debug import AttachFile
+from utils import is_port_open
 from task import Task, Provider, VerifyException, TaskDescription, TaskException
 from freenas.dispatcher.rpc import RpcException, description, accepts, returns, private, generator
 from freenas.dispatcher.rpc import SchemaHelper as h
 from freenas.utils import normalize, query as q
+
+
+
+def validate_portal_port(updated_fields):
+    if updated_fields.get('listen'):
+        for host in updated_fields['listen']:
+            if not not is_port_open(host['port']):
+                raise TaskException(
+                    errno.EFAULT,
+                    'Provided port {} is already in use'.format(host['port'])
+                )
 
 
 @description("Provides info about configured iSCSI shares")
@@ -446,6 +458,7 @@ class CreateISCSIPortalTask(Task):
         return ['system']
 
     def run(self, portal):
+        validate_portal_port(portal)
         normalize(portal, {
             'id': self.datastore.collection_get_next_pkey('iscsi.portals', 'pg'),
             'discovery_auth_group': None,
@@ -477,6 +490,7 @@ class UpdateISCSIPortalTask(Task):
         return ['system']
 
     def run(self, id, updated_params):
+        validate_portal_port(updated_params)
         if not self.datastore.exists('iscsi.portals', ('id', '=', id)):
             raise TaskException(errno.ENOENT, 'Portal {0} does not exist'.format(id))
 
@@ -610,8 +624,12 @@ def _init(dispatcher, plugin):
             'type': 'object',
             'additionalProperties': False,
             'properties': {
-                'address': {'type': 'string'},
-                'port': {'type': 'integer'}
+                'address': {'type': 'string', 'format': 'ip-address'},
+                'port': {
+                    'type': 'integer',
+                    'minimum': 1024,
+                    'maximum': 65535
+                }
             }
         }
     })
