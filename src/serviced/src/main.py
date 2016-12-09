@@ -144,7 +144,7 @@ class Job(object):
         try:
             proc = bsd.kinfo_getproc(pid)
             command = proc.command
-        except LookupError:
+        except (LookupError, ProcessLookupError):
             # Exited too quickly, but let's add it anyway - it will be removed in next event
             command = 'unknown'
 
@@ -164,6 +164,9 @@ class Job(object):
 
     def start(self):
         with self.cv:
+            if self.state in (JobState.STARTING, JobState.RUNNING):
+                return
+
             if not self.requires <= self.context.provides:
                 return
 
@@ -214,12 +217,15 @@ class Job(object):
             self.logger.info('Stopping job')
             self.set_state(JobState.STOPPING)
 
+            if not self.pid:
+                self.set_state(JobState.STOPPED)
+                return
+
             try:
                 os.kill(self.pid, signal.SIGTERM)
             except ProcessLookupError:
                 # Already dead
-                with self.cv:
-                    self.set_state(JobState.STOPPED)
+                self.set_state(JobState.STOPPED)
 
             if not self.cv.wait_for(lambda: self.state == JobState.STOPPED, self.exit_timeout):
                 os.kill(self.pid, signal.SIGKILL)
@@ -246,7 +252,7 @@ class Job(object):
             proc = bsd.kinfo_getproc(self.pid)
             argv = list(proc.argv)
             command = proc.command
-        except LookupError:
+        except (LookupError, ProcessLookupError):
             # Exited too quickly, exit info will be catched in another event
             return
 
