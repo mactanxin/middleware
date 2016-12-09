@@ -29,7 +29,6 @@ import os
 import errno
 import uuid
 import hashlib
-import ipaddress
 import ctl
 from debug import AttachFile
 from utils import is_port_open
@@ -38,20 +37,6 @@ from freenas.dispatcher.rpc import RpcException, description, accepts, returns, 
 from freenas.dispatcher.rpc import SchemaHelper as h
 from freenas.utils import normalize, query as q
 
-
-def validate_portal_config(updated_fields):
-    if updated_fields.get('listen'):
-        for host in updated_fields['listen']:
-            if not host['address']:
-                raise VerifyException(errno.EINVAL, 'Please provide a valid IP address')
-            else:
-                try:
-                    ipaddress.ip_address(host['address'])
-                except ValueError as e:
-                    raise VerifyException(errno.EINVAL, str(e))
-
-            if host['port'] not in range(1024, 65535):
-                raise VerifyException(errno.EINVAL, 'Please provide a port value between 1024 and 65535')
 
 
 def validate_portal_port(updated_fields):
@@ -470,7 +455,6 @@ class CreateISCSIPortalTask(Task):
         return TaskDescription('Creating iSCSI portal {name}', name=portal.get('id', ''))
 
     def verify(self, portal):
-        validate_portal_config(portal)
         return ['system']
 
     def run(self, portal):
@@ -503,7 +487,6 @@ class UpdateISCSIPortalTask(Task):
         return TaskDescription('Updating iSCSI portal {name}', name=id)
 
     def verify(self, id, updated_params):
-        validate_portal_config(updated_params)
         return ['system']
 
     def run(self, id, updated_params):
@@ -641,8 +624,12 @@ def _init(dispatcher, plugin):
             'type': 'object',
             'additionalProperties': False,
             'properties': {
-                'address': {'type': 'string'},
-                'port': {'type': 'integer'}
+                'address': {'type': 'string', 'format': 'ip-address'},
+                'port': {
+                    'type': 'integer',
+                    'minimum': 1024,
+                    'maximum': 65535
+                }
             }
         }
     })
