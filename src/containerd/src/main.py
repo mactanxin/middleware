@@ -153,8 +153,23 @@ def get_interactive(details):
     return config.get('Tty') and config.get('OpenStdin')
 
 
-def get_dhcp_lease(context, interface, hostname):
-    c = dhcp.Client(interface, hostname)
+def get_dhcp_lease(context, container_name, dockerhost_id):
+    dockerhost_name = context.get_docker_host(dockerhost_id).vm.name
+    interfaces = context.client.call_sync('containerd.management.get_netif_mappings', dockerhost_id)
+    interface = [i.get('target') for i in interfaces if i.get('mode') == 'BRIDGED']
+    if not interface:
+        raise RpcException(
+            errno.EEXIST,
+            'Failed to retrieve DHCP target interface, '
+            'no BRIDGED interfaces found on docker host : {0}'.format(dockerhost_name)
+        )
+    if len(interface) > 1:
+        raise RpcException(
+            errno.EEXIST,
+            'Failed to retrieve DHCP target interface, '
+            'multiple BRIDGED interfaces found on docker host : {0}'.format(dockerhost_name)
+        )
+    c = dhcp.Client(interface[0], dockerhost_name+'.'+container_name)
     c.hwaddr = context.client.call_sync('vm.generate_mac')
     c.start()
     lease = c.wait_for_bind(timeout=30).__getstate__()
@@ -1362,7 +1377,7 @@ class DockerService(RpcService):
         if bridge_enabled:
             dhcp_enabled = q.get(container, 'bridge.dhcp')
             if dhcp_enabled:
-                lease = get_dhcp_lease(self.context, 'em0', container['name'])
+                lease = get_dhcp_lease(self.context, container['name'], container['host'])
                 ipv4 = lease['client_ip']
                 macaddr = lease['client_mac']
                 labels.append('org.freenas.dhcp')
