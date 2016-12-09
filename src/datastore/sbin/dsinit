@@ -63,6 +63,10 @@ def do_init(control, db_dir):
     return subprocess.call([control, db_dir, 'init'])
 
 
+def do_exec(control, db_dir):
+    os.execv(control, [db_dir, 'exec'])
+
+
 def do_start_forked(control, db_dir, port):
     args = [control, db_dir, 'start']
     if port:

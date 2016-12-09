@@ -13,6 +13,17 @@ case ${cmd} in
         chown mongodb ${dbdir}
         ;;
 
+    exec)
+        rm -f ${dbdir}/mongod.lock
+        exec ${mongod} \
+            --config ${driverdir}/mongod.conf \
+            --logpath ${dbdir}/mongod.log \
+            --quiet \
+            --dbpath ${dbdir} \
+            --port ${3:-27017}
+
+        ;;
+
     start)
         rm -f ${dbdir}/mongod.lock
 
