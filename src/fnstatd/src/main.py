@@ -368,7 +368,7 @@ class OutputService(RpcService):
             ds = self.context.data_sources[data_source]
             df = ds.query(start, end, frequency)
             for i in range(len(df)):
-                yield datetime.utcfromtimestamp(df.index[i].value // 10 ** 9), str(df[i])
+                yield str(df[i])
 
             return
 
@@ -382,7 +382,7 @@ class OutputService(RpcService):
                 final[ds_name] = ds.query(start, end, frequency)
 
             for i in range(len(final)):
-                yield [datetime.utcfromtimestamp(final.index[i].value // 10 ** 9)] + [str(final[col][i]) for col in data_source]
+                yield [str(final[col][i]) for col in data_source]
 
             return
 
