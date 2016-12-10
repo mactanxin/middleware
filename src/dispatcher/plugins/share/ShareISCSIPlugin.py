@@ -49,15 +49,15 @@ def validate_portal_port(updated_fields):
                 )
 
 
-def check_auth_group_mode(self, updated_fields):
+def check_auth_group_mode(datastore, updated_fields):
     if updated_fields.get('discovery_auth_group'):
-        if not self.datastore.exists('iscsi.auth', ('id', '=', updated_fields['discovery_auth_group'])):
+        if not datastore.exists('iscsi.auth', ('id', '=', updated_fields['discovery_auth_group'])):
             raise TaskException(
                 errno.ENOENT,
                 'Auth group {0} does not exist'.format(updated_fields['discovery_auth_group'])
             )
         else:
-            auth_group = self.datastore.get_by_id('iscsi.auth', updated_fields['discovery_auth_group'])
+            auth_group = datastore.get_by_id('iscsi.auth', updated_fields['discovery_auth_group'])
             if auth_group['type'] in ('NONE', 'DENY'):
                 raise TaskException(errno.EPERM, 'Auth group cannot be in NONE or DENY mode')
 
@@ -472,7 +472,7 @@ class CreateISCSIPortalTask(Task):
 
     def run(self, portal):
         validate_portal_port(portal)
-        check_auth_group_mode(self, portal)
+        check_auth_group_mode(self.datastore, portal)
 
         normalize(portal, {
             'id': self.datastore.collection_get_next_pkey('iscsi.portals', 'pg'),
@@ -506,7 +506,7 @@ class UpdateISCSIPortalTask(Task):
 
     def run(self, id, updated_params):
         validate_portal_port(updated_params)
-        check_auth_group_mode(self, updated_params)
+        check_auth_group_mode(self.datastore, updated_params)
 
         if not self.datastore.exists('iscsi.portals', ('id', '=', id)):
             raise TaskException(errno.ENOENT, 'Portal {0} does not exist'.format(id))
