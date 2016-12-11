@@ -444,6 +444,17 @@ class JobService(RpcService):
 
         job.push_status(status)
 
+    def shutdown(self):
+        for job in self.context.jobs.values():
+            job.stop()
+
+        while True:
+            time.sleep(1)
+            if all(j.state in (JobState.STOPPED, JobState.ERROR) for j in self.context.jobs.values()):
+                break
+
+        self.context.shutdown()
+
 
 class Context(object):
     def __init__(self):
@@ -582,6 +593,11 @@ class Context(object):
                 self.jobs[job.id] = job
 
         Thread(target=doit).start()
+
+    def shutdown(self):
+        self.client.disconnect()
+        self.server.close()
+        sys.exit(0)
 
     def main(self):
         parser = argparse.ArgumentParser()

@@ -43,6 +43,12 @@ def bootstrap():
     load(*(glob.glob('/etc/serviced.d/*') + glob.glob('/usr/local/etc/serviced.d/*')))
 
 
+def shutdown():
+    client = create_client()
+    client.call_sync('serviced.management.shutdown')
+    sys.exit(0)
+
+
 def list(v=False):
     client = create_client()
     jobs = client.call_sync('serviced.job.query')
@@ -124,7 +130,7 @@ def create_client():
 
 def main():
     parser = argh.ArghParser()
-    parser.add_commands([bootstrap, list, load, unload, start, stop])
+    parser.add_commands([bootstrap, shutdown, list, load, unload, start, stop])
     parser.dispatch()
 
 
