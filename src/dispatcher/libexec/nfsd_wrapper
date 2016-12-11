@@ -51,7 +51,7 @@ def get_arguments(label):
 
     if label == 'org.freebsd.nfsd':
         return \
-            ['/usr/sbin/nfsd', '-d', '-t', '-n', str(nfs['servers'])] + \
+            ['/usr/sbin/nfsd', '--debug', '-t', '-n', str(nfs['servers'])] + \
             (['-u'] if nfs['udp'] else []) + \
             ips
 
