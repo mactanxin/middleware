@@ -1833,6 +1833,20 @@ class VolumeUnlockTask(Task):
                                    encryption.get('hashed_password', '')):
                     raise TaskException(errno.EINVAL, 'Password provided for volume {0} unlock is not valid'.format(id))
 
+            for vdev, _ in iterate_vdevs(vol['topology']):
+                if not self.dispatcher.call_sync(
+                        'disk.query',
+                        [('or', [('path', '=', vdev['path']), ('id', '=', vdev['disk_id'])])],
+                        {'count': True}):
+                    raise TaskException(
+                        errno.ENOENT,
+                        'Cannot decrypt {0} - disk {1} not found. Old path was {2}'.format(
+                            id,
+                            vdev['disk_id'],
+                            vdev['path']
+                        )
+                    )
+
             subtasks = []
             for vdev, _ in iterate_vdevs(vol['topology']):
                 path = self.dispatcher.call_sync(
