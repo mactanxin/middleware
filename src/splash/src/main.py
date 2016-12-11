@@ -91,7 +91,7 @@ class Main(object):
             frontend.draw(self.msg)
             with self.cv:
                 while True:
-                    self.cv.wait(1)
+                    self.cv.wait(0.5)
                     if self.exiting:
                         break
 

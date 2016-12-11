@@ -36,7 +36,6 @@ import time
 import uuid
 import setproctitle
 import signal
-import contextlib
 import pwd
 import grp
 import bsd
@@ -50,6 +49,7 @@ from freenas.utils.trace_logger import TRACE
 
 
 DEFAULT_SOCKET_ADDRESS = 'unix:///var/run/serviced.sock'
+BOOTSTRAP_JOB = ['/usr/local/sbin/servicectl', 'bootstrap']
 MAX_EVENTS = 16
 
 
@@ -67,6 +67,7 @@ class Job(object):
         self.context = context
         self.anonymous = False
         self.disabled = False
+        self.one_shot = False
         self.logger = None
         self.id = None
         self.label = None
@@ -96,6 +97,7 @@ class Job(object):
         self.umask = None
         self.last_exit_code = None
         self.failure_reason = None
+        self.status_message = None
         self.environment = {}
         self.respawns = 0
         self.cv = Condition()
@@ -117,6 +119,7 @@ class Job(object):
         self.disabled = bool(plist.get('Disabled', False))
         self.run_at_load = bool(plist.get('RunAtLoad', False))
         self.keep_alive = bool(plist.get('KeepAlive', False))
+        self.one_shot = bool(plist.get('OneShot', False))
         self.supports_checkin = bool(plist.get('SupportsCheckin', False))
         self.throttle_interval = int(plist.get('ThrottleInterval', 0))
         self.environment = plist.get('EnvironmentVariables', {})
@@ -240,6 +243,19 @@ class Job(object):
                 self.set_state(JobState.RUNNING)
                 self.context.provide(self.provides)
 
+    def push_status(self, status):
+        with self.cv:
+            self.status_message = status
+            self.cv.notify_all()
+
+        self.context.emit_event('serviced.job.status', {
+            'ID': self.id,
+            'Label': self.label,
+            'Reason': self.failure_reason,
+            'Anonymous': self.anonymous,
+            'Message': self.status_message
+        })
+
     def pid_event(self, ev):
         if ev.fflags & select.KQ_NOTE_EXEC:
             self.pid_exec(ev)
@@ -272,6 +288,9 @@ class Job(object):
                     # Exited too quickly after exec()
                     return
 
+                if self.label == 'org.freenas.dispatcher':
+                    self.context.init_dispatcher()
+
                 if not self.supports_checkin:
                     self.set_state(JobState.RUNNING)
                     self.context.provide(self.provides)
@@ -301,22 +320,25 @@ class Job(object):
     def set_state(self, new_state):
         # Must run locked
         if self.state != JobState.RUNNING and new_state == JobState.RUNNING:
-            self.context.client.emit_event('serviced.job.started', {
+            self.context.emit_event('serviced.job.started', {
                 'ID': self.id,
-                'Label': self.label
+                'Label': self.label,
+                'Anonymous': self.anonymous
             })
 
         if self.state != JobState.STOPPED and new_state == JobState.STOPPED:
-            self.context.client.emit_event('serviced.job.stopped', {
+            self.context.emit_event('serviced.job.stopped', {
                 'ID': self.id,
-                'Label': self.label
+                'Label': self.label,
+                'Anonymous': self.anonymous
             })
 
         if self.state != JobState.ERROR and new_state == JobState.ERROR:
-            self.context.client.emit_event('serviced.job.error', {
+            self.context.emit_event('serviced.job.error', {
                 'ID': self.id,
                 'Label': self.label,
-                'Reason': self.failure_reason
+                'Reason': self.failure_reason,
+                'Anonymous': self.anonymous
             })
 
         self.state = new_state
@@ -413,6 +435,14 @@ class JobService(RpcService):
             raise RpcException(errno.EINVAL, 'Unknown job')
 
         job.checkin()
+
+    def push_status(self, status):
+        sender = get_sender()
+        job = self.context.job_by_pid(sender.credentials['pid'])
+        if not job:
+            raise RpcException(errno.EINVAL, 'Unknown job')
+
+        job.push_status(status)
 
 
 class Context(object):
@@ -520,6 +550,11 @@ class Context(object):
         with contextlib.suppress(FileNotFoundError):
             self.kq.control([ev], 0)
 
+    def emit_event(self, name, args):
+        self.server.broadcast_event(name, args)
+        if self.client and self.client.connected:
+            self.client.emit_event(name, args)
+
     def connect(self):
         while True:
             try:
@@ -533,6 +568,21 @@ class Context(object):
                 self.logger.warning('Cannot connect to dispatcher: {0}, retrying in 1 second'.format(str(err)))
                 time.sleep(1)
 
+    def bootstrap(self):
+        def doit():
+            with self.lock:
+                job = Job(self)
+                job.load({
+                    'Label': 'org.freenas.serviced.bootstrap',
+                    'ProgramArguments': BOOTSTRAP_JOB,
+                    'OneShot': True,
+                    'RunAtLoad': True,
+                })
+
+                self.jobs[job.id] = job
+
+        Thread(target=doit).start()
+
     def main(self):
         parser = argparse.ArgumentParser()
         parser.add_argument('-s', metavar='SOCKET', default=DEFAULT_SOCKET_ADDRESS, help='Socket address to listen on')
@@ -541,8 +591,8 @@ class Context(object):
 
         setproctitle.setproctitle('serviced')
         self.logger.info('Started')
-        self.init_dispatcher()
         self.init_server(args.s)
+        self.bootstrap()
         self.event_loop()
 
 
