@@ -26,8 +26,26 @@
 #####################################################################
 
 import curses
+from bsd import sysctl
 from threading import Condition
 from freenas.serviced import subscribe
+
+
+class VerboseFrontend(object):
+    def __init__(self, context):
+        self.context = context
+        self.last_msg = None
+
+    def init(self):
+        print('\033[2J')
+
+    def draw(self, msg):
+        if msg != self.last_msg:
+            print(msg)
+            self.last_msg = msg
+
+    def cleanup(self):
+        pass
 
 
 class CursesFrontend(object):
@@ -59,6 +77,11 @@ class CursesFrontend(object):
         self.statuswin.refresh()
 
 
+class SDLFrontend(object):
+    def __init__(self, context):
+        self.context = context
+
+
 class Main(object):
     def __init__(self):
         self.cv = Condition()
@@ -83,9 +106,15 @@ class Main(object):
                 self.msg = '{0}: {1}'.format(args['Label'], args['Message'])
                 self.cv.notify_all()
 
+    def select_frontend(self):
+        if sysctl.sysctlbyname('debug.bootverbose') == 1:
+            return VerboseFrontend(self)
+
+        return CursesFrontend(self)
+
     def main(self):
         subscribe(self.event)
-        frontend = CursesFrontend(self)
+        frontend = self.select_frontend()
         try:
             frontend.init()
             frontend.draw(self.msg)
