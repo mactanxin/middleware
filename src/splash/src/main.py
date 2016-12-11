@@ -37,7 +37,7 @@ class VerboseFrontend(object):
         self.last_msg = None
 
     def init(self):
-        print('\033[2J')
+        print('Booting {0}...'.format(self.context.version))
 
     def draw(self, msg):
         if msg != self.last_msg:
