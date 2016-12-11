@@ -1797,9 +1797,18 @@ class VolumeUnlockTask(Task):
         if not self.datastore.exists('volumes', ('id', '=', id)):
             raise VerifyException(errno.ENOENT, 'Volume {0} not found'.format(id))
 
-        vol = self.dispatcher.call_sync('volume.query', [('id', '=', id)], {'single': True})
+        resources = []
+        topology = self.dispatcher.call_sync('volume.query', [('id', '=', id)], {'single': True, 'select': 'topology'})
+        for vdev, _ in iterate_vdevs(topology):
+            path = self.dispatcher.call_sync(
+                'disk.query',
+                [('or', [('path', '=', vdev['path']), ('id', '=', vdev['disk_id'])])],
+                {'single': True, 'select': 'path'}
+            )
+            if path:
+                resources.append('disk:{0}'.format(path))
 
-        return ['disk:{0}'.format(d) for d, _ in get_disks(vol['topology'])]
+        return resources
 
     def run(self, id, password=None, params=None):
         with self.dispatcher.get_lock('volumes'):
