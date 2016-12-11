@@ -30,6 +30,7 @@ from freenas.dispatcher.rpc import RpcException
 
 
 SERVICED_SOCKET = 'unix:///var/run/serviced.sock'
+_client = Client()
 
 
 class ServicedException(RpcException):
@@ -38,11 +39,34 @@ class ServicedException(RpcException):
 
 def checkin():
     try:
-        client = Client()
-        client.connect(SERVICED_SOCKET)
-        result = client.call_sync('serviced.job.checkin')
-        client.disconnect()
+        _client.connect(SERVICED_SOCKET)
+        result = _client.call_sync('serviced.job.checkin')
+        _client.disconnect()
     except RpcException as err:
         raise ServicedException(err.code, err.message, err.extra)
     else:
         return result
+
+
+def push_status(status):
+    try:
+        _client.connect(SERVICED_SOCKET)
+        result = _client.call_sync('serviced.job.push_status', status)
+        _client.disconnect()
+    except RpcException as err:
+        raise ServicedException(err.code, err.message, err.extra)
+    else:
+        return result
+
+
+def subscribe(callback):
+    try:
+        _client.connect(SERVICED_SOCKET)
+        _client.on_event(callback)
+    except RpcException as err:
+        raise ServicedException(err.code, err.message, err.extra)
+
+
+def unsubscribe():
+    _client.on_event = None
+    _client.disconnect()
