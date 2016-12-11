@@ -60,4 +60,4 @@ if [ -d /update-scripts ]; then
 fi
 
 /usr/sbin/service serviced onestart
-/usr/local/sbin/servicectl load /etc/serviced.d/*
+/usr/local/sbin/splash

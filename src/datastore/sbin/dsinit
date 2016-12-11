@@ -33,7 +33,6 @@ import glob
 import errno
 import shutil
 import subprocess
-import string
 import json
 
 
@@ -64,7 +63,7 @@ def do_init(control, db_dir):
 
 
 def do_exec(control, db_dir):
-    os.execv(control, [db_dir, 'exec'])
+    os.execv(control, [control, db_dir, 'exec'])
 
 
 def do_start_forked(control, db_dir, port):
@@ -122,6 +121,7 @@ def main():
     parser.add_argument('-c', metavar='CONFIG', default=DEFAULT_CONFIGFILE, help='Config file name')
     parser.add_argument('--init', action='store_true', help='Initialize datastore directory')
     parser.add_argument('--port', help='TCP port number to be used by database server')
+    parser.add_argument('--exec', action='store_true')
     parser.add_argument('--start-forked', action='store_true')
     parser.add_argument('--stop-forked', action='store_true')
     parser.add_argument('--check-dbdirs', action='store_true')
@@ -141,6 +141,9 @@ def main():
 
     if args.init:
         sys.exit(do_init(control, db_dir))
+
+    if args.exec:
+        do_exec(control, db_dir)
 
     if args.start_forked:
         sys.exit(do_start_forked(control, db_dir, args.port))
