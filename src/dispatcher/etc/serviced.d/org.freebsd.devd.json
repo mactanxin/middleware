@@ -1,7 +1,6 @@
 {
     "Label": "org.freebsd.devd",
     "RunAtLoad": true,
-    "SupportsCheckin": true,
     "Provides": ["devd"],
     "ProgramArguments": [
         "/sbin/devd",
