@@ -51,6 +51,36 @@ from freenas.utils.trace_logger import TRACE
 DEFAULT_SOCKET_ADDRESS = 'unix:///var/run/serviced.sock'
 BOOTSTRAP_JOB = ['/usr/local/sbin/servicectl', 'bootstrap']
 MAX_EVENTS = 16
+SHUTDOWN_TIMEOUT = 60
+
+
+def daemonize():
+    try:
+        pid = os.fork()
+        if pid > 0:
+            sys.exit(0)
+    except OSError as e:
+        sys.stderr.write('fork failed: {0}'.format(e.strerror))
+        sys.exit(1)
+
+    os.chdir('/')
+    os.setsid()
+    os.umask(0)
+
+    try:
+        pid = os.fork()
+        if pid > 0:
+            sys.exit(0)
+    except OSError as e:
+        sys.stderr.write('fork failed: {0}'.format(e.strerror))
+        sys.exit(1)
+
+    sys.stdout.flush()
+    sys.stderr.flush()
+    devnull = os.open('/dev/null', os.O_RDWR)
+    os.dup2(devnull, sys.stdin.fileno())
+    os.dup2(devnull, sys.stdout.fileno())
+    os.dup2(devnull, sys.stderr.fileno())
 
 
 class JobState(enum.Enum):
@@ -379,6 +409,20 @@ class ManagementService(RpcService):
     def __init__(self, context):
         self.context = context
 
+    def shutdown(self):
+        def doit():
+            for job in list(self.context.jobs.values()):
+                job.stop()
+
+            for _ in range(0, SHUTDOWN_TIMEOUT):
+                time.sleep(1)
+                if all(j.state in (JobState.STOPPED, JobState.ERROR) for j in self.context.jobs.values()):
+                    break
+
+            self.context.shutdown()
+
+        Thread(target=doit, daemon=True).start()
+
 
 class JobService(RpcService):
     def __init__(self, context):
@@ -443,17 +487,6 @@ class JobService(RpcService):
             raise RpcException(errno.EINVAL, 'Unknown job')
 
         job.push_status(status)
-
-    def shutdown(self):
-        for job in self.context.jobs.values():
-            job.stop()
-
-        while True:
-            time.sleep(1)
-            if all(j.state in (JobState.STOPPED, JobState.ERROR) for j in self.context.jobs.values()):
-                break
-
-        self.context.shutdown()
 
 
 class Context(object):
@@ -603,8 +636,8 @@ class Context(object):
         parser = argparse.ArgumentParser()
         parser.add_argument('-s', metavar='SOCKET', default=DEFAULT_SOCKET_ADDRESS, help='Socket address to listen on')
         args = parser.parse_args()
-        configure_logging('/var/log/serviced.log', 'DEBUG')
 
+        configure_logging('/var/log/serviced.log', 'DEBUG')
         setproctitle.setproctitle('serviced')
         self.logger.info('Started')
         self.init_server(args.s)
@@ -613,5 +646,6 @@ class Context(object):
 
 
 if __name__ == '__main__':
+    daemonize()
     c = Context()
     c.main()
