@@ -106,7 +106,7 @@ def main():
     except ServicedException:
         print("Failed to check-in")
     finally:
-        for p in procs:
+        for p in reversed(procs):
             print('Terminating {0}'.format(p.args[0]))
             p.terminate()
             p.wait()
