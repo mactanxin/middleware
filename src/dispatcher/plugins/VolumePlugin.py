@@ -1802,7 +1802,7 @@ class VolumeUnlockTask(Task):
         for vdev, _ in iterate_vdevs(topology):
             path = self.dispatcher.call_sync(
                 'disk.query',
-                [('or', [('path', '=', vdev['path']), ('id', '=', vdev['disk_id'])])],
+                [('id', '=', vdev['disk_id']), ('online', '=', True)],
                 {'single': True, 'select': 'path'}
             )
             if path:
@@ -1836,7 +1836,7 @@ class VolumeUnlockTask(Task):
             for vdev, _ in iterate_vdevs(vol['topology']):
                 if not self.dispatcher.call_sync(
                         'disk.query',
-                        [('or', [('path', '=', vdev['path']), ('id', '=', vdev['disk_id'])])],
+                        [('id', '=', vdev['disk_id']), ('online', '=', True)],
                         {'count': True}):
                     raise TaskException(
                         errno.ENOENT,
