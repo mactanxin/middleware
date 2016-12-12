@@ -106,6 +106,18 @@ def stop(label):
         sys.exit(0)
 
 
+def restart(label):
+    client = create_client()
+    try:
+        client.call_sync('serviced.job.stop', label)
+        client.call_sync('serviced.job.start', label)
+    except RpcException as err:
+        print('Failed to stop job: {0}'.format(err), file=sys.stderr)
+        sys.exit(1)
+    else:
+        sys.exit(0)
+
+
 def unload(label):
     client = create_client()
     try:
@@ -130,7 +142,7 @@ def create_client():
 
 def main():
     parser = argh.ArghParser()
-    parser.add_commands([bootstrap, shutdown, list, load, unload, start, stop])
+    parser.add_commands([bootstrap, shutdown, list, load, unload, start, stop, restart])
     parser.dispatch()
 
 
