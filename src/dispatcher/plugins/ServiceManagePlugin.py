@@ -499,10 +499,7 @@ def _init(dispatcher, plugin):
             'name': svc['name']
         })
 
-    def on_serviced_started(args):
-        if args['name'] != 'serviced.job':
-            return
-
+    def on_ready(args):
         for svc in dispatcher.datastore.query('service_definitions'):
             logger.debug('Loading service {0}'.format(svc['name']))
             enb = svc.get('builtin') or dispatcher.configstore.get('service.{0}.enable'.format(svc['name']))
@@ -558,7 +555,7 @@ def _init(dispatcher, plugin):
     plugin.register_event_handler("serviced.job.started", on_job_changed)
     plugin.register_event_handler("serviced.job.stopped", on_job_changed)
     plugin.register_event_handler("serviced.job.error", on_job_changed)
-    plugin.register_event_handler("plugin.service_resume", on_serviced_started)
+    plugin.register_event_handler("server.ready", on_ready)
     plugin.register_task_handler("service.manage", ServiceManageTask)
     plugin.register_task_handler("service.update", UpdateServiceConfigTask)
     plugin.register_provider("service", ServiceInfoProvider)
