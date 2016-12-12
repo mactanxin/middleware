@@ -5,7 +5,7 @@
     "Requires": ["devd", "datastore"],
     "Provides": ["dispatcher"],
     "ProgramArguments": [
-        "/usr/local/sbin/dispatcher",
+        "/usr/local/sbin/dispatcherd",
         "--log-level=DEBUG",
         "--log-file=/var/log/dispatcher.log"
     ]
