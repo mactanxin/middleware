@@ -1,3 +1,4 @@
+/usr/local/etc/serviced.d/org.freebsd.rc.json
 /usr/local/etc/rc.d/serviced
 /usr/local/sbin/serviced
 /usr/local/sbin/servicectl

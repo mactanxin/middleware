@@ -1,4 +1,6 @@
 libexec/dispatcher/ssh_transport_catcher
+etc/serviced.d/org.freebsd.devd.json
+etc/serviced.d/org.freenas.dispatcher.json
 etc/rc.d/dispatcher
 sbin/dispatcherd
 sbin/dispatcherctl
