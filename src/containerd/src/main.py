@@ -71,6 +71,7 @@ from freenas.dispatcher.client import Client, ClientError
 from freenas.dispatcher.rpc import RpcService, RpcException, private, generator
 from freenas.utils.debug import DebugService
 from freenas.utils import first_or_default, configure_logging, query as q
+from freenas.serviced import checkin
 from vnc import app
 from mgmt import ManagementNetwork
 from ec2 import EC2MetadataServer
@@ -1947,6 +1948,7 @@ class Main(object):
         }, context=self), **kwargs)
 
         serv_threads = [gevent.spawn(s4.serve_forever), gevent.spawn(s6.serve_forever)]
+        checkin()
         gevent.joinall(serv_threads)
 
 

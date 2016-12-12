@@ -1,0 +1,12 @@
+{
+    "Label": "org.freenas.dispatcher",
+    "RunAtLoad": true,
+    "SupportsCheckin": true,
+    "Requires": ["devd", "datastore"],
+    "Provides": ["dispatcher"],
+    "ProgramArguments": [
+        "/usr/local/sbin/dispatcher",
+        "--log-level=DEBUG",
+        "--log-file=/var/log/dispatcher.log"
+    ]
+}

@@ -1,0 +1,9 @@
+{
+    "Label": "org.freenas.datastore",
+    "RunAtLoad": true,
+    "KeepAlive": true,
+    "ProgramArguments": [
+        "/usr/local/sbin/dsinit",
+        "--exec"
+    ]
+}

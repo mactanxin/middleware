@@ -28,7 +28,7 @@
 
 import os
 import sys
-import socket
+import signal
 import logging
 import argparse
 import json
@@ -43,6 +43,7 @@ from freenas.dispatcher.client import Client, ClientError
 from freenas.dispatcher.rpc import RpcService, RpcException
 from freenas.utils import configure_logging
 from freenas.utils.debug import DebugService
+from freenas.serviced import checkin
 
 
 DEFAULT_CONFIGFILE = '/usr/local/etc/middleware.conf'
@@ -67,6 +68,7 @@ class ManagementService(RpcService):
 class FileGenerationService(RpcService):
     def __init__(self, ctx):
         self.context = ctx
+        self.context.generate_all = self.generate_all
         self.datastore = ctx.datastore
 
     def generate_all(self):
@@ -136,6 +138,7 @@ class Main(object):
     def __init__(self):
         self.logger = logging.getLogger('etcd')
         self.root = None
+        self.generate_all = None
         self.configfile = None
         self.config = None
         self.datastore = None
@@ -237,6 +240,10 @@ class Main(object):
     def emit_event(self, name, params):
         self.client.emit_event(name, params)
 
+    def checkin(self):
+        checkin()
+        os.kill(1, signal.SIGHUP)
+
     def main(self):
         parser = argparse.ArgumentParser()
         parser.add_argument('-c', metavar='CONFIG', default=DEFAULT_CONFIGFILE, help='Middleware config file')
@@ -253,6 +260,8 @@ class Main(object):
         self.init_renderers()
         self.init_datastore()
         self.init_dispatcher()
+        self.generate_all()
+        self.checkin()
         self.client.wait_forever()
 
 if __name__ == '__main__':

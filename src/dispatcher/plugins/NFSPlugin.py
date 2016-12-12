@@ -46,6 +46,40 @@ class NFSProvider(Provider):
     def get_config(self):
         return ConfigNode('service.nfs', self.configstore).__getstate__()
 
+    @private
+    def get_arguments(self, label):
+        nfs = self.get_config()
+        ips = sum([['-h', x] for x in nfs['bind_addresses']], [])
+
+        if label == 'org.freebsd.rpcbind':
+            return \
+                ['/usr/sbin/rpcbind', '-d'] + ips
+
+        if label == 'org.freebsd.nfsd':
+            return \
+                ['/usr/sbin/nfsd', '-d', '-t', '-n', nfs['servers']] +\
+                ['-u'] if nfs['udp'] else [] +\
+                ips
+
+        if label == 'org.freebsd.mountd':
+            return \
+                ['/usr/sbin/mountd', '-d', '-l', '-rS'] +\
+                ['-n'] if nfs['nonroot'] else [] +\
+                ['-p', nfs['mountd_port']] if nfs['mountd_port'] else [] +\
+                ips
+
+        if label == 'org.freebsd.statd':
+            return \
+                ['/usr/sbin/rpc.statd', '-d'] +\
+                ['-p', nfs['rpcstatd_port']] if nfs['rpcstatd_port'] else [] +\
+                ips
+
+        if label == 'org.freebsd.lockd':
+            return \
+                ['/usr/sbin/rpc.lockd', '-d'] +\
+                ['-p', nfs['rpclockd_port']] if nfs['rpclockd_port'] else [] +\
+                ips
+
 
 @private
 @description('Configure NFS service')

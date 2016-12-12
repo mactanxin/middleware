@@ -58,6 +58,7 @@ from freenas.dispatcher.bridge import Bridge
 from freenas.dispatcher.client import Client, ClientError
 from freenas.dispatcher.server import Server
 from freenas.utils.permissions import get_type
+from freenas.serviced import checkin
 
 
 DS2 = '/usr/local/bin/ds2'
@@ -576,6 +577,8 @@ def main():
 
     if not os.path.isdir(CORES_DIR):
         os.mkdir(CORES_DIR)
+
+    checkin()
 
     while True:
         time.sleep(60)
