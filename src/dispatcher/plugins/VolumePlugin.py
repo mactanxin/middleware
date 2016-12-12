@@ -1797,9 +1797,18 @@ class VolumeUnlockTask(Task):
         if not self.datastore.exists('volumes', ('id', '=', id)):
             raise VerifyException(errno.ENOENT, 'Volume {0} not found'.format(id))
 
-        vol = self.dispatcher.call_sync('volume.query', [('id', '=', id)], {'single': True})
+        resources = []
+        topology = self.dispatcher.call_sync('volume.query', [('id', '=', id)], {'single': True, 'select': 'topology'})
+        for vdev, _ in iterate_vdevs(topology):
+            path = self.dispatcher.call_sync(
+                'disk.query',
+                [('id', '=', vdev['disk_id']), ('online', '=', True)],
+                {'single': True, 'select': 'path'}
+            )
+            if path:
+                resources.append('disk:{0}'.format(path))
 
-        return ['disk:{0}'.format(d) for d, _ in get_disks(vol['topology'])]
+        return resources
 
     def run(self, id, password=None, params=None):
         with self.dispatcher.get_lock('volumes'):
@@ -1823,6 +1832,20 @@ class VolumeUnlockTask(Task):
                                    encryption.get('salt', ''),
                                    encryption.get('hashed_password', '')):
                     raise TaskException(errno.EINVAL, 'Password provided for volume {0} unlock is not valid'.format(id))
+
+            for vdev, _ in iterate_vdevs(vol['topology']):
+                if not self.dispatcher.call_sync(
+                        'disk.query',
+                        [('id', '=', vdev['disk_id']), ('online', '=', True)],
+                        {'count': True}):
+                    raise TaskException(
+                        errno.ENOENT,
+                        'Cannot decrypt {0} - disk {1} not found. Old path was {2}'.format(
+                            id,
+                            vdev['disk_id'],
+                            vdev['path']
+                        )
+                    )
 
             subtasks = []
             for vdev, _ in iterate_vdevs(vol['topology']):
