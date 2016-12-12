@@ -814,11 +814,7 @@
                         "-n"
                     ]
                 },
-                "rcng": {
-                    "rc-scripts": "proftpd"
-                },
                 "builtin": false,
-                "pidfile": "/var/run/proftpd.pid",
                 "etcd-group": "ftp",
                 "get_config_rpc": "service.ftp.get_config",
                 "task": "service.ftp.update",
@@ -836,11 +832,7 @@
                         "-Ls5d"
                     ]
                 },
-                "rcng": {
-                    "rc-scripts": "snmpd"
-                },
                 "builtin": false,
-                "pidfile": "/var/run/net_snmpd.pid",
                 "get_config_rpc": "service.snmp.get_config",
                 "task": "service.snmp.update",
                 "name": "snmp"
@@ -855,11 +847,7 @@
                         "-f"
                     ]
                 },
-                "rcng": {
-                    "rc-scripts": "collectd"
-                },
                 "builtin": true,
-                "pidfile": "/var/run/collectd.pid",
                 "etcd-group": "collectd",
                 "name": "collectd"
             },
@@ -894,11 +882,7 @@
                         "/usr/local/etc/rsync/rsyncd.conf"
                     ]
                 },
-                "rcng": {
-                    "rc-scripts": "rsyncd"
-                },
                 "builtin": false,
-                "pidfile": "/var/run/rsyncd.pid",
                 "get_config_rpc": "service.rsyncd.get_config",
                 "task": "service.rsyncd.update",
                 "name": "rsyncd"
