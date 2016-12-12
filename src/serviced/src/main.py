@@ -90,6 +90,7 @@ class JobState(enum.Enum):
     STOPPING = 'STOPPING'
     RUNNING = 'RUNNING'
     ERROR = 'ERROR'
+    ENDED = 'ENDED'
 
 
 class Job(object):
@@ -341,8 +342,11 @@ class Job(object):
             if self.state == JobState.STOPPING:
                 self.set_state(JobState.STOPPED)
             else:
-                self.failure_reason = 'Process died with exit code {0}'.format(self.last_exit_code)
-                self.set_state(JobState.ERROR)
+                if self.one_shot and self.last_exit_code == 0:
+                    self.set_state(JobState.ENDED)
+                else:
+                    self.failure_reason = 'Process died with exit code {0}'.format(self.last_exit_code)
+                    self.set_state(JobState.ERROR)
 
             if self.anonymous:
                 del self.context.jobs[self.id]
