@@ -261,7 +261,7 @@ class Job(object):
                 self.set_state(JobState.STOPPED)
 
             if not self.cv.wait_for(lambda: self.state == JobState.STOPPED, self.exit_timeout):
-                os.kill(self.pid, signal.SIGKILL)
+                os.killpg(self.pgid, signal.SIGKILL)
 
             if not self.cv.wait_for(lambda: self.state == JobState.STOPPED, self.exit_timeout):
                 self.logger.error('Unkillable process {0}'.format(self.pid))
