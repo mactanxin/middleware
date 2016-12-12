@@ -2,7 +2,7 @@ PREFIX ?= /usr/local
 PYTHON ?= python
 
 install:
-    install -d ${STAGEDIR}${PREFIX}/etc/serviced.d
+	install -d ${STAGEDIR}${PREFIX}/etc/serviced.d
 	install -d ${STAGEDIR}${PREFIX}/lib/datastore
 	install -d ${STAGEDIR}${PREFIX}/lib/datastore/drivers
 	install -d ${STAGEDIR}${PREFIX}/share/datastore
