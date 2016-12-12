@@ -41,15 +41,6 @@ class LLDPProvider(Provider):
     def get_config(self):
         return ConfigNode('service.lldp', self.configstore).__getstate__()
 
-    @private
-    def get_arguments(self, label):
-        lldp = self.get_config()
-        return \
-            ['/usr/local/sbin/ladvd', '-f', '-a'] +\
-            ['-z'] if lldp['save_description'] else [] +\
-            ['-c', lldp['country_code']] if lldp['country_code'] else [] +\
-            ['l', lldp['location']] if lldp['location'] else []
-
 
 @private
 @description('Configure LLDP service')
