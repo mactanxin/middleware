@@ -25,9 +25,13 @@
 #
 #####################################################################
 
-from json import loads
 import pickle
-import jsonpickle
+from calendar import timegm
+
+
+def datetime_to_utc_timestamp(timeval):
+    if timeval is not None:
+        return timegm(timeval.utctimetuple()) + timeval.microsecond / 1000000
 
 
 def probe(obj, ds):
@@ -35,7 +39,19 @@ def probe(obj, ds):
 
 
 def apply(obj, ds):
-    state = pickle.loads(obj['job_state'])
-    state = loads(jsonpickle.dumps(state))
-    obj['job_state'] = state
-    return obj
+    try:
+        job = pickle.loads(obj['job_state'])
+        schedule = {f.name: str(f) for f in job.trigger.fields}
+        return {
+            'id': job.id,
+            'name': job.name,
+            'next_run_time': datetime_to_utc_timestamp(job.next_run_time),
+            'task': job.args[0],
+            'args': job.args[1:],
+            'enabled': job.next_run_time is not None,
+            'hidden': job.kwargs['hidden'],
+            'protected': job.kwargs['protected'],
+            'schedule': schedule
+        }
+    except:
+        return None
