@@ -77,7 +77,7 @@ class VMProvider(Provider):
             return obj
 
         return q.query(
-            self.datastore.query('vms', callback=extend),
+            self.datastore.query_stream('vms', callback=extend),
             *(filter or []),
             stream=True,
             **(params or {})
@@ -147,9 +147,9 @@ class VMProvider(Provider):
         result = []
 
         if enabled_only:
-            vms = self.datastore.query('vms', ('enabled', '=', True))
+            vms = self.datastore.query_stream('vms', ('enabled', '=', True))
         else:
-            vms = self.datastore.query('vms')
+            vms = self.datastore.query_stream('vms')
 
         for i in vms:
             target_path = self.get_vm_root(i['id'])

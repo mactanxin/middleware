@@ -89,7 +89,7 @@ class InterfaceProvider(Provider):
             return i
 
         return q.query(
-            self.datastore.query('network.interfaces', callback=extend),
+            self.datastore.query_stream('network.interfaces', callback=extend),
             *(filter or []),
             stream=True,
             **(params or {})

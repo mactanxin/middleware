@@ -1882,7 +1882,7 @@ def _init(dispatcher, plugin):
 
         # Finally, Importing the unique unimported pools that are present in
         # the database
-        for vol in dispatcher.datastore.query('volumes'):
+        for vol in dispatcher.datastore.query_stream('volumes'):
             if int(vol['guid']) in unimported_unique_pools:
                 pool_to_import = unimported_unique_pools[int(vol['guid'])]
                 # Check if the volume name is also the same

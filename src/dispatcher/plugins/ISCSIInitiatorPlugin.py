@@ -229,6 +229,6 @@ def _init(dispatcher, plugin):
     plugin.register_event_handler('iscsi.session.update', on_session_update)
 
     ctx = iscsi.ISCSIInitiator()
-    for i in dispatcher.datastore.query('iscsi_initiator.targets'):
+    for i in dispatcher.datastore.query_stream('iscsi_initiator.targets'):
         session = iscsi_convert_session(i)
         ctx.add_session(session)
