@@ -12,6 +12,7 @@ COMMENT=	FreeNAS periodic tasks daemon
 
 RUN_DEPENDS=	\
 		${PYTHON_PKGNAMEPREFIX}apscheduler>0:${PORTSDIR}/devel/py-apscheduler \
+		${PYTHON_PKGNAMEPREFIX}jsonpickle>0:${PORTSDIR}/devel/py-jsonpickle \
 		${PYTHON_PKGNAMEPREFIX}pytz>0:${PORTSDIR}/devel/py-pytz
 
 USES=		python

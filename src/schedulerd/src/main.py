@@ -35,7 +35,6 @@ import errno
 from bsd import setproctitle
 from datetime import datetime, timezone
 from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.jobstores.mongodb import MongoDBJobStore
 from datastore import get_datastore, DatastoreException
 from datastore.config import ConfigStore
 from freenas.dispatcher.rpc import RpcService, RpcException, private, generator
@@ -44,6 +43,7 @@ from freenas.utils import configure_logging
 from freenas.utils.query import query
 from freenas.utils.debug import DebugService
 from freenas.serviced import checkin
+from mongodb import MongoDBJobStore
 
 
 DEFAULT_CONFIGFILE = '/usr/local/etc/middleware.conf'
