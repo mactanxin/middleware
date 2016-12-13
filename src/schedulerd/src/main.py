@@ -43,7 +43,7 @@ from freenas.utils import configure_logging
 from freenas.utils.query import query
 from freenas.utils.debug import DebugService
 from freenas.serviced import checkin
-from mongodb import MongoDBJobStore
+from store import FreeNASJobStore
 
 
 DEFAULT_CONFIGFILE = '/usr/local/etc/middleware.conf'
@@ -66,7 +66,6 @@ class ManagementService(RpcService):
             current_task = None
             current_progress = None
             schedule = {f.name: f for f in job.trigger.fields}
-            schedule['coalesce'] = job.coalesce
             schedule['timezone'] = job.trigger.timezone
 
             last_run = self.context.datastore.query(
@@ -222,7 +221,7 @@ class Context(object):
         self.connect()
 
     def init_scheduler(self):
-        store = MongoDBJobStore(database='freenas', collection='calendar_tasks', client=self.datastore.client)
+        store = FreeNASJobStore()
         self.scheduler = BackgroundScheduler(jobstores={'default': store}, timezone=pytz.utc)
         self.scheduler.start()
 
