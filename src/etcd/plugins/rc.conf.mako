@@ -25,6 +25,7 @@ synchronous_dhclient="YES"
 zfs_enable="YES"
 devd_enable="NO"
 vmware_guestd_enable="NO"
+cron_enable="NO"
 
 # middleware10
 dispatcher_enable="NO"
