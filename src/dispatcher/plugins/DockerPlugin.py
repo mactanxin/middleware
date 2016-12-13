@@ -28,7 +28,6 @@
 import re
 import copy
 import errno
-import gevent
 import dockerfile_parse
 import dockerhub
 import socket
