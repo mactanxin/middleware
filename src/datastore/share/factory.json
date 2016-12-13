@@ -781,11 +781,15 @@
                 "name": "nginx"
             },
             "69e1f6ef-8171-47c0-bb5f-22f3c8cce517": {
-                "rcng": {
-                    "rc-scripts": "powerd"
+                "launchd": {
+                    "Label": "org.freebsd.powerd",
+                    "RunAtLoad": true,
+                    "ProgramArguments": [
+                        "/usr/sbin/powerd",
+                        "-v"
+                    ]
                 },
                 "builtin": true,
-                "pidfile": "/var/run/powerd.pid",
                 "name": "powerd"
             },
             "77c47b78-9bf3-4ba7-aa76-8cb99a8da4a3": {
@@ -1022,10 +1026,16 @@
                 ]
             },
             "0a4792b5-e670-456a-a714-6806de235dea": {
-                "rcng": {
-                    "rc-scripts": "openvpn"
+                "launchd": {
+                    "Label": "net.openvpn.openvpn",
+                    "RunAtLoad": true,
+                    "Requires": ["networking", "logging", "etc"],
+                    "ProgramArguments": [
+                        "/usr/local/bin/openvpn",
+                        "--config",
+                        "/usr/local/etc/openvpn.conf"
+                    ]
                 },
-                "pidfile": "/var/run/openvpn.pid",
                 "builtin": false,
                 "task": "service.openvpn.update",
                 "get_config_rpc": "service.openvpn.get_config",
@@ -1054,10 +1064,13 @@
             },
             "e538db78-b14e-11e6-af2f-000c29796bea": {
                 "launchd": {
-
-                },
-                "rcng": {
-                    "rc-scripts": "iscsid"
+                    "Label": "org.freebsd.iscsid",
+                    "RunAtLoad": true,
+                    "Requires": ["networking", "logging"],
+                    "ProgramArguments": [
+                        "/usr/sbin/iscsid",
+                        "-D"
+                    ]
                 },
                 "builtin": true,
                 "name": "iscsid"
