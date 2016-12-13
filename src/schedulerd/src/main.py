@@ -35,6 +35,7 @@ import errno
 from bsd import setproctitle
 from datetime import datetime, timezone
 from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.jobstores.memory import MemoryJobStore
 from datastore import get_datastore, DatastoreException
 from datastore.config import ConfigStore
 from freenas.dispatcher.rpc import RpcService, RpcException, private, generator
@@ -65,6 +66,7 @@ class ManagementService(RpcService):
             last_task = None
             current_task = None
             current_progress = None
+
             schedule = {f.name: f for f in job.trigger.fields}
             schedule['timezone'] = job.trigger.timezone
 
@@ -95,7 +97,7 @@ class ManagementService(RpcService):
                 'schedule': schedule
             }
 
-        return query(list(map(serialize, self.context.scheduler.get_jobs())), *(filter or []), **(params or {}))
+        return query(list(map(serialize, self.context.scheduler.get_jobs(jobstore='default'))), *(filter or []), **(params or {}))
 
     @private
     def add(self, task):
@@ -187,6 +189,7 @@ class ManagementService(RpcService):
             id=job_id + '-temp',
             args=jb.args,
             kwargs=jb.kwargs,
+            jobstore='temp',
             run_date=datetime.now(timezone.utc)
         )
 
@@ -222,7 +225,7 @@ class Context(object):
 
     def init_scheduler(self):
         store = FreeNASJobStore()
-        self.scheduler = BackgroundScheduler(jobstores={'default': store}, timezone=pytz.utc)
+        self.scheduler = BackgroundScheduler(jobstores={'default': store, 'temp': MemoryJobStore()}, timezone=pytz.utc)
         self.scheduler.start()
 
     def connect(self):

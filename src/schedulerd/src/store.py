@@ -47,12 +47,12 @@ class FreeNASJobStore(BaseJobStore):
         return self.ds
 
     def lookup_job(self, job_id):
-        document = self.ds.get_by_id(job_id)
+        document = self.ds.get_by_id('calendar_tasks', job_id)
         return self._reconstitute_job(document) if document else None
 
     def get_due_jobs(self, now):
         timestamp = datetime_to_utc_timestamp(now)
-        return self._get_jobs(('next_run_time', '=<', timestamp))
+        return self._get_jobs(('next_run_time', '<=', timestamp))
 
     def get_next_run_time(self):
         document = self.ds.get_one('calendar_tasks', ('next_run_time', '!=', None), sort='next_run_time')
@@ -108,6 +108,7 @@ class FreeNASJobStore(BaseJobStore):
             name=job_state['name'],
             args=[job_state['task']] + job_state['args'],
             scheduler=self._scheduler,
+            executor='default',
             next_run_time=utc_timestamp_to_datetime(job_state['next_run_time']),
             kwargs={
                 'id': job_state['id'],
@@ -117,6 +118,9 @@ class FreeNASJobStore(BaseJobStore):
             }
         )
 
+        job.coalesce = True
+        job.max_instances = 1
+        job.misfire_grace_time = None
         job._jobstore_alias = self._alias
         return job
 
