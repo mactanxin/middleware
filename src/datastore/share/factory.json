@@ -1658,13 +1658,73 @@
     {
         "metadata": {
             "name": "calendar_tasks",
-            "migration": "keep",
+            "migration": "merge-preserve",
             "pkey-type": "native",
             "attributes": {
                 "type": "config"
             }
         },
         "data": {
+            "e8e84b9d-b853-4a67-8182-095e119ddfe0": {
+                "name": "nightly_update_check",
+                "task": "update.checkfetch",
+                "args": [],
+                "enabled": true,
+                "hidden": false,
+                "protected": false,
+                "next_run_time": null,
+                "schedule": {
+                    "year": "*",
+                    "month": "*",
+                    "day": "*",
+                    "week": "*",
+                    "day_of_week": "*",
+                    "hour": "23",
+                    "minute": "0",
+                    "second": "0",
+                    "timezone": "America/Los_Angeles"
+                }
+            },
+            "291082fa-c16f-11e6-866b-000c2921ac63": {
+                "name": "newsyslog",
+                "task": "calendar_task.command",
+                "args": ["root", "/usr/sbin/newsyslog"],
+                "enabled": true,
+                "hidden": false,
+                "protected": false,
+                "next_run_time": null,
+                "schedule": {
+                    "year": "*",
+                    "month": "*",
+                    "day": "*",
+                    "week": "*",
+                    "day_of_week": "*",
+                    "hour": "*",
+                    "minute": "0",
+                    "second": "0",
+                    "timezone": "America/Los_Angeles"
+                }
+            },
+            "7b48426c-c16f-11e6-866b-000c2921ac63": {
+                "name": "adjkerntz",
+                "task": "calendar_task.command",
+                "args": ["root", "/sbin/adjkerntz -a"],
+                "enabled": true,
+                "hidden": false,
+                "protected": false,
+                "next_run_time": null,
+                "schedule": {
+                    "year": "*",
+                    "month": "*",
+                    "day": "*",
+                    "week": "*",
+                    "day_of_week": "*",
+                    "hour": "*",
+                    "minute": "*/30",
+                    "second": "0",
+                    "timezone": "America/Los_Angeles"
+                }
+            }
         }
     },
     {
