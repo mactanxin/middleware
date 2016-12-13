@@ -34,12 +34,13 @@ import argparse
 import datastore
 import time
 import json
-import setproctitle
+from bsd import setproctitle
 from datastore.config import ConfigStore
 from freenas.dispatcher.client import Client, ClientError
 from freenas.dispatcher.rpc import RpcService, RpcException, generator
 from freenas.utils import configure_logging, load_module_from_file
 from freenas.utils.debug import DebugService
+from freenas.serviced import checkin
 
 
 DEFAULT_CONFIGFILE = '/usr/local/etc/middleware.conf'
@@ -168,6 +169,9 @@ class Main(object):
                 self.logger.warning('Cannot connect to dispatcher: {0}, retrying in 1 second'.format(str(err)))
                 time.sleep(1)
 
+    def checkin(self):
+        checkin()
+
     def main(self):
         parser = argparse.ArgumentParser()
         parser.add_argument('-c', metavar='CONFIG', default=DEFAULT_CONFIGFILE, help='Middleware config file')
@@ -175,12 +179,13 @@ class Main(object):
         self.config = args.c
         configure_logging('/var/log/neighbord.log', 'DEBUG')
 
-        setproctitle.setproctitle('neighbord')
+        setproctitle('neighbord')
         self.parse_config(self.config)
         self.init_datastore()
         self.init_dispatcher()
         self.scan_plugins()
         self.register()
+        self.checkin()
         self.client.wait_forever()
 
 

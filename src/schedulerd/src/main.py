@@ -29,10 +29,10 @@ import sys
 import time
 import uuid
 import logging
-import setproctitle
 import argparse
 import pytz
 import errno
+from bsd import setproctitle
 from datetime import datetime, timezone
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.mongodb import MongoDBJobStore
@@ -43,6 +43,7 @@ from freenas.dispatcher.client import Client, ClientError
 from freenas.utils import configure_logging
 from freenas.utils.query import query
 from freenas.utils.debug import DebugService
+from freenas.serviced import checkin
 
 
 DEFAULT_CONFIGFILE = '/usr/local/etc/middleware.conf'
@@ -271,17 +272,21 @@ class Context(object):
     def emit_event(self, name, params):
         self.client.emit_event(name, params)
 
+    def checkin(self):
+        checkin()
+
     def main(self):
         parser = argparse.ArgumentParser()
         parser.add_argument('-c', metavar='CONFIG', default=DEFAULT_CONFIGFILE, help='Middleware config file')
         parser.add_argument('-f', action='store_true', default=False, help='Run in foreground')
         args = parser.parse_args()
         configure_logging('/var/log/schedulerd.log', 'DEBUG')
-        setproctitle.setproctitle('schedulerd')
+        setproctitle('schedulerd')
         self.config = args.c
         self.init_datastore()
         self.init_scheduler()
         self.init_dispatcher()
+        self.checkin()
         self.client.wait_forever()
 
 

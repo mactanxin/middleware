@@ -63,7 +63,7 @@ SMART_ALERT_MAP = {
     'WARN': ('SmartWarn', 'S.M.A.R.T status warning'),
     'FAIL': ('SmartFail', 'S.M.A.R.T status failing')
 }
-multipaths = -1
+
 diskinfo_cache = CacheStore()
 logger = logging.getLogger('DiskPlugin')
 
@@ -98,7 +98,7 @@ class DiskProvider(Provider):
             return disk
 
         return q.query(
-            self.datastore.query('disks', callback=extend),
+            self.datastore.query_stream('disks', callback=extend),
             *(filter or []),
             stream=True,
             **(params or {})
@@ -520,32 +520,25 @@ class DiskConfigureTask(Task):
         if {'standby_mode', 'apm_mode', 'acoustic_level'} & set(updated_fields):
             configure_disk(self.datastore, id)
 
-        if 'smart' in updated_fields or 'smart_options' in updated_fields:
-            if 'smart_options' in updated_fields:
-                self.dispatcher.call_sync('etcd.generation.generate_group', 'smartd')
-                self.dispatcher.call_sync('service.reload', 'smartd')
-            elif 'smart' in updated_fields:
-                # If just 'smart' (i.e. whether the device should be smart enabled or not was)
-                # toggled then do not regenerate entier smartd conf for that, just toggle that
-                # disk's smart enabled thing.
-                disk_status = self.dispatcher.call_sync('disk.get_disk_config_by_id', id)
-                if not disk_status['smart_info']['smart_capable']:
-                    raise TaskException(errno.EINVAL, 'Disk is not SMART capable')
+        if 'smart' in updated_fields:
+            disk_status = self.dispatcher.call_sync('disk.get_disk_config_by_id', id)
+            if not disk_status['smart_info']['smart_capable']:
+                raise TaskException(errno.EINVAL, 'Disk is not SMART capable')
 
-                device_smart_handle = Device(disk_status['gdisk_name'], abridged=True)
-                if updated_fields['smart'] != device_smart_handle.smart_enabled:
-                    toggle_result = device_smart_handle.smart_toggle(
-                        'on' if updated_fields['smart'] else 'off'
-                    )
-                    if not toggle_result[0]:
-                        raise TaskException(
-                            errno.EINVAL,
-                            "Tried to toggle {0}".format(disk['path']) +
-                            " SMART enabled to: {0} and failed with error: {1}".format(
-                                updated_fields['smart'],
-                                toggle_result[1]
-                            )
+            device_smart_handle = Device(disk_status['gdisk_name'], abridged=True)
+            if updated_fields['smart'] != device_smart_handle.smart_enabled:
+                toggle_result = device_smart_handle.smart_toggle(
+                    'on' if updated_fields['smart'] else 'off'
+                )
+                if not toggle_result[0]:
+                    raise TaskException(
+                        errno.EINVAL,
+                        "Tried to toggle {0}".format(disk['path']) +
+                        " SMART enabled to: {0} and failed with error: {1}".format(
+                            updated_fields['smart'],
+                            toggle_result[1]
                         )
+                    )
             self.dispatcher.call_sync('disk.update_disk_cache', disk['path'], timeout=120)
 
         self.dispatcher.dispatch_event('disk.changed', {
@@ -1060,8 +1053,6 @@ def get_disk_by_lunid(lunid):
 
 
 def clean_multipaths(dispatcher):
-    global multipaths
-
     dispatcher.threaded(geom.scan)
     cls = geom.class_by_name('MULTIPATH')
     if cls:
@@ -1072,8 +1063,6 @@ def clean_multipaths(dispatcher):
                 lambda args: args['path'] == '/dev/multipath/{0}'.format(i.name),
                 lambda: system('/sbin/gmultipath', 'destroy', i.name)
             )
-
-    multipaths = -1
 
 
 def clean_mirrors(dispatcher):
@@ -1093,10 +1082,14 @@ def clean_mirrors(dispatcher):
 
 
 def get_multipath_name():
-    global multipaths
+    for i in ('/dev/multipath/mpath{0}'.format(n) for n in range(0, 1000)):
+        if os.path.exists(i):
+            continue
 
-    multipaths += 1
-    return 'mpath{0}'.format(multipaths)
+        if get_disk_by_path(i):
+            continue
+
+        return os.path.basename(i)
 
 
 def attach_to_multipath(dispatcher, disk, ds_disk, path):
@@ -1457,9 +1450,6 @@ def persist_disk(dispatcher, disk):
     if 'smart' not in ds_disk:
         ds_disk.update({'smart': True if disk['smart_info']['smart_capable'] else False})
 
-    if 'smart_options' not in ds_disk:
-        ds_disk.update({'smart_options': None})
-
     dispatcher.datastore.upsert('disks', disk['id'], ds_disk)
     dispatcher.dispatch_event('disk.changed', {
         'operation': 'create' if new else 'update',
@@ -1578,18 +1568,27 @@ def _init(dispatcher, plugin):
             with dispatcher.get_lock('diskcache:{0}'.format(path)):
                 generate_disk_cache(dispatcher, path)
 
-        dispatcher.emit_event('disk.attached', {'path': path})
+            disk = get_disk_by_path(path)
+            dispatcher.emit_event('disk.attached', {
+                'path': path,
+                'id': disk['id']
+            })
 
     def on_device_detached(args):
         path = args['path']
         if re.match(r'^/dev/(da|ada|vtbd|nvd)[0-9]+$', path):
             logger.info("Disk %s detached", path)
+            disk = get_disk_by_path(path)
             purge_disk_cache(dispatcher, path)
+
+            if disk:
+                dispatcher.emit_event('disk.detached', {
+                    'path': path,
+                    'id': disk['id']
+                })
 
         if re.match(r'^/dev/(da|ada|vtbd|nvd|multipath/mpath)[0-9]+$', path):
             dispatcher.unregister_resource('disk:{0}'.format(path))
-
-        dispatcher.emit_event('disk.detached', {'path': path})
 
     def on_device_mediachange(args):
         # Regenerate caches
@@ -1624,7 +1623,6 @@ def _init(dispatcher, plugin):
             'serial': {'type': ['string', 'null']},
             'mediasize': {'type': 'integer'},
             'smart': {'type': 'boolean'},
-            'smart_options': {'type': 'string'},
             'standby_mode': {'type': ['integer', 'null']},
             'apm_mode': {'type': ['integer', 'null']},
             'acoustic_level': {'$ref': 'disk-acousticlevel'},
@@ -1878,7 +1876,7 @@ def _init(dispatcher, plugin):
     plugin.register_debug_hook(collect_debug)
 
     # Start with marking all disks as unavailable
-    for i in dispatcher.datastore.query('disks'):
+    for i in dispatcher.datastore.query_stream('disks'):
         if not i.get('delete_at'):
             i['delete_at'] = datetime.utcnow() + EXPIRE_TIMEOUT
 

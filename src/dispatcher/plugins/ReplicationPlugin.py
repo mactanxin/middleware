@@ -95,7 +95,7 @@ class ReplicationLinkProvider(Provider):
                 obj['status'] = status_cache.get(obj['name'])
             return obj
 
-        links = self.datastore.query('replication.links')
+        links = self.datastore.query_stream('replication.links')
         latest_links = []
         for link in links:
             latest_links.append(self.dispatcher.call_task_sync('replication.get_latest_link', link['name']))
@@ -1749,7 +1749,7 @@ def _init(dispatcher, plugin):
         dispatcher.test_or_wait_for_event(
             'service.changed',
             lambda ar:
-                ar['id'] == sshd_service['id'] and
+                sshd_service['id'] in ar['ids'] and
                 dispatcher.call_sync(
                     'service.query',
                     [('name', '=', 'sshd')],

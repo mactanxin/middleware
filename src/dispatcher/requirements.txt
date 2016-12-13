@@ -4,6 +4,5 @@ texttable
 gevent
 gevent-websocket
 argh
-setproctitle
 pyee
 datastore

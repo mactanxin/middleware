@@ -121,8 +121,10 @@ class UPSProvider(Provider):
         try:
             for i in rc_scripts:
                 system("/usr/sbin/service", i, 'onestatus')
-        except SubprocessException as e:
-            raise TaskException(errno.EBUSY, e.err)
+        except SubprocessException:
+            raise RpcException(errno.ENOENT, "UPS service is not running")
+        else:
+            return 'RUNNING'
 
     @private
     def service_stop(self):
@@ -253,7 +255,7 @@ def _init(dispatcher, plugin):
             'shutdown_timer': {'type': 'integer'},
             'monitor_user': {'type': 'string'},
             'monitor_password': {'type': 'string'},
-            'monitor_remote': {'type': 'boolean'},
+            'allow_remote_connections': {'type': 'boolean'},
             'auxiliary_users': {'type': ['string', 'null']},
             'email_notify': {'type': 'boolean'},
             'email_recipients': {'type': 'array', 'items': {'$ref': 'email'}},

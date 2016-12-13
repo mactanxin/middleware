@@ -2,6 +2,7 @@ PREFIX ?= /usr/local
 PYTHON ?= python
 
 install:
+	install -d ${STAGEDIR}${PREFIX}/etc/serviced.d
 	install -d ${STAGEDIR}${PREFIX}/lib/datastore
 	install -d ${STAGEDIR}${PREFIX}/lib/datastore/drivers
 	install -d ${STAGEDIR}${PREFIX}/share/datastore
@@ -13,6 +14,7 @@ install:
 	install sbin/dspasswd ${STAGEDIR}${PREFIX}/sbin/
 	install sbin/dsinit ${STAGEDIR}${PREFIX}/sbin/
 	install sbin/dswatch ${STAGEDIR}${PREFIX}/sbin/
+	install etc/serviced.d/org.freenas.datastore.json ${STAGEDIR}${PREFIX}/etc/serviced.d/
 	install etc/datastore ${STAGEDIR}${PREFIX}/etc/rc.d/
 	install share/factory.json ${STAGEDIR}${PREFIX}/share/datastore/
 	cp -R share/migrations ${STAGEDIR}${PREFIX}/share/datastore/

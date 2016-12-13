@@ -15,6 +15,8 @@ import time
 from freenas.dispatcher.client import Client, ClientError
 from freenas.dispatcher.rpc import RpcException
 from freenas.utils import configure_logging
+from freenas.serviced import checkin
+
 from gevent.pywsgi import WSGIHandler, WSGIServer
 
 from serializers import JsonEncoder
@@ -185,6 +187,7 @@ class RESTApi(object):
 
         server4 = WSGIServer(('', 8889), self, handler_class=RESTWSGIHandler)
         self._threads = [gevent.spawn(server4.serve_forever)]
+        checkin()
         gevent.joinall(self._threads)
 
     def die(self, *args):

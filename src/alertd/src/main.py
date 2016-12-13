@@ -36,13 +36,14 @@ import time
 import json
 import imp
 import threading
-import setproctitle
+from bsd import setproctitle
 from datetime import timedelta, datetime
 from datastore.config import ConfigStore
 from freenas.dispatcher.client import Client, ClientError
 from freenas.dispatcher.rpc import RpcService, RpcException
 from freenas.utils import configure_logging
 from freenas.utils.debug import DebugService
+from freenas.serviced import checkin
 
 
 DEFAULT_CONFIGFILE = '/usr/local/etc/middleware.conf'
@@ -186,23 +187,32 @@ class Main(object):
     def emit_alert(self, alert):
         self.logger.debug('Emitting alert <id:{0}> (class {1})'.format(alert['id'], alert['class']))
         for i in self.datastore.query('alert.filters'):
-            for predicate in i['predicates']:
+            for predicate in i.get('predicates', []):
                 if predicate['operator'] not in operators_table:
                     continue
 
                 if not operators_table[predicate['operator']](alert[predicate['property']], predicate['value']):
                     break
             else:
-                emitter = self.emitters.get(i['emitter'])
-                if not emitter:
-                    self.logger.warning('Invalid emitter {0} for alert filter {1}'.format(i['emitter'], i['id']))
-                    continue
+                try:
+                    emitter = self.emitters.get(i['emitter'])
+                    if not emitter:
+                        self.logger.warning('Invalid emitter {0} for alert filter {1}'.format(i['emitter'], i['id']))
+                        continue
 
-                self.logger.debug('Alert <id:{0}> matched filter {1}'.format(alert['id'], i['id']))
-                if alert['send_count'] > 0:
-                    emitter.emit_again(alert, i['parameters'])
-                else:
-                    emitter.emit_first(alert, i['parameters'])
+                    self.logger.debug('Alert <id:{0}> matched filter {1}'.format(alert['id'], i['id']))
+                    if alert['send_count'] > 0:
+                        emitter.emit_again(alert, i['parameters'])
+                    else:
+                        emitter.emit_first(alert, i['parameters'])
+                except BaseException as err:
+                    # Failed to emit alert using alert emitter
+                    # XXX: generate another alert about that
+                    self.logger.error('Cannot emit alert <id:{0}> using {1}: {2}'.format(
+                        alert['id'],
+                        i['emitter'],
+                        str(err))
+                    )
 
         alert['send_count'] += 1
         alert['last_emitted_at'] = datetime.utcnow()
@@ -242,19 +252,23 @@ class Main(object):
                 if last_emission + timedelta(seconds=interval) <= datetime.utcnow():
                     self.emit_alert(i)
 
+    def checkin(self):
+        checkin()
+
     def main(self):
         parser = argparse.ArgumentParser()
         parser.add_argument('-c', metavar='CONFIG', default=DEFAULT_CONFIGFILE, help='Middleware config file')
         args = parser.parse_args()
         configure_logging('/var/log/alertd.log', 'DEBUG')
 
-        setproctitle.setproctitle('alertd')
+        setproctitle('alertd')
         self.config = args.c
         self.parse_config(self.config)
         self.init_datastore()
         self.init_dispatcher()
         self.scan_plugins()
         self.init_reminder()
+        self.checkin()
         self.client.wait_forever()
 
 

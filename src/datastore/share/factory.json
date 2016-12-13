@@ -116,12 +116,6 @@
             "service.devd.enable": true,
             "service.syslog.enable": true,
             "service.collectd.enable": true,
-            "service.smartd.enable": true,
-            "service.smartd.interval": 30,
-            "service.smartd.power_mode": "NEVER",
-            "service.smartd.temp_difference": null,
-            "service.smartd.temp_informational": null,
-            "service.smartd.temp_critical": null,
             "service.snmp.enable": true,
             "service.snmp.location": null,
             "service.snmp.contact": null,
@@ -200,7 +194,7 @@
             "service.ups.shutdown_timer": 30,
             "service.ups.monitor_user": "upsmon",
             "service.ups.monitor_password": "fixmepass",
-            "service.ups.monitor_remote": false,
+            "service.ups.allow_remote_connections": false,
             "service.ups.auxiliary_users": "",
             "service.ups.email_notify": false,
             "service.ups.email_recipients": [],
@@ -380,8 +374,7 @@
             "container.docker.default_host": null,
             "container.docker.api_forwarding": null,
             "container.docker.api_forwarding_enable": false,
-            "container.docker.default_collection": "freenas",
-            "container.cache_refresh_interval": 60,
+            "container.docker.default_collection": "7f4d5a8d-b8dd-4ffa-a866-b074067b381d",
             "storage.hotsparing.autoreplace": true,
             "storage.hotsparing.strong_match": false,
             "directory.search_order": ["local", "system"],
@@ -531,13 +524,6 @@
                 ],
                 "name": "rsyncd"
             },
-            "fbbe4258-42e7-46c5-8204-3ebbd3498340": {
-                "dependencies": [
-                    "group:services",
-                    "plugin:smartd_conf"
-                ],
-                "name": "smartd"
-            },
             "01af048d-5d3f-4e6a-a389-96d8d73f3d93": {
                 "dependencies": [
                     "file:local/snmpd.conf"
@@ -647,21 +633,50 @@
     {
         "data": {
             "858efb54-f5dc-4207-acb6-8ba793984794": {
-                "rcng": {
-                    "rc-scripts": "netatalk"
+                "launchd": {
+                    "RunAtLoad": true,
+                    "Label": "net.sourceforge.netatalk.netatalk",
+                    "ProgramArguments": [
+                        "/usr/local/sbin/netatalk",
+                        "-d"
+                    ]
                 },
                 "builtin": false,
                 "task": "service.afp.update",
                 "name": "afp"
             },
             "de07173c-fcaa-47ce-a044-facef514581f": {
-                "rcng": {
-                    "rc-scripts": "samba_server"
-                },
-                "pidfile": [
-                    "/var/run/samba4/smbd.pid",
-                    "/var/run/samba4/nmbd.pid",
-                    "/var/run/samba4/winbindd.pid"
+                "launchd": [
+                    {
+                        "RunAtLoad": true,
+                        "Label": "org.samba.smbd",
+                        "Requires": ["logging"],
+                        "ProgramArguments": [
+                            "/usr/local/sbin/smbd",
+                            "--foreground",
+                            "--configfile=/usr/local/etc/smb4.conf"
+                        ]
+                    },
+                    {
+                        "RunAtLoad": true,
+                        "Label": "org.samba.nmbd",
+                        "Requires": ["logging"],
+                        "ProgramArguments": [
+                            "/usr/local/sbin/nmbd",
+                            "--foreground",
+                            "--configfile=/usr/local/etc/smb4.conf"
+                        ]
+                    },
+                                        {
+                        "RunAtLoad": true,
+                        "Label": "org.samba.winbindd",
+                        "Requires": ["logging"],
+                        "ProgramArguments": [
+                            "/usr/local/sbin/winbindd",
+                            "--foreground",
+                            "--configfile=/usr/local/etc/smb4.conf"
+                        ]
+                    }
                 ],
                 "builtin": false,
                 "task": "service.smb.update",
@@ -669,94 +684,109 @@
                 "name": "smb"
             },
             "ffd1ea3f-36e3-4cfa-8a1e-9bada0defb76": {
-                "rcng": {
-                    "rc-scripts": "ntpd"
+                "launchd": {
+                    "Label": "org.ntp.ntpd",
+                    "RunAtLoad": "yes",
+                    "ProgramArguments": [
+                        "/usr/sbin/ntpd",
+                        "-n",
+                        "-g",
+                        "-c", "/etc/ntp.conf",
+                        "-f", "/var/db/ntpd.drift"
+                    ]
                 },
-                "pidfile": "/var/run/ntpd.pid",
                 "builtin": true,
                 "etcd-group": "ntpd",
                 "name": "ntpd"
             },
-            "721f2d5e-8395-4477-a01a-d23330a37752": {
-                "launchd": {
-                    "RunAtLoad": true,
-                    "ProgramArguments": [
-                        "/usr/sbin/devd",
-                        "-d"
-                    ],
-                    "Label": "org.freebsd.devd"
-                },
-                "rcng": {
-                    "rc-scripts": "devd"
-                },
-                "builtin": true,
-                "pidfile": "/var/run/devd.pid",
-                "name": "devd"
-            },
             "f742eccc-f912-4b9c-8ed5-90f6aa1ed74e": {
                 "launchd": {
                     "RunAtLoad": true,
+                    "Requires": ["logging", "etc"],
                     "ProgramArguments": [
                         "/usr/sbin/sshd",
                         "-D"
                     ],
                     "Label": "com.openssh.sshd"
                 },
-                "rcng": {
-                    "rc-scripts": "sshd"
-                },
-                "builtin": false,
                 "etcd-group": "sshd",
-                "pidfile": "/var/run/sshd.pid",
+                "builtin": false,
                 "get_config_rpc": "service.sshd.get_config",
                 "task": "service.sshd.update",
                 "name": "sshd"
             },
-            "77c31bda-a90a-495a-8d58-0063981eec67": {
-                "rcng": {
-                    "rc-scripts": "syslog-ng"
+            "9bb0873b-ba88-11e6-9cdc-000c293ba8c9": {
+                "launchd": {
+                    "Label": "org.freedesktop.dbus-system",
+                    "RunAtLoad": true,
+                    "ProgramArguments": [
+                        "/usr/local/bin/dbus-daemon",
+                        "--system",
+                        "--nofork"
+                    ]
                 },
                 "builtin": true,
-                "pidfile": "/var/run/syslog.pid",
+                "name": "dbus"
+            },
+            "65aa0301-ba8c-11e6-bc7b-000c293ba8c9": {
+                "launchd": {
+                    "Label": "com.vmware.guestd",
+                    "RunAtLoad": true,
+                    "Program": "/usr/local/libexec/dispatcher/vmtoolsd_wrapper",
+                    "SupportsCheckin": true
+                },
+                "builtin": true,
+                "name": "vmtoolsd"
+            },
+            "77c31bda-a90a-495a-8d58-0063981eec67": {
+                "launchd": {
+                    "Label": "org.syslog-ng.syslog-ng",
+                    "RunAtLoad": true,
+                    "Requires": ["etc"],
+                    "Provides": ["logging"],
+                    "ProgramArguments": [
+                        "/usr/local/sbin/syslog-ng",
+                        "-F"
+                    ]
+                },
+                "builtin": true,
                 "name": "syslog"
             },
             "dfc8c5c9-6825-43b3-bdfa-45466d0f77d1": {
-                "rcng": {
-                    "rc-scripts": "nginx"
+                "launchd": {
+                    "Label": "com.nginx.nginx",
+                    "RunAtLoad": true,
+                    "Requires": ["logging", "etc"],
+                    "ProgramArguments": [
+                        "/usr/local/sbin/nginx",
+                        "-g",
+                        "daemon off;"
+                    ]
                 },
                 "builtin": true,
-                "pidfile": "/var/run/nginx.pid",
                 "name": "nginx"
             },
             "69e1f6ef-8171-47c0-bb5f-22f3c8cce517": {
-                "rcng": {
-                    "rc-scripts": "powerd"
+                "launchd": {
+                    "Label": "org.freebsd.powerd",
+                    "RunAtLoad": true,
+                    "ProgramArguments": [
+                        "/usr/sbin/powerd",
+                        "-v"
+                    ]
                 },
                 "builtin": true,
-                "pidfile": "/var/run/powerd.pid",
                 "name": "powerd"
             },
             "77c47b78-9bf3-4ba7-aa76-8cb99a8da4a3": {
-                "rcng": {
-                    "rc-scripts": [
-                        "rpcbind",
-                        "nfsd",
-                        "mountd",
-                        "statd",
-                        "lockd",
-                        "gssd"
-                    ],
-                    "reload": [
-                        "mountd"
-                    ]
-                },
-                "pidfile": [
-                    "/var/run/rpcbind.pid",
-                    "/var/run/nfsd.pid",
-                    "/var/run/mountd.pid",
-                    "/var/run/rpc.statd.pid",
-                    "/var/run/rpc.lockd.pid",
-                    "/var/run/gssd.pid"
+                "launchd": [
+                    {
+                        "Label": "org.freebsd.nfsd",
+                        "RunAtLoad": true,
+                        "Requires": ["logging", "etc", "networking"],
+                        "SupportsCheckin": true,
+                        "Program": "/usr/local/libexec/dispatcher/nfsd_wrapper"
+                    }
                 ],
                 "builtin": false,
                 "etcd-group": "nfs",
@@ -765,38 +795,58 @@
                 "name": "nfs"
             },
             "0a7ff372-9808-411b-b3aa-59a6f3f9a7b2": {
-                "rcng": {
-                    "rc-scripts": "proftpd"
+                "launchd": {
+                    "Label": "org.proftpd.proftpd",
+                    "RunAtLoad": true,
+                    "Requires": ["logging", "etc"],
+                    "ProgramArguments": [
+                        "/usr/local/sbin/proftpd",
+                        "-n"
+                    ]
                 },
                 "builtin": false,
-                "pidfile": "/var/run/proftpd.pid",
                 "etcd-group": "ftp",
                 "get_config_rpc": "service.ftp.get_config",
                 "task": "service.ftp.update",
                 "name": "ftp"
             },
             "702dd24d-bf1a-4d36-b69b-c96971b37a9d": {
-                "rcng": {
-                    "rc-scripts": "snmpd"
+                "launchd": {
+                    "Label": "net.sourceforge.net-snmp.snmpd",
+                    "RunAtLoad": true,
+                    "Requires": ["logging", "etc"],
+                    "ProgramArguments": [
+                        "/usr/local/sbin/snmpd",
+                        "-f",
+                        "-c", "/usr/local/etc/snmpd.conf",
+                        "-Ls5d"
+                    ]
                 },
                 "builtin": false,
-                "pidfile": "/var/run/net_snmpd.pid",
                 "get_config_rpc": "service.snmp.get_config",
                 "task": "service.snmp.update",
                 "name": "snmp"
             },
             "7498b5d8-457f-442b-bf48-ed29d8db5fc5": {
-                "rcng": {
-                    "rc-scripts": "collectd"
+                "launchd": {
+                    "Label": "org.collectd.collectd",
+                    "RunAtLoad": true,
+                    "Requires": ["logging", "etc"],
+                    "ProgramArguments": [
+                        "/usr/local/sbin/collectd",
+                        "-f"
+                    ]
                 },
                 "builtin": true,
-                "pidfile": "/var/run/collectd.pid",
                 "etcd-group": "collectd",
                 "name": "collectd"
             },
             "7b488932-c09e-4336-a980-7fba6ddd6228": {
-                "rcng": {
-                    "rc-scripts": "inadyn-mt"
+                "launchd": {
+                    "Label": "net.sourceforge.inadyn-mt.inadyn-mt",
+                    "RunAtLoad": true,
+                    "Requires": ["logging", "etc"],
+                    "Program": ["/usr/local/bin/inadyn-mt"]
                 },
                 "builtin": false,
                 "get_config_rpc": "service.dyndns.get_config",
@@ -804,8 +854,12 @@
                 "name": "dyndns"
             },
             "efc90340-f09f-43dc-a1ab-20467f0a148a": {
-                "rcng": {
-                    "rc-scripts": "ipfs-go"
+                "launchd": {
+                    "Label": "io.ipfs.ipfs-go",
+                    "RunAtLoad": true,
+                    "SupportsCheckin": true,
+                    "Requires": ["networking", "logging", "etc"],
+                    "Program": ["/usr/local/libexec/dispatcher/ipfs_wrapper"]
                 },
                 "builtin": false,
                 "get_config_rpc": "service.ipfs.get_config",
@@ -813,32 +867,31 @@
                 "name": "ipfs"
             },
             "fd2c3dcd-6959-4dab-8750-65f2a0221fe6": {
-                "rcng": {
-                    "rc-scripts": "rsyncd"
+                "launchd": {
+                    "Label": "org.samba.rsyncd",
+                    "RunAtLoad": true,
+                    "Requires": ["logging", "etc"],
+                    "ProgramArguments": [
+                        "/usr/local/bin/rsync",
+                        "--daemon",
+                        "--no-detach",
+                        "--config",
+                        "/usr/local/etc/rsync/rsyncd.conf"
+                    ]
                 },
                 "builtin": false,
-                "pidfile": "/var/run/rsyncd.pid",
                 "get_config_rpc": "service.rsyncd.get_config",
                 "task": "service.rsyncd.update",
                 "name": "rsyncd"
             },
-            "95dec6af-48e4-49f0-8d96-9e7acc8f5e0d": {
-                "rcng": {
-                    "rc-scripts": "smartd"
-                },
-                "builtin": false,
-                "etcd-group": "smartd",
-                "pidfile": "/var/run/smartd.pid",
-                "get_config_rpc": "service.smartd.get_config",
-                "task": "service.smartd.update",
-                "name": "smartd"
-            },
             "638dde98-3f61-487e-9da7-47093a6beb7a": {
-                "rcng": {
-                    "rc-scripts": "tftpd"
+                "launchd": {
+                    "Label": "org.freenas.tftpd",
+                    "RunAtLoad": true,
+                    "SupportsCheckin": true,
+                    "Program": "/usr/local/libexec/dispatcher/tftpd_wrapper"
                 },
                 "builtin": false,
-                "pidfile": "/var/run/tftpd.pid",
                 "get_config_rpc": "service.tftpd.get_config",
                 "task": "service.tftpd.update",
                 "name": "tftpd"
@@ -870,101 +923,66 @@
                 "name": "dc"
             },
             "3f884592-fd25-4fe6-85c5-f1aabd4387e2": {
-                "rcng": {
-                    "rc-scripts": "apache24"
+                "launchd": {
+                    "Label": "org.apache.httpd",
+                    "RunAtLoad": true,
+                    "Requires": ["logging", "etc"],
+                    "ProgramArguments": [
+                        "/usr/local/sbin/httpd",
+                        "-DFOREGROUND"
+                    ]
                 },
                 "builtin": false,
-                "pidfile": "/var/run/httpd.pid",
                 "get_config_rpc": "service.webdav.get_config",
                 "task": "service.webdav.update",
                 "name": "webdav"
             },
-            "1c668931-3e2e-48d3-927d-39d71c34e3f2": {
-                "rcng": {
-                    "rc-scripts": "fnstatd"
-                },
-                "builtin": true,
-                "pidfile": "/var/run/fnstatd.pid",
-                "name": "fnstatd"
-            },
-            "f029276c-d66f-4730-916c-3f5765fb7213": {
-                "rcng": {
-                    "rc-scripts": "networkd"
-                },
-                "builtin": true,
-                "pidfile": "/var/run/networkd.pid",
-                "name": "networkd"
-            },
-            "1e054b99-ae65-4eb6-a991-8fe9a16abd9c": {
-                "rcng": {
-                    "rc-scripts": "etcd"
-                },
-                "builtin": true,
-                "pidfile": "/var/run/etcd.pid",
-                "name": "etcd"
-            },
-            "4984e2d7-7293-4e53-9507-474992c5db76": {
-                "rcng": {
-                    "rc-scripts": "schedulerd"
-                },
-                "builtin": true,
-                "pidfile": "/var/run/schedulerd.pid",
-                "name": "schedulerd"
-            },
-            "b8bfef63-7f32-11e5-8aaf-005056826348": {
-                "rcng": {
-                    "rc-scripts": "dsd"
-                },
-                "builtin": true,
-                "pidfile": "/var/run/dsd.pid",
-                "name": "dsd"
-            },
-            "b3e5e737-bd2e-401e-8d16-2a4cf3d68717": {
-                "rcng": {
-                    "rc-scripts": "dispatcher"
-                },
-                "builtin": true,
-                "pidfile": "/var/run/dispatcher.pid",
-                "name": "dispatcher"
-            },
-            "42ee6d97-3bbb-4dc4-bc30-95776167cb1d": {
-                "rcng": {
-                    "rc-scripts": "gui"
-                },
-                "builtin": true,
-                "pidfile": "/var/run/node.pid",
-                "name": "gui"
-            },
             "d33f4044-aa6b-4839-8b0d-16aeafc626f8": {
-                "rcng": {
-                    "rc-scripts": "mdnsd"
+                "launchd": {
+                    "Label": "com.apple.mdnsd",
+                    "RunAtLoad": true,
+                    "ProgramArguments": [
+                        "/usr/local/sbin/mdnsd",
+                        "-debug"
+                    ]
                 },
                 "builtin": true,
-                "pidfile": "/var/run/mdnsd.pid",
                 "name": "mdns"
             },
             "12b2673e-678c-4c5d-8e5b-08af9db31592": {
-                "rcng": {
-                    "rc-scripts": "ladvd"
+                "launchd": {
+                    "Label": "com.github.sspans.ladvd",
+                    "RunAtLoad": true,
+                    "Program": "/usr/local/libexec/dispatcher/ladvd_wrapper"
                 },
                 "builtin": false,
-                "pidfile": "/var/run/ladvd.pid",
                 "name": "lldp"
             },
             "9137a2bd-c45f-4b6e-ad4e-45d2fd858cac": {
-                "rcng": {
-                    "rc-scripts": "rtsold"
+                "launchd": {
+                    "Label": "org.freebsd.rtsold",
+                    "RunAtLoad": true,
+                    "ProgramArguments": [
+                        "/usr/sbin/rtsold",
+                        "-a",
+                        "-f"
+                    ]
                 },
                 "builtin": true,
-                "pidfile": "/var/run/rtsold.pid",
                 "name": "rtsold"
             },
             "793867c5-bf29-4464-b7f1-7b77a9e2b97c": {
-                "rcng": {
-                    "rc-scripts": "ctld"
+                "launchd": {
+                    "Label": "org.freebsd.ctld",
+                    "RunAtLoad": true,
+                    "Requires": ["logging", "etc"],
+                    "ProgramArguments": [
+                        "/usr/sbin/ctld",
+                        "-u",
+                        "-d"
+                    ]
                 },
                 "builtin": true,
-                "pidfile": "/var/run/ctld.pid",
                 "auto_enable": true,
                 "name": "ctl"
             },
@@ -983,10 +1001,16 @@
                 ]
             },
             "0a4792b5-e670-456a-a714-6806de235dea": {
-                "rcng": {
-                    "rc-scripts": "openvpn"
+                "launchd": {
+                    "Label": "net.openvpn.openvpn",
+                    "RunAtLoad": true,
+                    "Requires": ["networking", "logging", "etc"],
+                    "ProgramArguments": [
+                        "/usr/local/bin/openvpn",
+                        "--config",
+                        "/usr/local/etc/openvpn.conf"
+                    ]
                 },
-                "pidfile": "/var/run/openvpn.pid",
                 "builtin": false,
                 "task": "service.openvpn.update",
                 "get_config_rpc": "service.openvpn.get_config",
@@ -1003,18 +1027,144 @@
                 "name": "consul"
             },
             "98d512f6-9111-11e6-91a2-000c2924b2c6": {
-                "rcng": {
-                    "rc-scripts": "ypbind"
+                "launchd": {
+                    "Label": "org.freebsd.ypbind",
+                    "ProgramArguments": [
+                        "/usr/sbin/ypbind",
+                        "-d"
+                    ]
                 },
                 "builtin": true,
                 "name": "ypbind"
             },
             "e538db78-b14e-11e6-af2f-000c29796bea": {
-                "rcng": {
-                    "rc-scripts": "iscsid"
+                "launchd": {
+                    "Label": "org.freebsd.iscsid",
+                    "RunAtLoad": true,
+                    "Requires": ["networking", "logging"],
+                    "ProgramArguments": [
+                        "/usr/sbin/iscsid",
+                        "-D"
+                    ]
                 },
                 "builtin": true,
                 "name": "iscsid"
+            },
+            "c438c46f-bcb4-11e6-afca-0cc47a3511b4": {
+                "launchd": {
+                    "Label": "org.freenas.alertd",
+                    "RunAtLoad": true,
+                    "SupportsCheckin": true,
+                    "Program": "/usr/local/sbin/alertd"
+                },
+                "builtin": true,
+                "name": "alertd"
+            },
+            "e3f3cb21-bcb8-11e6-bbff-000c299ae6d8": {
+                "launchd": {
+                    "Label": "org.freenas.containerd",
+                    "RunAtLoad": true,
+                    "SupportsCheckin": true,
+                    "Requires": ["networking", "etc"],
+                    "Program": "/usr/local/sbin/containerd"
+                },
+                "builtin": true,
+                "name": "containerd"
+            },
+            "0a1c9025-bcb9-11e6-bbff-000c299ae6d8": {
+                "launchd": {
+                    "Label": "org.freenas.networkd",
+                    "RunAtLoad": true,
+                    "SupportsCheckin": true,
+                    "Provides": ["networking"],
+                    "Program": "/usr/local/sbin/networkd"
+                },
+                "builtin": true,
+                "name": "networkd"
+            },
+            "1a675bde-bcb9-11e6-bbff-000c299ae6d8": {
+                "launchd": {
+                    "Label": "org.freenas.schedulerd",
+                    "RunAtLoad": true,
+                    "SupportsCheckin": true,
+                    "Program": "/usr/local/sbin/schedulerd"
+                },
+                "builtin": true,
+                "name": "schedulerd"
+            },
+            "2d01341e-bcb9-11e6-bbff-000c299ae6d8": {
+                "launchd": {
+                    "Label": "org.freenas.dscached",
+                    "RunAtLoad": true,
+                    "SupportsCheckin": true,
+                    "Provides": ["accounts"],
+                    "Program": "/usr/local/sbin/dscached"
+                },
+                "builtin": true,
+                "name": "dscached"
+            },
+            "850ba33b-bcb9-11e6-bbff-000c299ae6d8": {
+                "launchd": {
+                    "Label": "org.freenas.restd",
+                    "RunAtLoad": true,
+                    "SupportsCheckin": true,
+                    "Program": "/usr/local/sbin/restd"
+                },
+                "builtin": true,
+                "name": "restd"
+            },
+            "a958c5fc-bcb9-11e6-bbff-000c299ae6d8": {
+                "launchd": {
+                    "Label": "org.freenas.etcd",
+                    "RunAtLoad": true,
+                    "SupportsCheckin": true,
+                    "Provides": ["etc"],
+                    "ProgramArguments": [
+                        "/usr/local/sbin/etcd",
+                        "/etc"
+                    ]
+                },
+                "builtin": true,
+                "name": "etcd"
+            },
+            "1edeed25-bcba-11e6-bbff-000c299ae6d8": {
+                "launchd": {
+                    "Label": "org.freenas.fnstatd",
+                    "RunAtLoad": true,
+                    "SupportsCheckin": true,
+                    "Program": "/usr/local/sbin/fnstatd"
+                },
+                "builtin": true,
+                "name": "fnstatd"
+            },
+            "825a1f02-bcba-11e6-bbff-000c299ae6d8": {
+                "launchd": {
+                    "Label": "org.freenas.crashd",
+                    "RunAtLoad": true,
+                    "Program": "/usr/local/sbin/crashd"
+                },
+                "builtin": true,
+                "name": "crashd"
+            },
+            "5fee310e-bccb-11e6-afca-0cc47a3511b4": {
+                "launchd": {
+                    "Label": "org.freenas.neighbord",
+                    "RunAtLoad": true,
+                    "SupportsCheckin": true,
+                    "Program": "/usr/local/sbin/neighbord"
+                },
+                "builtin": true,
+                "name": "neighbord"
+            },
+            "79349978-bccb-11e6-afca-0cc47a3511b4": {
+                "launchd": {
+                    "Label": "org.freenas.debugd",
+                    "RunAtLoad": true,
+                    "SupportsCheckin": true,
+                    "Program": "/usr/local/sbin/debugd"
+                },
+                "builtin": true,
+                "name": "debugd"
             }
         },
         "metadata": {
@@ -1164,6 +1314,18 @@
             "pkey-type": "uuid",
             "attributes": {
                 "type": "config"
+            }
+        },
+        "data": {
+        }
+    },
+    {
+        "metadata": {
+            "name": "docker.containers",
+            "migration": "keep",
+            "pkey-type": "uuid",
+            "attributes": {
+                "type": "log"
             }
         },
         "data": {
@@ -1507,18 +1669,6 @@
     {
          "metadata": {
             "name": "vm.snapshots",
-            "migration": "keep",
-            "pkey-type": "uuid",
-            "attributes": {
-                "type": "config"
-            }
-        },
-        "data": {
-        }
-    },
-    {
-         "metadata": {
-            "name": "containers",
             "migration": "keep",
             "pkey-type": "uuid",
             "attributes": {

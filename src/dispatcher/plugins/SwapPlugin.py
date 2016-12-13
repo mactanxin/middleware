@@ -98,7 +98,7 @@ def get_swap_info(dispatcher):
             prov = xml.xpath(".//provider[@id='{0}']".format(prov))[0]
             disk_geom = prov.find('geom').attrib['ref']
             disk_geom = xml.xpath(".//geom[@id='{0}']".format(disk_geom))[0]
-            swap['disks'].append(os.path.join('/dev', disk_geom.find('name').text))
+            swap['disks'].append(os.path.join('/dev', disk_geom.find('name').text[:-2]))
 
         result[name] = swap
 
@@ -128,6 +128,9 @@ def clear_swap(dispatcher):
 def remove_swap(dispatcher, disks):
     disks = set(disks)
     logger.log(TRACE, 'Remove swap request: disks={0}'.format(','.join(disks)))
+    if not disks:
+        return
+
     for swap in list(get_swap_info(dispatcher).values()):
         if disks & set(swap['disks']):
             try:
@@ -145,7 +148,7 @@ def create_swap(dispatcher, disks):
         name = get_swap_name()
         disk_a, disk_b = pair
         logger.info('Creating swap partition %s from disks: %s, %s', name, disk_a, disk_b)
-        system('/sbin/gmirror', 'label', '-b', 'prefer', name, disk_a, disk_b)
+        system('/sbin/gmirror', 'create', '-b', 'prefer', name, disk_a, disk_b)
         system('/sbin/swapon', '/dev/mirror/{0}'.format(name))
         configure_dumpdev('/dev/mirror/{0}'.format(name))
 

@@ -1,4 +1,11 @@
 libexec/dispatcher/ssh_transport_catcher
+libexec/dispatcher/ipfs_wrapper
+libexec/dispatcher/ladvd_wrapper
+libexec/dispatcher/nfsd_wrapper
+libexec/dispatcher/vmtoolsd_wrapper
+libexec/dispatcher/tftpd_wrapper
+etc/serviced.d/org.freebsd.devd.json
+etc/serviced.d/org.freenas.dispatcher.json
 etc/rc.d/dispatcher
 sbin/dispatcherd
 sbin/dispatcherctl

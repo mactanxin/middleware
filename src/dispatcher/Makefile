@@ -3,7 +3,9 @@ PYTHON ?= python
 BROWSERIFY_BUNDLE= ${PREFIX}/share/js-freenas-dispatcher/middleware.js
 
 install:
+	install -d  ${STAGEDIR}${PREFIX}/etc/serviced.d/
 	install etc/dispatcher ${STAGEDIR}${PREFIX}/etc/rc.d/
+	install etc/serviced.d/* ${STAGEDIR}${PREFIX}/etc/serviced.d/
 	install etc/middleware.conf ${STAGEDIR}${PREFIX}/etc/middleware.conf
 	install tools/dispatcherd ${STAGEDIR}${PREFIX}/sbin/
 	install tools/dispatcherctl ${STAGEDIR}${PREFIX}/sbin/

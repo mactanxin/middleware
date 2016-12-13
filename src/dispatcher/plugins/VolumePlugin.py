@@ -124,11 +124,12 @@ class VolumeProvider(Provider):
                         [('status.data_partition_path', '=', vdev['path'])],
                         {'single': True, 'select': ('id', 'path')}
                     )
-                    if not disk_info and encrypted:
-                        topology = vol['topology']
-                        break
-
-                    vdev['disk_id'], vdev['path'] = disk_info
+                    if not disk_info:
+                        if encrypted:
+                            topology = vol['topology']
+                            break
+                    else:
+                        vdev['disk_id'], vdev['path'] = disk_info
 
                 vol.update({
                     'rname': 'zpool:{0}'.format(vol['id']),
@@ -1796,9 +1797,18 @@ class VolumeUnlockTask(Task):
         if not self.datastore.exists('volumes', ('id', '=', id)):
             raise VerifyException(errno.ENOENT, 'Volume {0} not found'.format(id))
 
-        vol = self.dispatcher.call_sync('volume.query', [('id', '=', id)], {'single': True})
+        resources = []
+        topology = self.dispatcher.call_sync('volume.query', [('id', '=', id)], {'single': True, 'select': 'topology'})
+        for vdev, _ in iterate_vdevs(topology):
+            path = self.dispatcher.call_sync(
+                'disk.query',
+                [('id', '=', vdev['disk_id']), ('online', '=', True)],
+                {'single': True, 'select': 'path'}
+            )
+            if path:
+                resources.append('disk:{0}'.format(path))
 
-        return ['disk:{0}'.format(d) for d, _ in get_disks(vol['topology'])]
+        return resources
 
     def run(self, id, password=None, params=None):
         with self.dispatcher.get_lock('volumes'):
@@ -1822,6 +1832,20 @@ class VolumeUnlockTask(Task):
                                    encryption.get('salt', ''),
                                    encryption.get('hashed_password', '')):
                     raise TaskException(errno.EINVAL, 'Password provided for volume {0} unlock is not valid'.format(id))
+
+            for vdev, _ in iterate_vdevs(vol['topology']):
+                if not self.dispatcher.call_sync(
+                        'disk.query',
+                        [('id', '=', vdev['disk_id']), ('online', '=', True)],
+                        {'count': True}):
+                    raise TaskException(
+                        errno.ENOENT,
+                        'Cannot decrypt {0} - disk {1} not found. Old path was {2}'.format(
+                            id,
+                            vdev['disk_id'],
+                            vdev['path']
+                        )
+                    )
 
             subtasks = []
             for vdev, _ in iterate_vdevs(vol['topology']):
@@ -2348,7 +2372,7 @@ class DatasetDeleteTask(Task):
 
             self.join_subtasks(self.run_subtask('zfs.destroy', id))
         except RpcException as err:
-            if err.code == errno.EBUSY:
+            if err.code == errno.EBUSY and ds['type'] == 'FILESYSTEM':
                 # Find out what's holding unmount or destroy
                 files = self.dispatcher.call_sync('filesystem.get_open_files', ds['mountpoint'])
                 if len(files) == 1:
@@ -3212,6 +3236,9 @@ def _init(dispatcher, plugin):
         volume = dispatcher.call_sync('volume.query', [('guid', '=', guid)], {'single': True})
         if not volume:
             return
+        
+        if volume['status'] in ('UNKNOWN', 'LOCKED'):
+            return
 
         if args['vdev_guid'] == guid:
             # Ignore root vdev state changes
@@ -3221,7 +3248,7 @@ def _init(dispatcher, plugin):
         if not vdev:
             return
 
-        if args['vdev_state'] in ('FAULTED', 'REMOVED') and args['vdev_state'] != vdev['status']:
+        if args['vdev_state'] in ('FAULTED', 'REMOVED', 'OFFLINE') and args['vdev_state'] != vdev['status']:
             logger.warning('Vdev {0} of pool {1} is now in {2} state - attempting to replace'.format(
                 args['vdev_guid'],
                 volume['id'],
@@ -3233,13 +3260,16 @@ def _init(dispatcher, plugin):
     @sync
     def on_disk_attached(args):
         for vol in dispatcher.call_sync('volume.query', [('status', '=', 'UNKNOWN')]):
+            if vol.get('key_encrypted') or vol.get('password_encrypted'):
+                continue
+
             for vdev, group in iterate_vdevs(vol['topology']):
                 if group != 'data':
                     continue
 
-                if vdev['type'] == 'disk' and vdev['path'] == args['path']:
+                if vdev['type'] == 'disk' and vdev['disk_id'] == args['id']:
                     dispatcher.call_task_sync('zfs.pool.import', vol['guid'])
-                    dispatcher.call_task_sync('zfs.mount', vol['guid'], True)
+                    dispatcher.call_task_sync('zfs.mount', vol['id'], True)
 
     def scrub_snapshots():
         interval = dispatcher.configstore.get('middleware.snapshot_scrub_interval')

@@ -21,6 +21,7 @@ share/datastore/test/sample/migrations/users/0003-dependent.py
 %%PYTHON_SITELIBDIR%%/datastore/migrate.pyc
 %%PYTHON_SITELIBDIR%%/datastore-10.0-py%%PYTHON_VER%%.egg-info
 etc/rc.d/datastore
+etc/serviced.d/org.freenas.datastore.json
 sbin/dsutil
 sbin/dsdump
 sbin/dsrestore

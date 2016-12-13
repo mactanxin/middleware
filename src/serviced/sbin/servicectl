@@ -1,0 +1,150 @@
+#!/usr/local/bin/python3
+#
+# Copyright 2016 iXsystems, Inc.
+# All rights reserved
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted providing that the following conditions
+# are met:
+# 1. Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+# 2. Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in the
+#    documentation and/or other materials provided with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+# IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+# WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
+# DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+# OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+# HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+# STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
+# IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+#
+#####################################################################
+
+import sys
+import argh
+import socket
+import json
+import glob
+from freenas.dispatcher.rpc import RpcException
+from freenas.dispatcher.client import Client
+
+
+DEFAULT_SERVER = 'unix:///var/run/serviced.sock'
+DEFAULT_TIMEOUT = 10
+
+
+def bootstrap():
+    load(*(glob.glob('/etc/serviced.d/*') + glob.glob('/usr/local/etc/serviced.d/*')))
+
+
+def shutdown():
+    client = create_client()
+    client.call_sync('serviced.management.shutdown')
+    sys.exit(0)
+
+
+def list(v=False):
+    client = create_client()
+    jobs = client.call_sync('serviced.job.query')
+    if not v:
+        print('PID      Status   Label')
+
+    def branch(parent, indent):
+        for job in (j for j in jobs if j['ParentID'] == parent):
+            print('{0:<8} {1:<8} {2}{3}'.format(job['PID'] or '', job['State'] or '', '    ' * indent, job['Label']))
+            branch(job['ID'], indent + 1)
+
+    if v:
+        print(json.dumps(jobs, indent=4))
+        return
+
+    branch(None, 0)
+
+
+def load(*filenames):
+    client = create_client()
+    for i in filenames:
+        with open(i, 'r') as f:
+            try:
+                plist = json.load(f)
+                client.call_sync('serviced.job.load', plist)
+            except ValueError as err:
+                print('Unreadable JSON file: {0}'.format(err), file=sys.stderr)
+                sys.exit(1)
+            except RpcException as err:
+                print('Failed to load job: {0}'.format(err), file=sys.stderr)
+                sys.exit(1)
+
+    sys.exit(0)
+
+
+def start(label):
+    client = create_client()
+    try:
+        client.call_sync('serviced.job.start', label)
+    except RpcException as err:
+        print('Failed to start job: {0}'.format(err), file=sys.stderr)
+        sys.exit(1)
+    else:
+        sys.exit(0)
+
+
+def stop(label):
+    client = create_client()
+    try:
+        client.call_sync('serviced.job.stop', label)
+    except RpcException as err:
+        print('Failed to stop job: {0}'.format(err), file=sys.stderr)
+        sys.exit(1)
+    else:
+        sys.exit(0)
+
+
+def restart(label):
+    client = create_client()
+    try:
+        client.call_sync('serviced.job.stop', label)
+        client.call_sync('serviced.job.start', label)
+    except RpcException as err:
+        print('Failed to stop job: {0}'.format(err), file=sys.stderr)
+        sys.exit(1)
+    else:
+        sys.exit(0)
+
+
+def unload(label):
+    client = create_client()
+    try:
+        client.call_sync('serviced.job.unload', label)
+    except RpcException as err:
+        print('Failed to unload job: {0}'.format(err), file=sys.stderr)
+        sys.exit(1)
+    else:
+        sys.exit(0)
+
+
+def create_client():
+    try:
+        c = Client()
+        c.connect(DEFAULT_SERVER)
+    except socket.error as err:
+        print("Cannot connect: {0}".format(str(err)), file=sys.stderr)
+        sys.exit(1)
+
+    return c
+
+
+def main():
+    parser = argh.ArghParser()
+    parser.add_commands([bootstrap, shutdown, list, load, unload, start, stop, restart])
+    parser.dispatch()
+
+
+if __name__ == '__main__':
+    main()

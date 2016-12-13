@@ -51,6 +51,7 @@ from freenas.utils import first_or_default, normalize, deep_update, process_temp
 from utils import save_config, load_config, delete_config
 from freenas.utils.decorators import throttle
 from freenas.utils.copytree import copytree
+from debug import AttachData, AttachDirectory, AttachCommandOutput
 
 
 VM_OUI = '00:a0:98'  # NetApp
@@ -76,7 +77,7 @@ class VMProvider(Provider):
             return obj
 
         return q.query(
-            self.datastore.query('vms', callback=extend),
+            self.datastore.query_stream('vms', callback=extend),
             *(filter or []),
             stream=True,
             **(params or {})
@@ -146,9 +147,9 @@ class VMProvider(Provider):
         result = []
 
         if enabled_only:
-            vms = self.datastore.query('vms', ('enabled', '=', True))
+            vms = self.datastore.query_stream('vms', ('enabled', '=', True))
         else:
-            vms = self.datastore.query('vms')
+            vms = self.datastore.query_stream('vms')
 
         for i in vms:
             target_path = self.get_vm_root(i['id'])
@@ -1875,6 +1876,19 @@ def fetch_templates(dispatcher):
     dispatcher.call_task_sync('vm.template.fetch')
 
 
+def collect_debug(dispatcher):
+    yield AttachDirectory('vm-templates', dispatcher.call_sync('system_dataset.request_directory', 'vm_templates'))
+    yield AttachCommandOutput(
+        'vm-images',
+        ['ls', '-LRl', dispatcher.call_sync('system_dataset.request_directory', 'vm_image_cache')]
+    )
+    yield AttachData('vm-query', dumps(list(dispatcher.call_sync('vm.query')), indent=4))
+    yield AttachData('vm-config', dumps(dispatcher.call_sync('vm.config.get_config'), indent=4))
+    yield AttachData('vm-templates-query', dumps(list(dispatcher.call_sync('vm.template.query')), indent=4))
+    yield AttachData('vm-snapshot-query', dumps(list(dispatcher.call_sync('vm.snapshot.query')), indent=4))
+    yield AttachData('hw-support', dumps(dispatcher.call_sync('vm.get_hw_vm_capabilities'), indent=4))
+
+
 def _depends():
     return ['VolumePlugin']
 
@@ -2270,3 +2284,5 @@ def _init(dispatcher, plugin):
     plugin.register_event_type('vm.snapshot.changed')
 
     plugin.register_event_handler('zfs.snapshot.changed', on_snapshot_change)
+
+    plugin.register_debug_hook(collect_debug)

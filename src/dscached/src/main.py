@@ -38,8 +38,8 @@ import time
 import json
 import ipaddress
 import socket
-import setproctitle
 import netif
+from bsd import setproctitle
 from threading import RLock, Thread
 from datetime import datetime, timedelta
 from datastore.config import ConfigStore
@@ -49,6 +49,7 @@ from freenas.dispatcher.rpc import RpcContext, RpcService, RpcException, generat
 from freenas.utils import first_or_default, configure_logging, extend, load_module_from_file, list_startswith
 from freenas.utils.debug import DebugService
 from freenas.utils.query import query, test_filter, pop_filter, exclude_from_filter
+from freenas.serviced import checkin
 from plugin import DirectoryState
 
 
@@ -907,6 +908,9 @@ class Main(object):
         self.cache_enumerations = self.configstore.get('directory.cache_enumerations')
         self.cache_lookups = self.configstore.get('directory.cache_lookups')
 
+    def checkin(self):
+        checkin()
+
     def main(self):
         parser = argparse.ArgumentParser()
         parser.add_argument('-c', metavar='CONFIG', default=DEFAULT_CONFIGFILE, help='Middleware config file')
@@ -914,7 +918,7 @@ class Main(object):
         args = parser.parse_args()
         configure_logging('/var/log/dscached.log', 'DEBUG')
 
-        setproctitle.setproctitle('dscached')
+        setproctitle('dscached')
         self.config = args.c
         self.parse_config(self.config)
         self.init_datastore()
@@ -924,6 +928,7 @@ class Main(object):
         self.scan_plugins()
         self.wait_for_etcd()
         self.init_directories()
+        self.checkin()
         self.client.wait_forever()
 
 

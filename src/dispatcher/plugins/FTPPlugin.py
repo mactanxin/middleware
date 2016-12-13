@@ -80,7 +80,7 @@ class FTPConfigureTask(Task):
 
         if node['only_anonymous'] and not node['anonymous_path']:
             errors.add(
-                (0, 'anonymous_path'), errno.EINVAL, 'This field is required for anonymous login.'
+                (0, 'anonymous_path'), 'This field is required for anonymous login.'
             )
 
         if node['tls'] is True and not node['tls_ssl_certificate']:
@@ -90,6 +90,11 @@ class FTPConfigureTask(Task):
             cert = self.dispatcher.call_sync('crypto.certificate.query', [('id', '=', node['tls_ssl_certificate'])])
             if not cert:
                 errors.add((0, 'tls_ssl_certificate'), 'SSL Certificate not found.')
+
+        if node['only_anonymous'] and node['only_local']:
+            errors.add(
+                (0, 'only_anonymous'), 'Anonymous only and local only types of authentication cannot be enabled together.'
+            )
 
         if errors:
             raise errors

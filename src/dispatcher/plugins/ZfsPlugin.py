@@ -949,13 +949,16 @@ class ZfsDatasetCreateTask(Task):
                 del props['sparse']
 
             for k, v in props.items():
-                if v.get('value'):
+                if v.get('value') is not None:
                     params[k] = v['value']
                     continue
 
-                if v.get('parsed'):
+                if v.get('parsed') is not None:
                     params[k] = libzfs.serialize_zfs_prop(k, v['parsed'])
                     continue
+
+            if 'refreservation' in params:
+                sparse = True
 
             zfs = get_zfs()
             pool = zfs.get(path.split('/')[0])
@@ -1587,6 +1590,10 @@ def _init(dispatcher, plugin):
             if p['status'] not in ('DEGRADED', 'UNAVAIL'):
                 continue
 
+            volume = dispatcher.datastore.get_by_id('volumes', p['id'])
+            if volume and (volume.get('key_encrypted') or volume.get('password_encrypted')):
+                continue
+
             for vd in iterate_vdevs(p['groups']):
                 if args['path'] == vd['path']:
                     logger.info('Device {0} that was part of the pool {1} got reconnected'.format(
@@ -1879,7 +1886,7 @@ def _init(dispatcher, plugin):
 
         # Finally, Importing the unique unimported pools that are present in
         # the database
-        for vol in dispatcher.datastore.query('volumes'):
+        for vol in dispatcher.datastore.query_stream('volumes'):
             if int(vol['guid']) in unimported_unique_pools:
                 pool_to_import = unimported_unique_pools[int(vol['guid'])]
                 # Check if the volume name is also the same

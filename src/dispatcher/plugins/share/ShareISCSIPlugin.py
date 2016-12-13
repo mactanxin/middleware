@@ -31,10 +31,34 @@ import uuid
 import hashlib
 import ctl
 from debug import AttachFile
+from utils import is_port_open
 from task import Task, Provider, VerifyException, TaskDescription, TaskException
 from freenas.dispatcher.rpc import RpcException, description, accepts, returns, private, generator
 from freenas.dispatcher.rpc import SchemaHelper as h
 from freenas.utils import normalize, query as q
+
+
+def validate_portal_port(listen):
+    if listen:
+        for host in listen:
+            if not not is_port_open(host['port']):
+                raise TaskException(
+                    errno.EFAULT,
+                    'Provided port {} is already in use'.format(host['port'])
+                )
+
+
+def check_auth_group_mode(datastore, discovery_auth_group):
+    if discovery_auth_group:
+        if not datastore.exists('iscsi.auth', ('id', '=', discovery_auth_group)):
+            raise TaskException(
+                errno.ENOENT,
+                'Auth group {0} does not exist'.format(discovery_auth_group)
+            )
+        else:
+            auth_group = datastore.get_by_id('iscsi.auth', discovery_auth_group)
+            if auth_group['type'] in ('NONE', 'DENY'):
+                raise TaskException(errno.EPERM, 'Auth group cannot be in NONE or DENY mode')
 
 
 @description("Provides info about configured iSCSI shares")
@@ -204,7 +228,7 @@ class DeleteiSCSIShareTask(Task):
 
         # Check if share is mapped anywhere
         subtasks = []
-        for i in self.datastore.query('iscsi.targets'):
+        for i in self.datastore.query_stream('iscsi.targets'):
             if share['name'] in [m['name'] for m in i['extents']]:
                 i['extents'] = list(filter(lambda e: e['name'] != share['name'], i['extents']))
                 subtasks.append(self.run_subtask('share.iscsi.target.update', i['id'], i))
@@ -446,6 +470,9 @@ class CreateISCSIPortalTask(Task):
         return ['system']
 
     def run(self, portal):
+        validate_portal_port(portal.get('listen'))
+        check_auth_group_mode(self.datastore, portal.get('discovery_auth_group'))
+
         normalize(portal, {
             'id': self.datastore.collection_get_next_pkey('iscsi.portals', 'pg'),
             'discovery_auth_group': None,
@@ -477,6 +504,9 @@ class UpdateISCSIPortalTask(Task):
         return ['system']
 
     def run(self, id, updated_params):
+        validate_portal_port(updated_params.get('listen'))
+        check_auth_group_mode(self.datastore, updated_params.get('discovery_auth_group'))
+
         if not self.datastore.exists('iscsi.portals', ('id', '=', id)):
             raise TaskException(errno.ENOENT, 'Portal {0} does not exist'.format(id))
 
@@ -610,8 +640,12 @@ def _init(dispatcher, plugin):
             'type': 'object',
             'additionalProperties': False,
             'properties': {
-                'address': {'type': 'string'},
-                'port': {'type': 'integer'}
+                'address': {'type': 'string', 'format': 'ip-address'},
+                'port': {
+                    'type': 'integer',
+                    'minimum': 1024,
+                    'maximum': 65535
+                }
             }
         }
     })
