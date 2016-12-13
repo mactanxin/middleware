@@ -380,8 +380,7 @@
             "container.docker.default_host": null,
             "container.docker.api_forwarding": null,
             "container.docker.api_forwarding_enable": false,
-            "container.docker.default_collection": "freenas",
-            "container.cache_refresh_interval": 60,
+            "container.docker.default_collection": "7f4d5a8d-b8dd-4ffa-a866-b074067b381d",
             "storage.hotsparing.autoreplace": true,
             "storage.hotsparing.strong_match": false,
             "directory.search_order": ["local", "system"],
@@ -1163,6 +1162,18 @@
     },
     {
         "metadata": {
+            "name": "docker.containers",
+            "migration": "keep",
+            "pkey-type": "uuid",
+            "attributes": {
+                "type": "config"
+            }
+        },
+        "data": {
+        }
+    },
+    {
+        "metadata": {
             "name": "docker.collections",
             "migration": "merge-preserve",
             "pkey-type": "uuid",
@@ -1499,18 +1510,6 @@
     {
          "metadata": {
             "name": "vm.snapshots",
-            "migration": "keep",
-            "pkey-type": "uuid",
-            "attributes": {
-                "type": "config"
-            }
-        },
-        "data": {
-        }
-    },
-    {
-         "metadata": {
-            "name": "containers",
             "migration": "keep",
             "pkey-type": "uuid",
             "attributes": {

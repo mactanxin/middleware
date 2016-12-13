@@ -55,7 +55,7 @@ import pf
 import urllib.parse
 import requests
 import contextlib
-from docker.errors import NotFound, DockerException
+from docker.errors import NotFound
 from datetime import datetime
 from bsd import kld, sysctl
 from threading import Condition
@@ -1274,7 +1274,6 @@ class DockerService(RpcService):
                     'image': container['Image'],
                     'names': list(normalize_names(container['Names'])),
                     'command': container['Command'] if isinstance(container['Command'], list) else [container['Command']],
-                    'status': container['Status'],
                     'running': details['State'].get('Running', False),
                     'host': host.vm.id,
                     'ports': list(get_docker_ports(details)),

@@ -40,16 +40,16 @@ from datetime import datetime, timedelta
 from task import Provider, Task, ProgressTask, TaskDescription, TaskException, query, TaskWarning, VerifyException
 from cache import EventCacheStore, CacheStore
 from datastore.config import ConfigNode
-from freenas.utils import normalize, query as q, first_or_default
+from freenas.utils import normalize, query as q, first_or_default, exclude
 from freenas.utils.decorators import throttle
 from freenas.dispatcher.rpc import generator, accepts, returns, SchemaHelper as h, RpcException, description, private
 from freenas.dispatcher.jsonenc import loads, dumps
 from debug import AttachData
 
 logger = logging.getLogger(__name__)
-containers = None
-images = None
 collections = None
+images = None
+containers_state = None
 
 CONTAINERS_QUERY = 'containerd.docker.query_containers'
 IMAGES_QUERY = 'containerd.docker.query_images'
@@ -89,7 +89,7 @@ class DockerHostProvider(Provider):
             return ret
 
         with self.dispatcher.get_lock('vms'):
-            results = self.datastore.query('vms', ('config.docker_host', '=', True), callback=extend)
+            results = self.datastore.query_stream('vms', ('config.docker_host', '=', True), callback=extend)
         return q.query(results, *(filter or []), stream=True, **(params or {}))
 
 
@@ -114,7 +114,8 @@ class DockerContainerProvider(Provider):
             obj.update({
                 'web_ui_url': None,
                 'settings': [],
-                'version': '0'
+                'version': '0',
+                'running': containers_state.get(obj['id'], False)
             })
 
             if presets:
@@ -136,7 +137,12 @@ class DockerContainerProvider(Provider):
 
             return obj
 
-        return containers.query(*(filter or []), stream=True, callback=extend, **(params or {}))
+        return q.query(
+            self.datastore.query_stream('docker.containers', callback=extend),
+            *(filter or []),
+            stream=True,
+            **(params or {})
+        )
 
     @description('Requests authorization token for a container console')
     @accepts(str)
@@ -476,6 +482,20 @@ class DockerBaseTask(ProgressTask):
         if host['state'] == 'DOWN':
             raise TaskException(errno.EHOSTDOWN, 'Docker host {0} is down'.format(host['name']))
 
+    def get_container_name_and_vm_name(self, id):
+        host_id, name = self.dispatcher.call_sync(
+            'docker.container.query',
+            [('id', '=', id)],
+            {'single': True, 'select': ('host', 'names.0')}
+        )
+        host_name = self.dispatcher.call_sync(
+            'vm.query',
+            [('id', '=', host_id)],
+            {'single': True, 'select': 'name'}
+        )
+
+        return name, host_name
+
 
 @description('Updates Docker general configuration settings')
 @accepts(h.ref('docker-config'))
@@ -559,6 +579,9 @@ class DockerContainerCreateTask(DockerBaseTask):
             return ['docker']
 
     def run(self, container):
+        if self.datastore.exists('docker.containers', ('names.0', '=', container['names'][0])):
+            raise TaskException(errno.EEXIST, 'Docker container {0} already exists'.format(container['names'][0]))
+
         self.set_progress(0, 'Checking Docker host state')
         normalize(container, {
             'hostname': None,
@@ -646,7 +669,7 @@ class DockerContainerCreateTask(DockerBaseTask):
 
 @description('Deletes a Docker container')
 @accepts(str)
-class DockerContainerDeleteTask(ProgressTask):
+class DockerContainerDeleteTask(DockerBaseTask):
     @classmethod
     def early_describe(cls):
         return 'Deleting a Docker container'
@@ -670,6 +693,30 @@ class DockerContainerDeleteTask(ProgressTask):
             return ['docker']
 
     def run(self, id):
+        if not self.datastore.exists('docker.containers', ('id', '=', id)):
+            raise TaskException(errno.ENOENT, 'Docker container {0} does not exist'.format(id))
+
+        try:
+            self.dispatcher.call_sync('containerd.docker.host_name_by_container_id', id)
+        except RpcException:
+            name, host_name = self.get_container_name_and_vm_name(id)
+
+            self.datastore.delete('docker.containers', id)
+            self.dispatcher.dispatch_event('docker.container.changed', {
+                'operation': 'delete',
+                'ids': [id]
+            })
+
+            self.add_warning(TaskWarning(
+                errno.EACCES,
+                'Cannot access Docker Host {0}. Container {1} was deleted from the local cache only.'.format(
+                    host_name or '',
+                    name
+                )
+            ))
+
+            return
+
         self.dispatcher.exec_and_wait_for_event(
             'docker.container.changed',
             lambda args: args['operation'] == 'delete' and id in args['ids'],
@@ -680,7 +727,7 @@ class DockerContainerDeleteTask(ProgressTask):
 
 @description('Starts a Docker container')
 @accepts(str)
-class DockerContainerStartTask(Task):
+class DockerContainerStartTask(DockerBaseTask):
     @classmethod
     def early_describe(cls):
         return 'Starting container'
@@ -704,6 +751,18 @@ class DockerContainerStartTask(Task):
             return ['docker']
 
     def run(self, id):
+        if not self.datastore.exists('docker.containers', ('id', '=', id)):
+            raise TaskException(errno.ENOENT, 'Docker container {0} does not exist'.format(id))
+
+        try:
+            self.dispatcher.call_sync('containerd.docker.host_name_by_container_id', id)
+        except RpcException:
+            name, host_name = self.get_container_name_and_vm_name(id)
+            raise TaskException(
+                errno.EINVAL,
+                'Docker Host {0} is currently unreachable. Cannot start {1} container'.format(host_name or '', name)
+            )
+
         self.dispatcher.exec_and_wait_for_event(
             'docker.container.changed',
             lambda args: args['operation'] == 'update' and id in args['ids'],
@@ -738,6 +797,9 @@ class DockerContainerStopTask(Task):
             return ['docker']
 
     def run(self, id):
+        if not self.datastore.exists('docker.containers', ('id', '=', id)):
+            raise TaskException(errno.ENOENT, 'Docker container {0} does not exist'.format(id))
+
         self.dispatcher.exec_and_wait_for_event(
             'docker.container.changed',
             lambda args: args['operation'] == 'update' and id in args['ids'],
@@ -753,10 +815,10 @@ class DockerImagePullTask(DockerBaseTask):
     def early_describe(cls):
         return 'Pulling docker image'
 
-    def describe(self, name, hostid):
+    def describe(self, name, hostid=None):
         return TaskDescription('Pulling docker image {name}', name=name)
 
-    def verify(self, name, hostid):
+    def verify(self, name, hostid=None):
         host = self.datastore.get_by_id('vms', hostid) or {}
         hostname = host.get('name')
 
@@ -765,7 +827,7 @@ class DockerImagePullTask(DockerBaseTask):
         else:
             return ['docker']
 
-    def run(self, name, hostid):
+    def run(self, name, hostid=None):
         if not hostid:
             hostid = self.get_default_host(
                 lambda p, m, e=None: self.chunk_progress(0, 10, 'Looking for default Docker host:', p, m, e)
@@ -1094,13 +1156,13 @@ def _depends():
 
 
 def _init(dispatcher, plugin):
-    global containers
-    global images
     global collections
+    global images
+    global containers_state
 
-    containers = EventCacheStore(dispatcher, 'docker.container')
     images = EventCacheStore(dispatcher, 'docker.image')
     collections = CacheStore()
+    containers_state = CacheStore()
 
     def docker_resource_create_update(name, parents):
         if first_or_default(lambda o: o['name'] == name, dispatcher.call_sync('task.list_resources')):
@@ -1115,36 +1177,27 @@ def _init(dispatcher, plugin):
             )
 
     def on_host_event(args):
-        if images.ready and containers.ready:
-            if args['operation'] == 'create':
-                for host_id in args['ids']:
-                    new_images = list(dispatcher.call_sync(
-                        IMAGES_QUERY,
-                        [('hosts', 'contains', host_id)], {'select': 'id'}
-                    ))
-                    new_containers = list(dispatcher.call_sync(
-                        CONTAINERS_QUERY,
-                        [('host', '=', host_id)], {'select': 'id'}
-                    ))
+        if args['operation'] == 'create':
+            for host_id in args['ids']:
+                refresh_containers(host_id)
 
-                    if new_images:
-                        sync_cache(images, IMAGES_QUERY, new_images)
-                    if new_containers:
-                        sync_cache(containers, CONTAINERS_QUERY, new_containers)
+                new_images = list(dispatcher.call_sync(
+                    IMAGES_QUERY,
+                    [('hosts', 'contains', host_id)], {'select': 'id'}
+                ))
+                if new_images:
+                    sync_images(new_images)
 
-                    logger.debug('Docker host {0} started'.format(host_id))
+                logger.debug('Docker host {0} started'.format(host_id))
 
-            elif args['operation'] == 'delete':
-                sync_cache(images, IMAGES_QUERY)
-                for host_id in args['ids']:
-                    containers.remove_many(containers.query(('host', '=', host_id), select='id'))
+        elif args['operation'] == 'delete':
+            for host_id in args['ids']:
+                logger.debug('Docker host {0} stopped'.format(host_id))
 
-                    logger.debug('Docker host {0} stopped'.format(host_id))
-
-            dispatcher.dispatch_event('docker.host.changed', {
-                'operation': 'update',
-                'ids': args['ids']
-            })
+        dispatcher.dispatch_event('docker.host.changed', {
+            'operation': 'update',
+            'ids': args['ids']
+        })
 
     def vm_pre_destroy(args):
         host = dispatcher.datastore.query(
@@ -1154,6 +1207,7 @@ def _init(dispatcher, plugin):
             single=True
         )
         if host:
+            refresh_containers(host_id)
             logger.debug('Docker host {0} deleted'.format(host['name']))
             dispatcher.unregister_resource('docker:{0}'.format(host['name']))
             dispatcher.dispatch_event('docker.host.changed', {
@@ -1232,15 +1286,46 @@ def _init(dispatcher, plugin):
             if args['operation'] == 'delete':
                 images.remove_many(args['ids'])
             else:
-                sync_cache(images, IMAGES_QUERY, args['ids'])
+                sync_images(args['ids'])
 
     def on_container_event(args):
-        logger.trace('Received Docker container event: {0}'.format(args))
+        logger.trace('Received Docker container event: {}'.format(args))
+
+        collection = 'docker.containers'
+        event = 'docker.container.changed'
+
         if args['ids']:
+            for id in args['ids']:
+                if args['operation'] in ('create', 'update'):
+                    state = dispatcher.call_sync(
+                        CONTAINERS_QUERY,
+                        [('id', '=', id)],
+                        {'single': True, 'select': 'running'}
+                    )
+                    containers_state.put(id, state)
+                else:
+                    containers_state.remove(id)
+
             if args['operation'] == 'delete':
-                containers.remove_many(args['ids'])
+                for i in args['ids']:
+                    dispatcher.datastore.delete(collection, i)
+
+                dispatcher.dispatch_event(event, {
+                    'operation': 'delete',
+                    'ids': args['ids']
+                })
             else:
-                sync_cache(containers, CONTAINERS_QUERY, args['ids'])
+                objs = dispatcher.call_sync(CONTAINERS_QUERY, [('id', 'in', args['ids'])])
+                for obj in map(lambda o: exclude(o, 'running'), objs):
+                    if args['operation'] == 'create':
+                        dispatcher.datastore.insert(collection, obj)
+                    else:
+                        dispatcher.datastore.update(collection, obj['id'], obj)
+
+                    dispatcher.dispatch_event(event, {
+                        'operation': args['operation'],
+                        'ids': args['ids']
+                    })
 
     def on_collection_change(args):
         if args['operation'] == 'delete':
@@ -1249,35 +1334,61 @@ def _init(dispatcher, plugin):
             if default_collection and default_collection in args['ids']:
                 node.update({'default_collection': None})
 
-    def sync_caches():
-        interval = dispatcher.configstore.get('container.cache_refresh_interval')
-        while True:
-            gevent.sleep(interval)
-            if images.ready and containers.ready:
-                logger.trace('Syncing Docker caches')
-                try:
-                    sync_cache(images, IMAGES_QUERY)
-                    sync_cache(containers, CONTAINERS_QUERY)
-                except RpcException:
-                    pass
+    def refresh_containers(host_id):
+        current = list(dispatcher.call_sync(CONTAINERS_QUERY, [('host', '=', host_id)]))
+        old = dispatcher.datastore.query('docker.containers', ('host', '=', host_id))
+        created = []
+        updated = []
+        deleted = []
+        for obj in map(lambda o: exclude(o, 'running'), current):
+            old_obj = first_or_default(lambda o: o['id'] == obj['id'], old)
+            if old_obj:
+                if obj != old_obj:
+                    dispatcher.datastore.update('docker.containers', obj['id'], obj)
+                    updated.append(obj['id'])
 
-    def sync_cache(cache, query, ids=None):
-        objects = list(dispatcher.call_sync(query, [('id', 'in', ids)] if ids else []))
-        cache.update(**{i['id']: i for i in objects})
+            else:
+                dispatcher.datastore.insert('docker.containers', obj)
+                created.append(obj['id'])
+
+        for obj in old:
+            if not first_or_default(lambda o: o['id'] == obj['id'], current):
+                dispatcher.datastore.delete('docker.containers', obj['id'])
+                deleted.append(obj['id'])
+
+        if created:
+            dispatcher.dispatch_event('docker.container.changed', {
+                'operation': 'create',
+                'ids': created
+            })
+
+        if updated:
+            dispatcher.dispatch_event('docker.container.changed', {
+                'operation': 'update',
+                'ids': updated
+            })
+
+        if deleted:
+            dispatcher.dispatch_event('docker.container.changed', {
+                'operation': 'delete',
+                'ids': deleted
+            })
+
+    def init_images():
+        logger.trace('Initializing Docker images cache')
+        sync_images()
+        images.ready = True
+
+    def sync_images(ids=None):
+        objects = list(dispatcher.call_sync(IMAGES_QUERY, [('id', 'in', ids)] if ids else []))
+        images.update(**{i['id']: i for i in objects})
         if not ids:
             nonexistent_ids = []
-            for k, v in cache.itervalid():
+            for k, v in images.itervalid():
                 if not first_or_default(lambda o: o['id'] == k, objects):
                     nonexistent_ids.append(k)
 
-            cache.remove_many(nonexistent_ids)
-
-    def init_cache():
-        logger.trace('Initializing Docker caches')
-        sync_cache(images, IMAGES_QUERY)
-        images.ready = True
-        sync_cache(containers, CONTAINERS_QUERY)
-        containers.ready = True
+            images.remove_many(nonexistent_ids)
 
     plugin.register_provider('docker.config', DockerConfigProvider)
     plugin.register_provider('docker.host', DockerHostProvider)
@@ -1313,7 +1424,7 @@ def _init(dispatcher, plugin):
     plugin.register_event_handler('containerd.docker.image.changed', on_image_event)
     plugin.register_event_handler('vm.changed', on_vm_change)
     plugin.register_event_handler('plugin.service_registered',
-                                  lambda a: init_cache() if a['service-name'] == 'containerd.docker' else None)
+                                  lambda a: init_images() if a['service-name'] == 'containerd.docker' else None)
     plugin.register_event_handler('docker.collection.changed', on_collection_change)
 
     plugin.attach_hook('vm.pre_destroy', vm_pre_destroy)
@@ -1404,7 +1515,6 @@ def _init(dispatcher, plugin):
             'image': {'type': 'string'},
             'host': {'type': ['string', 'null']},
             'hostname': {'type': ['string', 'null']},
-            'status': {'type': ['string', 'null']},
             'memory_limit': {'type': ['integer', 'null']},
             'expose_ports': {'type': 'boolean'},
             'autostart': {'type': 'boolean'},
@@ -1526,7 +1636,7 @@ def _init(dispatcher, plugin):
     })
 
     if 'containerd.docker' in dispatcher.call_sync('discovery.get_services'):
-        init_cache()
+        init_images()
 
     if not dispatcher.call_sync('docker.config.get_config').get('default_host'):
         host_id = dispatcher.datastore.query(
@@ -1538,9 +1648,7 @@ def _init(dispatcher, plugin):
         if host_id:
             dispatcher.call_task_sync('docker.config.update', {'default_host': host_id})
 
-    gevent.spawn(sync_caches)
-
-    for h in dispatcher.datastore.query('vms', ('config.docker_host', '=', True)):
+    for h in dispatcher.datastore.query_stream('vms', ('config.docker_host', '=', True)):
         parents = ['docker', 'zpool:{0}'.format(h['target'])]
         dispatcher.register_resource(
             Resource('docker:{0}'.format(h['name'])),
