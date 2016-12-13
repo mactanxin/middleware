@@ -21,17 +21,14 @@ prestart()
 {
     rc_flags="-P ${pidfile} /usr/local/sbin/crash-wrapper /usr/local/sbin/dispatcherd ${rc_flags}"
 
-   # mount .system dataset (or create it/fix links if needed)
-   /usr/local/sbin/sdsinit
-
-   if [ -z "$(check_pidfile /var/run/devd.pid /sbin/devd)" ]; then
+    if [ -z "$(check_pidfile /var/run/devd.pid /sbin/devd)" ]; then
         /sbin/devd -q
-   fi
+    fi
 
-   if [ "$(check_pidfile /var/run/dispatcher.pid /usr/sbin/daemon)" ]; then
+    if [ "$(check_pidfile /var/run/dispatcher.pid /usr/sbin/daemon)" ]; then
         echo "ERROR: dispatcher is already running"
         exit 1
-   fi
+    fi
 }
 
 poststart()

@@ -1,0 +1,24 @@
+#!/bin/sh
+#
+# $FreeBSD$
+#
+
+# PROVIDE: serviced
+# REQUIRE: datastore dispatcher ix-network
+# BEFORE: FILESYSTEMS
+
+. /etc/rc.subr
+
+name="serviced"
+rcvar="serviced_enable"
+pidfile="/var/run/serviced.pid"
+command="/usr/sbin/daemon"
+start_precmd="prestart"
+
+prestart()
+{
+    rc_flags="-P ${pidfile} -f -r /usr/local/sbin/crash-wrapper /usr/local/sbin/serviced ${rc_flags}"
+}
+
+load_rc_config $name
+run_rc_command $*

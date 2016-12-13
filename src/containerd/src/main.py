@@ -34,7 +34,6 @@ import sys
 import argparse
 import json
 import logging
-import setproctitle
 import errno
 import time
 import string
@@ -57,7 +56,7 @@ import requests
 import contextlib
 from docker.errors import NotFound
 from datetime import datetime
-from bsd import kld, sysctl
+from bsd import kld, sysctl, setproctitle
 from threading import Condition
 from gevent.queue import Queue
 from gevent.event import Event
@@ -71,6 +70,7 @@ from freenas.dispatcher.client import Client, ClientError
 from freenas.dispatcher.rpc import RpcService, RpcException, private, generator
 from freenas.utils.debug import DebugService
 from freenas.utils import first_or_default, configure_logging, query as q
+from freenas.serviced import checkin
 from vnc import app
 from mgmt import ManagementNetwork
 from ec2 import EC2MetadataServer
@@ -1799,7 +1799,7 @@ class Main(object):
 
         # Last, but not least, enable IP forwarding in kernel
         try:
-            sysctl.sysctlbyname('net.inet.ip.forwarding', 1)
+            sysctl.sysctlbyname('net.inet.ip.forwarding', new=1)
         except OSError as err:
             raise err
 
@@ -1902,7 +1902,7 @@ class Main(object):
         parser.add_argument('-p', type=int, metavar='PORT', default=5500, help="WebSockets server port")
         args = parser.parse_args()
         configure_logging('/var/log/containerd.log', 'DEBUG')
-        setproctitle.setproctitle('containerd')
+        setproctitle('containerd')
 
         gevent.signal(signal.SIGTERM, self.die)
         gevent.signal(signal.SIGQUIT, self.die)
@@ -1946,6 +1946,7 @@ class Main(object):
         }, context=self), **kwargs)
 
         serv_threads = [gevent.spawn(s4.serve_forever), gevent.spawn(s6.serve_forever)]
+        checkin()
         gevent.joinall(serv_threads)
 
 

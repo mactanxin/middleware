@@ -33,7 +33,7 @@ import logging
 import datetime
 import requests
 import time
-import setproctitle
+from bsd import setproctitle
 from threading import RLock
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
@@ -141,7 +141,7 @@ class Main(object):
         os.unlink(path)
 
     def main(self):
-        setproctitle.setproctitle('crashd')
+        setproctitle('crashd')
         logging.basicConfig(level=logging.INFO, format=LOGGING_FORMAT)
         logger.info('Started')
 

@@ -29,7 +29,7 @@
 import logging
 import argparse
 import time
-import setproctitle
+from bsd import setproctitle
 from freenas.dispatcher.client import Client, ClientError
 from freenas.dispatcher.rpc import RpcService, RpcException, generator
 from freenas.utils import configure_logging, load_module_from_file
@@ -127,7 +127,7 @@ class Main(object):
         self.config = args.c
         configure_logging('/var/log/clid.log', 'DEBUG')
 
-        setproctitle.setproctitle('clid')
+        setproctitle('clid')
         self.init_dispatcher()
         self.init_cli()
         self.client.wait_forever()

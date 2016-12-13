@@ -38,15 +38,27 @@ from freenas.dispatcher.rpc import SchemaHelper as h
 from freenas.utils import normalize, query as q
 
 
-
-def validate_portal_port(updated_fields):
-    if updated_fields.get('listen'):
-        for host in updated_fields['listen']:
+def validate_portal_port(listen):
+    if listen:
+        for host in listen:
             if not not is_port_open(host['port']):
                 raise TaskException(
                     errno.EFAULT,
                     'Provided port {} is already in use'.format(host['port'])
                 )
+
+
+def check_auth_group_mode(datastore, discovery_auth_group):
+    if discovery_auth_group:
+        if not datastore.exists('iscsi.auth', ('id', '=', discovery_auth_group)):
+            raise TaskException(
+                errno.ENOENT,
+                'Auth group {0} does not exist'.format(discovery_auth_group)
+            )
+        else:
+            auth_group = datastore.get_by_id('iscsi.auth', discovery_auth_group)
+            if auth_group['type'] in ('NONE', 'DENY'):
+                raise TaskException(errno.EPERM, 'Auth group cannot be in NONE or DENY mode')
 
 
 @description("Provides info about configured iSCSI shares")
@@ -458,7 +470,9 @@ class CreateISCSIPortalTask(Task):
         return ['system']
 
     def run(self, portal):
-        validate_portal_port(portal)
+        validate_portal_port(portal.get('listen'))
+        check_auth_group_mode(self.datastore, portal.get('discovery_auth_group'))
+
         normalize(portal, {
             'id': self.datastore.collection_get_next_pkey('iscsi.portals', 'pg'),
             'discovery_auth_group': None,
@@ -490,7 +504,9 @@ class UpdateISCSIPortalTask(Task):
         return ['system']
 
     def run(self, id, updated_params):
-        validate_portal_port(updated_params)
+        validate_portal_port(updated_params.get('listen'))
+        check_auth_group_mode(self.datastore, updated_params.get('discovery_auth_group'))
+
         if not self.datastore.exists('iscsi.portals', ('id', '=', id)):
             raise TaskException(errno.ENOENT, 'Portal {0} does not exist'.format(id))
 

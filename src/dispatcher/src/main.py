@@ -42,7 +42,6 @@ import argparse
 import signal
 import time
 import errno
-import setproctitle
 import contextlib
 import tempfile
 import cgi
@@ -54,6 +53,7 @@ import traceback
 import websocket  # do not remove - we import it only for side effects
 
 import gevent
+from bsd import setproctitle
 from io import UnsupportedOperation
 from pyee import EventEmitter
 from gevent.threadpool import ThreadPool
@@ -80,6 +80,7 @@ from balancer import Balancer
 from auth import PasswordAuthenticator, TokenStore, Token, TokenException, User, Service
 from freenas.utils import FaultTolerantLogHandler, load_module_from_file, xrecvmsg, xsendmsg, serialize_exception
 from freenas.utils.trace_logger import TraceLogger, TRACE
+from freenas.serviced import checkin, push_status
 
 DEFAULT_CONFIGFILE = '/usr/local/etc/middleware.conf'
 LOGGING_FORMAT = '%(asctime)s %(levelname)s %(filename)s:%(lineno)d %(message)s'
@@ -160,6 +161,7 @@ class Plugin(object):
             self.module._init(self.dispatcher, self)
             self.state = self.LOADED
             self.dispatcher.dispatch_event('server.plugin.initialized', {"name": os.path.basename(self.filename)})
+            push_status('Plugin loaded: {0}'.format(os.path.basename(self.filename)))
         except Exception as err:
             self.dispatcher.logger.exception('Plugin %s exception', self.filename)
             self.dispatcher.report_error('Cannot initalize plugin {0}'.format(self.filename), err)
@@ -396,12 +398,13 @@ class Dispatcher(object):
     def start(self):
         self.started_at = time.time()
         self.balancer.start()
-
         self.ready.set()
-
         self.dispatch_event('server.ready', {
             'description': 'Server is completely loaded and ready to use.',
         })
+
+        # serviced check-in
+        checkin()
 
     def read_config_file(self, file):
         try:
@@ -1484,7 +1487,7 @@ class DownloadRequestHandler(object):
 
 
 def run(d, args):
-    setproctitle.setproctitle('dispatcher')
+    setproctitle('dispatcher')
 
     # Signal handlers
     gevent.signal(signal.SIGQUIT, d.die)
@@ -1532,10 +1535,15 @@ def run(d, args):
 
         d.http_servers.extend([http_server4, http_server6])
         logging.info('Frontend server listening on port %d', args.s)
+
     for i in d.http_servers:
         gevent.spawn(i.serve_forever)
 
-    serv_threads = [gevent.spawn(s4.serve_forever), gevent.spawn(s6.serve_forever), gevent.spawn(su.serve_forever)]
+    serv_threads = [
+        gevent.spawn(s4.serve_forever),
+        gevent.spawn(s6.serve_forever),
+        gevent.spawn(su.serve_forever)
+    ]
 
     d.discover_plugins()
     d.load_plugins()
@@ -1551,7 +1559,7 @@ def main():
     parser.add_argument('-p', type=int, metavar='PORT', default=5000, help="WebSockets server port")
     parser.add_argument('-u', type=str, metavar='PATH', default='/var/run/dispatcher.sock', help="Unix domain server path")
     parser.add_argument('-c', type=str, metavar='CONFIG', default=DEFAULT_CONFIGFILE, help='Configuration file path')
-    parser.add_argument('--load-disabled', type=bool, metavar='LOAD_DISABLED', default=False, help='Load disabled plugins')
+    parser.add_argument('--load-disabled', action='store_true', help='Load disabled plugins')
     args = parser.parse_args()
 
     logging.setLoggerClass(TraceLogger)

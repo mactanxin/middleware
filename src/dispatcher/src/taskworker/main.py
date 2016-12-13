@@ -29,12 +29,12 @@
 import os
 import sys
 import errno
-import setproctitle
 import socket
 import traceback
 import logging
 import queue
 import contextlib
+from bsd import setproctitle
 from threading import Event
 from freenas.dispatcher.client import Client
 from freenas.dispatcher.fd import FileDescriptor
@@ -213,13 +213,13 @@ class Context(object):
         self.conn.rpc.register_service_instance('taskproxy', self.service)
         self.conn.register_event_handler('task.progress', self.task_progress_handler)
         self.conn.call_sync('task.checkin', key)
-        setproctitle.setproctitle('task executor (idle)')
+        setproctitle('task executor (idle)')
 
         while True:
             try:
                 task = self.task.get()
                 logging.root.setLevel(self.conn.call_sync('management.get_logging_level'))
-                setproctitle.setproctitle('task executor (tid {0})'.format(task['id']))
+                setproctitle('task executor (tid {0})'.format(task['id']))
 
                 if task['debugger']:
                     sys.path.append('/usr/local/lib/dispatcher/pydev')
@@ -234,7 +234,7 @@ class Context(object):
                     module = load_module_from_file(name, task['filename'])
                     self.module_cache[task['filename']] = module
 
-                setproctitle.setproctitle('task executor (tid {0})'.format(task['id']))
+                setproctitle('task executor (tid {0})'.format(task['id']))
                 fds = list(self.collect_fds(task['args']))
 
                 try:
@@ -282,7 +282,7 @@ class Context(object):
                 import pydevd
                 pydevd.stoptrace()
 
-            setproctitle.setproctitle('task executor (idle)')
+            setproctitle('task executor (idle)')
 
 
 if __name__ == '__main__':

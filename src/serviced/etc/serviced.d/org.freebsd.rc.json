@@ -1,0 +1,9 @@
+{
+    "Label": "org.freebsd.rc",
+    "RunAtLoad": true,
+    "OneShot": true,
+    "ProgramArguments": [
+        "/bin/sh",
+        "/etc/rc.freebsd"
+    ]
+}

@@ -1590,6 +1590,10 @@ def _init(dispatcher, plugin):
             if p['status'] not in ('DEGRADED', 'UNAVAIL'):
                 continue
 
+            volume = dispatcher.datastore.get_by_id('volumes', p['id'])
+            if volume and (volume.get('key_encrypted') or volume.get('password_encrypted')):
+                continue
+
             for vd in iterate_vdevs(p['groups']):
                 if args['path'] == vd['path']:
                     logger.info('Device {0} that was part of the pool {1} got reconnected'.format(

@@ -35,7 +35,6 @@ import math
 import errno
 import argparse
 import logging
-import setproctitle
 import dateutil.parser
 import dateutil.tz
 import tables
@@ -47,6 +46,7 @@ from datetime import datetime, timedelta
 import gevent
 import gevent.socket
 import gevent.threadpool
+from bsd import setproctitle
 from gevent.server import StreamServer
 from freenas.dispatcher.client import Client, ClientError
 from freenas.dispatcher.rpc import RpcService, RpcException, accepts, returns, generator
@@ -54,6 +54,7 @@ from datastore import DatastoreException, get_datastore
 from ringbuffer import MemoryRingBuffer, PersistentRingBuffer
 from freenas.utils.debug import DebugService
 from freenas.utils import configure_logging, to_timedelta, materialized_paths_to_tree
+from freenas.serviced import checkin
 
 
 DEFAULT_CONFIGFILE = '/usr/local/etc/middleware.conf'
@@ -540,12 +541,15 @@ class Main(object):
     def dispatcher_error(self, error):
         self.die()
 
+    def checkin(self):
+        checkin()
+
     def main(self):
         parser = argparse.ArgumentParser()
         parser.add_argument('-c', metavar='CONFIG', default=DEFAULT_CONFIGFILE, help='Middleware config file')
         args = parser.parse_args()
         configure_logging('/var/log/fnstatd.log', 'DEBUG')
-        setproctitle.setproctitle('fnstatd')
+        setproctitle('fnstatd')
 
         # Signal handlers
         gevent.signal(signal.SIGQUIT, self.die)
@@ -559,6 +563,7 @@ class Main(object):
         self.init_database()
         self.server.start()
         self.logger.info('Started')
+        self.checkin()
         self.client.wait_forever()
 
 

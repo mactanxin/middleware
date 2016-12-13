@@ -34,13 +34,13 @@ import logging
 import subprocess
 import errno
 import threading
-import setproctitle
 import netif
 import time
 import ipaddress
 import io
 import dhcp.client
 import socket
+from bsd import setproctitle
 from threading import Condition
 from datastore import get_datastore, DatastoreException
 from datastore.config import ConfigStore
@@ -48,6 +48,7 @@ from freenas.dispatcher.client import Client, ClientError
 from freenas.dispatcher.rpc import RpcService, RpcException, private, generator
 from freenas.utils.debug import DebugService
 from freenas.utils import configure_logging, first_or_default
+from freenas.serviced import checkin
 from functools import reduce
 
 
@@ -322,6 +323,7 @@ class RoutingSocketEventSource(threading.Thread):
 class ConfigurationService(RpcService):
     def __init__(self, context):
         self.context = context
+        self.context.configure_network = self.configure_network
         self.logger = context.logger
         self.config = context.configstore
         self.datastore = context.datastore
@@ -793,6 +795,7 @@ class Main(object):
         self.rtsock_thread = None
         self.dhcp_clients = {}
         self.dhcp_lock = threading.RLock()
+        self.configure_network = None
         self.logger = logging.getLogger('networkd')
         self.default_interface = None
         self.cv = Condition()
@@ -1208,12 +1211,15 @@ class Main(object):
             'enum': list(netif.InterfaceLinkState.__members__.keys())
         })
 
+    def checkin(self):
+        checkin()
+
     def main(self):
         parser = argparse.ArgumentParser()
         parser.add_argument('-c', metavar='CONFIG', default=DEFAULT_CONFIGFILE, help='Middleware config file')
         args = parser.parse_args()
         configure_logging('/var/log/networkd.log', 'DEBUG')
-        setproctitle.setproctitle('networkd')
+        setproctitle('networkd')
         self.config = args.c
         self.init_datastore()
         self.init_dispatcher()
@@ -1221,6 +1227,11 @@ class Main(object):
         self.init_routing_socket()
         self.client.resume_service('networkd.configuration')
         self.client.resume_service('networkd.debug')
+
+        for i in self.configure_network():
+            self.logger.info('Initial network configuration: {0}, {1}'.format(*i))
+
+        self.checkin()
         self.logger.info('Started')
         self.client.wait_forever()
 

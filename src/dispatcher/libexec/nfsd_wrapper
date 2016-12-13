@@ -1,0 +1,117 @@
+#!/usr/local/bin/python3
+#
+# Copyright (c) 2016 iXsystems, Inc.
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+# 1. Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+# 2. Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in the
+#    documentation and/or other materials provided with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+# OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+# HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+# LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+# OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+# SUCH DAMAGE.
+#
+
+import os
+import sys
+import subprocess
+import signal
+from bsd import sysctl, setproctitle
+from datastore import get_datastore
+from datastore.config import ConfigStore, ConfigNode
+from freenas.serviced import checkin, ServicedException
+
+
+terminating = False
+ds = get_datastore()
+cs = ConfigStore(ds)
+nfs = ConfigNode('service.nfs', cs).__getstate__()
+ips = sum([['-h', x] for x in (nfs['bind_addresses'] or [])], [])
+nfsvers = 4 if nfs['v4'] else 3
+
+
+def get_arguments(label):
+    if label == 'org.freebsd.rpcbind':
+        return \
+            ['/usr/sbin/rpcbind', '-d'] + ips
+
+    if label == 'org.freebsd.nfsd':
+        return \
+            ['/usr/sbin/nfsd', '--debug', '-t', '-n', str(nfs['servers'])] + \
+            (['-u'] if nfs['udp'] else []) + \
+            ips
+
+    if label == 'org.freebsd.mountd':
+        return \
+            ['/usr/sbin/mountd', '-d', '-l', '-rS'] + \
+            (['-n'] if nfs['nonroot'] else []) + \
+            (['-p', nfs['mountd_port']] if nfs['mountd_port'] else []) + \
+            ips
+
+    if label == 'org.freebsd.statd':
+        return \
+            ['/usr/sbin/rpc.statd', '-d'] + \
+            (['-p', nfs['rpcstatd_port']] if nfs['rpcstatd_port'] else []) + \
+            ips
+
+    if label == 'org.freebsd.lockd':
+        return \
+            ['/usr/sbin/rpc.lockd', '-d', '1'] + \
+            (['-p', nfs['rpclockd_port']] if nfs['rpclockd_port'] else []) + \
+            ips
+
+
+def start_process(label):
+    args = get_arguments(label)
+    print('Starting {0}'.format(args))
+    return subprocess.Popen(args)
+
+
+def main():
+    setproctitle('nfsd master process')
+    sysctl.sysctlbyname('vfs.nfsd.server_max_nfsvers', new=nfsvers)
+    procs = [
+        start_process('org.freebsd.rpcbind'),
+        start_process('org.freebsd.nfsd'),
+        start_process('org.freebsd.mountd'),
+        start_process('org.freebsd.statd'),
+        start_process('org.freebsd.lockd')
+    ]
+
+    try:
+        checkin()
+        while True:
+            sig = signal.sigwait([signal.SIGTERM, signal.SIGINT, signal.SIGHUP])
+            if sig == signal.SIGHUP:
+                print('Reloading configuration')
+                for p in procs:
+                    os.kill(p.pid, signal.SIGHUP)
+
+                continue
+            break
+    except ServicedException:
+        print("Failed to check-in")
+    finally:
+        for p in reversed(procs):
+            print('Terminating {0}'.format(p.args[0]))
+            p.terminate()
+            p.wait()
+
+        sys.exit(0)
+
+
+if __name__ == '__main__':
+    main()
