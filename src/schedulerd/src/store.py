@@ -55,7 +55,7 @@ class FreeNASJobStore(BaseJobStore):
         return self._get_jobs(('next_run_time', '<=', timestamp))
 
     def get_next_run_time(self):
-        document = self.ds.get_one('calendar_tasks', ('next_run_time', '!=', None), sort='next_run_time')
+        document = self.ds.query('calendar_tasks', ('next_run_time', '!=', None), sort='next_run_time', single=True)
         return utc_timestamp_to_datetime(document['next_run_time']) if document else None
 
     def get_all_jobs(self):
