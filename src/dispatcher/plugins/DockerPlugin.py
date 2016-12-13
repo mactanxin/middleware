@@ -107,6 +107,7 @@ class DockerContainerProvider(Provider):
             return None
 
         def extend(obj):
+            obj = unpack_labels(obj)
             presets = self.dispatcher.call_sync('docker.image.labels_to_presets', obj['labels'])
             settings = obj.setdefault('settings', [])
             address = q.get(obj, 'bridge.address') or socket.gethostname()
@@ -1141,6 +1142,16 @@ class DockerCollectionDeleteTask(Task):
         })
 
 
+def pack_labels(obj):
+    obj['labels'] = {k.replace('.', '+'): v for k, v in obj['labels'].items()}
+    return obj
+
+
+def unpack_labels(obj):
+    obj['labels'] = {k.replace('+', '.'): v for k, v in obj['labels'].items()}
+    return obj
+
+
 def collect_debug(dispatcher):
     yield AttachData('hosts-query', dumps(list(dispatcher.call_sync('docker.host.query')), indent=4))
     yield AttachData('containers-query', dumps(list(dispatcher.call_sync('docker.container.query')), indent=4))
@@ -1315,7 +1326,7 @@ def _init(dispatcher, plugin):
                 })
             else:
                 objs = dispatcher.call_sync(CONTAINERS_QUERY, [('id', 'in', args['ids'])])
-                for obj in map(lambda o: exclude(o, 'running'), objs):
+                for obj in map(lambda o: pack_labels(exclude(o, 'running')), objs):
                     if args['operation'] == 'create':
                         dispatcher.datastore.insert(collection, obj)
                     else:
@@ -1339,7 +1350,7 @@ def _init(dispatcher, plugin):
         created = []
         updated = []
         deleted = []
-        for obj in map(lambda o: exclude(o, 'running'), current):
+        for obj in map(lambda o: pack_labels(exclude(o, 'running')), current):
             old_obj = first_or_default(lambda o: o['id'] == obj['id'], old)
             if old_obj:
                 if obj != old_obj:
