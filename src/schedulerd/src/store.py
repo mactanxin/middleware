@@ -47,7 +47,7 @@ class FreeNASJobStore(BaseJobStore):
         return self.ds
 
     def lookup_job(self, job_id):
-        document = self.ds.get_by_od(job_id)
+        document = self.ds.get_by_id(job_id)
         return self._reconstitute_job(document) if document else None
 
     def get_due_jobs(self, now):
