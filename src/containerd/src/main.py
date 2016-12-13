@@ -1801,7 +1801,7 @@ class Main(object):
 
         # Last, but not least, enable IP forwarding in kernel
         try:
-            sysctl.sysctlbyname('net.inet.ip.forwarding', 1)
+            sysctl.sysctlbyname('net.inet.ip.forwarding', new=1)
         except OSError as err:
             raise err
 
