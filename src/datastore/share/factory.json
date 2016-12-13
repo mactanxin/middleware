@@ -1666,13 +1666,13 @@
         },
         "data": {
             "e8e84b9d-b853-4a67-8182-095e119ddfe0": {
-                "name": "nightly_update_check",
+                "name": "nightly update check",
                 "task": "update.checkfetch",
                 "args": [],
                 "enabled": true,
                 "hidden": false,
                 "protected": false,
-                "next_run_time": null,
+                "next_run_time": 1,
                 "schedule": {
                     "year": "*",
                     "month": "*",
@@ -1690,9 +1690,9 @@
                 "task": "calendar_task.command",
                 "args": ["root", "/usr/sbin/newsyslog"],
                 "enabled": true,
-                "hidden": false,
+                "hidden": true,
                 "protected": false,
-                "next_run_time": null,
+                "next_run_time": 1,
                 "schedule": {
                     "year": "*",
                     "month": "*",
@@ -1712,7 +1712,7 @@
                 "enabled": true,
                 "hidden": false,
                 "protected": false,
-                "next_run_time": null,
+                "next_run_time": 1,
                 "schedule": {
                     "year": "*",
                     "month": "*",
@@ -1732,7 +1732,7 @@
                 "enabled": true,
                 "hidden": false,
                 "protected": false,
-                "next_run_time": null,
+                "next_run_time": 1,
                 "schedule": {
                     "year": "*",
                     "month": "*",
@@ -1752,7 +1752,7 @@
                 "enabled": true,
                 "hidden": false,
                 "protected": false,
-                "next_run_time": null,
+                "next_run_time": 1,
                 "schedule": {
                     "year": "*",
                     "month": "*",
@@ -1772,7 +1772,7 @@
                 "enabled": true,
                 "hidden": false,
                 "protected": false,
-                "next_run_time": null,
+                "next_run_time": 1,
                 "schedule": {
                     "year": "*",
                     "month": "*",
