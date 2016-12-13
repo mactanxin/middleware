@@ -1450,9 +1450,6 @@ def persist_disk(dispatcher, disk):
     if 'smart' not in ds_disk:
         ds_disk.update({'smart': True if disk['smart_info']['smart_capable'] else False})
 
-    if 'smart_options' not in ds_disk:
-        ds_disk.update({'smart_options': None})
-
     dispatcher.datastore.upsert('disks', disk['id'], ds_disk)
     dispatcher.dispatch_event('disk.changed', {
         'operation': 'create' if new else 'update',
@@ -1626,7 +1623,6 @@ def _init(dispatcher, plugin):
             'serial': {'type': ['string', 'null']},
             'mediasize': {'type': 'integer'},
             'smart': {'type': 'boolean'},
-            'smart_options': {'type': 'string'},
             'standby_mode': {'type': ['integer', 'null']},
             'apm_mode': {'type': ['integer', 'null']},
             'acoustic_level': {'$ref': 'disk-acousticlevel'},
