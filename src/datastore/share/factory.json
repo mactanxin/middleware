@@ -852,8 +852,11 @@
                 "name": "collectd"
             },
             "7b488932-c09e-4336-a980-7fba6ddd6228": {
-                "rcng": {
-                    "rc-scripts": "inadyn-mt"
+                "launchd": {
+                    "Label": "net.sourceforge.inadyn-mt.inadyn-mt",
+                    "RunAtLoad": true,
+                    "Requires": ["logging", "etc"],
+                    "Program": ["/usr/local/bin/inadyn-mt"]
                 },
                 "builtin": false,
                 "get_config_rpc": "service.dyndns.get_config",
@@ -861,8 +864,12 @@
                 "name": "dyndns"
             },
             "efc90340-f09f-43dc-a1ab-20467f0a148a": {
-                "rcng": {
-                    "rc-scripts": "ipfs-go"
+                "launchd": {
+                    "Label": "io.ipfs.ipfs-go",
+                    "RunAtLoad": true,
+                    "SupportsCheckin": true,
+                    "Requires": ["networking", "logging", "etc"],
+                    "Program": ["/usr/local/libexec/dispatcher/ipfs_wrapper"]
                 },
                 "builtin": false,
                 "get_config_rpc": "service.ipfs.get_config",
@@ -946,22 +953,10 @@
                         "-DFOREGROUND"
                     ]
                 },
-                "rcng": {
-                    "rc-scripts": "apache24"
-                },
                 "builtin": false,
-                "pidfile": "/var/run/httpd.pid",
                 "get_config_rpc": "service.webdav.get_config",
                 "task": "service.webdav.update",
                 "name": "webdav"
-            },
-            "b3e5e737-bd2e-401e-8d16-2a4cf3d68717": {
-                "rcng": {
-                    "rc-scripts": "dispatcher"
-                },
-                "builtin": true,
-                "pidfile": "/var/run/dispatcher.pid",
-                "name": "dispatcher"
             },
             "d33f4044-aa6b-4839-8b0d-16aeafc626f8": {
                 "launchd": {
@@ -972,11 +967,7 @@
                         "-debug"
                     ]
                 },
-                "rcng": {
-                    "rc-scripts": "mdnsd"
-                },
                 "builtin": true,
-                "pidfile": "/var/run/mdnsd.pid",
                 "name": "mdns"
             },
             "12b2673e-678c-4c5d-8e5b-08af9db31592": {
@@ -998,11 +989,7 @@
                         "-f"
                     ]
                 },
-                "rcng": {
-                    "rc-scripts": "rtsold"
-                },
                 "builtin": true,
-                "pidfile": "/var/run/rtsold.pid",
                 "name": "rtsold"
             },
             "793867c5-bf29-4464-b7f1-7b77a9e2b97c": {
@@ -1016,11 +1003,7 @@
                         "-d"
                     ]
                 },
-                "rcng": {
-                    "rc-scripts": "ctld"
-                },
                 "builtin": true,
-                "pidfile": "/var/run/ctld.pid",
                 "auto_enable": true,
                 "name": "ctl"
             },
@@ -1065,9 +1048,6 @@
                         "/usr/sbin/ypbind",
                         "-d"
                     ]
-                },
-                "rcng": {
-                    "rc-scripts": "ypbind"
                 },
                 "builtin": true,
                 "name": "ypbind"

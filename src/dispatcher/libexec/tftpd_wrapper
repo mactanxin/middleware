@@ -41,4 +41,4 @@ args = \
     tftpd['path']
 
 checkin()
-os.execvp('/usr/local/libexec/in.tftpd', args)
+os.execv('/usr/local/libexec/in.tftpd', args)
