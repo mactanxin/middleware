@@ -30,7 +30,6 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.util import datetime_to_utc_timestamp, utc_timestamp_to_datetime
 from apscheduler.job import Job
 from datastore import get_datastore, DuplicateKeyException
-import jsonpickle
 
 
 class FreeNASJobStore(BaseJobStore):
