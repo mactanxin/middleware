@@ -1724,6 +1724,66 @@
                     "second": "0",
                     "timezone": "America/Los_Angeles"
                 }
+            },
+            "f10a7f4a-c185-11e6-b7f2-000c293ba8c9": {
+                "name": "periodic daily",
+                "task": "calendar_task.command",
+                "args": ["root", "/usr/sbin/periodic daily"],
+                "enabled": true,
+                "hidden": false,
+                "protected": false,
+                "next_run_time": null,
+                "schedule": {
+                    "year": "*",
+                    "month": "*",
+                    "day": "*",
+                    "week": "*",
+                    "day_of_week": "*",
+                    "hour": "3",
+                    "minute": "1",
+                    "second": "0",
+                    "timezone": "America/Los_Angeles"
+                }
+            },
+            "2d5a6561-c186-11e6-b7f2-000c293ba8c9": {
+                "name": "periodic weekly",
+                "task": "calendar_task.command",
+                "args": ["root", "/usr/sbin/periodic weekly"],
+                "enabled": true,
+                "hidden": false,
+                "protected": false,
+                "next_run_time": null,
+                "schedule": {
+                    "year": "*",
+                    "month": "*",
+                    "day": "*",
+                    "week": "*",
+                    "day_of_week": "sat",
+                    "hour": "4",
+                    "minute": "15",
+                    "second": "0",
+                    "timezone": "America/Los_Angeles"
+                }
+            },
+            "3dc13171-c186-11e6-b7f2-000c293ba8c9": {
+                "name": "periodic monthly",
+                "task": "calendar_task.command",
+                "args": ["root", "/usr/sbin/periodic monthly"],
+                "enabled": true,
+                "hidden": false,
+                "protected": false,
+                "next_run_time": null,
+                "schedule": {
+                    "year": "*",
+                    "month": "*",
+                    "day": "1",
+                    "week": "*",
+                    "day_of_week": "*",
+                    "hour": "5",
+                    "minute": "30",
+                    "second": "0",
+                    "timezone": "America/Los_Angeles"
+                }
             }
         }
     },
