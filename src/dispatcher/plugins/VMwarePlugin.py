@@ -215,7 +215,7 @@ class CreateVMSnapshotsTask(ProgressTask):
         # Save the snapshot name in parent task environment to the delete counterpart can find it
         self.dispatcher.task_setenv(self.environment['parent'], 'vmware_snapshot_name', vm_snapname)
 
-        for mapping in self.datastore.query('vmware.datasets'):
+        for mapping in self.datastore.query_stream('vmware.datasets'):
             if recursive:
                 if not re.search('^{0}(/|$)'.format(mapping['dataset']), dataset) and \
                    not re.search('^{0}(/|$)'.format(dataset), mapping['dataset']):
@@ -319,7 +319,7 @@ class DeleteVMSnapshotsTask(ProgressTask):
 
         logger.info('VM snapshot name is: {0}'.format(vm_snapname))
 
-        for mapping in self.datastore.query('vmware.datasets'):
+        for mapping in self.datastore.query_stream('vmware.datasets'):
             if recursive:
                 if not re.search('^{0}(/|$)'.format(mapping['dataset']), dataset) and \
                    not re.search('^{0}(/|$)'.format(dataset), mapping['dataset']):

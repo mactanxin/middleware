@@ -98,7 +98,7 @@ class DiskProvider(Provider):
             return disk
 
         return q.query(
-            self.datastore.query('disks', callback=extend),
+            self.datastore.query_stream('disks', callback=extend),
             *(filter or []),
             stream=True,
             **(params or {})
@@ -1887,7 +1887,7 @@ def _init(dispatcher, plugin):
     plugin.register_debug_hook(collect_debug)
 
     # Start with marking all disks as unavailable
-    for i in dispatcher.datastore.query('disks'):
+    for i in dispatcher.datastore.query_stream('disks'):
         if not i.get('delete_at'):
             i['delete_at'] = datetime.utcnow() + EXPIRE_TIMEOUT
 

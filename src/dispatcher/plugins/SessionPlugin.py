@@ -137,7 +137,7 @@ def _init(dispatcher, plugin):
     })
 
     # Mark all orphaned sessions as inactive
-    for i in dispatcher.datastore.query('sessions', ('active', '=', True)):
+    for i in dispatcher.datastore.query_stream('sessions', ('active', '=', True)):
         i['active'] = False
         i['ended_at'] = datetime.utcnow()
         dispatcher.datastore.update('sessions', i['id'], i)

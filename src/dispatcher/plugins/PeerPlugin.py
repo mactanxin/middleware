@@ -306,6 +306,6 @@ def _init(dispatcher, plugin):
     # Init peer credentials schema
     update_peer_credentials_schema()
 
-    peers_status.update(**{i['id']: {'state': 'UNKNOWN', 'rtt': None} for i in dispatcher.datastore.query('peers')})
+    peers_status.update(**{i['id']: {'state': 'UNKNOWN', 'rtt': None} for i in dispatcher.datastore.query_stream('peers')})
 
     gevent.spawn(start_health_workers)

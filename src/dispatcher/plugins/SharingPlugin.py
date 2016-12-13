@@ -55,7 +55,7 @@ class SharesProvider(Provider):
             return share
 
         return q.query(
-            self.datastore.query('shares', callback=extend),
+            self.datastore.query_stream('shares', callback=extend),
             *(filter or []),
             stream=True,
             **(params or {})
@@ -91,9 +91,9 @@ class SharesProvider(Provider):
     def get_dependencies(self, path, enabled_only=True, recursive=True):
         result = []
         if enabled_only:
-            shares = self.datastore.query('shares', ('enabled', '=', True))
+            shares = self.datastore.query_stream('shares', ('enabled', '=', True))
         else:
-            shares = self.datastore.query('shares')
+            shares = self.datastore.query_stream('shares')
 
         for i in shares:
             target_path = self.translate_path(i['id'])

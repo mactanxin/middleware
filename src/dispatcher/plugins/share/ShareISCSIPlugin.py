@@ -228,7 +228,7 @@ class DeleteiSCSIShareTask(Task):
 
         # Check if share is mapped anywhere
         subtasks = []
-        for i in self.datastore.query('iscsi.targets'):
+        for i in self.datastore.query_stream('iscsi.targets'):
             if share['name'] in [m['name'] for m in i['extents']]:
                 i['extents'] = list(filter(lambda e: e['name'] != share['name'], i['extents']))
                 subtasks.append(self.run_subtask('share.iscsi.target.update', i['id'], i))
