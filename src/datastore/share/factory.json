@@ -116,12 +116,6 @@
             "service.devd.enable": true,
             "service.syslog.enable": true,
             "service.collectd.enable": true,
-            "service.smartd.enable": true,
-            "service.smartd.interval": 30,
-            "service.smartd.power_mode": "NEVER",
-            "service.smartd.temp_difference": null,
-            "service.smartd.temp_informational": null,
-            "service.smartd.temp_critical": null,
             "service.snmp.enable": true,
             "service.snmp.location": null,
             "service.snmp.contact": null,
@@ -531,13 +525,6 @@
                 ],
                 "name": "rsyncd"
             },
-            "fbbe4258-42e7-46c5-8204-3ebbd3498340": {
-                "dependencies": [
-                    "group:services",
-                    "plugin:smartd_conf"
-                ],
-                "name": "smartd"
-            },
             "01af048d-5d3f-4e6a-a389-96d8d73f3d93": {
                 "dependencies": [
                     "file:local/snmpd.conf"
@@ -897,17 +884,6 @@
                 "get_config_rpc": "service.rsyncd.get_config",
                 "task": "service.rsyncd.update",
                 "name": "rsyncd"
-            },
-            "95dec6af-48e4-49f0-8d96-9e7acc8f5e0d": {
-                "rcng": {
-                    "rc-scripts": "smartd"
-                },
-                "builtin": false,
-                "etcd-group": "smartd",
-                "pidfile": "/var/run/smartd.pid",
-                "get_config_rpc": "service.smartd.get_config",
-                "task": "service.smartd.update",
-                "name": "smartd"
             },
             "638dde98-3f61-487e-9da7-47093a6beb7a": {
                 "launchd": {
