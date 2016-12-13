@@ -35,7 +35,6 @@ import math
 import errno
 import argparse
 import logging
-import setproctitle
 import dateutil.parser
 import dateutil.tz
 import tables
@@ -47,6 +46,7 @@ from datetime import datetime, timedelta
 import gevent
 import gevent.socket
 import gevent.threadpool
+from bsd import setproctitle
 from gevent.server import StreamServer
 from freenas.dispatcher.client import Client, ClientError
 from freenas.dispatcher.rpc import RpcService, RpcException, accepts, returns, generator
@@ -549,7 +549,7 @@ class Main(object):
         parser.add_argument('-c', metavar='CONFIG', default=DEFAULT_CONFIGFILE, help='Middleware config file')
         args = parser.parse_args()
         configure_logging('/var/log/fnstatd.log', 'DEBUG')
-        setproctitle.setproctitle('fnstatd')
+        setproctitle('fnstatd')
 
         # Signal handlers
         gevent.signal(signal.SIGQUIT, self.die)

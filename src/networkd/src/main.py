@@ -34,13 +34,13 @@ import logging
 import subprocess
 import errno
 import threading
-import setproctitle
 import netif
 import time
 import ipaddress
 import io
 import dhcp.client
 import socket
+from bsd import setproctitle
 from threading import Condition
 from datastore import get_datastore, DatastoreException
 from datastore.config import ConfigStore
@@ -1219,7 +1219,7 @@ class Main(object):
         parser.add_argument('-c', metavar='CONFIG', default=DEFAULT_CONFIGFILE, help='Middleware config file')
         args = parser.parse_args()
         configure_logging('/var/log/networkd.log', 'DEBUG')
-        setproctitle.setproctitle('networkd')
+        setproctitle('networkd')
         self.config = args.c
         self.init_datastore()
         self.init_dispatcher()

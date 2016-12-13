@@ -38,8 +38,8 @@ import time
 import json
 import ipaddress
 import socket
-import setproctitle
 import netif
+from bsd import setproctitle
 from threading import RLock, Thread
 from datetime import datetime, timedelta
 from datastore.config import ConfigStore
@@ -918,7 +918,7 @@ class Main(object):
         args = parser.parse_args()
         configure_logging('/var/log/dscached.log', 'DEBUG')
 
-        setproctitle.setproctitle('dscached')
+        setproctitle('dscached')
         self.config = args.c
         self.parse_config(self.config)
         self.init_datastore()

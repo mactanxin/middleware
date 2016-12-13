@@ -36,8 +36,8 @@ import errno
 import datastore
 import time
 import imp
-import setproctitle
 import renderers
+from bsd import setproctitle
 from datastore.config import ConfigStore
 from freenas.dispatcher.client import Client, ClientError
 from freenas.dispatcher.rpc import RpcService, RpcException
@@ -252,7 +252,7 @@ class Main(object):
         args = parser.parse_args()
         configure_logging('/var/log/etcd.log', 'DEBUG')
 
-        setproctitle.setproctitle('etcd')
+        setproctitle('etcd')
         self.root = args.mountpoint
         self.configfile = args.c
         self.parse_config(args.c)

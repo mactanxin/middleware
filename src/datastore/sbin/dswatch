@@ -33,11 +33,11 @@ import argparse
 import subprocess
 import time
 import logging
-import setproctitle
 import shutil
 import signal
 import threading
 import pymongo
+from bsd import setproctitle
 from string import Template
 from datastore import get_datastore
 from datastore.restore import restore_db
@@ -150,7 +150,7 @@ def main():
     dbdir = dsconfig['dbdir']
     port = dsconfig['port']
 
-    setproctitle.setproctitle('dswatch: {0}'.format(args.name))
+    setproctitle('dswatch: {0}'.format(args.name))
     logger.info('Datastore name: {0}'.format(args.name))
     logger.info('Database directory: {0}'.format(dsconfig['dbdir']))
 

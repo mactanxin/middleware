@@ -34,7 +34,6 @@ import sys
 import argparse
 import json
 import logging
-import setproctitle
 import errno
 import time
 import string
@@ -57,7 +56,7 @@ import requests
 import contextlib
 from docker.errors import NotFound, DockerException
 from datetime import datetime
-from bsd import kld, sysctl
+from bsd import kld, sysctl, setproctitle
 from threading import Condition
 from gevent.queue import Queue
 from gevent.event import Event
@@ -1904,7 +1903,7 @@ class Main(object):
         parser.add_argument('-p', type=int, metavar='PORT', default=5500, help="WebSockets server port")
         args = parser.parse_args()
         configure_logging('/var/log/containerd.log', 'DEBUG')
-        setproctitle.setproctitle('containerd')
+        setproctitle('containerd')
 
         gevent.signal(signal.SIGTERM, self.die)
         gevent.signal(signal.SIGQUIT, self.die)
