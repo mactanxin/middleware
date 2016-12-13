@@ -65,7 +65,7 @@ class NTPServerSyncNowTask(Task):
     def run(self, address):
         output = ""
         try:
-            output = system('ntpdate', '-u', address)
+            output = system('/usr/sbin/ntpdate', '-u', address)
         except SubprocessException:
             raise TaskException(
                 errno.EACCES,
