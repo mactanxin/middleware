@@ -1349,7 +1349,7 @@
             "migration": "keep",
             "pkey-type": "uuid",
             "attributes": {
-                "type": "config"
+                "type": "log"
             }
         },
         "data": {
