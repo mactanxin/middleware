@@ -41,17 +41,18 @@ def probe(obj, ds):
 def apply(obj, ds):
     try:
         job = pickle.loads(obj['job_state'])
-        schedule = {f.name: str(f) for f in job.trigger.fields}
+        schedule = {f.name: str(f) for f in job['trigger'].fields}
         return {
-            'id': job.id,
-            'name': job.name,
-            'next_run_time': datetime_to_utc_timestamp(job.next_run_time),
-            'task': job.args[0],
-            'args': job.args[1:],
-            'enabled': job.next_run_time is not None,
-            'hidden': job.kwargs['hidden'],
-            'protected': job.kwargs['protected'],
+            'id': job['id'],
+            'name': job['name'],
+            'next_run_time': datetime_to_utc_timestamp(job['next_run_time']),
+            'task': job['args'][0],
+            'args': job['args'][1:],
+            'enabled': job['next_run_time'] is not None,
+            'hidden': job['kwargs']['hidden'],
+            'protected': job['kwargs']['protected'],
             'schedule': schedule
         }
-    except:
+    except BaseException as err:
+        print('Failed to convert {0}: {1}'.format(obj['id'], err))
         return None
