@@ -39,7 +39,7 @@ terminating = False
 ds = get_datastore()
 cs = ConfigStore(ds)
 nfs = ConfigNode('service.nfs', cs).__getstate__()
-ips = sum([['-h', x] for x in nfs['bind_addresses']], [])
+ips = sum([['-h', x] for x in (nfs['bind_addresses'] or [])], [])
 nfsvers = 4 if nfs['v4'] else 3
 
 
