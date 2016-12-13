@@ -52,6 +52,10 @@ DEFAULT_SOCKET_ADDRESS = 'unix:///var/run/serviced.sock'
 BOOTSTRAP_JOB = ['/usr/local/sbin/servicectl', 'bootstrap']
 MAX_EVENTS = 16
 SHUTDOWN_TIMEOUT = 60
+BASE_ENV = {
+    'PATH': '/sbin:/bin:/usr/sbin:/usr/bin',
+    'HOME': '/'
+}
 
 
 def daemonize():
@@ -230,8 +234,10 @@ class Job(object):
 
                 bsd.closefrom(3)
                 os.setsid()
+                env = BASE_ENV.copy()
+                env.update(self.environment)
                 try:
-                    os.execvpe(self.program, self.program_arguments, self.environment)
+                    os.execvpe(self.program, self.program_arguments, env)
                 except:
                     sys.exit(254)
 
