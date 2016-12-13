@@ -34,7 +34,6 @@ import logging
 import select
 import time
 import uuid
-import setproctitle
 import signal
 import pwd
 import grp
@@ -648,7 +647,7 @@ class Context(object):
         args = parser.parse_args()
 
         configure_logging('/var/log/serviced.log', 'DEBUG')
-        setproctitle.setproctitle('serviced')
+        bsd.setproctitle('serviced')
         self.logger.info('Started')
         self.init_server(args.s)
         self.bootstrap()

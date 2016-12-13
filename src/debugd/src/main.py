@@ -35,7 +35,6 @@ import enum
 import uuid
 import json
 import glob
-import setproctitle
 import tempfile
 import time
 import subprocess
@@ -50,6 +49,7 @@ import bsd
 import mmap
 import msock.channel
 import msock.client
+from bsd import setproctitle
 from datetime import datetime
 from threading import Condition
 from freenas.dispatcher.rpc import RpcContext, RpcService, RpcException, generator
@@ -573,7 +573,7 @@ def main():
     context = Context()
     context.start(args.c, args.s)
     context.init_dispatcher()
-    setproctitle.setproctitle('debugd')
+    setproctitle('debugd')
 
     if not os.path.isdir(CORES_DIR):
         os.mkdir(CORES_DIR)

@@ -34,7 +34,7 @@ import argparse
 import datastore
 import time
 import json
-import setproctitle
+from bsd import setproctitle
 from datastore.config import ConfigStore
 from freenas.dispatcher.client import Client, ClientError
 from freenas.dispatcher.rpc import RpcService, RpcException, generator
@@ -179,7 +179,7 @@ class Main(object):
         self.config = args.c
         configure_logging('/var/log/neighbord.log', 'DEBUG')
 
-        setproctitle.setproctitle('neighbord')
+        setproctitle('neighbord')
         self.parse_config(self.config)
         self.init_datastore()
         self.init_dispatcher()

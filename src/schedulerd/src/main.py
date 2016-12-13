@@ -29,10 +29,10 @@ import sys
 import time
 import uuid
 import logging
-import setproctitle
 import argparse
 import pytz
 import errno
+from bsd import setproctitle
 from datetime import datetime, timezone
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.mongodb import MongoDBJobStore
@@ -281,7 +281,7 @@ class Context(object):
         parser.add_argument('-f', action='store_true', default=False, help='Run in foreground')
         args = parser.parse_args()
         configure_logging('/var/log/schedulerd.log', 'DEBUG')
-        setproctitle.setproctitle('schedulerd')
+        setproctitle('schedulerd')
         self.config = args.c
         self.init_datastore()
         self.init_scheduler()
