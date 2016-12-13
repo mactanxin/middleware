@@ -4,9 +4,6 @@
 
     adv_config = dispatcher.call_sync('system.advanced.get_config')
     gen_config = dispatcher.call_sync('system.general.get_config')
-    lldp_config = dispatcher.call_sync('service.lldp.get_config')
-    smartd_config = dispatcher.call_sync('service.smartd.get_config')
-    tftp_config = dispatcher.call_sync('service.tftpd.get_config')
     ups_config = dispatcher.call_sync('service.ups.get_config')
 
     hwmodel = sysctl.sysctlbyname("hw.model")
