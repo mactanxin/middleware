@@ -2051,6 +2051,8 @@ def _init(dispatcher, plugin):
             '%type': {'enum': ['vm-device-disk']},
             'mode': {'$ref': 'vm-device-disk-mode'},
             'size': {'type': 'integer'},
+            'target_type': {'$ref': 'vm-device-disk-target-type'},
+            'target_path': {'type': 'string'},
             'source': {'type': 'string'}
         },
         'required': ['size']
@@ -2199,12 +2201,27 @@ def _init(dispatcher, plugin):
 
     plugin.register_schema_definition('vm-hw-capabilites', {
         'type': 'object',
+        'additionalProperties': False,
         'properties': {
             'vtx_enabled': {'type': 'boolean'},
             'svm_features': {'type': 'boolean'},
             'unrestricted_guest': {'type': 'boolean'}
         },
+    })
+
+    plugin.register_schema_definition('vm-datastore-type', {
+        'type': 'string',
+        'enum': ['DIRECTORY', 'VOLUME', 'NFS']
+    })
+
+    plugin.register_schema_definition('vm-datastore', {
+        'type': 'object',
         'additionalProperties': False,
+        'properties': {
+            'id': {'type': 'string'},
+            'name': {'type': 'string'},
+            'type': {'$ref': 'vm-datastore-type'}
+        }
     })
 
     def volume_pre_detach(args):
