@@ -314,12 +314,11 @@ class UpdateServiceConfigTask(Task):
         restart = False
         reload = False
         updated_config = updated_fields.get('config')
-        enable = not node['enable'].value and updated_config['enable']
-        disable = node['enable'].value and not updated_config['enable']
-
         if updated_config is None:
             return
 
+        enable = not node['enable'].value and updated_config['enable']
+        disable = node['enable'].value and not updated_config['enable']
         updated_config.pop('type', None)
 
         if service_def.get('task'):
