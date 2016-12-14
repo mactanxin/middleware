@@ -469,7 +469,7 @@ def get_status(dispatcher, datastore, service):
 
 def collect_debug(dispatcher):
     yield AttachFile('rc.conf', '/etc/rc.conf')
-    yield AttachCommandOutput('enabled-services', ['/usr/sbin/service', '-e'])
+    yield AttachCommandOutput('servicectl-list', ['/usr/local/sbin/servicectl', 'list'])
 
 
 def _init(dispatcher, plugin):

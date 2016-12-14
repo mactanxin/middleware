@@ -154,11 +154,6 @@ def _init(dispatcher, plugin):
         'additionalProperties': False,
     })
 
-    # Register providers
     plugin.register_provider("service.nfs", NFSProvider)
-
-    # Register tasks
     plugin.register_task_handler("service.nfs.update", NFSConfigureTask)
-
-    # Register debug hook
     plugin.register_debug_hook(collect_debug)
