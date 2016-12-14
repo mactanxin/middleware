@@ -140,7 +140,7 @@ class Task(object):
         self.dispatcher.balancer.submit(task, *args)
 
     def verify(self, *args, **kwargs):
-        raise NotImplementedError()
+        return []
 
     def run(self, *args, **kwargs):
         raise NotImplementedError()
