@@ -32,10 +32,10 @@ import threading
 import time
 import base64
 from freenas.dispatcher import AsyncResult
-from freenas.utils import first_or_default
+from freenas.utils import first_or_default, human_readable_bytes
 from freenas.dispatcher.fd import FileDescriptor
 from freenas.dispatcher.rpc import SchemaHelper as h, description, accepts, private
-from utils import get_freenas_peer_client, call_task_and_check_state
+from utils import get_freenas_peer_client
 from task import Task, ProgressTask, Provider, TaskException, VerifyException, TaskDescription
 from libc.stdlib cimport malloc, free
 from posix.unistd cimport read, write
@@ -235,7 +235,14 @@ class TransportBase(ProgressTask):
                 progress = int((float(self.done) / float(self.estimated_size)) * 100)
                 if progress > 100:
                     progress = 100
-            self.set_progress(progress, 'Transfer speed {0} B/s'.format(self.done - last_done))
+
+            speed = self.done - last_done
+            self.set_progress(
+                progress,
+                'Transfer speed {0}'.format(human_readable_bytes(speed, '/s')),
+                extra=(progress, speed)
+            )
+
             last_done = self.done
             time.sleep(1)
             total_time += 1
