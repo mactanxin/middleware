@@ -218,3 +218,4 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('debug.remote.disconnect', RemoteDebugDisconnectTask)
     plugin.register_task_handler('debug.collect', CollectDebugTask)
     plugin.register_task_handler('debug.save_to_file', SaveDebugTask)
+    plugin.register_debug_hook(collect_debug)
