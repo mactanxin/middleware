@@ -43,7 +43,7 @@ from task import Provider, Task, ProgressTask, VerifyException, TaskException, T
 from freenas.dispatcher.rpc import RpcException, SchemaHelper as h, description, accepts, returns, private, generator
 from freenas.dispatcher.fd import FileDescriptor
 from utils import get_freenas_peer_client, call_task_and_check_state
-from freenas.utils import first_or_default, query as q, normalize
+from freenas.utils import first_or_default, query as q, normalize, human_readable_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -1299,11 +1299,10 @@ class ReplicateDatasetTask(ProgressTask):
             return actions, send_size
 
         # 2nd pass - actual send
-        for idx, action in enumerate(actions):
+        progress = 0
+        for action in actions:
             if self.aborted:
                 break
-
-            progress = float(idx) / len(actions) * 100
 
             if action['type'] in (ReplicationActionType.DELETE_SNAPSHOTS.name, ReplicationActionType.CLEAR_SNAPSHOTS.name):
                 self.set_progress(progress, 'Removing snapshots on remote dataset {0}'.format(action['remotefs']))
@@ -1320,11 +1319,10 @@ class ReplicateDatasetTask(ProgressTask):
                     ))
 
             if action['type'] == ReplicationActionType.SEND_STREAM.name:
-                self.set_progress(progress, 'Sending {0} stream of snapshot {1}@{2}'.format(
-                    'incremental' if action['incremental'] else 'full',
-                    action['localfs'],
-                    action['snapshot']
-                ))
+                def update_progress(p):
+                    nonlocal progress
+                    progress = p
+                    return p
 
                 self.rd_fd, self.wr_fd = os.pipe()
                 fromsnap = action['anchor'] if 'anchor' in action else None
@@ -1350,7 +1348,16 @@ class ReplicateDatasetTask(ProgressTask):
                                 'props': {'mountpoint': None}
                             },
                             'estimated_size': send_size
-                        }
+                        },
+                        progress_callback=lambda p, m, e=None: self.set_progress(
+                            update_progress(e[0]),
+                            'Sending {0} stream of snapshot {1}@{2} - speed {3}'.format(
+                                'incremental' if action['incremental'] else 'full',
+                                action['localfs'],
+                                action['snapshot'],
+                                human_readable_bytes(e[1], '/s')
+                            )
+                        )
                     )
                 )
 
