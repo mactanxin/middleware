@@ -1659,7 +1659,6 @@ class VolumeAutoImportTask(Task):
         with self.dispatcher.get_lock('volumes'):
             vol = self.dispatcher.call_sync('volume.query', [('id', '=', volume)], {'single': True})
             share_types = self.dispatcher.call_sync('share.supported_types')
-            vm_types = ['VM']
             imported = {
                 'shares': [],
                 'vms': [],
@@ -1682,67 +1681,55 @@ class VolumeAutoImportTask(Task):
                             )
                             continue
 
-                        item_type = config.get('type')
-                        if item_type:
-                            if scope in ['all', 'shares'] and item_type in share_types:
-                                try:
-                                    self.join_subtasks(self.run_subtask(
-                                        'share.import',
-                                        root,
-                                        config.get('name', ''),
-                                        item_type
-                                    ))
+                        item_type = config.get('type', 'VM')
+                        if scope in ['all', 'shares'] and item_type in share_types:
+                            try:
+                                self.join_subtasks(self.run_subtask(
+                                    'share.import',
+                                    root,
+                                    config.get('name', ''),
+                                    item_type
+                                ))
 
-                                    imported['shares'].append(
-                                        {
-                                            'path': config_path,
-                                            'type': item_type,
-                                            'name': config.get('name', '')
-                                        }
-                                    )
-                                except RpcException as err:
-                                    self.add_warning(
-                                        TaskWarning(
-                                            err.code,
-                                            'Share import from {0} failed. Message: {1}'.format(
-                                                config_path,
-                                                err.message
-                                            )
-                                        )
-                                    )
-                                    continue
-                            elif scope in ['all', 'vms'] and item_type in vm_types:
-                                try:
-                                    self.join_subtasks(self.run_subtask(
-                                        'vm.import',
-                                        config.get('name', ''),
-                                        volume
-                                    ))
-
-                                    imported['vms'].append(
-                                        {
-                                            'type': item_type,
-                                            'name': config.get('name', '')
-                                        }
-                                    )
-                                except RpcException as err:
-                                    self.add_warning(
-                                        TaskWarning(
-                                            err.code,
-                                            'VM import from {0} failed. Message: {1}'.format(
-                                                config_path,
-                                                err.message
-                                            )
-                                        )
-                                    )
-                                    continue
-                            elif item_type not in itertools.chain(share_types, vm_types):
+                                imported['shares'].append(
+                                    {
+                                        'path': config_path,
+                                        'type': item_type,
+                                        'name': config.get('name', '')
+                                    }
+                                )
+                            except RpcException as err:
                                 self.add_warning(
                                     TaskWarning(
-                                        errno.EINVAL,
-                                        'Import from {0} failed because {1} is unsupported share/VM type'.format(
+                                        err.code,
+                                        'Share import from {0} failed. Message: {1}'.format(
                                             config_path,
-                                            item_type
+                                            err.message
+                                        )
+                                    )
+                                )
+                                continue
+                        elif scope in ['all', 'vms']:
+                            try:
+                                self.join_subtasks(self.run_subtask(
+                                    'vm.import',
+                                    config.get('name', ''),
+                                    volume
+                                ))
+
+                                imported['vms'].append(
+                                    {
+                                        'type': item_type,
+                                        'name': config.get('name', '')
+                                    }
+                                )
+                            except RpcException as err:
+                                self.add_warning(
+                                    TaskWarning(
+                                        err.code,
+                                        'VM import from {0} failed. Message: {1}'.format(
+                                            config_path,
+                                            err.message
                                         )
                                     )
                                 )
@@ -1751,8 +1738,11 @@ class VolumeAutoImportTask(Task):
                             self.add_warning(
                                 TaskWarning(
                                     errno.EINVAL,
-                                    'Cannot read importable type from {0}.'.format(config_path)
+                                    'Import from {0} failed because {1} is unsupported share/VM type'.format(
+                                        config_path,
+                                        item_type
                                     )
+                                )
                             )
                             continue
 
