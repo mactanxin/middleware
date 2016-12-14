@@ -28,6 +28,7 @@
 import re
 import copy
 import errno
+import gevent
 import dockerfile_parse
 import dockerhub
 import socket
@@ -1344,9 +1345,13 @@ def _init(dispatcher, plugin):
             if default_collection and default_collection in args['ids']:
                 node.update({'default_collection': None})
 
-    def refresh_containers(host_id):
-        current = list(dispatcher.call_sync(CONTAINERS_QUERY, [('host', '=', host_id)]))
-        old = dispatcher.datastore.query('docker.containers', ('host', '=', host_id))
+    def refresh_containers(host_id=None):
+        filter = []
+        if host_id:
+            filter.append(('host', '=', host_id))
+
+        current = list(dispatcher.call_sync(CONTAINERS_QUERY, filter))
+        old = dispatcher.datastore.query('docker.containers', *filter)
         created = []
         updated = []
         deleted = []
@@ -1399,6 +1404,18 @@ def _init(dispatcher, plugin):
                     nonexistent_ids.append(k)
 
             images.remove_many(nonexistent_ids)
+
+    def sync_caches():
+        interval = dispatcher.configstore.get('container.cache_refresh_interval')
+        while True:
+            gevent.sleep(interval)
+            if images.ready:
+                logger.trace('Syncing Docker containers image cache')
+                try:
+                    sync_images()
+                    refresh_containers()
+                except RpcException:
+                    pass
 
     plugin.register_provider('docker.config', DockerConfigProvider)
     plugin.register_provider('docker.host', DockerHostProvider)
@@ -1647,6 +1664,8 @@ def _init(dispatcher, plugin):
 
     if 'containerd.docker' in dispatcher.call_sync('discovery.get_services'):
         init_images()
+
+    gevent.spawn(sync_caches)
 
     if not dispatcher.call_sync('docker.config.get_config').get('default_host'):
         host_id = dispatcher.datastore.query(
