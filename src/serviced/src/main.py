@@ -80,10 +80,16 @@ def daemonize():
 
     sys.stdout.flush()
     sys.stderr.flush()
-    devnull = os.open('/dev/null', os.O_RDWR)
+    try:
+        devnull = os.open('/dev/null', os.O_RDWR)
+        log = os.open('/var/tmp/serviced.log', os.O_WRONLY | os.O_CREAT | os.O_TRUNC)
+    except OSError as e:
+        sys.stderr.write('failed to open log file: {0}'.format(e.strerror))
+        sys.exit(1)
+
     os.dup2(devnull, sys.stdin.fileno())
-    os.dup2(devnull, sys.stdout.fileno())
-    os.dup2(devnull, sys.stderr.fileno())
+    os.dup2(log, sys.stdout.fileno())
+    os.dup2(log, sys.stderr.fileno())
 
 
 class JobState(enum.Enum):
@@ -496,6 +502,16 @@ class JobService(RpcService):
 
         with job.cv:
             job.cv.wait_for(lambda: job.state in states)
+            return job.state
+
+    def wait(self, name_or_id):
+        with self.context.lock:
+            job = first_or_default(lambda j: j.label == name_or_id or j.id == name_or_id, self.context.jobs.values())
+            if not job:
+                raise RpcException(errno.ENOENT, 'Job {0} not found'.format(name_or_id))
+
+            oldstate = job.state
+            job.cv.wait_for(lambda: job.state != oldstate)
             return job.state
 
     def checkin(self):
