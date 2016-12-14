@@ -1300,12 +1300,26 @@ class ReplicateDatasetTask(ProgressTask):
 
         # 2nd pass - actual send
         progress = 0
-        for action in actions:
+        done = 0
+        actions_len = len(actions)
+
+        for idx, action in enumerate(actions):
+            def get_progress(delta=None):
+                nonlocal progress, done
+                if delta:
+                    done += delta
+
+                progress = ((idx / actions_len) * 100) + ((1 / actions_len) * 100 * (done / send_size))
+                if progress > 100:
+                    progress = 100
+
+                return progress
+
             if self.aborted:
                 break
 
             if action['type'] in (ReplicationActionType.DELETE_SNAPSHOTS.name, ReplicationActionType.CLEAR_SNAPSHOTS.name):
-                self.set_progress(progress, 'Removing snapshots on remote dataset {0}'.format(action['remotefs']))
+                self.set_progress(get_progress(), 'Removing snapshots on remote dataset {0}'.format(action['remotefs']))
                 # Remove snapshots on remote side
                 result = remote_client.call_task_sync(
                     'zfs.delete_multiple_snapshots',
@@ -1319,11 +1333,6 @@ class ReplicateDatasetTask(ProgressTask):
                     ))
 
             if action['type'] == ReplicationActionType.SEND_STREAM.name:
-                def update_progress(p):
-                    nonlocal progress
-                    progress = p
-                    return p
-
                 self.rd_fd, self.wr_fd = os.pipe()
                 fromsnap = action['anchor'] if 'anchor' in action else None
 
@@ -1350,19 +1359,19 @@ class ReplicateDatasetTask(ProgressTask):
                             'estimated_size': send_size
                         },
                         progress_callback=lambda p, m, e=None: self.set_progress(
-                            update_progress(e[0]),
+                            get_progress(e),
                             'Sending {0} stream of snapshot {1}@{2} - speed {3}'.format(
                                 'incremental' if action['incremental'] else 'full',
                                 action['localfs'],
                                 action['snapshot'],
-                                human_readable_bytes(e[1], '/s')
+                                human_readable_bytes(e, '/s')
                             )
                         )
                     )
                 )
 
             if action['type'] == ReplicationActionType.DELETE_DATASET.name:
-                self.set_progress(progress, 'Removing remote dataset {0}'.format(action['remotefs']))
+                self.set_progress(get_progress(), 'Removing remote dataset {0}'.format(action['remotefs']))
                 result = remote_client.call_task_sync(
                     'zfs.destroy',
                     action['remotefs'].split('/')[0],

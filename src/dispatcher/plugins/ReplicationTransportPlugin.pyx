@@ -236,11 +236,11 @@ class TransportBase(ProgressTask):
                 if progress > 100:
                     progress = 100
 
-            speed = self.done - last_done
+            delta = self.done - last_done
             self.set_progress(
                 progress,
-                'Transfer speed {0}'.format(human_readable_bytes(speed, '/s')),
-                extra=(progress, speed)
+                'Transfer speed {0}'.format(human_readable_bytes(delta, '/s')),
+                extra=delta
             )
 
             last_done = self.done
