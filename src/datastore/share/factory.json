@@ -287,7 +287,6 @@
             ],
             "middleware.token_lifetime": 600,
             "middleware.parallel_disk_format": true,
-            "middleware.executors_count": 4,
             "middleware.streaming_burst_size": 16,
             "middleware.zfs_refresh_interval": 30,
             "middleware.snapshot_scrub_interval": 300,
