@@ -51,6 +51,12 @@ class VolumeDatastoreProvider(Provider):
     def get_resources(self, datastore_id):
         return ['zpool:{0}'.format(datastore_id)]
 
+    @private
+    @accepts(str, str)
+    def directory_exists(self, datastore_id, datastore_path):
+        path = os.path.join(datastore_id, datastore_path)
+        return self.dispatcher.call_sync('volume.dataset.query', [('id', '=', path)], {'single': True}) is not None
+
 
 class VolumeDirectoryCreateTask(Task):
     def verify(self, id, path):
@@ -59,7 +65,7 @@ class VolumeDirectoryCreateTask(Task):
     def run(self, id, path):
         return self.run_subtask_sync('volume.dataset.create', {
             'volume': id,
-            'path': os.path.join(id, path)
+            'id': os.path.join(id, path)
         })
 
 
@@ -68,6 +74,27 @@ class VolumeDirectoryDeleteTask(Task):
         return []
 
     def run(self, id, path):
+        return self.run_subtask_sync('volume.dataset.delete', os.path.join(id, path))
+
+
+class VolumeBlockDeviceCreateTask(Task):
+    def verify(self, id, path, size):
+        return []
+
+    def run(self, id, path, size):
+        return self.run_subtask_sync('volume.dataset.create', {
+            'volume': id,
+            'id': os.path.join(id, path),
+            'type': 'VOLUME',
+            'volsize': size
+        })
+
+
+class VolumeBlockDeviceDeleteTask(Task):
+    def verify(self, id, path):
+        return []
+
+    def run(self, id, path, size):
         return self.run_subtask_sync('volume.dataset.delete', os.path.join(id, path))
 
 
@@ -82,3 +109,5 @@ def _init(dispatcher, plugin):
     plugin.register_provider('vm.datastore.volume', VolumeDatastoreProvider)
     plugin.register_task_handler('vm.datastore.volume.create_directory', VolumeDirectoryCreateTask)
     plugin.register_task_handler('vm.datastore.volume.delete_directory', VolumeDirectoryDeleteTask)
+    plugin.register_task_handler('vm.datastore.volume.create_block_device', VolumeBlockDeviceCreateTask)
+    plugin.register_task_handler('vm.datastore.volume.delete_block_device', VolumeBlockDeviceCreateTask)

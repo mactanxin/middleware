@@ -25,8 +25,12 @@
 #
 #####################################################################
 
-from task import Task, Provider
-from freenas.dispatcher.rpc import private, accepts, returns, generator
+import os
+import shutil
+import errno
+from task import Task, TaskException, Provider
+from freenas.dispatcher.rpc import RpcException, private, accepts, returns, generator
+from freenas.utils import query as q
 
 
 class LocalDatastoreProvider(Provider):
@@ -35,13 +39,49 @@ class LocalDatastoreProvider(Provider):
     def discover(self):
         return
 
+    @private
+    def get_filesystem_path(self, datastore_id, datastore_path):
+        ds = self.datastore.get_by_id(datastore_id)
+        if ds['type'] != 'local':
+            raise RpcException(errno.EINVAL, 'Invalid datastore type')
+
+        return os.path.join(q.get(ds, 'properties.path'), datastore_path)
+
+    @private
+    def directory_exists(self, datastore_id, datastore_path):
+        ds = self.datastore.get_by_id(datastore_id)
+        if ds['type'] != 'local':
+            raise RpcException(errno.EINVAL, 'Invalid datastore type')
+
+        return os.path.exists(os.path.join(q.get(ds, 'properties.path'), datastore_path))
+
+    @private
+    def get_resources(self, datastore_id):
+        return ['system']
+
+
+class LocalDirectoryCreateTask(Task):
+    def run(self, id, path):
+        path = self.dispatcher.call_sync('vm.datastore.get_filesystem_path', id, path)
+        os.mkdir(path)
+
+
+class LocalDirectoryDeleteTask(Task):
+    def run(self, id, path):
+        path = self.dispatcher.call_sync('vm.datastore.get_filesystem_path', id, path)
+        shutil.rmtree(path, ignore_errors=True)
+
 
 def _metadata():
     return {
         'type': 'datastore',
-        'driver': 'local'
+        'driver': 'local',
+        'block_devices': False,
+        'snapshots': False
     }
 
 
 def _init(dispatcher, plugin):
     plugin.register_provider('vm.datastore.local', LocalDatastoreProvider)
+    plugin.register_task_handler('vm.datastore.volume.create_directory', LocalDirectoryCreateTask)
+    plugin.register_task_handler('vm.datastore.volume.delete_directory', LocalDirectoryDeleteTask)
