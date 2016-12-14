@@ -354,6 +354,7 @@ class VolumeProvider(Provider):
     @returns(h.ref('disks-allocation'))
     def get_disks_allocation(self, disks):
         ret = {}
+        disks = [os.path.join('/dev', i) for i in disks]
         boot_pool_name = self.configstore.get('system.boot_pool_name')
         boot_devs = self.dispatcher.call_sync('zfs.pool.get_disks', boot_pool_name)
 

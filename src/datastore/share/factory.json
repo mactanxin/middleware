@@ -1645,13 +1645,133 @@
     {
         "metadata": {
             "name": "calendar_tasks",
-            "migration": "keep",
+            "migration": "merge-preserve",
             "pkey-type": "native",
             "attributes": {
                 "type": "config"
             }
         },
         "data": {
+            "e8e84b9d-b853-4a67-8182-095e119ddfe0": {
+                "name": "nightly update check",
+                "task": "update.checkfetch",
+                "args": [],
+                "enabled": true,
+                "hidden": false,
+                "protected": false,
+                "next_run_time": 1,
+                "schedule": {
+                    "year": "*",
+                    "month": "*",
+                    "day": "*",
+                    "week": "*",
+                    "day_of_week": "*",
+                    "hour": "23",
+                    "minute": "0",
+                    "second": "0",
+                    "timezone": "America/Los_Angeles"
+                }
+            },
+            "291082fa-c16f-11e6-866b-000c2921ac63": {
+                "name": "newsyslog",
+                "task": "calendar_task.command",
+                "args": ["root", "/usr/sbin/newsyslog"],
+                "enabled": true,
+                "hidden": true,
+                "protected": false,
+                "next_run_time": 1,
+                "schedule": {
+                    "year": "*",
+                    "month": "*",
+                    "day": "*",
+                    "week": "*",
+                    "day_of_week": "*",
+                    "hour": "*",
+                    "minute": "0",
+                    "second": "0",
+                    "timezone": "America/Los_Angeles"
+                }
+            },
+            "7b48426c-c16f-11e6-866b-000c2921ac63": {
+                "name": "adjkerntz",
+                "task": "calendar_task.command",
+                "args": ["root", "/sbin/adjkerntz -a"],
+                "enabled": true,
+                "hidden": false,
+                "protected": false,
+                "next_run_time": 1,
+                "schedule": {
+                    "year": "*",
+                    "month": "*",
+                    "day": "*",
+                    "week": "*",
+                    "day_of_week": "*",
+                    "hour": "*",
+                    "minute": "*/30",
+                    "second": "0",
+                    "timezone": "America/Los_Angeles"
+                }
+            },
+            "f10a7f4a-c185-11e6-b7f2-000c293ba8c9": {
+                "name": "periodic daily",
+                "task": "calendar_task.command",
+                "args": ["root", "/usr/sbin/periodic daily"],
+                "enabled": true,
+                "hidden": false,
+                "protected": false,
+                "next_run_time": 1,
+                "schedule": {
+                    "year": "*",
+                    "month": "*",
+                    "day": "*",
+                    "week": "*",
+                    "day_of_week": "*",
+                    "hour": "3",
+                    "minute": "1",
+                    "second": "0",
+                    "timezone": "America/Los_Angeles"
+                }
+            },
+            "2d5a6561-c186-11e6-b7f2-000c293ba8c9": {
+                "name": "periodic weekly",
+                "task": "calendar_task.command",
+                "args": ["root", "/usr/sbin/periodic weekly"],
+                "enabled": true,
+                "hidden": false,
+                "protected": false,
+                "next_run_time": 1,
+                "schedule": {
+                    "year": "*",
+                    "month": "*",
+                    "day": "*",
+                    "week": "*",
+                    "day_of_week": "sat",
+                    "hour": "4",
+                    "minute": "15",
+                    "second": "0",
+                    "timezone": "America/Los_Angeles"
+                }
+            },
+            "3dc13171-c186-11e6-b7f2-000c293ba8c9": {
+                "name": "periodic monthly",
+                "task": "calendar_task.command",
+                "args": ["root", "/usr/sbin/periodic monthly"],
+                "enabled": true,
+                "hidden": false,
+                "protected": false,
+                "next_run_time": 1,
+                "schedule": {
+                    "year": "*",
+                    "month": "*",
+                    "day": "1",
+                    "week": "*",
+                    "day_of_week": "*",
+                    "hour": "5",
+                    "minute": "30",
+                    "second": "0",
+                    "timezone": "America/Los_Angeles"
+                }
+            }
         }
     },
     {

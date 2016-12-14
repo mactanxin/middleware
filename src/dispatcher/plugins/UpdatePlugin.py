@@ -980,35 +980,6 @@ def _depends():
 
 
 def _init(dispatcher, plugin):
-
-    def nightly_update_check(args):
-        if args.get('name') != 'scheduler.management':
-            return
-
-        logger.debug('Scheduling a nightly update check task')
-        caltask = dispatcher.call_sync(
-            'calendar_task.query', [('name', '=', 'nightly_update_check')], {'single': True}
-        ) or {'schedule': {}}
-
-        caltask.update({
-            'name': 'nightly_update_check',
-            'task': 'update.checkfetch',
-            'args': [],
-            'hidden': True,
-            'protected': True
-        })
-
-        caltask['schedule'].update({
-            'hour': str(random.randint(1, 6)),
-            'minute': str(random.randint(0, 59)),
-        })
-
-        if caltask.get('id'):
-            del caltask['name']
-            dispatcher.call_task_sync('calendar_task.update', caltask['id'], caltask)
-        else:
-            dispatcher.call_task_sync('calendar_task.create', caltask)
-
     # Register Schemas
     plugin.register_schema_definition('update', {
         'type': 'object',
@@ -1111,6 +1082,3 @@ def _init(dispatcher, plugin):
     # Do this in parallel so that a failed cache generation does not take the
     # entire dispatcher start/restart with it (See Ticket: #12892)
     gevent.spawn(generate_update_cache, dispatcher)
-
-    # Schedule a task to check/dowload for updates
-    plugin.register_event_handler('plugin.service_resume', nightly_update_check)
