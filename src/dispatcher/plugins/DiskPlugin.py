@@ -98,7 +98,7 @@ class DiskProvider(Provider):
             return disk
 
         return q.query(
-            self.datastore.query('disks', callback=extend),
+            self.datastore.query_stream('disks', callback=extend),
             *(filter or []),
             stream=True,
             **(params or {})
@@ -520,32 +520,25 @@ class DiskConfigureTask(Task):
         if {'standby_mode', 'apm_mode', 'acoustic_level'} & set(updated_fields):
             configure_disk(self.datastore, id)
 
-        if 'smart' in updated_fields or 'smart_options' in updated_fields:
-            if 'smart_options' in updated_fields:
-                self.dispatcher.call_sync('etcd.generation.generate_group', 'smartd')
-                self.dispatcher.call_sync('service.reload', 'smartd')
-            elif 'smart' in updated_fields:
-                # If just 'smart' (i.e. whether the device should be smart enabled or not was)
-                # toggled then do not regenerate entier smartd conf for that, just toggle that
-                # disk's smart enabled thing.
-                disk_status = self.dispatcher.call_sync('disk.get_disk_config_by_id', id)
-                if not disk_status['smart_info']['smart_capable']:
-                    raise TaskException(errno.EINVAL, 'Disk is not SMART capable')
+        if 'smart' in updated_fields:
+            disk_status = self.dispatcher.call_sync('disk.get_disk_config_by_id', id)
+            if not disk_status['smart_info']['smart_capable']:
+                raise TaskException(errno.EINVAL, 'Disk is not SMART capable')
 
-                device_smart_handle = Device(disk_status['gdisk_name'], abridged=True)
-                if updated_fields['smart'] != device_smart_handle.smart_enabled:
-                    toggle_result = device_smart_handle.smart_toggle(
-                        'on' if updated_fields['smart'] else 'off'
-                    )
-                    if not toggle_result[0]:
-                        raise TaskException(
-                            errno.EINVAL,
-                            "Tried to toggle {0}".format(disk['path']) +
-                            " SMART enabled to: {0} and failed with error: {1}".format(
-                                updated_fields['smart'],
-                                toggle_result[1]
-                            )
+            device_smart_handle = Device(disk_status['gdisk_name'], abridged=True)
+            if updated_fields['smart'] != device_smart_handle.smart_enabled:
+                toggle_result = device_smart_handle.smart_toggle(
+                    'on' if updated_fields['smart'] else 'off'
+                )
+                if not toggle_result[0]:
+                    raise TaskException(
+                        errno.EINVAL,
+                        "Tried to toggle {0}".format(disk['path']) +
+                        " SMART enabled to: {0} and failed with error: {1}".format(
+                            updated_fields['smart'],
+                            toggle_result[1]
                         )
+                    )
             self.dispatcher.call_sync('disk.update_disk_cache', disk['path'], timeout=120)
 
         self.dispatcher.dispatch_event('disk.changed', {
@@ -1457,9 +1450,6 @@ def persist_disk(dispatcher, disk):
     if 'smart' not in ds_disk:
         ds_disk.update({'smart': True if disk['smart_info']['smart_capable'] else False})
 
-    if 'smart_options' not in ds_disk:
-        ds_disk.update({'smart_options': None})
-
     dispatcher.datastore.upsert('disks', disk['id'], ds_disk)
     dispatcher.dispatch_event('disk.changed', {
         'operation': 'create' if new else 'update',
@@ -1633,7 +1623,6 @@ def _init(dispatcher, plugin):
             'serial': {'type': ['string', 'null']},
             'mediasize': {'type': 'integer'},
             'smart': {'type': 'boolean'},
-            'smart_options': {'type': 'string'},
             'standby_mode': {'type': ['integer', 'null']},
             'apm_mode': {'type': ['integer', 'null']},
             'acoustic_level': {'$ref': 'disk-acousticlevel'},
@@ -1887,7 +1876,7 @@ def _init(dispatcher, plugin):
     plugin.register_debug_hook(collect_debug)
 
     # Start with marking all disks as unavailable
-    for i in dispatcher.datastore.query('disks'):
+    for i in dispatcher.datastore.query_stream('disks'):
         if not i.get('delete_at'):
             i['delete_at'] = datetime.utcnow() + EXPIRE_TIMEOUT
 

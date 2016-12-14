@@ -68,7 +68,7 @@ class KerberosKeytabsProvider(Provider):
             return keytab
 
         return q.query(
-            self.datastore.query('kerberos.keytabs', callback=extend),
+            self.datastore.query_stream('kerberos.keytabs', callback=extend),
             *(filter or []),
             stream=True,
             **(params or {})
@@ -185,7 +185,7 @@ def generate_keytab(datastore):
     ctx = krb5.Context()
     sys_keytab = krb5.Keytab(ctx, name='FILE:/etc/krb5.keytab')
     sys_keytab.clear()
-    for i in datastore.query('kerberos.keytabs'):
+    for i in datastore.query_stream('kerberos.keytabs'):
         k = krb5.Keytab(ctx, contents=i['keytab'])
         for entry in k.entries:
             sys_keytab.add(entry)

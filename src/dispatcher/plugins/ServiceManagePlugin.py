@@ -314,12 +314,11 @@ class UpdateServiceConfigTask(Task):
         restart = False
         reload = False
         updated_config = updated_fields.get('config')
-        enable = not node['enable'].value and updated_config['enable']
-        disable = node['enable'].value and not updated_config['enable']
-
         if updated_config is None:
             return
 
+        enable = not node['enable'].value and updated_config['enable']
+        disable = node['enable'].value and not updated_config['enable']
         updated_config.pop('type', None)
 
         if service_def.get('task'):
@@ -470,7 +469,7 @@ def get_status(dispatcher, datastore, service):
 
 def collect_debug(dispatcher):
     yield AttachFile('rc.conf', '/etc/rc.conf')
-    yield AttachCommandOutput('enabled-services', ['/usr/sbin/service', '-e'])
+    yield AttachCommandOutput('servicectl-list', ['/usr/local/sbin/servicectl', 'list'])
 
 
 def _init(dispatcher, plugin):

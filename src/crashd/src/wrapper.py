@@ -35,7 +35,7 @@ import signal
 import datetime
 import tempfile
 import subprocess
-import setproctitle
+from bsd import setproctitle
 
 
 proc = None
@@ -55,7 +55,7 @@ def main():
         print("Usage: crash-wrapper <path to executable> [args...]", file=sys.stderr)
         exit(1)
 
-    setproctitle.setproctitle('crash-wrapper')
+    setproctitle('crash-wrapper')
     signal.signal(signal.SIGTERM, sigterm)
     name = os.path.basename(sys.argv[1])
     null = open('/dev/null', 'r')

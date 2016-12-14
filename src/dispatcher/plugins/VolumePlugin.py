@@ -357,6 +357,7 @@ class VolumeProvider(Provider):
     @returns(h.ref('disks-allocation'))
     def get_disks_allocation(self, disks):
         ret = {}
+        disks = [os.path.join('/dev', i) for i in disks]
         boot_pool_name = self.configstore.get('system.boot_pool_name')
         boot_devs = self.dispatcher.call_sync('zfs.pool.get_disks', boot_pool_name)
 
@@ -619,10 +620,8 @@ class VolumeCreateTask(ProgressTask):
             })
 
         self.set_progress(90)
-        self.dispatcher.dispatch_event('volume.changed', {
-            'operation': 'create',
-            'ids': [id]
-        })
+        wait_for_cache(self.dispatcher, 'volume', 'create', name)
+        return name
 
 
 @description("Creates new volume and automatically guesses disks layout")
@@ -707,7 +706,7 @@ class VolumeAutoCreateTask(ProgressTask):
             {'type': 'disk', 'path': disk_spec_to_path(self.dispatcher, i)} for i in log_disks or []
         ]
 
-        self.join_subtasks(self.run_subtask(
+        id, = self.join_subtasks(self.run_subtask(
             'volume.create',
             {
                 'id': name,
@@ -726,6 +725,8 @@ class VolumeAutoCreateTask(ProgressTask):
                 0, 100, '', p, m, e
             )
         ))
+
+        return id
 
 
 @description("Destroys active volume")
@@ -1661,7 +1662,6 @@ class VolumeAutoImportTask(Task):
         with self.dispatcher.get_lock('volumes'):
             vol = self.dispatcher.call_sync('volume.query', [('id', '=', volume)], {'single': True})
             share_types = self.dispatcher.call_sync('share.supported_types')
-            vm_types = ['VM']
             imported = {
                 'shares': [],
                 'vms': [],
@@ -1684,67 +1684,55 @@ class VolumeAutoImportTask(Task):
                             )
                             continue
 
-                        item_type = config.get('type')
-                        if item_type:
-                            if scope in ['all', 'shares'] and item_type in share_types:
-                                try:
-                                    self.join_subtasks(self.run_subtask(
-                                        'share.import',
-                                        root,
-                                        config.get('name', ''),
-                                        item_type
-                                    ))
+                        item_type = config.get('type', 'VM')
+                        if scope in ['all', 'shares'] and item_type in share_types:
+                            try:
+                                self.join_subtasks(self.run_subtask(
+                                    'share.import',
+                                    root,
+                                    config.get('name', ''),
+                                    item_type
+                                ))
 
-                                    imported['shares'].append(
-                                        {
-                                            'path': config_path,
-                                            'type': item_type,
-                                            'name': config.get('name', '')
-                                        }
-                                    )
-                                except RpcException as err:
-                                    self.add_warning(
-                                        TaskWarning(
-                                            err.code,
-                                            'Share import from {0} failed. Message: {1}'.format(
-                                                config_path,
-                                                err.message
-                                            )
-                                        )
-                                    )
-                                    continue
-                            elif scope in ['all', 'vms'] and item_type in vm_types:
-                                try:
-                                    self.join_subtasks(self.run_subtask(
-                                        'vm.import',
-                                        config.get('name', ''),
-                                        volume
-                                    ))
-
-                                    imported['vms'].append(
-                                        {
-                                            'type': item_type,
-                                            'name': config.get('name', '')
-                                        }
-                                    )
-                                except RpcException as err:
-                                    self.add_warning(
-                                        TaskWarning(
-                                            err.code,
-                                            'VM import from {0} failed. Message: {1}'.format(
-                                                config_path,
-                                                err.message
-                                            )
-                                        )
-                                    )
-                                    continue
-                            elif item_type not in itertools.chain(share_types, vm_types):
+                                imported['shares'].append(
+                                    {
+                                        'path': config_path,
+                                        'type': item_type,
+                                        'name': config.get('name', '')
+                                    }
+                                )
+                            except RpcException as err:
                                 self.add_warning(
                                     TaskWarning(
-                                        errno.EINVAL,
-                                        'Import from {0} failed because {1} is unsupported share/VM type'.format(
+                                        err.code,
+                                        'Share import from {0} failed. Message: {1}'.format(
                                             config_path,
-                                            item_type
+                                            err.message
+                                        )
+                                    )
+                                )
+                                continue
+                        elif scope in ['all', 'vms']:
+                            try:
+                                self.join_subtasks(self.run_subtask(
+                                    'vm.import',
+                                    config.get('name', ''),
+                                    volume
+                                ))
+
+                                imported['vms'].append(
+                                    {
+                                        'type': item_type,
+                                        'name': config.get('name', '')
+                                    }
+                                )
+                            except RpcException as err:
+                                self.add_warning(
+                                    TaskWarning(
+                                        err.code,
+                                        'VM import from {0} failed. Message: {1}'.format(
+                                            config_path,
+                                            err.message
                                         )
                                     )
                                 )
@@ -1753,8 +1741,11 @@ class VolumeAutoImportTask(Task):
                             self.add_warning(
                                 TaskWarning(
                                     errno.EINVAL,
-                                    'Cannot read importable type from {0}.'.format(config_path)
+                                    'Import from {0} failed because {1} is unsupported share/VM type'.format(
+                                        config_path,
+                                        item_type
                                     )
+                                )
                             )
                             continue
 
@@ -3195,6 +3186,10 @@ def _init(dispatcher, plugin):
                         })
                     except DuplicateKeyException:
                         # already inserted by task
+                        dispatcher.dispatch_event('volume.changed', {
+                            'operation': 'create',
+                            'ids': [i['name']]
+                        })
                         continue
 
                     logger.info('New volume {0} <{1}>'.format(i['name'], i['guid']))

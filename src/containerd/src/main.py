@@ -34,7 +34,6 @@ import sys
 import argparse
 import json
 import logging
-import setproctitle
 import errno
 import time
 import string
@@ -55,9 +54,9 @@ import pf
 import urllib.parse
 import requests
 import contextlib
-from docker.errors import NotFound, DockerException
+from docker.errors import NotFound
 from datetime import datetime
-from bsd import kld, sysctl
+from bsd import kld, sysctl, setproctitle
 from threading import Condition
 from gevent.queue import Queue
 from gevent.event import Event
@@ -1275,7 +1274,6 @@ class DockerService(RpcService):
                     'image': container['Image'],
                     'names': list(normalize_names(container['Names'])),
                     'command': container['Command'] if isinstance(container['Command'], list) else [container['Command']],
-                    'status': container['Status'],
                     'running': details['State'].get('Running', False),
                     'host': host.vm.id,
                     'ports': list(get_docker_ports(details)),
@@ -1904,7 +1902,7 @@ class Main(object):
         parser.add_argument('-p', type=int, metavar='PORT', default=5500, help="WebSockets server port")
         args = parser.parse_args()
         configure_logging('/var/log/containerd.log', 'DEBUG')
-        setproctitle.setproctitle('containerd')
+        setproctitle('containerd')
 
         gevent.signal(signal.SIGTERM, self.die)
         gevent.signal(signal.SIGQUIT, self.die)

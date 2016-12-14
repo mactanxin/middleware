@@ -55,7 +55,7 @@ class DirectoryProvider(Provider):
             return directory
 
         return q.query(
-            self.datastore.query('directories', callback=extend),
+            self.datastore.query_stream('directories', callback=extend),
             *(filter or []),
             stream=True,
             **(params or {})

@@ -42,7 +42,6 @@ import argparse
 import signal
 import time
 import errno
-import setproctitle
 import contextlib
 import tempfile
 import cgi
@@ -54,6 +53,7 @@ import traceback
 import websocket  # do not remove - we import it only for side effects
 
 import gevent
+from bsd import setproctitle
 from io import UnsupportedOperation
 from pyee import EventEmitter
 from gevent.threadpool import ThreadPool
@@ -353,6 +353,7 @@ class Dispatcher(object):
         self.load_disabled_plugins = kwargs.get('load_disabled', False)
 
     def init(self):
+        push_status('Initializing')
         self.logger.info('Initializing')
         self.logger.info('Starting log database')
         self.start_logdb()
@@ -1487,7 +1488,7 @@ class DownloadRequestHandler(object):
 
 
 def run(d, args):
-    setproctitle.setproctitle('dispatcher')
+    setproctitle('dispatcher')
 
     # Signal handlers
     gevent.signal(signal.SIGQUIT, d.die)

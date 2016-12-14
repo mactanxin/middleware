@@ -12,8 +12,8 @@ COMMENT=	FreeNAS periodic tasks daemon
 
 RUN_DEPENDS=	\
 		${PYTHON_PKGNAMEPREFIX}apscheduler>0:${PORTSDIR}/devel/py-apscheduler \
-		${PYTHON_PKGNAMEPREFIX}pytz>0:${PORTSDIR}/devel/py-pytz \
-		${PYTHON_PKGNAMEPREFIX}setproctitle>0:${PORTSDIR}/devel/py-setproctitle
+		${PYTHON_PKGNAMEPREFIX}jsonpickle>0:${PORTSDIR}/devel/py-jsonpickle \
+		${PYTHON_PKGNAMEPREFIX}pytz>0:${PORTSDIR}/devel/py-pytz
 
 USES=		python
 USE_PYTHON=	py3kplist
@@ -32,5 +32,9 @@ do-install:
 
 post-install:
 	${PYTHON_CMD} -m compileall ${STAGEDIR}${PREFIX}/lib/schedulerd
+	(cd ${STAGEDIR}${PREFIX}/lib/schedulerd; ${FIND} -E . -type f -regex ".*.pyc?" \
+		| ${SED} -e 's,^\./,,g' \
+		| ${AWK} '{print length, $$0}' | ${SORT} -rn \
+		| ${AWK} '{print "lib/schedulerd/"$$2 }' >> ${TMPPLIST})
 
 .include <bsd.port.mk>

@@ -34,7 +34,6 @@ import logging
 import select
 import time
 import uuid
-import setproctitle
 import signal
 import pwd
 import grp
@@ -52,6 +51,10 @@ DEFAULT_SOCKET_ADDRESS = 'unix:///var/run/serviced.sock'
 BOOTSTRAP_JOB = ['/usr/local/sbin/servicectl', 'bootstrap']
 MAX_EVENTS = 16
 SHUTDOWN_TIMEOUT = 60
+BASE_ENV = {
+    'PATH': '/sbin:/bin:/usr/sbin:/usr/bin',
+    'HOME': '/'
+}
 
 
 def daemonize():
@@ -236,8 +239,10 @@ class Job(object):
 
                 bsd.closefrom(3)
                 os.setsid()
+                env = BASE_ENV.copy()
+                env.update(self.environment)
                 try:
-                    os.execvpe(self.program, self.program_arguments, self.environment)
+                    os.execvpe(self.program, self.program_arguments, env)
                 except:
                     sys.exit(254)
 
@@ -658,7 +663,7 @@ class Context(object):
         args = parser.parse_args()
 
         configure_logging('/var/log/serviced.log', 'DEBUG')
-        setproctitle.setproctitle('serviced')
+        bsd.setproctitle('serviced')
         self.logger.info('Started')
         self.init_server(args.s)
         self.bootstrap()

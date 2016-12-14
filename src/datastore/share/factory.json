@@ -116,12 +116,6 @@
             "service.devd.enable": true,
             "service.syslog.enable": true,
             "service.collectd.enable": true,
-            "service.smartd.enable": true,
-            "service.smartd.interval": 30,
-            "service.smartd.power_mode": "NEVER",
-            "service.smartd.temp_difference": null,
-            "service.smartd.temp_informational": null,
-            "service.smartd.temp_critical": null,
             "service.snmp.enable": true,
             "service.snmp.location": null,
             "service.snmp.contact": null,
@@ -293,7 +287,6 @@
             ],
             "middleware.token_lifetime": 600,
             "middleware.parallel_disk_format": true,
-            "middleware.executors_count": 4,
             "middleware.streaming_burst_size": 16,
             "middleware.zfs_refresh_interval": 30,
             "middleware.snapshot_scrub_interval": 300,
@@ -380,8 +373,7 @@
             "container.docker.default_host": null,
             "container.docker.api_forwarding": null,
             "container.docker.api_forwarding_enable": false,
-            "container.docker.default_collection": "freenas",
-            "container.cache_refresh_interval": 60,
+            "container.docker.default_collection": "7f4d5a8d-b8dd-4ffa-a866-b074067b381d",
             "storage.hotsparing.autoreplace": true,
             "storage.hotsparing.strong_match": false,
             "directory.search_order": ["local", "system"],
@@ -530,13 +522,6 @@
                     "file:local/rsyncd.conf"
                 ],
                 "name": "rsyncd"
-            },
-            "fbbe4258-42e7-46c5-8204-3ebbd3498340": {
-                "dependencies": [
-                    "group:services",
-                    "plugin:smartd_conf"
-                ],
-                "name": "smartd"
             },
             "01af048d-5d3f-4e6a-a389-96d8d73f3d93": {
                 "dependencies": [
@@ -781,11 +766,15 @@
                 "name": "nginx"
             },
             "69e1f6ef-8171-47c0-bb5f-22f3c8cce517": {
-                "rcng": {
-                    "rc-scripts": "powerd"
+                "launchd": {
+                    "Label": "org.freebsd.powerd",
+                    "RunAtLoad": true,
+                    "ProgramArguments": [
+                        "/usr/sbin/powerd",
+                        "-v"
+                    ]
                 },
                 "builtin": true,
-                "pidfile": "/var/run/powerd.pid",
                 "name": "powerd"
             },
             "77c47b78-9bf3-4ba7-aa76-8cb99a8da4a3": {
@@ -893,17 +882,6 @@
                 "get_config_rpc": "service.rsyncd.get_config",
                 "task": "service.rsyncd.update",
                 "name": "rsyncd"
-            },
-            "95dec6af-48e4-49f0-8d96-9e7acc8f5e0d": {
-                "rcng": {
-                    "rc-scripts": "smartd"
-                },
-                "builtin": false,
-                "etcd-group": "smartd",
-                "pidfile": "/var/run/smartd.pid",
-                "get_config_rpc": "service.smartd.get_config",
-                "task": "service.smartd.update",
-                "name": "smartd"
             },
             "638dde98-3f61-487e-9da7-47093a6beb7a": {
                 "launchd": {
@@ -1022,10 +1000,16 @@
                 ]
             },
             "0a4792b5-e670-456a-a714-6806de235dea": {
-                "rcng": {
-                    "rc-scripts": "openvpn"
+                "launchd": {
+                    "Label": "net.openvpn.openvpn",
+                    "RunAtLoad": true,
+                    "Requires": ["networking", "logging", "etc"],
+                    "ProgramArguments": [
+                        "/usr/local/bin/openvpn",
+                        "--config",
+                        "/usr/local/etc/openvpn.conf"
+                    ]
                 },
-                "pidfile": "/var/run/openvpn.pid",
                 "builtin": false,
                 "task": "service.openvpn.update",
                 "get_config_rpc": "service.openvpn.get_config",
@@ -1054,10 +1038,13 @@
             },
             "e538db78-b14e-11e6-af2f-000c29796bea": {
                 "launchd": {
-
-                },
-                "rcng": {
-                    "rc-scripts": "iscsid"
+                    "Label": "org.freebsd.iscsid",
+                    "RunAtLoad": true,
+                    "Requires": ["networking", "logging"],
+                    "ProgramArguments": [
+                        "/usr/sbin/iscsid",
+                        "-D"
+                    ]
                 },
                 "builtin": true,
                 "name": "iscsid"
@@ -1326,6 +1313,18 @@
             "pkey-type": "uuid",
             "attributes": {
                 "type": "config"
+            }
+        },
+        "data": {
+        }
+    },
+    {
+        "metadata": {
+            "name": "docker.containers",
+            "migration": "keep",
+            "pkey-type": "uuid",
+            "attributes": {
+                "type": "log"
             }
         },
         "data": {
@@ -1645,13 +1644,133 @@
     {
         "metadata": {
             "name": "calendar_tasks",
-            "migration": "keep",
+            "migration": "merge-preserve",
             "pkey-type": "native",
             "attributes": {
                 "type": "config"
             }
         },
         "data": {
+            "e8e84b9d-b853-4a67-8182-095e119ddfe0": {
+                "name": "nightly update check",
+                "task": "update.checkfetch",
+                "args": [],
+                "enabled": true,
+                "hidden": false,
+                "protected": false,
+                "next_run_time": 1,
+                "schedule": {
+                    "year": "*",
+                    "month": "*",
+                    "day": "*",
+                    "week": "*",
+                    "day_of_week": "*",
+                    "hour": "23",
+                    "minute": "0",
+                    "second": "0",
+                    "timezone": "America/Los_Angeles"
+                }
+            },
+            "291082fa-c16f-11e6-866b-000c2921ac63": {
+                "name": "newsyslog",
+                "task": "calendar_task.command",
+                "args": ["root", "/usr/sbin/newsyslog"],
+                "enabled": true,
+                "hidden": true,
+                "protected": false,
+                "next_run_time": 1,
+                "schedule": {
+                    "year": "*",
+                    "month": "*",
+                    "day": "*",
+                    "week": "*",
+                    "day_of_week": "*",
+                    "hour": "*",
+                    "minute": "0",
+                    "second": "0",
+                    "timezone": "America/Los_Angeles"
+                }
+            },
+            "7b48426c-c16f-11e6-866b-000c2921ac63": {
+                "name": "adjkerntz",
+                "task": "calendar_task.command",
+                "args": ["root", "/sbin/adjkerntz -a"],
+                "enabled": true,
+                "hidden": false,
+                "protected": false,
+                "next_run_time": 1,
+                "schedule": {
+                    "year": "*",
+                    "month": "*",
+                    "day": "*",
+                    "week": "*",
+                    "day_of_week": "*",
+                    "hour": "*",
+                    "minute": "*/30",
+                    "second": "0",
+                    "timezone": "America/Los_Angeles"
+                }
+            },
+            "f10a7f4a-c185-11e6-b7f2-000c293ba8c9": {
+                "name": "periodic daily",
+                "task": "calendar_task.command",
+                "args": ["root", "/usr/sbin/periodic daily"],
+                "enabled": true,
+                "hidden": false,
+                "protected": false,
+                "next_run_time": 1,
+                "schedule": {
+                    "year": "*",
+                    "month": "*",
+                    "day": "*",
+                    "week": "*",
+                    "day_of_week": "*",
+                    "hour": "3",
+                    "minute": "1",
+                    "second": "0",
+                    "timezone": "America/Los_Angeles"
+                }
+            },
+            "2d5a6561-c186-11e6-b7f2-000c293ba8c9": {
+                "name": "periodic weekly",
+                "task": "calendar_task.command",
+                "args": ["root", "/usr/sbin/periodic weekly"],
+                "enabled": true,
+                "hidden": false,
+                "protected": false,
+                "next_run_time": 1,
+                "schedule": {
+                    "year": "*",
+                    "month": "*",
+                    "day": "*",
+                    "week": "*",
+                    "day_of_week": "sat",
+                    "hour": "4",
+                    "minute": "15",
+                    "second": "0",
+                    "timezone": "America/Los_Angeles"
+                }
+            },
+            "3dc13171-c186-11e6-b7f2-000c293ba8c9": {
+                "name": "periodic monthly",
+                "task": "calendar_task.command",
+                "args": ["root", "/usr/sbin/periodic monthly"],
+                "enabled": true,
+                "hidden": false,
+                "protected": false,
+                "next_run_time": 1,
+                "schedule": {
+                    "year": "*",
+                    "month": "*",
+                    "day": "1",
+                    "week": "*",
+                    "day_of_week": "*",
+                    "hour": "5",
+                    "minute": "30",
+                    "second": "0",
+                    "timezone": "America/Los_Angeles"
+                }
+            }
         }
     },
     {
@@ -1669,18 +1788,6 @@
     {
          "metadata": {
             "name": "vm.snapshots",
-            "migration": "keep",
-            "pkey-type": "uuid",
-            "attributes": {
-                "type": "config"
-            }
-        },
-        "data": {
-        }
-    },
-    {
-         "metadata": {
-            "name": "containers",
             "migration": "keep",
             "pkey-type": "uuid",
             "attributes": {

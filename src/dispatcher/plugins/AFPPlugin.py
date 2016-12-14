@@ -118,8 +118,6 @@ def _init(dispatcher, plugin):
         'additionalProperties': False,
     })
 
-    # Register providers
     plugin.register_provider("service.afp", AFPProvider)
-
-    # Register tasks
     plugin.register_task_handler("service.afp.update", AFPConfigureTask)
+    plugin.register_debug_hook(collect_debug)

@@ -817,7 +817,7 @@ class GroupDeleteTask(Task):
                 raise TaskException(errno.ENOENT, 'Group with given ID does not exist')
 
             # Remove group from users
-            for i in self.datastore.query('users', ('groups', 'in', group['gid'])):
+            for i in self.datastore.query_stream('users', ('groups', 'in', group['gid'])):
                 i['groups'].remove(id)
                 self.datastore.update('users', i['id'], i)
 

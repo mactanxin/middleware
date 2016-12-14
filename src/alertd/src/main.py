@@ -36,7 +36,7 @@ import time
 import json
 import imp
 import threading
-import setproctitle
+from bsd import setproctitle
 from datetime import timedelta, datetime
 from datastore.config import ConfigStore
 from freenas.dispatcher.client import Client, ClientError
@@ -261,7 +261,7 @@ class Main(object):
         args = parser.parse_args()
         configure_logging('/var/log/alertd.log', 'DEBUG')
 
-        setproctitle.setproctitle('alertd')
+        setproctitle('alertd')
         self.config = args.c
         self.parse_config(self.config)
         self.init_datastore()

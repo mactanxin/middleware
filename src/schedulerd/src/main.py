@@ -29,13 +29,13 @@ import sys
 import time
 import uuid
 import logging
-import setproctitle
 import argparse
 import pytz
 import errno
+from bsd import setproctitle
 from datetime import datetime, timezone
 from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.jobstores.mongodb import MongoDBJobStore
+from apscheduler.jobstores.memory import MemoryJobStore
 from datastore import get_datastore, DatastoreException
 from datastore.config import ConfigStore
 from freenas.dispatcher.rpc import RpcService, RpcException, private, generator
@@ -44,6 +44,7 @@ from freenas.utils import configure_logging
 from freenas.utils.query import query
 from freenas.utils.debug import DebugService
 from freenas.serviced import checkin
+from store import FreeNASJobStore
 
 
 DEFAULT_CONFIGFILE = '/usr/local/etc/middleware.conf'
@@ -65,8 +66,8 @@ class ManagementService(RpcService):
             last_task = None
             current_task = None
             current_progress = None
+
             schedule = {f.name: f for f in job.trigger.fields}
-            schedule['coalesce'] = job.coalesce
             schedule['timezone'] = job.trigger.timezone
 
             last_run = self.context.datastore.query(
@@ -96,7 +97,7 @@ class ManagementService(RpcService):
                 'schedule': schedule
             }
 
-        return query(list(map(serialize, self.context.scheduler.get_jobs())), *(filter or []), **(params or {}))
+        return query(list(map(serialize, self.context.scheduler.get_jobs(jobstore='default'))), *(filter or []), **(params or {}))
 
     @private
     def add(self, task):
@@ -188,6 +189,7 @@ class ManagementService(RpcService):
             id=job_id + '-temp',
             args=jb.args,
             kwargs=jb.kwargs,
+            jobstore='temp',
             run_date=datetime.now(timezone.utc)
         )
 
@@ -222,8 +224,8 @@ class Context(object):
         self.connect()
 
     def init_scheduler(self):
-        store = MongoDBJobStore(database='freenas', collection='calendar_tasks', client=self.datastore.client)
-        self.scheduler = BackgroundScheduler(jobstores={'default': store}, timezone=pytz.utc)
+        store = FreeNASJobStore()
+        self.scheduler = BackgroundScheduler(jobstores={'default': store, 'temp': MemoryJobStore()}, timezone=pytz.utc)
         self.scheduler.start()
 
     def connect(self):
@@ -281,7 +283,7 @@ class Context(object):
         parser.add_argument('-f', action='store_true', default=False, help='Run in foreground')
         args = parser.parse_args()
         configure_logging('/var/log/schedulerd.log', 'DEBUG')
-        setproctitle.setproctitle('schedulerd')
+        setproctitle('schedulerd')
         self.config = args.c
         self.init_datastore()
         self.init_scheduler()

@@ -89,7 +89,7 @@ class InterfaceProvider(Provider):
             return i
 
         return q.query(
-            self.datastore.query('network.interfaces', callback=extend),
+            self.datastore.query_stream('network.interfaces', callback=extend),
             *(filter or []),
             stream=True,
             **(params or {})
@@ -801,7 +801,11 @@ def _init(dispatcher, plugin):
             'dhcp': {'type': 'boolean'},
             'rtadv': {'type': 'boolean'},
             'noipv6': {'type': 'boolean'},
-            'mtu': {'type': ['integer', 'null']},
+            'mtu': {
+                'type': ['integer', 'null'],
+                'minimum': 576,
+                'maximum': 16384
+            },
             'media': {'type': ['string', 'null']},
             'mediaopts': {'$ref': 'network-interface-mediaopts'},
             'capabilities': {
