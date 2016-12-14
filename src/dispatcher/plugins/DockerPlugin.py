@@ -1217,7 +1217,7 @@ def _init(dispatcher, plugin):
             single=True
         )
         if host:
-            refresh_containers(host_id)
+            refresh_containers(args['name'])
             logger.debug('Docker host {0} deleted'.format(host['name']))
             dispatcher.unregister_resource('docker:{0}'.format(host['name']))
             dispatcher.dispatch_event('docker.host.changed', {
