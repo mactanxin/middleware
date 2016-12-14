@@ -1,4 +1,2 @@
-lib/schedulerd/src/main.py
-lib/schedulerd/src/main.pyc
 etc/rc.d/schedulerd
 sbin/schedulerd
