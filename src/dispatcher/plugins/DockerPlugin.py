@@ -1393,12 +1393,14 @@ def _init(dispatcher, plugin):
                 node.update({'default_collection': None})
 
     def refresh_containers(host_id=None):
+        collection = 'docker.containers'
+        event = 'docker.container.changed'
         filter = []
         if host_id:
             filter.append(('host', '=', host_id))
 
         current = list(dispatcher.call_sync(CONTAINERS_QUERY, filter))
-        old = dispatcher.datastore.query('docker.containers', *filter)
+        old = dispatcher.datastore.query(collection, *filter)
         created = []
         updated = []
         deleted = []
@@ -1406,32 +1408,32 @@ def _init(dispatcher, plugin):
             old_obj = first_or_default(lambda o: o['id'] == obj['id'], old)
             if old_obj:
                 if obj != old_obj:
-                    dispatcher.datastore.update('docker.containers', obj['id'], obj)
+                    dispatcher.datastore.update(collection, obj['id'], obj)
                     updated.append(obj['id'])
 
             else:
-                dispatcher.datastore.insert('docker.containers', obj)
+                dispatcher.datastore.insert(collection, obj)
                 created.append(obj['id'])
 
         for obj in old:
             if not first_or_default(lambda o: o['id'] == obj['id'], current):
-                dispatcher.datastore.delete('docker.containers', obj['id'])
+                dispatcher.datastore.delete(collection, obj['id'])
                 deleted.append(obj['id'])
 
         if created:
-            dispatcher.dispatch_event('docker.container.changed', {
+            dispatcher.dispatch_event(event, {
                 'operation': 'create',
                 'ids': created
             })
 
         if updated:
-            dispatcher.dispatch_event('docker.container.changed', {
+            dispatcher.dispatch_event(event, {
                 'operation': 'update',
                 'ids': updated
             })
 
         if deleted:
-            dispatcher.dispatch_event('docker.container.changed', {
+            dispatcher.dispatch_event(event, {
                 'operation': 'delete',
                 'ids': deleted
             })
