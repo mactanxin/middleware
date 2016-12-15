@@ -353,7 +353,6 @@ class Dispatcher(object):
         self.load_disabled_plugins = kwargs.get('load_disabled', False)
 
     def init(self):
-        push_status('Initializing')
         self.logger.info('Initializing')
         self.logger.info('Starting log database')
         self.start_logdb()
