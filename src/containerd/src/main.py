@@ -1295,6 +1295,26 @@ class DockerService(RpcService):
         return q.query(result, *(filter or []), stream=True, **(params or {}))
 
     @generator
+    def query_networks(self, filter=None, params=None):
+        result = []
+
+        for host in self.context.iterate_docker_hosts():
+            for network in host.connection.networks():
+                details = host.connection.inspect_network(network['Id'])
+                config = q.get(details, 'IPAM.Config.0')
+
+                result.append({
+                    'id': details['Id'],
+                    'name': details['Name'],
+                    'driver': details['Driver'],
+                    'subnet': config['Subnet'] if config else None,
+                    'gateway': config['Gateway'] if config else None,
+                    'host': host.vm.id,
+                })
+
+        return q.query(result, *(filter or []), stream=True, **(params or {}))
+
+    @generator
     def query_images(self, filter=None, params=None):
         result = []
         for host in self.context.iterate_docker_hosts():
@@ -1346,7 +1366,7 @@ class DockerService(RpcService):
         except BaseException as err:
             raise RpcException(errno.EFAULT, 'Failed to stop container: {0}'.format(str(err)))
 
-    def create(self, container):
+    def create_container(self, container):
         labels = []
         networking_config = None
         host = self.context.get_docker_host(container['host'])
@@ -1446,7 +1466,7 @@ class DockerService(RpcService):
         )
         return exec['Id']
 
-    def delete(self, id):
+    def delete_container(self, id):
         try:
             host = self.context.docker_host_by_container_id(id)
         except RpcException as err:
