@@ -208,10 +208,11 @@ class VMProvider(Provider):
         interfaces = self.dispatcher.call_sync('containerd.management.call_vmtools', id, 'network.interfaces')
         loadavg = self.dispatcher.call_sync('containerd.management.call_vmtools', id, 'system.loadavg')
 
-        return {
-            'interfaces': interfaces,
-            'load_avg': list(loadavg)
-        }
+        if interfaces and loadavg:
+            return {
+                'interfaces': interfaces,
+                'load_avg': list(loadavg)
+            }
 
     @accepts(str, str)
     @returns(h.object())

@@ -287,7 +287,6 @@
             ],
             "middleware.token_lifetime": 600,
             "middleware.parallel_disk_format": true,
-            "middleware.executors_count": 4,
             "middleware.streaming_burst_size": 16,
             "middleware.zfs_refresh_interval": 30,
             "middleware.snapshot_scrub_interval": 300,
@@ -374,6 +373,7 @@
             "container.docker.default_host": null,
             "container.docker.api_forwarding": null,
             "container.docker.api_forwarding_enable": false,
+            "container.cache_refresh_interval": 60,
             "container.docker.default_collection": "7f4d5a8d-b8dd-4ffa-a866-b074067b381d",
             "storage.hotsparing.autoreplace": true,
             "storage.hotsparing.strong_match": false,
@@ -1322,6 +1322,18 @@
     {
         "metadata": {
             "name": "docker.containers",
+            "migration": "keep",
+            "pkey-type": "uuid",
+            "attributes": {
+                "type": "log"
+            }
+        },
+        "data": {
+        }
+    },
+    {
+        "metadata": {
+            "name": "docker.networks",
             "migration": "keep",
             "pkey-type": "uuid",
             "attributes": {

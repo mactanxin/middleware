@@ -617,10 +617,8 @@ class VolumeCreateTask(ProgressTask):
             })
 
         self.set_progress(90)
-        self.dispatcher.dispatch_event('volume.changed', {
-            'operation': 'create',
-            'ids': [id]
-        })
+        wait_for_cache(self.dispatcher, 'volume', 'create', name)
+        return name
 
 
 @description("Creates new volume and automatically guesses disks layout")
@@ -705,7 +703,7 @@ class VolumeAutoCreateTask(ProgressTask):
             {'type': 'disk', 'path': disk_spec_to_path(self.dispatcher, i)} for i in log_disks or []
         ]
 
-        self.join_subtasks(self.run_subtask(
+        id, = self.join_subtasks(self.run_subtask(
             'volume.create',
             {
                 'id': name,
@@ -724,6 +722,8 @@ class VolumeAutoCreateTask(ProgressTask):
                 0, 100, '', p, m, e
             )
         ))
+
+        return id
 
 
 @description("Destroys active volume")
@@ -3183,6 +3183,10 @@ def _init(dispatcher, plugin):
                         })
                     except DuplicateKeyException:
                         # already inserted by task
+                        dispatcher.dispatch_event('volume.changed', {
+                            'operation': 'create',
+                            'ids': [i['name']]
+                        })
                         continue
 
                     logger.info('New volume {0} <{1}>'.format(i['name'], i['guid']))

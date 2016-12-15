@@ -707,3 +707,4 @@ def _init(dispatcher, plugin):
     plugin.register_provider("share.iscsi.auth", ISCSIAuthProvider)
     plugin.register_provider("share.iscsi.portal", ISCSIPortalProvider)
     plugin.register_event_type('share.iscsi.changed')
+    plugin.register_debug_hook(collect_debug)

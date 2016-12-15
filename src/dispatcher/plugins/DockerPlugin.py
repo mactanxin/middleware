@@ -28,6 +28,7 @@
 import re
 import copy
 import errno
+import gevent
 import dockerfile_parse
 import dockerhub
 import socket
@@ -51,6 +52,7 @@ images = None
 containers_state = None
 
 CONTAINERS_QUERY = 'containerd.docker.query_containers'
+NETWORKS_QUERY = 'containerd.docker.query_networks'
 IMAGES_QUERY = 'containerd.docker.query_images'
 
 dockerfile_parser_logger = logging.getLogger('dockerfile_parse.parser')
@@ -168,6 +170,20 @@ class DockerContainerProvider(Provider):
             return id
         else:
             return self.dispatcher.call_sync('docker.container.create_exec', id, '/bin/sh')
+
+
+@description('Provides information about Docker networks')
+class DockerNetworkProvider(Provider):
+    @description('Returns information about Docker networks')
+    @query('docker-network')
+    @generator
+    def query(self, filter=None, params=None):
+        return q.query(
+            self.datastore.query_stream('docker.networks'),
+            *(filter or []),
+            stream=True,
+            **(params or {})
+        )
 
 
 @description('Provides information about Docker container images')
@@ -550,7 +566,7 @@ class DockerContainerCreateTask(DockerBaseTask):
         if not container.get('names'):
             raise VerifyException(errno.EINVAL, 'Container name must be specified')
         else:
-            if not re.match(r'[a-zA-Z0-9.-]*$', container['names'][0]):
+            if not re.match(r'[a-zA-Z0-9.-_]*$', container['names'][0]):
                 raise VerifyException(
                     errno.EINVAL,
                     'Invalid container name: {0}. Only [a-zA-Z0-9.-] characters are allowed'.format(
@@ -661,7 +677,7 @@ class DockerContainerCreateTask(DockerBaseTask):
         self.dispatcher.exec_and_wait_for_event(
             'docker.container.changed',
             match_fn,
-            lambda: self.dispatcher.call_sync('containerd.docker.create', container, timeout=100),
+            lambda: self.dispatcher.call_sync('containerd.docker.create_container', container, timeout=100),
             600
         )
         self.set_progress(100, 'Finished')
@@ -720,7 +736,7 @@ class DockerContainerDeleteTask(DockerBaseTask):
         self.dispatcher.exec_and_wait_for_event(
             'docker.container.changed',
             lambda args: args['operation'] == 'delete' and id in args['ids'],
-            lambda: self.dispatcher.call_sync('containerd.docker.delete', id),
+            lambda: self.dispatcher.call_sync('containerd.docker.delete_container', id),
             600
         )
 
@@ -1155,9 +1171,11 @@ def unpack_labels(obj):
 def collect_debug(dispatcher):
     yield AttachData('hosts-query', dumps(list(dispatcher.call_sync('docker.host.query')), indent=4))
     yield AttachData('containers-query', dumps(list(dispatcher.call_sync('docker.container.query')), indent=4))
+    yield AttachData('networks-query', dumps(list(dispatcher.call_sync('docker.network.query')), indent=4))
     yield AttachData('images-query', dumps(list(dispatcher.call_sync('docker.image.query')), indent=4))
     yield AttachData('collections-query', dumps(list(dispatcher.call_sync('docker.collection.query')), indent=4))
     yield AttachData('containerd-containers', dumps(list(dispatcher.call_sync(CONTAINERS_QUERY)), indent=4))
+    yield AttachData('containerd-networks', dumps(list(dispatcher.call_sync(NETWORKS_QUERY)), indent=4))
     yield AttachData('containerd-images', dumps(list(dispatcher.call_sync(IMAGES_QUERY)), indent=4))
 
 
@@ -1190,6 +1208,7 @@ def _init(dispatcher, plugin):
         if args['operation'] == 'create':
             for host_id in args['ids']:
                 refresh_containers(host_id)
+                refresh_networks(host_id)
 
                 new_images = list(dispatcher.call_sync(
                     IMAGES_QUERY,
@@ -1217,7 +1236,8 @@ def _init(dispatcher, plugin):
             single=True
         )
         if host:
-            refresh_containers(host_id)
+            refresh_containers(args['name'])
+            refresh_networks(args['name'])
             logger.debug('Docker host {0} deleted'.format(host['name']))
             dispatcher.unregister_resource('docker:{0}'.format(host['name']))
             dispatcher.dispatch_event('docker.host.changed', {
@@ -1337,6 +1357,34 @@ def _init(dispatcher, plugin):
                         'ids': args['ids']
                     })
 
+    def on_network_event(args):
+        logger.trace('Received Docker network event: {}'.format(args))
+
+        collection = 'docker.networks'
+        event = 'docker.network.changed'
+
+        if args['ids']:
+            if args['operation'] == 'delete':
+                for i in args['ids']:
+                    dispatcher.datastore.delete(collection, i)
+
+                dispatcher.dispatch_event(event, {
+                    'operation': 'delete',
+                    'ids': args['ids']
+                })
+            else:
+                objs = dispatcher.call_sync(NETWORKS_QUERY, [('id', 'in', args['ids'])])
+                for obj in objs:
+                    if args['operation'] == 'create':
+                        dispatcher.datastore.insert(collection, obj)
+                    else:
+                        dispatcher.datastore.update(collection, obj['id'], obj)
+
+                    dispatcher.dispatch_event(event, {
+                        'operation': args['operation'],
+                        'ids': args['ids']
+                    })
+
     def on_collection_change(args):
         if args['operation'] == 'delete':
             node = ConfigNode('container.docker', dispatcher.configstore)
@@ -1344,9 +1392,18 @@ def _init(dispatcher, plugin):
             if default_collection and default_collection in args['ids']:
                 node.update({'default_collection': None})
 
-    def refresh_containers(host_id):
-        current = list(dispatcher.call_sync(CONTAINERS_QUERY, [('host', '=', host_id)]))
-        old = dispatcher.datastore.query('docker.containers', ('host', '=', host_id))
+    def refresh_containers(host_id=None):
+        collection = 'docker.containers'
+        event = 'docker.container.changed'
+        filter = []
+        if host_id:
+            filter.append(('host', '=', host_id))
+        else:
+            active_hosts = list(dispatcher.call_sync('docker.host.query', [('state', '=', 'UP')], {'select': 'id'}))
+            filter.append(('host', 'in', active_hosts))
+
+        current = list(dispatcher.call_sync(CONTAINERS_QUERY, filter))
+        old = dispatcher.datastore.query(collection, *filter)
         created = []
         updated = []
         deleted = []
@@ -1354,32 +1411,81 @@ def _init(dispatcher, plugin):
             old_obj = first_or_default(lambda o: o['id'] == obj['id'], old)
             if old_obj:
                 if obj != old_obj:
-                    dispatcher.datastore.update('docker.containers', obj['id'], obj)
+                    dispatcher.datastore.update(collection, obj['id'], obj)
                     updated.append(obj['id'])
 
             else:
-                dispatcher.datastore.insert('docker.containers', obj)
+                dispatcher.datastore.insert(collection, obj)
                 created.append(obj['id'])
 
         for obj in old:
             if not first_or_default(lambda o: o['id'] == obj['id'], current):
-                dispatcher.datastore.delete('docker.containers', obj['id'])
+                dispatcher.datastore.delete(collection, obj['id'])
                 deleted.append(obj['id'])
 
         if created:
-            dispatcher.dispatch_event('docker.container.changed', {
+            dispatcher.dispatch_event(event, {
                 'operation': 'create',
                 'ids': created
             })
 
         if updated:
-            dispatcher.dispatch_event('docker.container.changed', {
+            dispatcher.dispatch_event(event, {
                 'operation': 'update',
                 'ids': updated
             })
 
         if deleted:
-            dispatcher.dispatch_event('docker.container.changed', {
+            dispatcher.dispatch_event(event, {
+                'operation': 'delete',
+                'ids': deleted
+            })
+
+    def refresh_networks(host_id=None):
+        collection = 'docker.networks'
+        event = 'docker.network.changed'
+        filter = []
+        if host_id:
+            filter.append(('host', '=', host_id))
+        else:
+            active_hosts = list(dispatcher.call_sync('docker.host.query', [('state', '=', 'UP')], {'select': 'id'}))
+            filter.append(('host', 'in', active_hosts))
+
+        current = list(dispatcher.call_sync(NETWORKS_QUERY, filter))
+        old = dispatcher.datastore.query(collection, *filter)
+        created = []
+        updated = []
+        deleted = []
+        for obj in current:
+            old_obj = first_or_default(lambda o: o['id'] == obj['id'], old)
+            if old_obj:
+                if obj != old_obj:
+                    dispatcher.datastore.update(collection, obj['id'], obj)
+                    updated.append(obj['id'])
+
+            else:
+                dispatcher.datastore.insert(collection, obj)
+                created.append(obj['id'])
+
+        for obj in old:
+            if not first_or_default(lambda o: o['id'] == obj['id'], current):
+                dispatcher.datastore.delete(collection, obj['id'])
+                deleted.append(obj['id'])
+
+        if created:
+            dispatcher.dispatch_event(event, {
+                'operation': 'create',
+                'ids': created
+            })
+
+        if updated:
+            dispatcher.dispatch_event(event, {
+                'operation': 'update',
+                'ids': updated
+            })
+
+        if deleted:
+            dispatcher.dispatch_event(event, {
                 'operation': 'delete',
                 'ids': deleted
             })
@@ -1400,9 +1506,23 @@ def _init(dispatcher, plugin):
 
             images.remove_many(nonexistent_ids)
 
+    def sync_caches():
+        interval = dispatcher.configstore.get('container.cache_refresh_interval')
+        while True:
+            gevent.sleep(interval)
+            if images.ready:
+                logger.trace('Syncing Docker containers, networks, image cache')
+                try:
+                    sync_images()
+                    refresh_containers()
+                    refresh_networks()
+                except RpcException:
+                    pass
+
     plugin.register_provider('docker.config', DockerConfigProvider)
     plugin.register_provider('docker.host', DockerHostProvider)
     plugin.register_provider('docker.container', DockerContainerProvider)
+    plugin.register_provider('docker.network', DockerNetworkProvider)
     plugin.register_provider('docker.image', DockerImagesProvider)
     plugin.register_provider('docker.collection', DockerCollectionProvider)
 
@@ -1426,11 +1546,13 @@ def _init(dispatcher, plugin):
 
     plugin.register_event_type('docker.host.changed')
     plugin.register_event_type('docker.container.changed')
+    plugin.register_event_type('docker.network.changed')
     plugin.register_event_type('docker.image.changed')
     plugin.register_event_type('docker.collection.changed')
 
     plugin.register_event_handler('containerd.docker.host.changed', on_host_event)
     plugin.register_event_handler('containerd.docker.container.changed', on_container_event)
+    plugin.register_event_handler('containerd.docker.network.changed', on_network_event)
     plugin.register_event_handler('containerd.docker.image.changed', on_image_event)
     plugin.register_event_handler('vm.changed', on_vm_change)
     plugin.register_event_handler('plugin.service_registered',
@@ -1590,6 +1712,19 @@ def _init(dispatcher, plugin):
         }
     })
 
+    plugin.register_schema_definition('docker-network', {
+        'type': 'object',
+        'additionalProperties': False,
+        'properties': {
+            'id': {'type': 'string'},
+            'name': {'type': 'string'},
+            'host': {'type': ['string', 'null']},
+            'driver': {'type': ['string', 'null']},
+            'subnet': {'type': ['string', 'null']},
+            'gateway': {'type': ['string', 'null']},
+        }
+    })
+
     plugin.register_schema_definition('docker-image', {
         'type': 'object',
         'additionalProperties': False,
@@ -1647,6 +1782,8 @@ def _init(dispatcher, plugin):
 
     if 'containerd.docker' in dispatcher.call_sync('discovery.get_services'):
         init_images()
+
+    gevent.spawn(sync_caches)
 
     if not dispatcher.call_sync('docker.config.get_config').get('default_host'):
         host_id = dispatcher.datastore.query(

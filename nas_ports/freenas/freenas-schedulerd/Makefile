@@ -32,5 +32,9 @@ do-install:
 
 post-install:
 	${PYTHON_CMD} -m compileall ${STAGEDIR}${PREFIX}/lib/schedulerd
+	(cd ${STAGEDIR}${PREFIX}/lib/schedulerd; ${FIND} -E . -type f -regex ".*.pyc?" \
+		| ${SED} -e 's,^\./,,g' \
+		| ${AWK} '{print length, $$0}' | ${SORT} -rn \
+		| ${AWK} '{print "lib/schedulerd/"$$2 }' >> ${TMPPLIST})
 
 .include <bsd.port.mk>

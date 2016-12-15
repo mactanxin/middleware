@@ -801,7 +801,11 @@ def _init(dispatcher, plugin):
             'dhcp': {'type': 'boolean'},
             'rtadv': {'type': 'boolean'},
             'noipv6': {'type': 'boolean'},
-            'mtu': {'type': ['integer', 'null']},
+            'mtu': {
+                'type': ['integer', 'null'],
+                'minimum': 576,
+                'maximum': 16384
+            },
             'media': {'type': ['string', 'null']},
             'mediaopts': {'$ref': 'network-interface-mediaopts'},
             'capabilities': {

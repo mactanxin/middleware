@@ -37,6 +37,7 @@ import inspect
 import subprocess
 import bsd
 import signal
+from lib.freebsd import get_sysctl
 from threading import Condition
 from datetime import datetime
 from freenas.dispatcher import validator
@@ -530,7 +531,7 @@ class Balancer(object):
         self.resource_graph.add_resource(Resource('system'))
 
     def start_executors(self):
-        for i in range(0, self.dispatcher.configstore.get('middleware.executors_count')):
+        for i in range(0, get_sysctl("hw.ncpu")):
             self.logger.info('Starting task executor #{0}...'.format(i))
             self.executors.append(TaskExecutor(self, i))
 
