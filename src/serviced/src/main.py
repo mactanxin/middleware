@@ -448,8 +448,9 @@ class JobService(RpcService):
     def load(self, plist):
         with self.context.lock:
             job = Job(self.context)
-            job.load(plist)
             self.context.jobs[job.id] = job
+
+        job.load(plist)
 
     def unload(self, name_or_id):
         with self.context.lock:
