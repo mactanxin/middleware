@@ -457,24 +457,28 @@ class JobService(RpcService):
             if not job:
                 raise RpcException(errno.ENOENT, 'Job {0} not found'.format(name_or_id))
 
-            job.stop()
-            job.unload()
+        job.stop()
+        job.unload()
 
-    def start(self, name_or_id):
+    def start(self, name_or_id, wait=False):
         with self.context.lock:
             job = first_or_default(lambda j: j.label == name_or_id or j.id == name_or_id, self.context.jobs.values())
             if not job:
                 raise RpcException(errno.ENOENT, 'Job {0} not found'.format(name_or_id))
 
-            job.start()
+        job.start()
+        if wait:
+            self.wait(name_or_id, (JobState.RUNNING, JobState.ERROR))
 
-    def stop(self, name_or_id):
+    def stop(self, name_or_id, wait=False):
         with self.context.lock:
             job = first_or_default(lambda j: j.label == name_or_id or j.id == name_or_id, self.context.jobs.values())
             if not job:
                 raise RpcException(errno.ENOENT, 'Job {0} not found'.format(name_or_id))
 
-            job.stop()
+        job.stop()
+        if wait:
+            self.wait(name_or_id, (JobState.STOPPED, JobState.ERROR))
 
     def get(self, name_or_id):
         with self.context.lock:
@@ -482,16 +486,16 @@ class JobService(RpcService):
             if not job:
                 raise RpcException(errno.ENOENT, 'Job {0} not found'.format(name_or_id))
 
-            return job.__getstate__()
+        return job.__getstate__()
 
-    def wait(self, name_or_id, state):
+    def wait(self, name_or_id, states):
         with self.context.lock:
             job = first_or_default(lambda j: j.label == name_or_id or j.id == name_or_id, self.context.jobs.values())
             if not job:
                 raise RpcException(errno.ENOENT, 'Job {0} not found'.format(name_or_id))
 
         with job.cv:
-            job.cv.wait_for(lambda: job.state == state)
+            job.cv.wait_for(lambda: job.state in states)
             return job.state
 
     def checkin(self):
