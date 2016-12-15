@@ -193,6 +193,10 @@ class Plugin(object):
         self.dispatcher.register_task_handler(name, clazz)
         self.registers['task_handlers'].append(name)
 
+    def register_task_alias(self, name, name2):
+        self.dispatcher.register_task_alias(name, name2)
+        self.registers['task_handlers'].append(name)
+
     def unregister_task_handler(self, name):
         self.dispatcher.unregister_task_handler(name)
         self.registers['task_handlers'].remove(name)
@@ -646,8 +650,12 @@ class Dispatcher(object):
         self.dispatch_event('server.event.removed', {'name': name})
 
     def register_task_handler(self, name, clazz):
-        self.logger.debug("New task handler: %s", name)
+        self.logger.debug("New task handler: {0}".format(name))
         self.tasks[name] = clazz
+
+    def register_task_alias(self, name, name2):
+        self.logger.debug("New task alias: {0} -> {1}".format(name, name2))
+        self.tasks[name] = self.tasks[name2]
 
     def unregister_task_handler(self, name):
         del self.tasks[name]
