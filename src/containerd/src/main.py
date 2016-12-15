@@ -389,7 +389,7 @@ class VirtualMachine(object):
 
     def call_vmtools(self, method, *args, timeout=None):
         if not self.vmtools_ready:
-            raise RuntimeError('freenas-vm-tools service not ready or not present')
+            raise RpcException(errno.ENXIO, 'freenas-vm-tools service not ready or not present')
 
         return self.vmtools_client.call_sync(method, *args, timeout=timeout)
 
@@ -1193,7 +1193,7 @@ class ManagementService(RpcService):
     def call_vmtools(self, id, fn, *args):
         vm = self.context.vms.get(id)
         if not vm:
-            raise RpcException(errno.ENOENT, 'VM {0} not found'.format(id))
+            return
 
         return vm.call_vmtools(fn, *args)
 
