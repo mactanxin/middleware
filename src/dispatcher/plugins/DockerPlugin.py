@@ -108,7 +108,7 @@ class DockerContainerProvider(Provider):
 
             return None
 
-        def extend(obj):
+        def extend(obj, hosts):
             obj = unpack_labels(obj)
             presets = self.dispatcher.call_sync('docker.image.labels_to_presets', obj['labels'])
             settings = obj.setdefault('settings', [])
@@ -117,7 +117,8 @@ class DockerContainerProvider(Provider):
                 'web_ui_url': None,
                 'settings': [],
                 'version': '0',
-                'running': containers_state.get(obj['id'], False)
+                'running': containers_state.get(obj['id'], False),
+                'reachable': obj['host'] in hosts
             })
 
             if presets:
@@ -139,8 +140,10 @@ class DockerContainerProvider(Provider):
 
             return obj
 
+        reachable_hosts = list(self.dispatcher.call_sync('docker.host.query', [('state', '=', 'UP')], {'select': 'id'}))
+
         return q.query(
-            self.datastore.query_stream('docker.containers', callback=extend),
+            self.datastore.query_stream('docker.containers', callback=lambda o: extend(o, reachable_hosts)),
             *(filter or []),
             stream=True,
             **(params or {})
@@ -1651,6 +1654,7 @@ def _init(dispatcher, plugin):
             'expose_ports': {'type': 'boolean'},
             'autostart': {'type': 'boolean'},
             'running': {'type': 'boolean'},
+            'reachable': {'type': 'boolean'},
             'interactive': {'type': 'boolean'},
             'version': {'type': 'string'},
             'web_ui_url': {'type': 'string'},
