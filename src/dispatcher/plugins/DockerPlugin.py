@@ -1398,6 +1398,9 @@ def _init(dispatcher, plugin):
         filter = []
         if host_id:
             filter.append(('host', '=', host_id))
+        else:
+            active_hosts = list(dispatcher.call_sync('docker.host.query', [('state', '=', 'UP')], {'select': 'id'}))
+            filter.append(('host', 'in', active_hosts))
 
         current = list(dispatcher.call_sync(CONTAINERS_QUERY, filter))
         old = dispatcher.datastore.query(collection, *filter)
@@ -1444,6 +1447,9 @@ def _init(dispatcher, plugin):
         filter = []
         if host_id:
             filter.append(('host', '=', host_id))
+        else:
+            active_hosts = list(dispatcher.call_sync('docker.host.query', [('state', '=', 'UP')], {'select': 'id'}))
+            filter.append(('host', 'in', active_hosts))
 
         current = list(dispatcher.call_sync(NETWORKS_QUERY, filter))
         old = dispatcher.datastore.query(collection, *filter)
