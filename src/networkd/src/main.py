@@ -476,7 +476,7 @@ class ConfigurationService(RpcService):
 
         yield from self.configure_routes()
         yield from self.configure_dns()
-        self.client.call_sync('service.restart', 'rtsold')
+        self.client.call_sync('service.restart', 'rtsold', timeout=300)
         self.client.emit_event('network.changed', {
             'operation': 'update'
         })
@@ -720,7 +720,7 @@ class ConfigurationService(RpcService):
             if entity.get('rtadv', False):
                 iface.nd6_flags = iface.nd6_flags | {netif.NeighborDiscoveryFlags.ACCEPT_RTADV}
                 if restart_rtsold:
-                    self.client.call_sync('service.restart', 'rtsold')
+                    self.client.call_sync('service.restart', 'rtsold', timeout=300)
             else:
                 iface.nd6_flags = iface.nd6_flags - {netif.NeighborDiscoveryFlags.ACCEPT_RTADV}
 
