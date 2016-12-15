@@ -97,7 +97,7 @@ def _metadata():
 
 def mount(name, properties):
     # XXX: Couldn't figure out how to do that with py-bsd's nmount
-    system('/sbin/mount_nfs', '{address}:{path}'.format(**properties), os.path.join('/nfs', name))
+    system('/sbin/mount_nfs', '-o soft,retrycnt=1,timeout=60', '{address}:{path}'.format(**properties), os.path.join('/nfs', name))
 
 
 def umount(name):
