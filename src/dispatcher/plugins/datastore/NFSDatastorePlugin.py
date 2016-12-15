@@ -89,6 +89,7 @@ def _metadata():
     return {
         'type': 'datastore',
         'driver': 'nfs',
+        'block_devices': False,
         'clones': False,
         'snapshots': False
     }
@@ -101,6 +102,10 @@ def mount(name, properties):
 
 def umount(name):
     bsd.unmount(os.path.join('/nfs', name))
+
+
+def _depends():
+    return ['LocalDatastorePlugin']
 
 
 def _init(dispatcher, plugin):
@@ -134,4 +139,4 @@ def _init(dispatcher, plugin):
         for i in dispatcher.datastore.query('vm.datastores', ('type', '=', 'nfs')):
             mount(i['name'], i['properties'])
 
-    dispatcher.register_event_handler_once('network.configured', init)
+    dispatcher.register_event_handler_once('network.changed', init)

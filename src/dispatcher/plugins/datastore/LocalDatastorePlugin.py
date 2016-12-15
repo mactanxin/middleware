@@ -77,6 +77,7 @@ def _metadata():
         'type': 'datastore',
         'driver': 'local',
         'block_devices': False,
+        'clones': False,
         'snapshots': False
     }
 
