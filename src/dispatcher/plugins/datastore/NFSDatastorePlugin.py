@@ -88,7 +88,9 @@ class NFSDatastoreDeleteTask(Task):
 def _metadata():
     return {
         'type': 'datastore',
-        'driver': 'nfs'
+        'driver': 'nfs',
+        'clones': False,
+        'snapshots': False
     }
 
 
@@ -128,5 +130,8 @@ def _init(dispatcher, plugin):
     if not os.path.isdir('/nfs'):
         os.mkdir('/nfs')
 
-    for i in dispatcher.datastore.query('vm.datastores', ('type', '=', 'nfs')):
-        mount(i['name'], i['properties'])
+    def init(args):
+        for i in dispatcher.datastore.query('vm.datastores', ('type', '=', 'nfs')):
+            mount(i['name'], i['properties'])
+
+    dispatcher.register_event_handler_once('network.configured', init)

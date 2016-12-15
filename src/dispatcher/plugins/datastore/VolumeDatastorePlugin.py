@@ -101,7 +101,9 @@ class VolumeBlockDeviceDeleteTask(Task):
 def _metadata():
     return {
         'type': 'datastore',
-        'driver': 'volume'
+        'driver': 'volume',
+        'clones': True,
+        'snapshots': True
     }
 
 
