@@ -633,6 +633,13 @@ class Dispatcher(object):
             if en == name:
                 ev.decref()
 
+    def register_event_handler_once(self, name, handler):
+        def doit(args):
+            handler(args)
+            self.unregister_event_handler(name, doit)
+
+        self.register_event_handler(name, doit)
+
     def register_event_source(self, name, clazz):
         self.logger.debug("New event source: %s", name)
         self.event_sources[name] = clazz
