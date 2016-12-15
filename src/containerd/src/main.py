@@ -1193,7 +1193,7 @@ class ManagementService(RpcService):
     def call_vmtools(self, id, fn, *args):
         vm = self.context.vms.get(id)
         if not vm:
-            raise RpcException(errno.ENOENT, 'It looks like the VM is not runnig - please start the VM')
+            return
 
         return vm.call_vmtools(fn, *args)
 
