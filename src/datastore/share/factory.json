@@ -1333,6 +1333,18 @@
     },
     {
         "metadata": {
+            "name": "docker.networks",
+            "migration": "keep",
+            "pkey-type": "uuid",
+            "attributes": {
+                "type": "log"
+            }
+        },
+        "data": {
+        }
+    },
+    {
+        "metadata": {
             "name": "docker.collections",
             "migration": "merge-preserve",
             "pkey-type": "uuid",
