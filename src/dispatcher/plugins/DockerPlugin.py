@@ -1607,6 +1607,19 @@ def _init(dispatcher, plugin):
         }
     })
 
+    plugin.register_schema_definition('docker-network', {
+        'type': 'object',
+        'additionalProperties': False,
+        'properties': {
+            'id': {'type': 'string'},
+            'name': {'type': 'string'},
+            'host': {'type': ['string', 'null']},
+            'driver': {'type': ['string', 'null']},
+            'subnet': {'type': ['string', 'null']},
+            'gateway': {'type': ['string', 'null']},
+        }
+    })
+
     plugin.register_schema_definition('docker-image', {
         'type': 'object',
         'additionalProperties': False,
