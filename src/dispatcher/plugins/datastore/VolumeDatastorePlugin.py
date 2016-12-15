@@ -38,7 +38,7 @@ class VolumeDatastoreProvider(Provider):
             yield {
                 'id': vol['id'],
                 'name': vol['id'],
-                'type': 'VOLUME'
+                'type': 'volume'
             }
 
     @private
@@ -85,7 +85,7 @@ class VolumeBlockDeviceCreateTask(Task):
         return self.run_subtask_sync('volume.dataset.create', {
             'volume': id,
             'id': os.path.join(id, path),
-            'type': 'VOLUME',
+            'type': 'volume',
             'volsize': size
         })
 
@@ -111,3 +111,4 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('vm.datastore.volume.delete_directory', VolumeDirectoryDeleteTask)
     plugin.register_task_handler('vm.datastore.volume.create_block_device', VolumeBlockDeviceCreateTask)
     plugin.register_task_handler('vm.datastore.volume.delete_block_device', VolumeBlockDeviceCreateTask)
+

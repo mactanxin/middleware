@@ -25,18 +25,28 @@
 #
 #####################################################################
 
+import errno
 import contextlib
 from task import Task, TaskException, Provider, query
-from freenas.dispatcher.rpc import accepts, returns, private, description, generator
+from freenas.dispatcher.rpc import RpcException, accepts, returns, private, description, generator
+from freenas.utils import query as q
 
 
 class DatastoreProvider(Provider):
     @query('vm-datastore')
     @generator
     def query(self, filter=None, params=None):
-        for i in self.supported_drivers():
-            with contextlib.suppress(BaseException):
-                yield from self.dispatcher.call_sync('vm.datastore.{0}.discover'.format(i))
+        def doit():
+            for i in self.supported_drivers():
+                with contextlib.suppress(BaseException):
+                    yield from self.dispatcher.call_sync('vm.datastore.{0}.discover'.format(i))
+
+            def extend(obj):
+                return obj
+
+            yield from self.datastore.query_stream('vm.datastores', callback=extend)
+
+        return q.query(doit(), *(filter or []), **(params or {}))
 
     @description("Returns list of supported datastore drivers")
     def supported_drivers(self):
@@ -49,7 +59,11 @@ class DatastoreProvider(Provider):
 
     @private
     def get_driver(self, id):
-        return 'volume'
+        ds = self.query([('id', '=', id)], {'single': True})
+        if not ds:
+            raise RpcException(errno.ENOENT, 'Datastore {0} not found'.format(id))
+
+        return ds['type']
 
     @private
     def directory_exists(self, datastore_id, datastore_path):
@@ -83,6 +97,46 @@ class DatastoreProvider(Provider):
     @generator
     def get_snapshots(self, datastore_id, path):
         pass
+
+
+class DatastoreCreateTask(Task):
+    def verify(self, datastore):
+        return ['system']
+
+    def run(self, datastore):
+        self.run_subtask_sync('vm.datastore.{0}.create'.format(datastore['type']), datastore)
+        id = self.datastore.insert('vm.datastores', datastore)
+        self.dispatcher.emit_event('vm.datastore.changed', {
+            'operation': 'create',
+            'ids': [id]
+        })
+
+        return id
+
+
+class DatastoreUpdateTask(Task):
+    def verify(self, id, updated_fields):
+        return ['system']
+
+    def run(self, id, updated_fields):
+        pass
+
+
+class DatastoreDeleteTask(Task):
+    def verify(self, id):
+        return ['system']
+
+    def run(self, id):
+        ds = self.datastore.get_by_id('vm.datastores', id)
+        if not ds:
+            raise TaskException(errno.ENOENT, 'Datastore {0} not found'.format(id))
+
+        self.run_subtask_sync('vm.datastore.{0}.delete'.format(ds['type']), id)
+        self.datastore.delete('vm.datastores', id)
+        self.dispatcher.emit_event('vm.datastore.changed', {
+            'operation': 'delete',
+            'ids': [id]
+        })
 
 
 class DirectoryCreateTask(Task):
@@ -132,9 +186,19 @@ class BlockDeviceCloneTask(Task):
 
 
 def _init(dispatcher, plugin):
-    plugin.register_schema_definition('vm-datastore-type', {
+    def update_datastore_properties_schema():
+        plugin.register_schema_definition('vm-datastore-properties', {
+            'discriminator': '%type',
+            'oneOf': [
+                {'$ref': 'vm-datastore-properties-{0}'.format(name)}
+                for name
+                in dispatcher.call_sync('vm.datastore.supported_types')
+            ]
+        })
+
+    plugin.register_schema_definition('vm-datastore-state', {
         'type': 'string',
-        'enum': ['DIRECTORY', 'VOLUME', 'NFS']
+        'enum': ['ONLINE', 'OFFLINE']
     })
 
     plugin.register_schema_definition('vm-datastore', {
@@ -143,13 +207,22 @@ def _init(dispatcher, plugin):
         'properties': {
             'id': {'type': 'string'},
             'name': {'type': 'string'},
-            'type': {'$ref': 'vm-datastore-type'}
+            'type': {'type': 'string'},
+            'state': {'$ref': 'vm-datastore-state'},
+            'properties': {'$ref': 'vm-datastore-properties'}
         }
     })
 
     plugin.register_provider('vm.datastore', DatastoreProvider)
+    plugin.register_task_handler('vm.datastore.create', DatastoreCreateTask)
+    plugin.register_task_handler('vm.datastore.update', DatastoreUpdateTask)
+    plugin.register_task_handler('vm.datastore.delete', DatastoreDeleteTask)
     plugin.register_task_handler('vm.datastore.create_directory', DirectoryCreateTask)
     plugin.register_task_handler('vm.datastore.delete_directory', DirectoryDeleteTask)
     plugin.register_task_handler('vm.datastore.create_block_device', BlockDeviceCreateTask)
     plugin.register_task_handler('vm.datastore.delete_block_device', BlockDeviceDeleteTask)
     plugin.register_task_handler('vm.datastore.clone_block_device', BlockDeviceCloneTask)
+    plugin.register_event_type('vm.datastore.changed')
+
+    update_datastore_properties_schema()
+    dispatcher.register_event_handler('server.plugin.loaded', update_datastore_properties_schema())

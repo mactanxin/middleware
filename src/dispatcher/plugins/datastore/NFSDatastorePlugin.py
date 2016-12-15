@@ -26,14 +26,14 @@
 #####################################################################
 
 import os
-import shutil
+import bsd
 import errno
+from lib.system import system
 from task import Task, TaskException, Provider
 from freenas.dispatcher.rpc import RpcException, private, accepts, returns, generator
-from freenas.utils import query as q
 
 
-class LocalDatastoreProvider(Provider):
+class NFSDatastoreProvider(Provider):
     @private
     @generator
     def discover(self):
@@ -42,55 +42,91 @@ class LocalDatastoreProvider(Provider):
     @private
     def get_filesystem_path(self, datastore_id, datastore_path):
         ds = self.datastore.get_by_id('vm.datastores', datastore_id)
-        if ds['type'] != 'local':
+        if ds['type'] != 'nfs':
             raise RpcException(errno.EINVAL, 'Invalid datastore type')
 
-        return os.path.join(q.get(ds, 'properties.path'), datastore_path)
+        return os.path.join('/nfs', ds['name'], datastore_path)
 
     @private
     def directory_exists(self, datastore_id, datastore_path):
         ds = self.datastore.get_by_id('vm.datastores', datastore_id)
-        if ds['type'] != 'local':
+        if ds['type'] != 'nfs':
             raise RpcException(errno.EINVAL, 'Invalid datastore type')
 
-        return os.path.exists(os.path.join(q.get(ds, 'properties.path'), datastore_path))
+        return os.path.exists(os.path.join('/nfs', ds['name'], datastore_path))
 
     @private
     def get_resources(self, datastore_id):
         return ['system']
 
 
-class LocalDirectoryCreateTask(Task):
-    def run(self, id, path):
-        path = self.dispatcher.call_sync('vm.datastore.get_filesystem_path', id, path)
-        os.mkdir(path)
+class NFSDatastoreCreateTask(Task):
+    def verify(self, datastore):
+        return ['system']
+
+    def run(self, datastore):
+        mount(datastore['name'], datastore['properties'])
 
 
-class LocalDirectoryDeleteTask(Task):
-    def run(self, id, path):
-        path = self.dispatcher.call_sync('vm.datastore.get_filesystem_path', id, path)
-        shutil.rmtree(path, ignore_errors=True)
+class NFSDatastoreUpdateTask(Task):
+    def verify(self, id, updated_fields):
+        return ['system']
+
+    def run(self, id, updated_fields):
+        pass
+
+
+class NFSDatastoreDeleteTask(Task):
+    def verify(self, id):
+        return ['system']
+
+    def run(self, id):
+        ds = self.datastore.get_by_id('vm.datastores', id)
+        umount(ds['name'])
 
 
 def _metadata():
     return {
         'type': 'datastore',
-        'driver': 'local',
-        'block_devices': False,
-        'snapshots': False
+        'driver': 'nfs'
     }
 
 
+def mount(name, properties):
+    # XXX: Couldn't figure out how to do that with py-bsd's nmount
+    system('/sbin/mount_nfs', '{address}:{path}'.format(**properties), os.path.join('/nfs', name))
+
+
+def umount(name):
+    bsd.unmount(os.path.join('/nfs', name))
+
+
 def _init(dispatcher, plugin):
-    plugin.register_schema_definition('vm-datastore-properties-local', {
+    plugin.register_schema_definition('vm-datastore-nfs-version', {
+        'type': 'string',
+        'enum': ['NFSV3', 'NFSV4']
+    })
+
+    plugin.register_schema_definition('vm-datastore-properties-nfs', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
-            '%type': {'enum': ['vm-datastore-local']},
-            'path': {'type': 'string'}
+            '%type': {'enum': ['vm-datastore-nfs']},
+            'address': {'type': 'string'},
+            'path': {'type': 'string'},
+            'version': {'$ref': 'vm-datastore-nfs-version'}
         }
     })
 
-    plugin.register_provider('vm.datastore.local', LocalDatastoreProvider)
-    plugin.register_task_handler('vm.datastore.local.create_directory', LocalDirectoryCreateTask)
-    plugin.register_task_handler('vm.datastore.local.delete_directory', LocalDirectoryDeleteTask)
+    plugin.register_provider('vm.datastore.nfs', NFSDatastoreProvider)
+    plugin.register_task_handler('vm.datastore.nfs.create', NFSDatastoreCreateTask)
+    plugin.register_task_handler('vm.datastore.nfs.update', NFSDatastoreUpdateTask)
+    plugin.register_task_handler('vm.datastore.nfs.delete', NFSDatastoreDeleteTask)
+    plugin.register_task_alias('vm.datastore.nfs.create_directory', 'vm.datastore.local.create_directory')
+    plugin.register_task_alias('vm.datastore.nfs.delete_directory', 'vm.datastore.local.delete_directory')
+
+    if not os.path.isdir('/nfs'):
+        os.mkdir('/nfs')
+
+    for i in dispatcher.datastore.query('vm.datastores', ('type', '=', 'nfs')):
+        mount(i['name'], i['properties'])
