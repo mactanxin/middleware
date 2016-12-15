@@ -662,7 +662,7 @@ class DockerContainerCreateTask(DockerBaseTask):
         self.dispatcher.exec_and_wait_for_event(
             'docker.container.changed',
             match_fn,
-            lambda: self.dispatcher.call_sync('containerd.docker.create', container, timeout=100),
+            lambda: self.dispatcher.call_sync('containerd.docker.create_container', container, timeout=100),
             600
         )
         self.set_progress(100, 'Finished')
@@ -721,7 +721,7 @@ class DockerContainerDeleteTask(DockerBaseTask):
         self.dispatcher.exec_and_wait_for_event(
             'docker.container.changed',
             lambda args: args['operation'] == 'delete' and id in args['ids'],
-            lambda: self.dispatcher.call_sync('containerd.docker.delete', id),
+            lambda: self.dispatcher.call_sync('containerd.docker.delete_container', id),
             600
         )
 
