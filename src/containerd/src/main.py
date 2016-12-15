@@ -1295,6 +1295,29 @@ class DockerService(RpcService):
         return q.query(result, *(filter or []), stream=True, **(params or {}))
 
     @generator
+    def query_networks(self, filter=None, params=None):
+        result = []
+
+        for host in self.context.iterate_docker_hosts():
+            for network in host.connection.networks():
+                details = host.connection.inspect_network(network['Id'])
+                try:
+                    config = details['IPAM']['Config'][0]
+                except IndexError:
+                    config = None
+
+                result.append({
+                    'id': details['Id'],
+                    'name': details['Name'],
+                    'driver': details['Driver'],
+                    'subnet': config['Subnet'] if config else None,
+                    'gateway': config['Gateway'] if config else None,
+                    'host': host.vm.id,
+                })
+
+        return q.query(result, *(filter or []), stream=True, **(params or {}))
+
+    @generator
     def query_images(self, filter=None, params=None):
         result = []
         for host in self.context.iterate_docker_hosts():
