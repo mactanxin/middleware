@@ -75,6 +75,7 @@ from services import (
     ManagementService, DebugService, EventService, TaskService,
     PluginService, ShellService, LockService
 )
+from event import sync
 from schemas import register_general_purpose_schemas
 from balancer import Balancer
 from auth import PasswordAuthenticator, TokenStore, Token, TokenException, User, Service
@@ -634,6 +635,7 @@ class Dispatcher(object):
                 ev.decref()
 
     def register_event_handler_once(self, name, handler):
+        @sync
         def doit(args):
             handler(args)
             self.unregister_event_handler(name, doit)
