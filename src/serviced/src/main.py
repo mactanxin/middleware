@@ -446,11 +446,10 @@ class JobService(RpcService):
             return q.query(self.context.jobs.values(), *(filter or []), **(params or {}))
 
     def load(self, plist):
-        with self.context.lock:
-            job = Job(self.context)
-            self.context.jobs[job.id] = job
-
+        job = Job(self.context)
         job.load(plist)
+        with self.context.lock:
+            self.context.jobs[job.id] = job
 
     def unload(self, name_or_id):
         with self.context.lock:
