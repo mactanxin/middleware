@@ -1301,10 +1301,7 @@ class DockerService(RpcService):
         for host in self.context.iterate_docker_hosts():
             for network in host.connection.networks():
                 details = host.connection.inspect_network(network['Id'])
-                try:
-                    config = details['IPAM']['Config'][0]
-                except IndexError:
-                    config = None
+                config = q.get(details, 'IPAM.Config.0')
 
                 result.append({
                     'id': details['Id'],
