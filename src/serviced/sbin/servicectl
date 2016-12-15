@@ -95,10 +95,10 @@ def start(label):
         sys.exit(0)
 
 
-def stop(label):
+def stop(label, state):
     client = create_client()
     try:
-        client.call_sync('serviced.job.stop', label)
+        client.call_sync('serviced.job.stop', label, state)
     except RpcException as err:
         print('Failed to stop job: {0}'.format(err), file=sys.stderr)
         sys.exit(1)
