@@ -34,7 +34,7 @@ from freenas.utils import query as q
 
 
 class KerberosRealmsProvider(Provider):
-    @query('kerberos-realm')
+    @query('KerberosRealm')
     @generator
     def query(self, filter=None, params=None):
         return q.query(
@@ -46,7 +46,7 @@ class KerberosRealmsProvider(Provider):
 
 
 class KerberosKeytabsProvider(Provider):
-    @query('kerberos-keytab')
+    @query('KerberosKeytab')
     @generator
     def query(self, filter=None, params=None):
         ctx = krb5.Context()
@@ -75,7 +75,7 @@ class KerberosKeytabsProvider(Provider):
         )
 
 
-@accepts(h.ref('kerberos-realm'))
+@accepts(h.ref('KerberosRealm'))
 class KerberosRealmCreateTask(Task):
     def verify(self, realm):
         return ['system']
@@ -90,7 +90,7 @@ class KerberosRealmCreateTask(Task):
         return id
 
 
-@accepts(str, h.ref('kerberos-realm'))
+@accepts(str, h.ref('KerberosRealm'))
 class KerberosRealmUpdateTask(Task):
     def verify(self, id, realm):
         return ['system']
@@ -122,7 +122,7 @@ class KerberosRealmDeleteTask(Task):
 
 
 @accepts(h.all_of(
-    h.ref('kerberos-keytab'),
+    h.ref('KerberosKeytab'),
     h.required('name', 'keytab')
 ))
 class KerberosKeytabCreateTask(Task):
@@ -143,7 +143,7 @@ class KerberosKeytabCreateTask(Task):
 
 
 @accepts(str, h.all_of(
-    h.ref('kerberos-keytab'),
+    h.ref('KerberosKeytab'),
     h.forbidden('keytab', 'entries')
 ))
 class KerberosKeytabUpdateTask(Task):
@@ -197,7 +197,7 @@ def collect_debug(dispatcher):
 
 
 def _init(dispatcher, plugin):
-    plugin.register_schema_definition('kerberos-realm', {
+    plugin.register_schema_definition('KerberosRealm', {
         'type': 'object',
         'properties': {
             'id': {'type': 'string'},
@@ -208,7 +208,7 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('kerberos-keytab', {
+    plugin.register_schema_definition('KerberosKeytab', {
         'type': 'object',
         'properties': {
             'id': {'type': 'string'},
@@ -216,12 +216,12 @@ def _init(dispatcher, plugin):
             'keytab': {'type': 'binary'},
             'entries': {
                 'type': 'array',
-                'items': {'$ref': 'kerberos-keytab-entry'}
+                'items': {'$ref': 'KerberosKeytabEntry'}
             }
         }
     })
 
-    plugin.register_schema_definition('kerberos-keytab-entry', {
+    plugin.register_schema_definition('KerberosKeytabEntry', {
         'type': 'object',
         'properties': {
             'principal': {'type': 'string'},
