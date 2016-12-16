@@ -125,7 +125,7 @@ class IPFSServiceProvider(Provider):
 
     @private
     @accepts()
-    @returns(h.ref('service-ipfs'))
+    @returns(h.ref('ServiceIpfs'))
     def get_config(self):
         return ConfigNode('service.ipfs', self.configstore).__getstate__()
 
@@ -145,7 +145,7 @@ class IPFSProvider(Provider):
 
 @private
 @description('Configure IPFS service')
-@accepts(h.ref('service-ipfs'))
+@accepts(h.ref('ServiceIpfs'))
 class IPFSConfigureTask(Task):
     @classmethod
     def early_describe(cls):
@@ -264,10 +264,10 @@ def _depends():
 def _init(dispatcher, plugin):
 
     # Register schemas
-    plugin.register_schema_definition('service-ipfs', {
+    plugin.register_schema_definition('ServiceIpfs', {
         'type': 'object',
         'properties': {
-            'type': {'enum': ['service-ipfs']},
+            'type': {'enum': ['ServiceIpfs']},
             'enable': {'type': 'boolean'},
             'path': {'type': 'string'},
             'webui': {'type': 'boolean'}

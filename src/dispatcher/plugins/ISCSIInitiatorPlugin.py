@@ -58,7 +58,7 @@ class ISCSITargetProvider(Provider):
 
 @description("Creates a new iSCSI initiator target")
 @accepts(h.all_of(
-    h.ref('iscsi-target'),
+    h.ref('IscsiTarget'),
     h.required('address', 'name')
 ))
 class ISCSITargetCreateTask(Task):
@@ -102,7 +102,7 @@ class ISCSITargetCreateTask(Task):
 
 
 @description("Updates configuration of a iSCSI initiator target")
-@accepts(str, h.ref('iscsi-target'))
+@accepts(str, h.ref('IscsiTarget'))
 class ISCSITargetUpdateTask(Task):
     @classmethod
     def early_describe(cls):
@@ -187,7 +187,7 @@ def _depends():
 
 
 def _init(dispatcher, plugin):
-    plugin.register_schema_definition('iscsi-target', {
+    plugin.register_schema_definition('IscsiTarget', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
@@ -199,11 +199,11 @@ def _init(dispatcher, plugin):
             'secret': {'type': ['string', 'null']},
             'mutual_user': {'type': ['string', 'null']},
             'mutual_secret': {'type': ['string', 'null']},
-            'status': {'$ref': 'iscsi-target-status'}
+            'status': {'$ref': 'IscsiTargetStatus'}
         }
     })
 
-    plugin.register_schema_definition('iscsi-target-status', {
+    plugin.register_schema_definition('IscsiTargetStatus', {
         'type': 'object',
         'additionalProperties': False,
         'readOnly': True,

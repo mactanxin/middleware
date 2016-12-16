@@ -65,7 +65,7 @@ class IPMIProvider(Provider):
     def channels(self):
         return channels
 
-    @query('ipmi')
+    @query('Ipmi')
     @generator
     def query(self, filter=None, params=None):
         if not self.is_ipmi_loaded():
@@ -88,7 +88,7 @@ class IPMIProvider(Provider):
         return q.query(result, *(filter or []), stream=True, **(params or {}))
 
 
-@accepts(int, h.ref('ipmi'))
+@accepts(int, h.ref('Ipmi'))
 @description("Configures IPMI module")
 class ConfigureIPMITask(Task):
     @classmethod
@@ -153,7 +153,7 @@ def cidr_to_netmask(cidr):
 
 
 def _init(dispatcher, plugin):
-    plugin.register_schema_definition('ipmi', {
+    plugin.register_schema_definition('Ipmi', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {

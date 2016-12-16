@@ -38,7 +38,7 @@ from freenas.utils.permissions import get_type, get_unix_permissions
 @description("Provides access to the filesystem index")
 class IndexProvider(Provider):
     @generator
-    @query('file-index')
+    @query('FileIndex')
     def query(self, filter=None, params=None):
         return self.datastore.query_stream('fileindex', *(filter or []), **(params or {}))
 
@@ -193,7 +193,7 @@ def collect(datastore, path):
 
 
 def _init(dispatcher, plugin):
-    plugin.register_schema_definition('file-index', {
+    plugin.register_schema_definition('FileIndex', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {

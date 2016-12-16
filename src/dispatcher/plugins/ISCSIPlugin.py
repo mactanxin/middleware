@@ -39,7 +39,7 @@ logger = logging.getLogger('ISCSIPlugin')
 @description('Provides info about ISCSI service configuration')
 class ISCSIProvider(Provider):
     @accepts()
-    @returns(h.ref('service-iscsi'))
+    @returns(h.ref('ServiceIscsi'))
     def get_config(self):
         node = ConfigNode('service.iscsi', self.configstore).__getstate__()
         node['portals'] = self.datastore.query('iscsi.portals')
@@ -48,7 +48,7 @@ class ISCSIProvider(Provider):
 
 @private
 @description('Configure ISCSI service')
-@accepts(h.ref('service-iscsi'))
+@accepts(h.ref('ServiceIscsi'))
 class ISCSIConfigureTask(Task):
     @classmethod
     def early_describe(cls):
@@ -84,11 +84,11 @@ def _depends():
 
 def _init(dispatcher, plugin):
     # Register schemas
-    plugin.register_schema_definition('service-iscsi', {
+    plugin.register_schema_definition('ServiceIscsi', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
-            'type': {'enum': ['service-iscsi']},
+            'type': {'enum': ['ServiceIscsi']},
             'enable': {'type': 'boolean'},
             'base_name': {'type': 'string'},
             'pool_space_threshold': {'type': ['integer', 'null']},
