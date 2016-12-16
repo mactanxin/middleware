@@ -84,7 +84,7 @@ class SelfTestType(enum.Enum):
 
 @description('Provides information about disks')
 class DiskProvider(Provider):
-    @query('disk')
+    @query('Disk')
     @generator
     def query(self, filter=None, params=None):
         def extend(disk):
@@ -121,7 +121,7 @@ class DiskProvider(Provider):
         return part['disk']
 
     @accepts(str)
-    @returns(h.ref('disk-status'))
+    @returns(h.ref('DiskStatus'))
     def get_disk_config_by_id(self, id):
         disk = diskinfo_cache.get(id)
         if not disk:
@@ -130,7 +130,7 @@ class DiskProvider(Provider):
         return disk
 
     @accepts(str)
-    @returns(h.ref('disk-status'))
+    @returns(h.ref('DiskStatus'))
     def get_disk_config(self, name):
         disk = get_disk_by_path(name)
         if not disk:
@@ -221,7 +221,7 @@ class DiskProvider(Provider):
 
 
 class EnclosureProvider(Provider):
-    @query('enclosure')
+    @query('Enclosure')
     @generator
     def query(self, filter=None, params=None):
         def get_devname(devnames):
@@ -400,7 +400,7 @@ class DiskInstallBootloaderTask(Task):
 
 
 @description("Erases the given Disk with erasure method specified (default: QUICK)")
-@accepts(str, h.ref('disk-erase-method'))
+@accepts(str, h.ref('DiskEraseMethod'))
 class DiskEraseTask(Task):
     def __init__(self, dispatcher, datastore):
         super(DiskEraseTask, self).__init__(dispatcher, datastore)
@@ -576,7 +576,7 @@ class DiskDeleteTask(Task):
 
 
 @private
-@accepts(str, h.ref('disk-attach-params'))
+@accepts(str, h.ref('DiskAttachParams'))
 @description('Initializes GELI encrypted partition')
 class DiskGELIInitTask(Task):
     @classmethod
@@ -638,7 +638,7 @@ class DiskGELIInitTask(Task):
 
 
 @private
-@accepts(str, h.ref('disk-set-key-params'))
+@accepts(str, h.ref('DiskSetKeyParams'))
 @description('Sets new GELI user key in specified slot')
 class DiskGELISetUserKeyTask(Task):
     @classmethod
@@ -733,7 +733,7 @@ class DiskGELIDelUserKeyTask(Task):
 
 @private
 @accepts(str)
-@returns(h.ref('disk-metadata'))
+@returns(h.ref('DiskMetadata'))
 @description('Creates a backup of GELI metadata')
 class DiskGELIBackupMetadataTask(Task):
     @classmethod
@@ -773,7 +773,7 @@ class DiskGELIBackupMetadataTask(Task):
 
 
 @private
-@accepts(str, h.ref('disk-metadata'))
+@accepts(str, h.ref('DiskMetadata'))
 @description('Restores GELI metadata from file')
 class DiskGELIRestoreMetadataTask(Task):
     @classmethod
@@ -813,7 +813,7 @@ class DiskGELIRestoreMetadataTask(Task):
 
 
 @private
-@accepts(str, h.ref('disk-attach-params'))
+@accepts(str, h.ref('DiskAttachParams'))
 @description('Attaches GELI encrypted partition')
 class DiskGELIAttachTask(Task):
     @classmethod
@@ -937,7 +937,7 @@ class DiskGELIKillTask(Task):
 
 
 @description("Performs SMART test on disk")
-@accepts(str, h.ref('disk-selftest-type'))
+@accepts(str, h.ref('DiskSelftestType'))
 class DiskTestTask(ProgressTask):
     @classmethod
     def early_describe(cls):
@@ -972,7 +972,7 @@ class DiskTestTask(ProgressTask):
 
 
 @description("Performs the given SMART test on the disk IDs specified (in parallel)")
-@accepts(h.array(str), h.ref('disk-selftest-type'))
+@accepts(h.array(str), h.ref('DiskSelftestType'))
 class DiskParallelTestTask(ProgressTask):
     @classmethod
     def early_describe(cls):
@@ -1613,7 +1613,7 @@ def _init(dispatcher, plugin):
                 )
             gevent.sleep(SMART_CHECK_INTERVAL)
 
-    plugin.register_schema_definition('disk', {
+    plugin.register_schema_definition('Disk', {
         'type': 'object',
         'properties': {
             'id': {'type': 'string'},
@@ -1625,18 +1625,18 @@ def _init(dispatcher, plugin):
             'smart': {'type': 'boolean'},
             'standby_mode': {'type': ['integer', 'null']},
             'apm_mode': {'type': ['integer', 'null']},
-            'acoustic_level': {'$ref': 'disk-acousticlevel'},
-            'status': {'$ref': 'disk-status'},
+            'acoustic_level': {'$ref': 'DiskAcousticlevel'},
+            'status': {'$ref': 'DiskStatus'},
             'is_multipath': {'type': 'boolean'}
         }
     })
 
-    plugin.register_schema_definition('disk-acousticlevel', {
+    plugin.register_schema_definition('DiskAcousticlevel', {
         'type': 'string',
         'enum': ['DISABLED', 'MINIMUM', 'MEDIUM', 'MAXIMUM']
     })
 
-    plugin.register_schema_definition('disk-status', {
+    plugin.register_schema_definition('DiskStatus', {
         'type': 'object',
         'properties': {
             'mediasize': {'type': 'integer'},
@@ -1654,7 +1654,7 @@ def _init(dispatcher, plugin):
             'empty': {'type': 'boolean'},
             'partitions': {
                 'type': 'array',
-                'items': {'$ref': 'disk-partition'}
+                'items': {'$ref': 'DiskPartition'}
             },
             'multipath': {
                 'type': 'object',
@@ -1674,11 +1674,11 @@ def _init(dispatcher, plugin):
             'encrypted': {'type': 'boolean'},
             'gdisk_name': {'type': 'string'},
             'enclosure': {'type': ['string', 'null']},
-            'smart_info': {'$ref': 'smart-info'},
+            'smart_info': {'$ref': 'SmartInfo'},
         }
     })
 
-    plugin.register_schema_definition('disk-partition', {
+    plugin.register_schema_definition('DiskPartition', {
         'type': 'object',
         'properties': {
             'name': {'type': 'string'},
@@ -1693,17 +1693,17 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('disk-erase-method', {
+    plugin.register_schema_definition('DiskEraseMethod', {
         'type': 'string',
         'enum': ['QUICK', 'ZEROS', 'RANDOM']
     })
 
-    plugin.register_schema_definition('disk-selftest-type', {
+    plugin.register_schema_definition('DiskSelftestType', {
         'type': 'string',
         'enum': list(SelfTestType.__members__.keys())
     })
 
-    plugin.register_schema_definition('disk-attach-params', {
+    plugin.register_schema_definition('DiskAttachParams', {
         'type': 'object',
         'properties': {
             'key': {'type': 'string'},
@@ -1711,7 +1711,7 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('disk-set-key-params', {
+    plugin.register_schema_definition('DiskSetKeyParams', {
         'type': 'object',
         'properties': {
             'key': {'type': 'string'},
@@ -1720,7 +1720,7 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('disk-metadata', {
+    plugin.register_schema_definition('DiskMetadata', {
         'type': 'object',
         'properties': {
             'disk': {'type': 'string'},
@@ -1728,17 +1728,17 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('enclosure-status', {
+    plugin.register_schema_definition('EnclosureStatus', {
         'type': 'string',
         'enum': list(EnclosureStatus.__members__.keys())
     })
 
-    plugin.register_schema_definition('enclosure-element-status', {
+    plugin.register_schema_definition('EnclosureElementStatus', {
         'type': 'string',
         'enum': list(ElementStatus.__members__.keys()) + ['UNKNOWN']
     })
 
-    plugin.register_schema_definition('enclosure', {
+    plugin.register_schema_definition('Enclosure', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
@@ -1747,7 +1747,7 @@ def _init(dispatcher, plugin):
             'description': {'type': 'string'},
             'status': {
                 'type': 'array',
-                'items': {'$ref': 'enclosure-status'},
+                'items': {'$ref': 'EnclosureStatus'},
             },
             'devices': {
                 'type': 'array',
@@ -1756,7 +1756,7 @@ def _init(dispatcher, plugin):
                     'additionalProperties': False,
                     'properties': {
                         'index': {'type': 'integer'},
-                        'status': {'$ref': 'enclosure-element-status'},
+                        'status': {'$ref': 'EnclosureElementStatus'},
                         'name': {'type': 'string'},
                         'disk_name': {'type': 'string'}
                     }
@@ -1765,7 +1765,7 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('smart-info', {
+    plugin.register_schema_definition('SmartInfo', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
@@ -1776,12 +1776,12 @@ def _init(dispatcher, plugin):
             'smart_status': {'type': ['string', 'null']},
             'firmware': {'type': ['string', 'null']},
             'messages': h.array(str),
-            'test_capabilities': {'$ref': 'supported-smart-tests'},
+            'test_capabilities': {'$ref': 'SupportedSmartTests'},
             'tests': {
                 'oneOf': [
                     {
                         'type': 'array',
-                        'items': {'$ref': 'smart-test-result'},
+                        'items': {'$ref': 'SmartTestResult'},
                     },
                     {'type': 'null'}
                 ]
@@ -1790,14 +1790,14 @@ def _init(dispatcher, plugin):
             'temperature': {'type': 'integer'},
             'attributes': {
                 'type': 'array',
-                'items': {'oneOf': [{'$ref': 'smart-attribute'}, {'type': 'null'}]},
+                'items': {'oneOf': [{'$ref': 'SmartAttribute'}, {'type': 'null'}]},
                 'minItems': 255,
                 'maxItems': 255
             }
         }
     })
 
-    plugin.register_schema_definition('smart-test-result', {
+    plugin.register_schema_definition('SmartTestResult', {
         'type': 'object',
         'additonalProperties': False,
         'properties': {
@@ -1814,7 +1814,7 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('supported-smart-tests', {
+    plugin.register_schema_definition('SupportedSmartTests', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
@@ -1826,7 +1826,7 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('smart-attribute', {
+    plugin.register_schema_definition('SmartAttribute', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {

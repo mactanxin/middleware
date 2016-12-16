@@ -152,7 +152,7 @@ def get_utc_string_from_asn1generalizedtime(asn1):
 
 @description("Provider for certificates")
 class CertificateProvider(Provider):
-    @query('crypto-certificate')
+    @query('CryptoCertificate')
     @generator
     def query(self, filter=None, params=None):
         def extend(certificate):
@@ -189,7 +189,7 @@ class CertificateProvider(Provider):
 
 
 @accepts(h.all_of(
-    h.ref('crypto-certificate'),
+    h.ref('CryptoCertificate'),
     h.required('type', 'name', 'country', 'state', 'city', 'organization', 'email', 'common'),
     h.forbidden('certificate_path', 'privatekey_path'),
 ))
@@ -349,7 +349,7 @@ class CertificateCreateTask(Task):
 
 
 @accepts(h.all_of(
-    h.ref('crypto-certificate'),
+    h.ref('CryptoCertificate'),
     h.required('name', 'type'),
 ))
 @description('Imports a certificate')
@@ -491,7 +491,7 @@ class CertificateImportTask(Task):
 
 
 @accepts(str, h.all_of(
-    h.ref('crypto-certificate'),
+    h.ref('CryptoCertificate'),
     h.forbidden('certificate_path', 'privatekey_path'),
 ))
 @description('Updates a certificate')
@@ -619,17 +619,17 @@ class CertificateDeleteTask(Task):
 
 
 def _init(dispatcher, plugin):
-    plugin.register_schema_definition('crypto-certificate', {
+    plugin.register_schema_definition('CryptoCertificate', {
         'type': 'object',
         'properties': {
             'id': {'type': 'string'},
-            'type': {'$ref': 'crypto-certificate-type'},
+            'type': {'$ref': 'CryptoCertificateType'},
             'name': {'type': 'string'},
             'certificate': {'type': ['string', 'null']},
             'privatekey': {'type': ['string', 'null']},
             'csr': {'type': 'string'},
             'key_length': {'type': 'integer'},
-            'digest_algorithm': {'$ref': 'crypto-certificate-digestalgorithm'},
+            'digest_algorithm': {'$ref': 'CryptoCertificateDigestalgorithm'},
             'lifetime': {'type': 'integer'},
             'not_before': {'type': 'string'},
             'not_after': {'type': 'string'},
@@ -654,7 +654,7 @@ def _init(dispatcher, plugin):
         'additionalProperties': False,
     })
 
-    plugin.register_schema_definition('crypto-certificate-type', {
+    plugin.register_schema_definition('CryptoCertificateType', {
         'type': 'string',
         'enum': [
             'CA_EXISTING', 'CA_INTERMEDIATE', 'CA_INTERNAL',
@@ -662,7 +662,7 @@ def _init(dispatcher, plugin):
         ]
     })
 
-    plugin.register_schema_definition('crypto-certificate-digestalgorithm', {
+    plugin.register_schema_definition('CryptoCertificateDigestalgorithm', {
         'type': 'string',
         'enum': ['SHA1', 'SHA224', 'SHA256', 'SHA384', 'SHA512']
     })
