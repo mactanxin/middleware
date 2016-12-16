@@ -572,7 +572,7 @@ class DockerContainerCreateTask(DockerBaseTask):
             if not re.match(r'[a-zA-Z0-9.-_]*$', container['names'][0]):
                 raise VerifyException(
                     errno.EINVAL,
-                    'Invalid container name: {0}. Only [a-zA-Z0-9.-] characters are allowed'.format(
+                    'Invalid container name: {0}. Only [a-zA-Z0-9.-_] characters are allowed'.format(
                         container['names'][0]
                     )
                 )
