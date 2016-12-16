@@ -924,6 +924,12 @@ class DockerHost(object):
                             'ids': [id]
                         })
 
+                    if ev['Type'] == 'network':
+                        self.context.client.emit_event('containerd.docker.network.changed', {
+                            'operation': actions.get(ev['Action'], 'update'),
+                            'ids': [ev['id']]
+                        })
+
                 self.logger.warning('Disconnected from Docker API endpoint on {0}'.format(self.vm.name))
 
             except BaseException as err:
