@@ -44,7 +44,7 @@ def is_empty_schedule(sched=None):
 
 @description('Provides information about calendar tasks')
 class CalendarTasksProvider(Provider):
-    @query('calendar-task')
+    @query('CalendarTask')
     @generator
     def query(self, filter=None, params=None):
         return q.query(
@@ -57,7 +57,7 @@ class CalendarTasksProvider(Provider):
 
 @accepts(
     h.all_of(
-        h.ref('calendar-task'),
+        h.ref('CalendarTask'),
         h.required('name'),
         h.no(h.required('status'))
     )
@@ -98,7 +98,7 @@ class CreateCalendarTask(Task):
 @accepts(
     str,
     h.all_of(
-        h.ref('calendar-task'),
+        h.ref('CalendarTask'),
         h.no(h.required('status'))
     )
 )
@@ -245,7 +245,7 @@ class CommandTask(Task):
 def _init(dispatcher, plugin):
 
     # registering schemas
-    plugin.register_schema_definition('calendar-task', {
+    plugin.register_schema_definition('CalendarTask', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
@@ -256,7 +256,7 @@ def _init(dispatcher, plugin):
             'enabled': {'type': 'boolean'},
             'hidden': {'type': 'boolean'},
             'protected': {'type': 'boolean'},
-            'status': {'$ref': 'calendar-task-status'},
+            'status': {'$ref': 'CalendarTaskStatus'},
             'schedule': {
                 'type': 'object',
                 'additionalProperties': False,
@@ -276,7 +276,7 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('calendar-task-status', {
+    plugin.register_schema_definition('CalendarTaskStatus', {
         'type': 'object',
         'properties': {
             'next_run_time': {'type': 'string'},
