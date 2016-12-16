@@ -617,6 +617,9 @@ class ReplicationUpdateTask(ReplicationBaseTask):
 
         link = self.join_subtasks(self.run_subtask('replication.get_latest_link', name))[0]
 
+        if 'status' in updated_fields and link['status'] != updated_fields['status']:
+            raise TaskException(errno.EINVAL, 'Replication status is readonly')
+
         if 'initial_master' in updated_fields:
             if updated_fields['initial_master'] != link['initial_master']:
                 raise TaskException(errno.EINVAL, 'Initial master cannot be modified')
