@@ -1258,6 +1258,10 @@ class DockerService(RpcService):
         host = self.context.docker_host_by_container_id(id)
         return host.vm.name
 
+    def host_name_by_network_id(self, id):
+        host = self.context.docker_host_by_network_id(id)
+        return host.vm.name
+
     @generator
     def query_containers(self, filter=None, params=None):
         result = []
@@ -1863,6 +1867,15 @@ class Main(object):
             continue
 
         raise RpcException(errno.ENOENT, 'Container {0} not found'.format(id))
+
+    def docker_host_by_network_id(self, id):
+        for host in self.docker_hosts.values():
+            for n in host.connection.networks():
+                if n['Id'] == id:
+                    host.ready.wait()
+                    return host
+
+        raise RpcException(errno.ENOENT, 'Network {0} not found'.format(id))
 
     def get_docker_host(self, id):
         host = self.docker_hosts.get(id)

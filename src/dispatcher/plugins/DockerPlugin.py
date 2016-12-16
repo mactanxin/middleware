@@ -515,6 +515,20 @@ class DockerBaseTask(ProgressTask):
 
         return name, host_name
 
+    def get_network_name_and_vm_name(self, id):
+        host_id, name = self.dispatcher.call_sync(
+            'docker.network.query',
+            [('id', '=', id)],
+            {'single': True, 'select': ('host', 'name')}
+        )
+        host_name = self.dispatcher.call_sync(
+            'vm.query',
+            [('id', '=', host_id)],
+            {'single': True, 'select': 'name'}
+        )
+
+        return name, host_name
+
 
 @description('Updates Docker general configuration settings')
 @accepts(h.ref('docker-config'))
