@@ -47,8 +47,6 @@ from freenas.utils import first_or_default, query as q, normalize, human_readabl
 
 logger = logging.getLogger(__name__)
 
-
-status_cache = CacheStore()
 link_cache = CacheStore()
 
 
@@ -78,30 +76,15 @@ class ReplicationLinkProvider(Provider):
     @query('replication')
     @generator
     def query(self, filter=None, params=None):
-        def extend(obj):
-            if status_cache.is_valid(obj['id']):
-                obj['status'] = status_cache.get(obj['id'])
-            return obj
-
-        links = link_cache.query()
-
-        links = list(map(extend, links))
-        return q.query(links, *(filter or []), stream=True, **(params or {}))
+        return q.query(link_cache.query(stream=True), *(filter or []), stream=True, **(params or {}))
 
     @private
     def sync_query(self, filter=None, params=None):
-        def extend(obj):
-            if status_cache.is_valid(obj['name']):
-                obj['status'] = status_cache.get(obj['name'])
-            return obj
+        def get_latest_links():
+            for link in self.datastore.query_stream('replication.links'):
+                yield self.dispatcher.call_task_sync('replication.get_latest_link', link['name'])
 
-        links = self.datastore.query_stream('replication.links')
-        latest_links = []
-        for link in links:
-            latest_links.append(self.dispatcher.call_task_sync('replication.get_latest_link', link['name']))
-
-        latest_links = list(map(extend, latest_links))
-        return q.query(latest_links, *(filter or []), **(params or {}))
+        return q.query(get_latest_links(), *(filter or []), **(params or {}))
 
     @private
     def local_query(self, filter=None, params=None):
@@ -146,21 +129,6 @@ class ReplicationLinkProvider(Provider):
             )
 
         return is_master, remote
-
-    @private
-    def put_status(self, id, status):
-        status_cache.put(id, status)
-        self.dispatcher.dispatch_event('replication.changed', {
-            'operation': 'update',
-            'ids': [id]
-        })
-
-    @private
-    def get_status(self, id):
-        if status_cache.is_valid(id):
-            return status_cache.get(id)
-        else:
-            return None
 
     @private
     def link_cache_put(self, link):
@@ -838,8 +806,8 @@ class ReplicationSyncTask(ReplicationBaseTask):
         speed = 0
         remote_client = None
         link = self.join_subtasks(self.run_subtask('replication.get_latest_link', name))[0]
+        is_master, remote = self.get_replication_state(link)
         try:
-            is_master, remote = self.get_replication_state(link)
             remote_client = get_freenas_peer_client(self, remote)
             if is_master:
                 with self.dispatcher.get_lock('volumes'):
@@ -883,20 +851,35 @@ class ReplicationSyncTask(ReplicationBaseTask):
             message = e.message
             raise
         finally:
-            end_time = time.time()
-            if start_time != end_time:
-                speed = int(float(total_size) / float(end_time - start_time))
+            if is_master:
+                end_time = time.time()
+                if start_time != end_time:
+                    speed = int(float(total_size) / float(end_time - start_time))
 
-            status_dict = {
-                'status': status,
-                'message': message,
-                'size': total_size,
-                'speed': speed
-            }
-            self.dispatcher.call_sync('replication.put_status', link['id'], status_dict)
-            if remote_client:
-                remote_client.call_sync('replication.put_status', link['id'], status_dict)
-                remote_client.disconnect()
+                status_dict = {
+                    'status': status,
+                    'message': message,
+                    'size': total_size,
+                    'speed': speed
+                }
+                link['status'].append(status_dict)
+                self.join_subtasks(self.run_subtask('replication.update_link', link))
+                self.dispatcher.dispatch_event('replication.changed', {
+                    'operation': 'update',
+                    'ids': [link['id']]
+                })
+
+                if remote_client:
+                    call_task_and_check_state(
+                        remote_client,
+                        'replication.update_link',
+                        self.remove_datastore_timestamps(link)
+                    )
+                    remote_client.emit_event('replication.changed', {
+                        'operation': 'update',
+                        'ids': [link['id']]
+                    })
+                    remote_client.disconnect()
 
 
 @private
@@ -1433,10 +1416,6 @@ class ReplicationGetLatestLinkTask(ReplicationBaseTask):
         try:
             client = get_freenas_peer_client(self, remote)
             remote_link = client.call_sync('replication.get_one_local', name)
-            status = client.call_sync('replication.get_status', local_link['id'])
-            if not self.dispatcher.call_sync('replication.get_status', local_link['id']):
-                if status:
-                    self.dispatcher.call_sync('replication.put_status', local_link['id'], status)
         except RpcException:
             pass
 
@@ -1649,7 +1628,10 @@ def _init(dispatcher, plugin):
             'auto_recover': {'type': 'boolean'},
             'replicate_services': {'type': 'boolean'},
             'recursive': {'type': 'boolean'},
-            'status': {'$ref': 'replication-status'},
+            'status': {
+                'type': 'array',
+                'items': {'$ref': 'replication-status'}
+            },
             'transport_options': {
                 'type': 'array',
                 'items': {'$ref': 'replication-transport-option'}
