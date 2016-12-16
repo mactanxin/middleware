@@ -59,7 +59,7 @@ class BackupProvider(Provider):
 
     @description("Returns list of supported backup providers")
     @accepts()
-    @returns(h.ref('BackupProviders'))
+    @returns(h.ref('backup-providers'))
     def supported_providers(self):
         result = {}
         for p in list(self.dispatcher.plugins.values()):
@@ -70,7 +70,7 @@ class BackupProvider(Provider):
 
 
 @accepts(h.all_of(
-    h.ref('Backup'),
+    h.ref('backup'),
     h.required('name', 'provider', 'dataset')
 ))
 @description('Creates a backup task')
@@ -107,7 +107,7 @@ class CreateBackupTask(Task):
 
 
 @accepts(str, h.all_of(
-    h.ref('Backup'),
+    h.ref('backup'),
     h.forbidden('id', 'provider', 'dataset')
 ))
 @description('Updates a backup task')
@@ -412,7 +412,7 @@ class BackupRestoreTask(ProgressTask):
 
 
 def _init(dispatcher, plugin):
-    plugin.register_schema_definition('Backup', {
+    plugin.register_schema_definition('backup', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
@@ -420,18 +420,18 @@ def _init(dispatcher, plugin):
             'name': {'type': 'string'},
             'dataset': {'type': 'string'},
             'recursive': {'type': 'boolean'},
-            'compression': {'$ref': 'BackupCompressionType'},
+            'compression': {'$ref': 'backup-compression-type'},
             'provider': {'type': 'string'},
-            'properties': {'$ref': 'BackupProperties'}
+            'properties': {'$ref': 'backup-properties'}
         }
     })
 
-    plugin.register_schema_definition('BackupCompressionType', {
+    plugin.register_schema_definition('backup-compression-type', {
         'type': 'string',
         'enum': ['NONE', 'GZIP']
     })
 
-    plugin.register_schema_definition('BackupState', {
+    plugin.register_schema_definition('backup-state', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
@@ -448,7 +448,7 @@ def _init(dispatcher, plugin):
                         'incremental': {'type': 'boolean'},
                         'created_at': {'type': 'string'},
                         'uuid': {'type': 'string'},
-                        'compression': {'$ref': 'BackupCompressionType'},
+                        'compression': {'$ref': 'backup-compression-type'},
                         'filename': {'type': 'string'}
                     }
                 }
@@ -456,7 +456,7 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('BackupProviders', {
+    plugin.register_schema_definition('backup-providers', {
         'type': 'object',
         'additionalProperties': {
             'type': 'object',
@@ -466,7 +466,7 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('BackupFile', {
+    plugin.register_schema_definition('backup-file', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
@@ -477,7 +477,7 @@ def _init(dispatcher, plugin):
     })
 
     def update_backup_properties_schema():
-        plugin.register_schema_definition('BackupProperties', {
+        plugin.register_schema_definition('backup-properties', {
             'discriminator': '%type',
             'oneOf': [
                 {'$ref': 'backup-{0}'.format(name)} for name in dispatcher.call_sync('backup.supported_providers')

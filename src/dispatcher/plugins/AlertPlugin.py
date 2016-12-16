@@ -61,7 +61,7 @@ class AlertsProvider(Provider):
 
     @private
     @accepts(str, str)
-    @returns(h.one_of(h.ref('Alert'), None))
+    @returns(h.one_of(h.ref('alert'), None))
     def get_active_alert(self, cls, target):
         return self.datastore.query(
             'alerts',
@@ -113,7 +113,7 @@ class AlertsProvider(Provider):
     @private
     @description("Emits an event for the provided alert")
     @accepts(h.all_of(
-        h.ref('Alert'),
+        h.ref('alert'),
         h.required('class')
     ))
     @returns(int)
@@ -188,7 +188,7 @@ class AlertsProvider(Provider):
 
     @description("Returns list of registered alerts")
     @accepts()
-    @returns(h.ref('AlertClass'))
+    @returns(h.ref('alert-class'))
     def get_alert_classes(self):
         return self.datastore.query('alert.classes')
 
@@ -196,7 +196,7 @@ class AlertsProvider(Provider):
 @description('Provides access to the alerts filters')
 class AlertsFiltersProvider(Provider):
 
-    @query('AlertFilter')
+    @query('alert-filter')
     @generator
     def query(self, filter=None, params=None):
         return self.datastore.query_stream(
@@ -206,7 +206,7 @@ class AlertsFiltersProvider(Provider):
 
 @description("Creates an Alert Filter")
 @accepts(h.all_of(
-    h.ref('AlertFilter'),
+    h.ref('alert-filter'),
     h.required('id', 'emitter', 'parameters')
 ))
 class AlertFilterCreateTask(Task):
@@ -270,7 +270,7 @@ class AlertFilterDeleteTask(Task):
 
 
 @description("Updates the specified Alert Filter")
-@accepts(str, h.ref('AlertFilter'))
+@accepts(str, h.ref('alert-filter'))
 class AlertFilterUpdateTask(Task):
     @classmethod
     def early_describe(cls):
@@ -300,7 +300,7 @@ class AlertFilterUpdateTask(Task):
         })
 
 
-@accepts(str, h.ref('AlertSeverity'))
+@accepts(str, h.ref('alert-severity'))
 @description('Sends user alerts')
 class SendAlertTask(Task):
     @classmethod
@@ -327,24 +327,24 @@ class SendAlertTask(Task):
 
 
 def _init(dispatcher, plugin):
-    plugin.register_schema_definition('AlertSeverity', {
+    plugin.register_schema_definition('alert-severity', {
         'type': 'string',
         'enum': ['CRITICAL', 'WARNING', 'INFO'],
     })
 
-    plugin.register_schema_definition('AlertClassId', {
+    plugin.register_schema_definition('alert-class-id', {
         'type': 'string',
         'enum': dispatcher.datastore.query('alert.classes', select='id')
     })
 
-    plugin.register_schema_definition('Alert', {
+    plugin.register_schema_definition('alert', {
         'type': 'object',
         'properties': {
             'id': {'type': 'integer'},
-            'class': {'$ref': 'AlertClassId'},
-            'type': {'$ref': 'AlertType'},
+            'class': {'$ref': 'alert-class-id'},
+            'type': {'$ref': 'alert-type'},
             'subtype': {'type': 'string'},
-            'severity': {'$ref': 'AlertSeverity'},
+            'severity': {'$ref': 'alert-severity'},
             'target': {'type': 'string'},
             'title': {'type': 'string'},
             'description': {'type': 'string'},
@@ -361,16 +361,16 @@ def _init(dispatcher, plugin):
         'additionalProperties': False
     })
 
-    plugin.register_schema_definition('AlertType', {
+    plugin.register_schema_definition('alert-type', {
         'type': 'string',
         'enum': ['SYSTEM', 'VOLUME', 'DISK']
     })
 
-    plugin.register_schema_definition('AlertEmitterEmail', {
+    plugin.register_schema_definition('alert-emitter-email', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
-            '%type': {'enum': ['AlertEmitterEmail']},
+            '%type': {'enum': ['alert-emitter-email']},
             'addresses': {
                 'type': 'array',
                 'items': {'type': 'string'}
@@ -378,7 +378,7 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('AlertFilter', {
+    plugin.register_schema_definition('alert-filter', {
         'type': 'object',
         'properties': {
             'id': {'type': 'string'},
@@ -386,7 +386,7 @@ def _init(dispatcher, plugin):
             'parameters': {
                 'discriminator': '%type',
                 'oneOf': [
-                    {'$ref': 'AlertEmitterEmail'}
+                    {'$ref': 'alert-emitter-email'}
                 ]
             },
             'predicates': {
@@ -414,15 +414,15 @@ def _init(dispatcher, plugin):
         'additionalProperties': False,
     })
 
-    plugin.register_schema_definition('AlertClass', {
+    plugin.register_schema_definition('alert-class', {
         'type': 'object',
         'additionalProperties': {
             'type': 'object',
             'properties': {
-                'id': {'$ref': 'AlertClassId'},
+                'id': {'$ref': 'alert-class-id'},
                 'type': {'type': 'string'},
                 'subtype': {'type': 'string'},
-                'severity': {'$ref': 'AlertSeverity'}
+                'severity': {'$ref': 'alert-severity'}
             },
             'additionalProperties': False,
         }
