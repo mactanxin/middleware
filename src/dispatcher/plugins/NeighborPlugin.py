@@ -64,9 +64,4 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('neighbor-type', {
-        'type': 'string',
-        'enum': KNOWN_SERVICES
-    })
-
     plugin.register_provider('neighbor', NeighborProvider)
