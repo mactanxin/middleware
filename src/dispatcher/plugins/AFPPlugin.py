@@ -42,14 +42,14 @@ logger = logging.getLogger('AFPPlugin')
 class AFPProvider(Provider):
     @private
     @accepts()
-    @returns(h.ref('service-afp'))
+    @returns(h.ref('ServiceAfp'))
     def get_config(self):
         return ConfigNode('service.afp', self.configstore).__getstate__()
 
 
 @private
 @description('Configure AFP service')
-@accepts(h.ref('service-afp'))
+@accepts(h.ref('ServiceAfp'))
 class AFPConfigureTask(Task):
     @classmethod
     def early_describe(cls):
@@ -96,10 +96,10 @@ def _depends():
 
 def _init(dispatcher, plugin):
     # Register schemas
-    plugin.register_schema_definition('service-afp', {
+    plugin.register_schema_definition('ServiceAfp', {
         'type': 'object',
         'properties': {
-            'type': {'enum': ['service-afp']},
+            'type': {'enum': ['ServiceAfp']},
             'enable': {'type': 'boolean'},
             'guest_enable': {'type': 'boolean'},
             'guest_user': {'type': 'string'},
