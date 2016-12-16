@@ -70,7 +70,7 @@ class FilesystemProvider(Provider):
         return result
 
     @accepts(str)
-    @returns(h.ref('stat'))
+    @returns(h.ref('Stat'))
     def stat(self, path):
         try:
             st = os.stat(path, follow_symlinks=False)
@@ -164,7 +164,7 @@ class FilesystemProvider(Provider):
         return token
 
     @accepts(str)
-    @returns(h.array(h.ref('open-file')))
+    @returns(h.array(h.ref('OpenFile')))
     def get_open_files(self, path):
         result = []
         for proc in bsd.getprocs(bsd.ProcessLookupPredicate.PROC):
@@ -340,7 +340,7 @@ class SetPermissionsTask(Task):
 
 
 def _init(dispatcher, plugin):
-    plugin.register_schema_definition('stat', {
+    plugin.register_schema_definition('Stat', {
         'type': 'object',
         'properties': {
             'path': {'type': 'string'},
@@ -349,34 +349,34 @@ def _init(dispatcher, plugin):
             'atime': {'type': 'datetime'},
             'mtime': {'type': 'datetime'},
             'ctime': {'type': 'datetime'},
-            'permissions': {'$ref': 'permissions'}
+            'permissions': {'$ref': 'Permissions'}
         }
     })
 
-    plugin.register_schema_definition('permissions', {
+    plugin.register_schema_definition('Permissions', {
         'type': 'object',
         'properties': {
             'user': {'type': ['string', 'null']},
             'group': {'type': ['string', 'null']},
-            'modes': {'$ref': 'unix-permissions'},
+            'modes': {'$ref': 'UnixPermissions'},
             'acl': {
                 'type': ['array', 'null'],
-                'items': {'$ref': 'acl-entry'}
+                'items': {'$ref': 'AclEntry'}
             }
         }
     })
 
-    plugin.register_schema_definition('unix-permissions', {
+    plugin.register_schema_definition('UnixPermissions', {
         'type': 'object',
         'properties': {
             'value': {'type': ['integer', 'null']},
-            'user': {'$ref': 'unix-mode-tuple'},
-            'group': {'$ref': 'unix-mode-tuple'},
-            'others': {'$ref': 'unix-mode-tuple'}
+            'user': {'$ref': 'UnixModeTuple'},
+            'group': {'$ref': 'UnixModeTuple'},
+            'others': {'$ref': 'UnixModeTuple'}
         }
     })
 
-    plugin.register_schema_definition('unix-mode-tuple', {
+    plugin.register_schema_definition('UnixModeTuple', {
         'type': 'object',
         'properties': {
             'read': {'type': 'boolean'},
@@ -385,30 +385,30 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('acl-entry', {
+    plugin.register_schema_definition('AclEntry', {
         'type': 'object',
         'properties': {
-            'tag': {'$ref': 'acl-entry-tag'},
-            'type': {'$ref': 'acl-entry-type'},
+            'tag': {'$ref': 'AclEntryTag'},
+            'type': {'$ref': 'AclEntryType'},
             'id': {'type': ['string', 'null']},
             'name': {'type': ['string', 'null']},
-            'perms': {'$ref': 'acl-entry-perms'},
-            'flags': {'$ref': 'acl-entry-flags'},
+            'perms': {'$ref': 'AclEntryPerms'},
+            'flags': {'$ref': 'AclEntryFlags'},
             'text': {'type': ['string', 'null']}
         }
     })
 
-    plugin.register_schema_definition('acl-entry-tag', {
+    plugin.register_schema_definition('AclEntryTag', {
         'type': 'string',
         'enum': list(acl.ACLEntryTag.__members__.keys())
     })
 
-    plugin.register_schema_definition('acl-entry-type', {
+    plugin.register_schema_definition('AclEntryType', {
         'type': 'string',
         'enum': list(acl.ACLEntryType.__members__.keys())
     })
 
-    plugin.register_schema_definition('acl-entry-perms', {
+    plugin.register_schema_definition('AclEntryPerms', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
@@ -431,7 +431,7 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('acl-entry-flags', {
+    plugin.register_schema_definition('AclEntryFlags', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
@@ -442,7 +442,7 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('open-file', {
+    plugin.register_schema_definition('OpenFile', {
         'type': 'object',
         'properties': {
             'pid': {'type': 'integer'},

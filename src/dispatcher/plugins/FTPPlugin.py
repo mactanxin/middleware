@@ -42,7 +42,7 @@ logger = logging.getLogger('FTPPlugin')
 class FTPProvider(Provider):
     @private
     @accepts()
-    @returns(h.ref('service-ftp'))
+    @returns(h.ref('ServiceFtp'))
     def get_config(self):
         config = ConfigNode('service.ftp', self.configstore).__getstate__()
         config['filemask'] = get_unix_permissions(config['filemask'])
@@ -52,7 +52,7 @@ class FTPProvider(Provider):
 
 @private
 @description('Configure FTP service')
-@accepts(h.ref('service-ftp'))
+@accepts(h.ref('ServiceFtp'))
 class FTPConfigureTask(Task):
     @classmethod
     def early_describe(cls):
@@ -136,10 +136,10 @@ def _depends():
 def _init(dispatcher, plugin):
 
     # Register schemas
-    plugin.register_schema_definition('service-ftp', {
+    plugin.register_schema_definition('ServiceFtp', {
         'type': 'object',
         'properties': {
-            'type': {'enum': ['service-ftp']},
+            'type': {'enum': ['ServiceFtp']},
             'enable': {'type': 'boolean'},
             'port': {
                 'type': 'integer',
@@ -170,10 +170,10 @@ def _init(dispatcher, plugin):
             'anon_up_bandwidth': {'type': ['integer', 'null']},
             'anon_down_bandwidth': {'type': ['integer', 'null']},
             'tls': {'type': 'boolean'},
-            'tls_policy': {'$ref': 'service-ftp-tlspolicy'},
+            'tls_policy': {'$ref': 'ServiceFtpTlspolicy'},
             'tls_options': {
                 'type': 'array',
-                'items': {'$ref': 'service-ftp-tlsoptions-items'}
+                'items': {'$ref': 'ServiceFtpTlsoptionsItems'}
             },
             'tls_ssl_certificate': {'type': ['string', 'null']},
             'auxiliary': {'type': ['string', 'null']},
@@ -181,13 +181,13 @@ def _init(dispatcher, plugin):
         'additionalProperties': False,
     })
 
-    plugin.register_schema_definition('service-ftp-tlspolicy', {
+    plugin.register_schema_definition('ServiceFtpTlspolicy', {
         'type': 'string',
         'enum': ['ON', 'OFF', 'DATA', '!DATA', 'AUTH', 'CTRL',
                  'CTRL+DATA', 'CTRL+!DATA', 'AUTH+DATA', 'AUTH+!DATA']
     })
 
-    plugin.register_schema_definition('service-ftp-tlsoptions-items', {
+    plugin.register_schema_definition('ServiceFtpTlsoptionsItems', {
         'type': 'string',
         'enum': ['ALLOW_CLIENT_RENEGOTIATIONS', 'ALLOW_DOT_LOGIN', 'ALLOW_PER_USER',
             'COMMON_NAME_REQUIRED', 'ENABLE_DIAGNOSTICS', 'EXPORT_CERTIFICATE_DATA',

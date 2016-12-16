@@ -62,7 +62,7 @@ dockerfile_parser_logger.setLevel(logging.ERROR)
 @description('Provides information about Docker configuration')
 class DockerConfigProvider(Provider):
     @description('Returns Docker general configuration')
-    @returns(h.ref('docker-config'))
+    @returns(h.ref('DockerConfig'))
     def get_config(self):
         return ConfigNode('container.docker', self.configstore).__getstate__()
 
@@ -70,7 +70,7 @@ class DockerConfigProvider(Provider):
 @description('Provides information about Docker container hosts')
 class DockerHostProvider(Provider):
     @description('Returns current status of Docker hosts')
-    @query('docker-host')
+    @query('DockerHost')
     @generator
     def query(self, filter=None, params=None):
         def extend(obj):
@@ -97,7 +97,7 @@ class DockerHostProvider(Provider):
 @description('Provides information about Docker containers')
 class DockerContainerProvider(Provider):
     @description('Returns current status of Docker containers')
-    @query('docker-container')
+    @query('DockerContainer')
     @generator
     def query(self, filter=None, params=None):
         def find_env(env, name):
@@ -178,7 +178,7 @@ class DockerContainerProvider(Provider):
 @description('Provides information about Docker networks')
 class DockerNetworkProvider(Provider):
     @description('Returns information about Docker networks')
-    @query('docker-network')
+    @query('DockerNetwork')
     @generator
     def query(self, filter=None, params=None):
         return q.query(
@@ -201,7 +201,7 @@ class DockerImagesProvider(Provider):
         self.update_collection_lock = RLock()
 
     @description('Returns current status of cached Docker container images')
-    @query('docker-image')
+    @query('DockerImage')
     @generator
     def query(self, filter=None, params=None):
         def extend(obj):
@@ -213,7 +213,7 @@ class DockerImagesProvider(Provider):
 
     @description('Returns a result of searching Docker Hub for a specified term - part of image name')
     @accepts(str)
-    @returns(h.array(h.ref('docker-hub-image')))
+    @returns(h.array(h.ref('DockerHubImage')))
     @generator
     def search(self, term):
         parser = dockerfile_parse.DockerfileParser()
@@ -241,7 +241,7 @@ class DockerImagesProvider(Provider):
             }
 
     @description('Returns a list of docker images from a given collection')
-    @returns(h.array(h.ref('docker-hub-image')))
+    @returns(h.array(h.ref('DockerHubImage')))
     @accepts(str)
     @generator
     def get_collection_images(self, collection='freenas'):
@@ -397,7 +397,7 @@ class DockerImagesProvider(Provider):
 @description('Provides information about cached Docker container collections')
 class DockerCollectionProvider(Provider):
     @description('Returns current status of cached Docker container collections')
-    @query('docker-collection')
+    @query('DockerCollection')
     @generator
     def full_query(self, filter=None, params=None):
         id_filters = []
@@ -417,7 +417,7 @@ class DockerCollectionProvider(Provider):
         return q.query(results, *(filter or []), stream=True, **(params or {}))
 
     @description('Returns current status of cached Docker container collections without image entries')
-    @query('docker-collection')
+    @query('DockerCollection')
     @generator
     def query(self, filter=None, params=None):
         return self.datastore.query_stream(
@@ -425,7 +425,7 @@ class DockerCollectionProvider(Provider):
         )
 
     @description('Returns a list of Docker images related to a saved collection')
-    @returns(h.array(h.ref('docker-hub-image')))
+    @returns(h.array(h.ref('DockerHubImage')))
     @accepts(str)
     @generator
     def get_entries(self, id):
@@ -517,7 +517,7 @@ class DockerBaseTask(ProgressTask):
 
 
 @description('Updates Docker general configuration settings')
-@accepts(h.ref('docker-config'))
+@accepts(h.ref('DockerConfig'))
 class DockerUpdateTask(Task):
     @classmethod
     def early_describe(cls):
@@ -554,7 +554,7 @@ class DockerUpdateTask(Task):
 
 @description('Creates a Docker container')
 @accepts(h.all_of(
-    h.ref('docker-container'),
+    h.ref('DockerContainer'),
     h.required('names', 'image')
 ))
 class DockerContainerCreateTask(DockerBaseTask):
@@ -1064,7 +1064,7 @@ class DockerRollbackHostResourceTask(Task):
 
 
 @accepts(h.all_of(
-    h.ref('docker-collection'),
+    h.ref('DockerCollection'),
     h.forbidden('images')
 ))
 @returns(str)
@@ -1103,7 +1103,7 @@ class DockerCollectionCreateTask(Task):
 
 
 @accepts(str, h.all_of(
-    h.ref('docker-collection'),
+    h.ref('DockerCollection'),
     h.forbidden('images')
 ))
 @description('Updates a known Docker cache collection')
@@ -1582,7 +1582,7 @@ def _init(dispatcher, plugin):
         resource_hook_condition
     )
 
-    plugin.register_schema_definition('docker-config', {
+    plugin.register_schema_definition('DockerConfig', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
@@ -1593,7 +1593,7 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('docker-collection', {
+    plugin.register_schema_definition('DockerCollection', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
@@ -1601,29 +1601,29 @@ def _init(dispatcher, plugin):
             'name': {'type': 'string'},
             'collection': {'type': 'string'},
             'match_expr': {'type': ['string', 'null']},
-            'images': {'$ref': 'docker-hub-image'}
+            'images': {'$ref': 'DockerHubImage'}
         }
     })
 
-    plugin.register_schema_definition('docker-host', {
+    plugin.register_schema_definition('DockerHost', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
             'id': {'type': 'string'},
             'name': {'type': 'string'},
-            'state': {'$ref': 'docker-host-state'},
+            'state': {'$ref': 'DockerHostState'},
             'status': {
-                'oneOf': [{'$ref': 'docker-host-status'}, {'type': 'null'}]
+                'oneOf': [{'$ref': 'DockerHostStatus'}, {'type': 'null'}]
             }
         }
     })
 
-    plugin.register_schema_definition('docker-host-state', {
+    plugin.register_schema_definition('DockerHostState', {
         'type': 'string',
         'enum': ['UP', 'DOWN']
     })
 
-    plugin.register_schema_definition('docker-host-status', {
+    plugin.register_schema_definition('DockerHostStatus', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
@@ -1634,7 +1634,7 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('docker-container', {
+    plugin.register_schema_definition('DockerContainer', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
@@ -1683,7 +1683,7 @@ def _init(dispatcher, plugin):
                     'type': 'object',
                     'additionalProperties': False,
                     'properties': {
-                        'protocol': {'$ref': 'docker-port-protocol'},
+                        'protocol': {'$ref': 'DockerPortProtocol'},
                         'container_port': {
                             'type': 'integer',
                             'minimum': 0,
@@ -1699,14 +1699,14 @@ def _init(dispatcher, plugin):
             },
             'volumes': {
                 'type': 'array',
-                'items': {'$ref': 'docker-volume'}
+                'items': {'$ref': 'DockerVolume'}
             },
-            'bridge': {'$ref': 'docker-container-bridge'},
+            'bridge': {'$ref': 'DockerContainerBridge'},
             'parent_directory': {'type': 'string'}
         }
     })
 
-    plugin.register_schema_definition('docker-container-bridge', {
+    plugin.register_schema_definition('DockerContainerBridge', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
@@ -1716,7 +1716,7 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('docker-network', {
+    plugin.register_schema_definition('DockerNetwork', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
@@ -1729,7 +1729,7 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('docker-image', {
+    plugin.register_schema_definition('DockerImage', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
@@ -1749,7 +1749,7 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('docker-hub-image', {
+    plugin.register_schema_definition('DockerHubImage', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
@@ -1763,23 +1763,23 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('docker-volume', {
+    plugin.register_schema_definition('DockerVolume', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
             'container_path': {'type': 'string'},
             'host_path': {'type': 'string'},
             'readonly': {'type': 'boolean'},
-            'source': {'$ref': 'docker-volume-host-path-source'}
+            'source': {'$ref': 'DockerVolumeHostPathSource'}
         }
     })
 
-    plugin.register_schema_definition('docker-port-protocol', {
+    plugin.register_schema_definition('DockerPortProtocol', {
         'type': 'string',
         'enum': ['TCP', 'UDP']
     })
 
-    plugin.register_schema_definition('docker-volume-host-path-source', {
+    plugin.register_schema_definition('DockerVolumeHostPathSource', {
         'type': 'string',
         'enum': ['HOST', 'VM']
     })

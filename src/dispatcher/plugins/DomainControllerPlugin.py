@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 @description('Provides info about Domain Controller vm service')
 class DCProvider(Provider):
     @accepts()
-    @returns(h.ref('service-dc'))
+    @returns(h.ref('ServiceDc'))
     def get_config(self):
         config = ConfigNode('service.dc', self.configstore).__getstate__()
         return config
@@ -114,7 +114,7 @@ class DCProvider(Provider):
 
 
 @description('Configure Domain Controller vm service')
-@accepts(h.ref('service-dc'))
+@accepts(h.ref('ServiceDc'))
 class DCConfigureTask(ProgressTask):
     @classmethod
     def early_describe(cls):
@@ -173,10 +173,10 @@ class DCConfigureTask(ProgressTask):
 
 def _init(dispatcher, plugin):
 
-    plugin.register_schema_definition('service-dc', {
+    plugin.register_schema_definition('ServiceDc', {
         'type': 'object',
         'properties': {
-            'type': {'enum': ['service-dc']},
+            'type': {'enum': ['ServiceDc']},
             'enable': {'type': 'boolean'},
             'volume': {'type': 'string'}
         },

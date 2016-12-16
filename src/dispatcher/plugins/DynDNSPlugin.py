@@ -112,7 +112,7 @@ def _init(dispatcher, plugin):
         'properties': {
             'type': {'enum': ['service-dyndns']},
             'enable': {'type': 'boolean'},
-            'provider': {'$ref': 'service-dyndns-provider'},
+            'provider': {'$ref': 'ServiceDyndnsProvider'},
             'ipserver': {'type': ['string', 'null']},
             'domains': {'type': 'array', 'items': {'type': 'string'}},
             'username': {'type': 'string'},
@@ -124,7 +124,7 @@ def _init(dispatcher, plugin):
         'additionalProperties': False,
     })
 
-    plugin.register_schema_definition('service-dyndns-provider', {
+    plugin.register_schema_definition('ServiceDyndnsProvider', {
         'type': ['string', 'null'],
         'enum': [None] + list(PROVIDERS.values())
     })
