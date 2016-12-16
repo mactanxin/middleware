@@ -1316,7 +1316,7 @@ class DockerService(RpcService):
                     'name': details['Name'],
                     'driver': details['Driver'],
                     'subnet': config['Subnet'] if config else None,
-                    'gateway': config['Gateway'] if config else None,
+                    'gateway': config.get('Gateway', None) if config else None,
                     'host': host.vm.id,
                 })
 
