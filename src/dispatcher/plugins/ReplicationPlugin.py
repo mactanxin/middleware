@@ -374,7 +374,8 @@ class ReplicationCreateTask(ReplicationBaseTask):
                 'recursive': False,
                 'transport_options': [],
                 'snapshot_lifetime': 365 * 24 * 60 * 60,
-                'followdelete': False
+                'followdelete': False,
+                'status': []
             }
         )
 
