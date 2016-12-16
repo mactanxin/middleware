@@ -42,7 +42,7 @@ logger = logging.getLogger('NFSPlugin')
 class NFSProvider(Provider):
     @private
     @accepts()
-    @returns(h.ref('service-nfs'))
+    @returns(h.ref('ServiceNfs'))
     def get_config(self):
         return ConfigNode('service.nfs', self.configstore).__getstate__()
 
@@ -83,7 +83,7 @@ class NFSProvider(Provider):
 
 @private
 @description('Configure NFS service')
-@accepts(h.ref('service-nfs'))
+@accepts(h.ref('ServiceNfs'))
 class NFSConfigureTask(Task):
     @classmethod
     def early_describe(cls):
@@ -130,10 +130,10 @@ def _depends():
 
 def _init(dispatcher, plugin):
     # Register schemas
-    plugin.register_schema_definition('service-nfs', {
+    plugin.register_schema_definition('ServiceNfs', {
         'type': 'object',
         'properties': {
-            'type': {'enum': ['service-nfs']},
+            'type': {'enum': ['ServiceNfs']},
             'enable': {'type': 'boolean'},
             'servers': {
                 'type': 'integer',

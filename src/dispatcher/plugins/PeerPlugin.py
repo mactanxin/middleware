@@ -40,7 +40,7 @@ peers_status = None
 
 @description('Provides information about known peers')
 class PeerProvider(Provider):
-    @query('peer')
+    @query('Peer')
     @generator
     def query(self, filter=None, params=None):
         def extend(peer):
@@ -67,10 +67,10 @@ class PeerProvider(Provider):
 @description('Creates a peer entry')
 @accepts(
     h.all_of(
-        h.ref('peer'),
+        h.ref('Peer'),
         h.required('type', 'credentials')
     ),
-    h.ref('peer-initial-credentials')
+    h.ref('PeerInitialCredentials')
 )
 class PeerCreateTask(Task):
     @classmethod
@@ -104,7 +104,7 @@ class PeerCreateTask(Task):
 
 
 @description('Updates peer entry')
-@accepts(str, h.ref('peer'))
+@accepts(str, h.ref('Peer'))
 class PeerUpdateTask(Task):
     @classmethod
     def early_describe(cls):
@@ -164,20 +164,20 @@ def _init(dispatcher, plugin):
     peers_status = CacheStore()
 
     # Register schemas
-    plugin.register_schema_definition('peer', {
+    plugin.register_schema_definition('Peer', {
         'type': 'object',
         'properties': {
             'name': {'type': 'string'},
             'id': {'type': 'string'},
             'type': {'type': 'string'},
-            'status': {'$ref': 'peer-status'},
+            'status': {'$ref': 'PeerStatus'},
             'health_check_interval': {'type': 'integer'},
-            'credentials': {'$ref': 'peer-credentials'}
+            'credentials': {'$ref': 'PeerCredentials'}
         },
         'additionalProperties': False
     })
 
-    plugin.register_schema_definition('peer-status', {
+    plugin.register_schema_definition('PeerStatus', {
         'type': 'object',
         'properties': {
             'state': {
@@ -269,14 +269,14 @@ def _init(dispatcher, plugin):
                 if p.metadata.get('initial_credentials'):
                     initial_credential_types.append('{0}-initial-credentials'.format(p.metadata['subtype']))
 
-        plugin.register_schema_definition('peer-credentials', {
+        plugin.register_schema_definition('PeerCredentials', {
             'discriminator': '%type',
             'oneOf': [
                 {'$ref': name} for name in credential_types
             ]
         })
 
-        plugin.register_schema_definition('peer-initial-credentials', {
+        plugin.register_schema_definition('PeerInitialCredentials', {
             'discriminator': '%type',
             'oneOf':
                 [{'$ref': name} for name in initial_credential_types] +

@@ -43,11 +43,11 @@ class OpenVpnProvider(Provider):
     """ I think that some of the information here needs to be excluded using exclude()
         I need consultaion on that.
     """
-    @returns(h.ref('service-openvpn'))
+    @returns(h.ref('ServiceOpenvpn'))
     def get_config(self):
         return ConfigNode('service.openvpn', self.configstore).__getstate__()
 
-    @returns(h.ref('service-openvpn'))
+    @returns(h.ref('ServiceOpenvpn'))
     def get_readable_config(self):
         vpn_config = ConfigNode('service.openvpn', self.configstore).__getstate__()
 
@@ -86,7 +86,7 @@ class OpenVPNClientConfigProvider(Provider):
 
 
 @description('Creates OpenVPN config file')
-@accepts(h.ref('service-openvpn'))
+@accepts(h.ref('ServiceOpenvpn'))
 class OpenVpnConfigureTask(Task):
     @classmethod
     def early_describe(cls):
@@ -375,10 +375,10 @@ def _init(dispatcher, plugin):
         else:
             dispatcher.configstore.set('service.openvpn.tls_auth', tls_auth_key)
 
-    plugin.register_schema_definition('service-openvpn', {
+    plugin.register_schema_definition('ServiceOpenvpn', {
         'type': 'object',
         'properties': {
-            'type': {'enum': ['service-openvpn']},
+            'type': {'enum': ['ServiceOpenvpn']},
             'enable': {'type': 'boolean'},
             'mode': {'type': 'string', 'enum': ['pki', 'psk']},
             'dev': {'type': 'string'},

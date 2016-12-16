@@ -34,7 +34,7 @@ KNOWN_SERVICES = ['freenas', 'ssh']
 
 
 class NeighborProvider(Provider):
-    @query('neighbor')
+    @query('Neighbor')
     @generator
     def query(self, filter=None, params=None):
         def collect():
@@ -47,7 +47,7 @@ class NeighborProvider(Provider):
 
 
 def _init(dispatcher, plugin):
-    plugin.register_schema_definition('neighbor', {
+    plugin.register_schema_definition('Neighbor', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
