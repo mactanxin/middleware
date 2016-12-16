@@ -1464,6 +1464,31 @@ class DockerService(RpcService):
         except BaseException as err:
             raise RpcException(errno.EFAULT, str(err))
 
+    def create_network(self, network):
+        host = self.context.get_docker_host(network.get('host'))
+        if not host:
+            raise RpcException(errno.ENOENT, 'Docker host {0} not found'.format(network.get('host')))
+
+        create_args = {
+            'name': network.get('name'),
+            'driver': network.get('driver'),
+        }
+
+        if network.get('subnet'):
+            create_args['ipam'] = docker.utils.create_ipam_config(
+                pool_configs=[
+                    docker.utils.create_ipam_pool(
+                        subnet=network.get('subnet'),
+                        gateway=network.get('gateway')
+                    )
+                ]
+            )
+
+        try:
+            host.connection.create_network(**create_args)
+        except BaseException as err:
+            raise RpcException(errno.EFAULT, 'Cannot create docker network {0}: {1}'.format(network.get('name'), err))
+
     def create_exec(self, id, command):
         host = self.context.docker_host_by_container_id(id)
         try:
@@ -1492,6 +1517,21 @@ class DockerService(RpcService):
             host.connection.remove_container(container=id, force=True)
         except BaseException as err:
             raise RpcException(errno.EFAULT, 'Failed to remove container: {0}'.format(str(err)))
+
+    def delete_network(self, id):
+        try:
+            host = self.context.docker_host_by_network_id(id)
+        except RpcException as err:
+            if err.code == errno.ENOENT:
+                self.context.client.emit_event('containerd.docker.network.changed', {
+                    'operation': 'delete',
+                    'ids': id
+                })
+                return
+        try:
+            host.connection.remove_network(id)
+        except BaseException as err:
+            raise RpcException(errno.EFAULT, 'Failed to remove network: {0}'.format(str(err)))
 
     def set_api_forwarding(self, hostid):
         if hostid in self.context.docker_hosts:
