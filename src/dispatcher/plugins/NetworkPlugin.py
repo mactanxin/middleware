@@ -954,28 +954,6 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('network-status', {
-        'type': 'object',
-        'additionalProperties': False,
-        'properties': {
-            'gateway': {
-                'type': 'object',
-                'additionalProperties': False,
-                'properties': {
-                    'ipv4': {'oneOf': [{'$ref': 'ipv4-address'}, {'type': 'null'}]},
-                    'ipv6': {'oneOf': [{'$ref': 'ipv6-address'}, {'type': 'null'}]}
-                }
-            },
-            'dns': {
-                'type': 'object',
-                'additionalProperties': False,
-                'properties': {
-                    'addresses': {'type': 'array', 'items': {'$ref': 'ip-address'}},
-                    'search': {'type': 'array', 'items': {'type': 'string'}}
-                }
-            }
-        }
-    })
 
     plugin.register_provider('network.config', NetworkProvider)
     plugin.register_provider('network.interface', InterfaceProvider)
