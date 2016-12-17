@@ -276,7 +276,7 @@ class ServiceManageTask(Task):
 
 @description("Updates configuration for services")
 @accepts(str, h.all_of(
-    h.ref('service'),
+    h.ref('Service'),
     h.forbidden('id', 'name', 'builtin', 'pid', 'state')
 ))
 class UpdateServiceConfigTask(Task):
@@ -520,7 +520,7 @@ def _init(dispatcher, plugin):
                 'ids': [svc['id']]
             })
 
-    plugin.register_schema_definition('service', {
+    plugin.register_schema_definition('Service', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
@@ -531,17 +531,17 @@ def _init(dispatcher, plugin):
                 'items': {'type': 'integer'}
             },
             'builtin': {'type': 'boolean'},
-            'state': {'$ref': 'service-state'},
-            'config': {'$ref': 'service-config'}
+            'state': {'$ref': 'ServiceState'},
+            'config': {'$ref': 'ServiceConfig'}
         }
     })
 
-    plugin.register_schema_definition('service-state', {
+    plugin.register_schema_definition('ServiceState', {
         'type': 'string',
         'enum': ['RUNNING', 'STARTING', 'STOPPING', 'STOPPED', 'ERROR', 'UNKNOWN']
     })
 
-    plugin.register_schema_definition('service-config', {
+    plugin.register_schema_definition('ServiceConfig', {
         'discriminator': 'type',
         'oneOf': [
             {'$ref': 'service-{0}'.format(svc['name'])}
