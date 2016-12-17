@@ -29,7 +29,7 @@ from apscheduler.jobstores.base import BaseJobStore, JobLookupError, Conflicting
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.util import datetime_to_utc_timestamp, utc_timestamp_to_datetime
 from apscheduler.job import Job
-from datastore import get_datastore, DuplicateKeyException
+from datastore import get_datastore, DuplicateKeyException, DatastoreException
 
 
 class FreeNASJobStore(BaseJobStore):
@@ -73,13 +73,14 @@ class FreeNASJobStore(BaseJobStore):
         self.ds.update('calendar_tasks', job.id, self._serialize_job(job))
 
     def remove_job(self, job_id):
-        result = self.collection.remove(job_id)
-        if result and result['n'] == 0:
+        try:
+            self.ds.delete('calendar_tasks', job_id)
+        except DatastoreException:
             raise JobLookupError(job_id)
 
     def remove_all_jobs(self):
         for i in self.get_all_jobs():
-            self.ds.delete(i.id)
+            self.ds.delete('calendar_tasks', i.id)
 
     def shutdown(self):
         self.ds.close()
