@@ -161,7 +161,8 @@ class Plugin(object):
             self.module._init(self.dispatcher, self)
             self.state = self.LOADED
             self.dispatcher.dispatch_event('server.plugin.initialized', {"name": os.path.basename(self.filename)})
-            push_status('Plugin loaded: {0}'.format(os.path.basename(self.filename)))
+            with contextlib.suppress(BaseException):
+                push_status('Plugin loaded: {0}'.format(os.path.basename(self.filename)))
         except Exception as err:
             self.dispatcher.logger.exception('Plugin %s exception', self.filename)
             self.dispatcher.report_error('Cannot initalize plugin {0}'.format(self.filename), err)
