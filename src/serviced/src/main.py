@@ -290,6 +290,9 @@ class Job(object):
             self.status_message = status
             self.cv.notify_all()
 
+        if self.label == 'org.freenas.dispatcher':
+            self.context.init_dispatcher()
+
         self.context.emit_event('serviced.job.status', {
             'ID': self.id,
             'Label': self.label,
@@ -329,9 +332,6 @@ class Job(object):
                 except ProcessLookupError:
                     # Exited too quickly after exec()
                     return
-
-                if self.label == 'org.freenas.dispatcher':
-                    self.context.init_dispatcher()
 
                 if not self.supports_checkin:
                     self.set_state(JobState.RUNNING)
@@ -533,6 +533,9 @@ class Context(object):
         self.rpc.register_service_instance('serviced.job', JobService(self))
 
     def init_dispatcher(self):
+        if self.client and self.client.connected:
+            return
+
         def on_error(reason, **kwargs):
             if reason in (ClientError.CONNECTION_CLOSED, ClientError.LOGOUT):
                 self.logger.warning('Connection to dispatcher lost')
