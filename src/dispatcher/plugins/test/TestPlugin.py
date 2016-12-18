@@ -50,6 +50,10 @@ class TestProvider(Provider):
     def wrapped_stream(self, count=10):
         return self.dispatcher.call_sync('test.stream', count)
 
+    def sleep(self, n):
+        time.sleep(n)
+        return 'done'
+
     def rpcerror(self):
         raise RpcException(errno.EINVAL, 'Testing if parameter', 'This is in the extra paramaeter')
 
