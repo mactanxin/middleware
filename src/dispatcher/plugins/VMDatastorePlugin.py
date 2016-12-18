@@ -36,13 +36,17 @@ class DatastoreProvider(Provider):
     @query('vm-datastore')
     @generator
     def query(self, filter=None, params=None):
-        def doit():
-            for i in self.supported_drivers():
-                with contextlib.suppress(BaseException):
-                    yield from self.dispatcher.call_sync('vm.datastore.{0}.discover'.format(i))
+        drivers = self.supported_drivers()
 
-            def extend(obj):
-                return obj
+        def extend(obj):
+            obj['capabilities'] = drivers[obj['type']]
+            return obj
+
+        def doit():
+            for i in drivers:
+                with contextlib.suppress(BaseException):
+                    for d in self.dispatcher.call_sync('vm.datastore.{0}.discover'.format(i)):
+                        yield extend(d)
 
             yield from self.datastore.query_stream('vm.datastores', callback=extend)
 
@@ -53,7 +57,11 @@ class DatastoreProvider(Provider):
         result = {}
         for p in list(self.dispatcher.plugins.values()):
             if p.metadata and p.metadata.get('type') == 'datastore':
-                result[p.metadata['driver']] = {}
+                result[p.metadata['driver']] = {
+                    'block_devices': p.metadata['block_devices'],
+                    'clones': p.metadata['clones'],
+                    'snapshots': p.metadata['snapshots']
+                }
 
         return result
 
@@ -119,7 +127,20 @@ class DatastoreUpdateTask(Task):
         return ['system']
 
     def run(self, id, updated_fields):
-        pass
+        ds = self.datastore.get_by_id('vm.datastores', id)
+        if not ds:
+            raise TaskException(errno.ENOENT, 'Datastore {0} not found'.format(id))
+
+        self.run_subtask_sync('vm.datastore.{0}.update'.format(ds['type']), id, updated_fields)
+
+        ds.update(updated_fields)
+        self.datastore.update('vm.datastores', id, ds)
+        self.dispatcher.emit_event('vm.datastore.changed', {
+            'operation': 'update',
+            'ids': [id]
+        })
+
+        return id
 
 
 class DatastoreDeleteTask(Task):
@@ -157,6 +178,15 @@ class DirectoryDeleteTask(Task):
         return self.run_subtask_sync('vm.datastore.{0}.delete_directory'.format(driver), id, path)
 
 
+class DirectoryRenameTask(Task):
+    def verify(self, id, path, size):
+        return []
+
+    def run(self, id, path):
+        driver = self.dispatcher.call_sync('vm.datastore.get_driver', id)
+        return self.run_subtask_sync('vm.datastore.{0}.resize_block_device'.format(driver), id, path)
+
+
 class BlockDeviceCreateTask(Task):
     def verify(self, id, path, size):
         return []
@@ -176,6 +206,24 @@ class BlockDeviceDeleteTask(Task):
         return self.run_subtask_sync('vm.datastore.{0}.delete_block_device'.format(driver), id, path)
 
 
+class BlockDeviceRenameTask(Task):
+    def verify(self, id, path, size):
+        return []
+
+    def run(self, id, path):
+        driver = self.dispatcher.call_sync('vm.datastore.get_driver', id)
+        return self.run_subtask_sync('vm.datastore.{0}.resize_block_device'.format(driver), id, path)
+
+
+class BlockDeviceResizeTask(Task):
+    def verify(self, id, path, size):
+        return []
+
+    def run(self, id, path):
+        driver = self.dispatcher.call_sync('vm.datastore.get_driver', id)
+        return self.run_subtask_sync('vm.datastore.{0}.resize_block_device'.format(driver), id, path)
+
+
 class BlockDeviceCloneTask(Task):
     def verify(self, id, path, new_path):
         return []
@@ -192,13 +240,23 @@ def _init(dispatcher, plugin):
             'oneOf': [
                 {'$ref': 'vm-datastore-properties-{0}'.format(name)}
                 for name
-                in dispatcher.call_sync('vm.datastore.supported_types')
+                in dispatcher.call_sync('vm.datastore.supported_drivers')
             ]
         })
 
     plugin.register_schema_definition('vm-datastore-state', {
         'type': 'string',
         'enum': ['ONLINE', 'OFFLINE']
+    })
+
+    plugin.register_schema_definition('vm-datastore-capabilities', {
+        'type': 'object',
+        'additionalProperties': False,
+        'properties': {
+            'block_devices': {'type': 'boolean'},
+            'clones': {'type': 'boolean'},
+            'snapshots': {'type': 'boolean'},
+        }
     })
 
     plugin.register_schema_definition('vm-datastore', {
@@ -209,6 +267,7 @@ def _init(dispatcher, plugin):
             'name': {'type': 'string'},
             'type': {'type': 'string'},
             'state': {'$ref': 'vm-datastore-state'},
+            'capabilities': {'$ref': 'vm-datastore-capabilities'},
             'properties': {'$ref': 'vm-datastore-properties'}
         }
     })
@@ -221,8 +280,9 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('vm.datastore.delete_directory', DirectoryDeleteTask)
     plugin.register_task_handler('vm.datastore.create_block_device', BlockDeviceCreateTask)
     plugin.register_task_handler('vm.datastore.delete_block_device', BlockDeviceDeleteTask)
+    plugin.register_task_handler('vm.datastore.resize_block_device', BlockDeviceResizeTask)
     plugin.register_task_handler('vm.datastore.clone_block_device', BlockDeviceCloneTask)
     plugin.register_event_type('vm.datastore.changed')
 
     update_datastore_properties_schema()
-    dispatcher.register_event_handler('server.plugin.loaded', update_datastore_properties_schema())
+    dispatcher.register_event_handler('server.plugin.loaded', update_datastore_properties_schema)

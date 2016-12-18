@@ -85,7 +85,7 @@ class VolumeBlockDeviceCreateTask(Task):
         return self.run_subtask_sync('volume.dataset.create', {
             'volume': id,
             'id': os.path.join(id, path),
-            'type': 'volume',
+            'type': 'VOLUME',
             'volsize': size
         })
 
