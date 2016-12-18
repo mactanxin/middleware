@@ -109,7 +109,7 @@ def stop(label, state):
 def restart(label):
     client = create_client()
     try:
-        client.call_sync('serviced.job.stop', label)
+        client.call_sync('serviced.job.stop', label, True)
         client.call_sync('serviced.job.start', label)
     except RpcException as err:
         print('Failed to stop job: {0}'.format(err), file=sys.stderr)
