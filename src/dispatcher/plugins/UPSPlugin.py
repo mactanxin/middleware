@@ -180,7 +180,7 @@ class UPSConfigureTask(Task):
             raise TaskException(errno.EINVAL, 'Please provide a valid port and driver for monitored UPS device')
 
         if node['mode'] == 'SLAVE' and not node['remote_host']:
-            raise TaskException(errno.EINVAL, 'This field is required')
+            raise TaskException(errno.EINVAL, 'remote_host field is required in SLAVE mode')
 
         if not re.search(r'^[a-z0-9\.\-_]+$', node['identifier'], re.I):
             raise TaskException(errno.EINVAL, 'Use alphanumeric characters, ".", "-" and "_"')
