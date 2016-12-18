@@ -322,8 +322,6 @@ class UpdateServiceConfigTask(Task):
         updated_config.pop('type', None)
 
         if service_def.get('task'):
-            enable = updated_config.pop('enable', None)
-
             try:
                 self.verify_subtask(service_def['task'], updated_config)
             except RpcException as err:
@@ -335,8 +333,8 @@ class UpdateServiceConfigTask(Task):
             restart = result[0] == 'RESTART'
             reload = result[0] == 'RELOAD'
 
-            if enable is not None:
-                node['enable'] = enable
+            if updated_config.get('enable') is not None:
+                node['enable'] = updated_config['enable']
         else:
             node.update(updated_config)
 
