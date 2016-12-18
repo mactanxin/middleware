@@ -249,7 +249,7 @@ def drop_share_connections(share):
 
 
 def convert_share(dispatcher, ret, path, enabled, share):
-    vfs_objects = ['zfsacl', 'zfs_space'] + share.get('vfs_objects', []) + ['aio_pthread']
+    vfs_objects = ['zfsacl', 'zfs_space'] + share.get('vfs_objects', [])
     ret.clear()
     ret['path'] = path
     ret['available'] = yesno(enabled)
@@ -277,6 +277,7 @@ def convert_share(dispatcher, ret, path, enabled, share):
         ret['recycle:touch'] = 'yes'
         ret['recycle:directory_mode'] = '0777'
         ret['recycle:subdir_mode'] = '0700'
+        vfs_objects.append('recycle')
 
     if share.get('previous_versions'):
         try:
@@ -287,7 +288,7 @@ def convert_share(dispatcher, ret, path, enabled, share):
         except RpcException as err:
             logger.warning('Failed to determine dataset for path {0}: {1}'.format(path, str(err)))
 
-    ret['vfs objects'] = ' '.join(vfs_objects)
+    ret['vfs objects'] = ' '.join(vfs_objects + ['aio_pthread'])
 
     for k, v in share['extra_parameters'].items():
         ret[k] = str(v)
