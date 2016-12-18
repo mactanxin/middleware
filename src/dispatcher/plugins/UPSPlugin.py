@@ -248,7 +248,7 @@ def _init(dispatcher, plugin):
             'identifier': {'type': 'string'},
             'remote_host': {'type': ['string', 'null']},
             'remote_port': {'type': 'integer'},
-            'driver': {'type': 'string'},
+            'driver': {'type': ['string', 'null']},
             'driver_port': {'type': ['string', 'null']},
             'description': {'type': ['string', 'null']},
             'shutdown_mode': {'$ref': 'service-ups-shutdownmode'},
