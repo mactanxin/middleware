@@ -65,7 +65,8 @@ class Task(object):
             try:
                 self.progress_callbacks[id](
                     args['percentage'],
-                    args['message']
+                    args['message'],
+                    args['extra']
                 )
             except:
                 # ignore
