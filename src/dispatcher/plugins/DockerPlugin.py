@@ -58,6 +58,8 @@ IMAGES_QUERY = 'containerd.docker.query_images'
 dockerfile_parser_logger = logging.getLogger('dockerfile_parse.parser')
 dockerfile_parser_logger.setLevel(logging.ERROR)
 
+docker_names_pattern = '^[a-zA-Z0-9._-]*$'
+
 
 @description('Provides information about Docker configuration')
 class DockerConfigProvider(Provider):
@@ -515,6 +517,20 @@ class DockerBaseTask(ProgressTask):
 
         return name, host_name
 
+    def get_network_name_and_vm_name(self, id):
+        host_id, name = self.dispatcher.call_sync(
+            'docker.network.query',
+            [('id', '=', id)],
+            {'single': True, 'select': ('host', 'name')}
+        )
+        host_name = self.dispatcher.call_sync(
+            'vm.query',
+            [('id', '=', host_id)],
+            {'single': True, 'select': 'name'}
+        )
+
+        return name, host_name
+
 
 @description('Updates Docker general configuration settings')
 @accepts(h.ref('docker-config'))
@@ -566,20 +582,6 @@ class DockerContainerCreateTask(DockerBaseTask):
         return TaskDescription('Creating Docker container {name}', name=container['names'][0])
 
     def verify(self, container):
-        if not container.get('names'):
-            raise VerifyException(errno.EINVAL, 'Container name must be specified')
-        else:
-            if not re.match(r'[a-zA-Z0-9.-_]*$', container['names'][0]):
-                raise VerifyException(
-                    errno.EINVAL,
-                    'Invalid container name: {0}. Only [a-zA-Z0-9.-] characters are allowed'.format(
-                        container['names'][0]
-                    )
-                )
-
-        if not container.get('image'):
-            raise VerifyException(errno.EINVAL, 'Image name must be specified')
-
         host = self.datastore.get_by_id('vms', container.get('host')) or {}
         hostname = host.get('name')
 
@@ -824,6 +826,131 @@ class DockerContainerStopTask(Task):
             lambda args: args['operation'] == 'update' and id in args['ids'],
             lambda: self.dispatcher.call_sync('containerd.docker.stop', id),
             600
+        )
+
+
+@description('Creates a Docker network')
+@accepts(h.all_of(
+    h.ref('docker-network'),
+    h.required('name')
+))
+class DockerNetworkCreateTask(DockerBaseTask):
+    @classmethod
+    def early_describe(cls):
+        return 'Creating a Docker network'
+
+    def describe(self, network):
+        return TaskDescription('Creating Docker network {name}', name=network['name'])
+
+    def verify(self, network):
+        if network.get('gateway') and not network.get('subnet'):
+            raise TaskException(errno.EINVAL, 'Docker network subnet property is not specified')
+
+        if network.get('subnet') and not network.get('gateway'):
+            raise TaskException(errno.EINVAL, 'Docker network gateway property is not specified')
+
+        host = self.datastore.get_by_id('vms', network.get('host')) or {}
+        hostname = host.get('name')
+
+        if hostname:
+            return ['docker:{0}'.format(hostname)]
+        else:
+            return ['docker']
+
+    def run(self, network):
+        if self.datastore.exists('docker.networks', ('name', '=', network['name'])):
+            raise TaskException(errno.EEXIST, 'Docker network {0} already exists'.format(network['name']))
+
+        normalize(network, {
+            'host': None,
+            'driver': 'bridge',
+            'subnet': None,
+            'gateway': None,
+        })
+
+        if not network.get('host'):
+            network['host'] = self.get_default_host(
+                lambda p, m, e=None: self.chunk_progress(0, 30, 'Looking for default Docker host:', p, m, e)
+            )
+
+        self.check_host_state(network['host'])
+
+        def match_fn(args):
+            if args['operation'] == 'create':
+                return self.dispatcher.call_sync(
+                    'docker.network.query',
+                    [('id', 'in', args['ids']), ('name', '=', network['name'])],
+                    {'single': True}
+                )
+            else:
+                return False
+
+        self.dispatcher.exec_and_wait_for_event(
+            'docker.network.changed',
+            match_fn,
+            lambda: self.dispatcher.call_sync('containerd.docker.create_network', network)
+        )
+
+
+@description('Deletes a Docker network')
+@accepts(str)
+class DockerNetworkDeleteTask(DockerBaseTask):
+    @classmethod
+    def early_describe(cls):
+        return 'Deleting a Docker network'
+
+    def describe(self, id):
+        name = self.dispatcher.call_sync(
+            'docker.network.query', [('id', '=', id)], {'single': True, 'select': 'name'}
+        )
+        return TaskDescription('Deleting Docker network {name}', name=name or id)
+
+    def verify(self, id):
+        hostname = None
+        try:
+            hostname = self.dispatcher.call_sync('containerd.docker.host_name_by_network_id', id)
+        except RpcException:
+            pass
+
+        name = self.dispatcher.call_sync('docker.network.query', [('id', '=', id)], {'single': True, 'select': 'name'})
+        if name in ('bridge', 'external', 'host', 'none'):
+            raise TaskException(errno.EINVAL, 'Cannot delete built-in network "{0}"'.format(name))
+
+        if hostname:
+            return ['docker:{0}'.format(hostname)]
+        else:
+            return ['docker']
+
+    def run(self, id):
+        if not self.datastore.exists('docker.networks', ('id', '=', id)):
+            raise TaskException(errno.ENOENT, 'Docker network {0} does not exist'.format(id))
+
+        try:
+            self.dispatcher.call_sync('containerd.docker.host_name_by_network_id', id)
+        except RpcException:
+            name, host_name = self.get_network_name_and_vm_name(id)
+
+            self.datastore.delete('docker.networks', id)
+            self.dispatcher.dispatch_event('docker.network.changed', {
+                'operation': 'delete',
+                'ids': [id]
+            })
+
+            self.add_warning(TaskWarning(
+                errno.EACCES,
+                'Cannot access Docker Host {0}. Network {1} was deleted from the local cache only.'.format(
+                    host_name or '',
+                    name
+                )
+            ))
+
+            return
+
+        self.dispatcher.exec_and_wait_for_event(
+            'docker.network.changed',
+            lambda args: args['operation'] == 'delete' and id in args['ids'],
+            lambda: self.dispatcher.call_sync('containerd.docker.delete_network', id),
+            100
         )
 
 
@@ -1536,6 +1663,11 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('docker.container.start', DockerContainerStartTask)
     plugin.register_task_handler('docker.container.stop', DockerContainerStopTask)
 
+    plugin.register_task_handler('docker.network.create', DockerNetworkCreateTask)
+    plugin.register_task_handler('docker.network.delete', DockerNetworkDeleteTask)
+    #plugin.register_task_handler('docker.network.connect', DockerNetworkConnectTask)
+    #plugin.register_task_handler('docker.network.disconnect', DockerNetworkDisconnectTask)
+
     plugin.register_task_handler('docker.image.pull', DockerImagePullTask)
     plugin.register_task_handler('docker.image.delete', DockerImageDeleteTask)
     plugin.register_task_handler('docker.image.flush', DockerImageFlushTask)
@@ -1641,7 +1773,8 @@ def _init(dispatcher, plugin):
             'id': {'type': 'string'},
             'names': {
                 'type': 'array',
-                'items': {'type': 'string'}
+                'items': {'type': 'string',
+                          'pattern': docker_names_pattern}
             },
             'command': {
                 'type': 'array',
@@ -1721,7 +1854,8 @@ def _init(dispatcher, plugin):
         'additionalProperties': False,
         'properties': {
             'id': {'type': 'string'},
-            'name': {'type': 'string'},
+            'name': {'type': 'string',
+                     'pattern': docker_names_pattern},
             'host': {'type': ['string', 'null']},
             'driver': {'type': ['string', 'null']},
             'subnet': {'type': ['string', 'null']},

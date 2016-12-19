@@ -802,7 +802,9 @@ class DockerHost(object):
             'create': 'create',
             'pull': 'create',
             'destroy': 'delete',
-            'delete': 'delete'
+            'delete': 'delete',
+            'connect': 'update',
+            'disconnect': 'update',
         }
 
         while True:
@@ -922,6 +924,12 @@ class DockerHost(object):
                         self.context.client.emit_event('containerd.docker.image.changed', {
                             'operation': transform_action(ev['Action']),
                             'ids': [id]
+                        })
+
+                    if ev['Type'] == 'network':
+                        self.context.client.emit_event('containerd.docker.network.changed', {
+                            'operation': actions.get(ev['Action'], 'update'),
+                            'ids': [ev['id']]
                         })
 
                 self.logger.warning('Disconnected from Docker API endpoint on {0}'.format(self.vm.name))
@@ -1250,6 +1258,10 @@ class DockerService(RpcService):
         host = self.context.docker_host_by_container_id(id)
         return host.vm.name
 
+    def host_name_by_network_id(self, id):
+        host = self.context.docker_host_by_network_id(id)
+        return host.vm.name
+
     @generator
     def query_containers(self, filter=None, params=None):
         result = []
@@ -1308,7 +1320,7 @@ class DockerService(RpcService):
                     'name': details['Name'],
                     'driver': details['Driver'],
                     'subnet': config['Subnet'] if config else None,
-                    'gateway': config['Gateway'] if config else None,
+                    'gateway': config.get('Gateway', None) if config else None,
                     'host': host.vm.id,
                 })
 
@@ -1452,6 +1464,31 @@ class DockerService(RpcService):
         except BaseException as err:
             raise RpcException(errno.EFAULT, str(err))
 
+    def create_network(self, network):
+        host = self.context.get_docker_host(network.get('host'))
+        if not host:
+            raise RpcException(errno.ENOENT, 'Docker host {0} not found'.format(network.get('host')))
+
+        create_args = {
+            'name': network.get('name'),
+            'driver': network.get('driver'),
+        }
+
+        if network.get('subnet'):
+            create_args['ipam'] = docker.utils.create_ipam_config(
+                pool_configs=[
+                    docker.utils.create_ipam_pool(
+                        subnet=network.get('subnet'),
+                        gateway=network.get('gateway')
+                    )
+                ]
+            )
+
+        try:
+            host.connection.create_network(**create_args)
+        except BaseException as err:
+            raise RpcException(errno.EFAULT, 'Cannot create docker network {0}: {1}'.format(network.get('name'), err))
+
     def create_exec(self, id, command):
         host = self.context.docker_host_by_container_id(id)
         try:
@@ -1480,6 +1517,21 @@ class DockerService(RpcService):
             host.connection.remove_container(container=id, force=True)
         except BaseException as err:
             raise RpcException(errno.EFAULT, 'Failed to remove container: {0}'.format(str(err)))
+
+    def delete_network(self, id):
+        try:
+            host = self.context.docker_host_by_network_id(id)
+        except RpcException as err:
+            if err.code == errno.ENOENT:
+                self.context.client.emit_event('containerd.docker.network.changed', {
+                    'operation': 'delete',
+                    'ids': id
+                })
+                return
+        try:
+            host.connection.remove_network(id)
+        except BaseException as err:
+            raise RpcException(errno.EFAULT, 'Failed to remove network: {0}'.format(str(err)))
 
     def set_api_forwarding(self, hostid):
         if hostid in self.context.docker_hosts:
@@ -1855,6 +1907,15 @@ class Main(object):
             continue
 
         raise RpcException(errno.ENOENT, 'Container {0} not found'.format(id))
+
+    def docker_host_by_network_id(self, id):
+        for host in self.docker_hosts.values():
+            for n in host.connection.networks():
+                if n['Id'] == id:
+                    host.ready.wait()
+                    return host
+
+        raise RpcException(errno.ENOENT, 'Network {0} not found'.format(id))
 
     def get_docker_host(self, id):
         host = self.docker_hosts.get(id)
