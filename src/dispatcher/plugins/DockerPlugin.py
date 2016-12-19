@@ -58,6 +58,8 @@ IMAGES_QUERY = 'containerd.docker.query_images'
 dockerfile_parser_logger = logging.getLogger('dockerfile_parse.parser')
 dockerfile_parser_logger.setLevel(logging.ERROR)
 
+docker_names_pattern = '^[a-zA-Z0-9._-]*$'
+
 
 @description('Provides information about Docker configuration')
 class DockerConfigProvider(Provider):
@@ -1796,7 +1798,8 @@ def _init(dispatcher, plugin):
             'id': {'type': 'string'},
             'names': {
                 'type': 'array',
-                'items': {'type': 'string'}
+                'items': {'type': 'string',
+                          'pattern': docker_names_pattern}
             },
             'command': {
                 'type': 'array',
@@ -1876,7 +1879,8 @@ def _init(dispatcher, plugin):
         'additionalProperties': False,
         'properties': {
             'id': {'type': 'string'},
-            'name': {'type': 'string'},
+            'name': {'type': 'string',
+                     'pattern': docker_names_pattern},
             'host': {'type': ['string', 'null']},
             'driver': {'type': ['string', 'null']},
             'subnet': {'type': ['string', 'null']},
