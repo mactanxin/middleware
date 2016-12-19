@@ -501,6 +501,9 @@ def _init(dispatcher, plugin):
             logger.debug('Loading service {0}'.format(svc['name']))
             enb = svc.get('builtin') or dispatcher.configstore.get('service.{0}.enable'.format(svc['name']))
 
+            if svc.get('auto_enable'):
+                enb = False
+
             if 'launchd' in svc and enb:
                 try:
                     load_job(dispatcher, svc)
