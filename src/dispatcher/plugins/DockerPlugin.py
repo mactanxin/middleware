@@ -582,20 +582,6 @@ class DockerContainerCreateTask(DockerBaseTask):
         return TaskDescription('Creating Docker container {name}', name=container['names'][0])
 
     def verify(self, container):
-        if not container.get('names'):
-            raise VerifyException(errno.EINVAL, 'Container name must be specified')
-        else:
-            if not re.match(r'[a-zA-Z0-9.-_]*$', container['names'][0]):
-                raise VerifyException(
-                    errno.EINVAL,
-                    'Invalid container name: {0}. Only [a-zA-Z0-9.-_] characters are allowed'.format(
-                        container['names'][0]
-                    )
-                )
-
-        if not container.get('image'):
-            raise VerifyException(errno.EINVAL, 'Image name must be specified')
-
         host = self.datastore.get_by_id('vms', container.get('host')) or {}
         hostname = host.get('name')
 
@@ -857,17 +843,6 @@ class DockerNetworkCreateTask(DockerBaseTask):
         return TaskDescription('Creating Docker network {name}', name=network['name'])
 
     def verify(self, network):
-        if not network.get('name'):
-            raise VerifyException(errno.EINVAL, 'Network name must be specified')
-        else:
-            if not re.match(r'[a-zA-Z0-9.-_]*$', network['name']):
-                raise VerifyException(
-                    errno.EINVAL,
-                    'Invalid network name: {0}. Only [a-zA-Z0-9.-_] characters are allowed'.format(
-                        network['name']
-                    )
-                )
-
         if network.get('gateway') and not network.get('subnet'):
             raise TaskException(errno.EINVAL, 'Docker network subnet property is not specified')
 
