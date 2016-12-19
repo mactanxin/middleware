@@ -1295,7 +1295,7 @@ class ReplicateDatasetTask(ProgressTask):
 
         for idx, action in enumerate(actions):
             def get_progress(delta=None):
-                nonlocal progress, done
+                nonlocal progress, done, idx
                 if delta:
                     done += delta
 
@@ -1350,10 +1350,11 @@ class ReplicateDatasetTask(ProgressTask):
                         },
                         progress_callback=lambda p, m, e=None: self.set_progress(
                             get_progress(e),
-                            'Sending {0} stream of snapshot {1}@{2} - speed {3}'.format(
+                            'Sending {0} stream of snapshot {1}@{2} - {3}% - speed {4}'.format(
                                 'incremental' if action['incremental'] else 'full',
                                 action['localfs'],
                                 action['snapshot'],
+                                int(p),
                                 human_readable_bytes(e, '/s')
                             )
                         )
