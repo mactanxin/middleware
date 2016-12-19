@@ -870,6 +870,7 @@ class ReplicationSyncTask(ReplicationBaseTask):
                     'speed': speed
                 }
                 link['status'].append(status_dict)
+                link['update_date'] = str(datetime.utcnow())
                 self.join_subtasks(self.run_subtask('replication.update_link', link))
                 self.dispatcher.dispatch_event('replication.changed', {
                     'operation': 'update',
