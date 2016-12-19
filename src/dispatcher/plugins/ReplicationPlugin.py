@@ -1776,9 +1776,14 @@ def _init(dispatcher, plugin):
                 if link['replicate_services']:
                     dispatcher.call_task_sync('replication.reserve_services', link['name'])
                 status = link.get('status')
+                if len(status):
+                    last_status = status[-1]
+                else:
+                    continue
+
                 is_master, _ = dispatcher.call_sync('replication.get_replication_state', link)
                 recover = link['auto_recover'] and link['initial_master'] != link['master'] and not is_master
-                if (status and status['status'] == 'FAILED') or recover:
+                if (last_status and last_status['status'] == 'FAILED') or recover:
                     dispatcher.call_task_sync(
                         'replication.sync',
                         link['name']
