@@ -2,7 +2,7 @@
 
 PORTNAME=	bonjour
 PORTVERSION=	1.1.1
-CATEGORIES=	net python
+CATEGORIES=	dns python
 PKGNAMEPREFIX=	${PYTHON_PKGNAMEPREFIX}
 
 LIB_DEPENDS=	libdns_sd.so.1:net/mDNSResponder
