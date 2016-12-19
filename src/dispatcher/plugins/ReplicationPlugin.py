@@ -1751,7 +1751,8 @@ def _init(dispatcher, plugin):
                 'replication:{0}'.format(link['name']),
                 new_parents=get_replication_resources(dispatcher, link)
             )
-            dispatcher.call_task_sync('replication.role_update', i)
+            if link['bidirectional']:
+                dispatcher.call_task_sync('replication.role_update', i)
 
     def update_link_cache(args):
         sshd_service = dispatcher.call_sync('service.query', [('name', '=', 'sshd')], {'single': True})
