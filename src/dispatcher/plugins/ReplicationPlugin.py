@@ -44,6 +44,7 @@ from freenas.dispatcher.rpc import RpcException, SchemaHelper as h, description,
 from freenas.dispatcher.fd import FileDescriptor
 from utils import get_freenas_peer_client, call_task_and_check_state
 from freenas.utils import first_or_default, query as q, normalize, human_readable_bytes
+from freenas.utils.decorators import throttle
 
 logger = logging.getLogger(__name__)
 
@@ -857,6 +858,31 @@ class ReplicationSyncTask(ReplicationBaseTask):
 
                     ds_count = len(parent_datasets)
                     for idx, dataset in enumerate(parent_datasets):
+                        done = 0
+
+                        def report_progress(prgrs, msg, extra):
+                            @throttle(seconds=30)
+                            def update_status(p):
+                                speed = int(done / (time.time() - start_time))
+                                state = {
+                                    'created_at': datetime.now(),
+                                    'status': 'RUNNING',
+                                    'progress': p,
+                                    'speed': human_readable_bytes(speed, '/s')
+                                }
+
+                                self.dispatcher.call_sync('replication.put_status', link['id'], state)
+                                remote_client.call_sync('replication.put_status', link['id'], state)
+
+                            nonlocal done
+                            if extra:
+                                done += extra
+
+                            update_status(self.chunk_progress(
+                                int((idx / ds_count) * 100), int(((idx + 1) / ds_count) * 100),
+                                '', prgrs, msg, extra
+                            ))
+
                         datasets_pair = first_or_default(lambda d: d['master'] == dataset['name'], link['datasets'])
                         result = self.join_subtasks(self.run_subtask(
                             'replication.replicate_dataset',
@@ -870,10 +896,7 @@ class ReplicationSyncTask(ReplicationBaseTask):
                                 'followdelete': link['followdelete']
                             },
                             link['transport_options'],
-                            progress_callback=lambda p, m, e=None: self.chunk_progress(
-                                int((idx / ds_count) * 100), int(((idx + 1) / ds_count) * 100),
-                                '', p, m, e
-                            )
+                            progress_callback=lambda p, m, e=None: report_progress(p, m, e)
                         ))
 
                         total_size += result[0][1]
@@ -893,6 +916,7 @@ class ReplicationSyncTask(ReplicationBaseTask):
             raise
         finally:
             if is_master:
+                self.dispatcher.call_sync('replication.remove_status', link['id'])
                 end_time = time.time()
                 if start_time != end_time:
                     speed = int(float(total_size) / float(end_time - start_time))
@@ -914,6 +938,7 @@ class ReplicationSyncTask(ReplicationBaseTask):
                 })
 
                 if remote_client:
+                    remote_client.call_sync('replication.remove_status', link['id'])
                     call_task_and_check_state(
                         remote_client,
                         'replication.update_link',
