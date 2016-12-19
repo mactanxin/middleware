@@ -1632,6 +1632,52 @@ class ReplicationCheckDatasetsTask(ReplicationBaseTask):
         self.check_datasets_valid(link)
 
 
+@description("Deletes replication status history")
+@accepts(str)
+class ReplicationCleanHistoryTask(ReplicationBaseTask):
+    @classmethod
+    def early_describe(cls):
+        return "Deleting replication status history"
+
+    def describe(self, id):
+        link = self.datastore.get_by_id('replication.links', id)
+        return TaskDescription("Deleting replication {name} status history", name=link['name'] if link else id)
+
+    def verify(self, id):
+        link = self.datastore.get_by_id('replication.links', id)
+
+        return ['replication{0}'.format(':' + link['name'] if link else '')]
+
+    def run(self, id):
+        if not self.datastore.exists('replication.links', ('id', '=', id)):
+            raise TaskException(errno.ENOENT, 'Replication link {0} do not exist.'.format(id))
+
+        link = self.datastore.get_by_id('replication.links', id)
+        link['status'] = []
+        link['update_date'] = str(datetime.utcnow())
+
+        _, remote = self.get_replication_state(link)
+        remote_client = get_freenas_peer_client(self, remote)
+
+        self.join_subtasks(self.run_subtask('replication.update_link', link))
+        self.dispatcher.dispatch_event('replication.changed', {
+            'operation': 'update',
+            'ids': [link['id']]
+        })
+
+        if remote_client:
+            call_task_and_check_state(
+                remote_client,
+                'replication.update_link',
+                self.remove_datastore_timestamps(link)
+            )
+            remote_client.emit_event('replication.changed', {
+                'operation': 'update',
+                'ids': [link['id']]
+            })
+            remote_client.disconnect()
+
+
 def get_services(dispatcher, service, relation, link_name):
     services = []
     link = dispatcher.call_task_sync('replication.get_latest_link', link_name)
@@ -1819,6 +1865,7 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('replication.reserve_services', ReplicationReserveServicesTask)
     plugin.register_task_handler('replication.delete', ReplicationDeleteTask)
     plugin.register_task_handler('replication.check_datasets', ReplicationCheckDatasetsTask)
+    plugin.register_task_handler('replication.clean_history', ReplicationCleanHistoryTask)
 
     plugin.register_event_type('replication.changed')
 
