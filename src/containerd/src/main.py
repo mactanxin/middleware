@@ -803,8 +803,8 @@ class DockerHost(object):
             'pull': 'create',
             'destroy': 'delete',
             'delete': 'delete',
-            'connect': 'connect',
-            'disconnect': 'disconnect',
+            'connect': 'update',
+            'disconnect': 'update',
         }
 
         while True:
