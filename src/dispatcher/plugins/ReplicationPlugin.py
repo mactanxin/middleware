@@ -804,6 +804,7 @@ class ReplicationSyncTask(ReplicationBaseTask):
             raise TaskException(errno.ENOENT, 'Replication link {0} do not exist.'.format(name))
 
         start_time = time.time()
+        started_at = datetime.utcnow().isoformat().split('.')[0]
         total_size = 0
         status = 'SUCCESS'
         message = ''
@@ -861,6 +862,8 @@ class ReplicationSyncTask(ReplicationBaseTask):
                     speed = int(float(total_size) / float(end_time - start_time))
 
                 status_dict = {
+                    'started_at': {'$date': started_at},
+                    'ended_at': {'$date': datetime.utcnow().isoformat().split('.')[0]},
                     'status': status,
                     'message': message,
                     'size': total_size,
@@ -1649,6 +1652,8 @@ def _init(dispatcher, plugin):
     plugin.register_schema_definition('replication-status', {
         'type': 'object',
         'properties': {
+            'started_at': {'type': 'datetime'},
+            'ended_at': {'type': 'datetime'},
             'status': {'type': 'string'},
             'message': {'type': 'string'},
             'size': {'type': 'number'},
