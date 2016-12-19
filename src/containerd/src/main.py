@@ -1543,6 +1543,20 @@ class DockerService(RpcService):
         else:
             self.context.set_docker_api_forwarding(None)
 
+    def connect_container_to_network(self, container_id, network_id):
+        host = self.context.docker_host_by_container_id(container_id)
+        try:
+            host.connection.connect_container_to_network(container_id, network_id)
+        except BaseException as err:
+            raise RpcException(errno.EFAULT, 'Failed to connect container to newtork: {0}'.format(str(err)))
+
+    def disconnect_container_from_network(self, container_id, network_id):
+        host = self.context.docker_host_by_container_id(container_id)
+        try:
+            host.connection.disconnect_container_from_network(container_id, network_id)
+        except BaseException as err:
+            raise RpcException(errno.EFAULT, 'Failed to disconnect container from network: {0}'.format(str(err)))
+
 
 class ServerResource(Resource):
     def __init__(self, apps=None, context=None):
