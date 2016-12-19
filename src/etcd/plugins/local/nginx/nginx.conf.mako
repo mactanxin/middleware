@@ -9,6 +9,7 @@ events {
 http {
     include mime.types;
     default_type application/octet-stream;
+    access_log /var/log/nginx-access.log combined;
 
     # reserve 1MB under the name 'proxied' to track uploads
     upload_progress proxied 1m;
