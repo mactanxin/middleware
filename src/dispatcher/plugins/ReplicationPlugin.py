@@ -37,7 +37,7 @@ import logging
 from cache import CacheStore
 from resources import Resource
 from paramiko import SSHException
-from datetime import datetime
+from datetime import datetime, timedelta
 from dateutil.parser import parse as parse_datetime
 from task import Provider, Task, ProgressTask, VerifyException, TaskException, TaskWarning, query, TaskDescription
 from freenas.dispatcher.rpc import RpcException, SchemaHelper as h, description, accepts, returns, private, generator
@@ -77,7 +77,30 @@ class ReplicationLinkProvider(Provider):
     @query('replication')
     @generator
     def query(self, filter=None, params=None):
-        return q.query(link_cache.query(stream=True), *(filter or []), stream=True, **(params or {}))
+        def extend():
+            now = datetime.now()
+
+            for link in link_cache.query(stream=True):
+
+                state = current_state_cache.get(link['id'])
+                if not state or (datetime.now() - state['created_at']) > timedelta(minutes=1):
+                    self.dispatcher.call_sync('replication.remove_status', link['id'])
+                    status = 'STOPPED'
+                    if len(link['status']) and link['status'][-1]['status'] == 'FAILED':
+                        status = 'FAILED'
+
+                    link['current_state'] = {
+                        'created_at': now,
+                        'status': status,
+                        'progress': 0,
+                        'speed': '0B/s'
+                    }
+                else:
+                    link['current_state'] = state
+
+                yield link
+
+        return q.query(extend(), *(filter or []), stream=True, **(params or {}))
 
     @private
     def sync_query(self, filter=None, params=None):
@@ -1658,6 +1681,7 @@ def _init(dispatcher, plugin):
                 'type': 'array',
                 'items': {'$ref': 'replication-status'}
             },
+            'current_state': {'$ref': 'replication-runtime-state'},
             'transport_options': {
                 'type': 'array',
                 'items': {'$ref': 'replication-transport-option'}
@@ -1677,6 +1701,17 @@ def _init(dispatcher, plugin):
             'message': {'type': 'string'},
             'size': {'type': 'number'},
             'speed': {'type': 'number'}
+        },
+        'additionalProperties': False,
+    })
+
+    plugin.register_schema_definition('replication-runtime-state', {
+        'type': 'object',
+        'properties': {
+            'created_at': {'type': 'datetime'},
+            'status': {'type': {'enum': ['RUNNING', 'STOPPED', 'FAILED']}},
+            'progress': {'type': 'number'},
+            'speed': {'type': 'string'}
         },
         'additionalProperties': False,
     })
