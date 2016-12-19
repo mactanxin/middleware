@@ -1393,7 +1393,8 @@ class ReplicateDatasetTask(ProgressTask):
                                 action['snapshot'],
                                 int(p),
                                 human_readable_bytes(e, '/s')
-                            )
+                            ),
+                            extra=e
                         )
                     )
                 )
