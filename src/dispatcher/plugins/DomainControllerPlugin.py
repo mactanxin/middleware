@@ -156,6 +156,20 @@ class DCConfigureTask(ProgressTask):
                         5, 100, 'Creating Domain Controller virtual machine: ', p, m, e
                     )
                 ))
+            finally:
+                vm_config = self.dispatcher.call_sync(
+                    'vm.query', [('id', '=', dc['vm_id'] if dc.get('vm_id') else node['vm_id'])],
+                    {'select': 'config', 'single': True}
+                )
+                if not node['enable'] and vm_config['autostart']:
+                    vm_config['autostart'] = False
+                elif node['enable'] and not vm_config['autostart']:
+                    vm_config['autostart'] = True
+
+                self.join_subtasks(self.run_subtask('vm.update',
+                    dc['vm_id'] if dc.get('vm_id') else node['vm_id'],
+                    {'config': vm_config}
+                ))
 
         try:
             node = ConfigNode('service.dc', self.configstore)

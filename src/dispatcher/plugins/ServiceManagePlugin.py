@@ -248,7 +248,7 @@ class ServiceManageTask(Task):
 
         if hook_rpc:
             try:
-                return self.dispatcher.call_sync(hook_rpc)
+                self.dispatcher.call_sync(hook_rpc)
             except RpcException as e:
                 raise TaskException(errno.EBUSY, 'Hook {0} for {1} failed: {2}'.format(
                     action, name, e
@@ -322,8 +322,6 @@ class UpdateServiceConfigTask(Task):
         updated_config.pop('type', None)
 
         if service_def.get('task'):
-            enable = updated_config.pop('enable', None)
-
             try:
                 self.verify_subtask(service_def['task'], updated_config)
             except RpcException as err:
@@ -335,8 +333,8 @@ class UpdateServiceConfigTask(Task):
             restart = result[0] == 'RESTART'
             reload = result[0] == 'RELOAD'
 
-            if enable is not None:
-                node['enable'] = enable
+            if updated_config.get('enable') is not None:
+                node['enable'] = updated_config['enable']
         else:
             node.update(updated_config)
 
@@ -473,35 +471,13 @@ def collect_debug(dispatcher):
 
 
 def _init(dispatcher, plugin):
-    def on_rc_command(args):
-        cmd = args['action']
-        name = args['name']
-        svc = dispatcher.datastore.get_one('service_definitions', (
-            'or', (
-                ('rcng.rc-scripts', '=', name),
-                ('rcng.rc-scripts', 'in', name)
-            )
-        ))
-
-        if svc is None:
-            # ignore unknown rc scripts
-            return
-
-        if cmd not in ('start', 'stop', 'reload', 'restart'):
-            # ignore unknown actions
-            return
-
-        if cmd == 'stop':
-            cmd += 'p'
-
-        dispatcher.dispatch_event('service.{0}ed'.format(cmd), {
-            'name': svc['name']
-        })
-
     def on_ready(args):
         for svc in dispatcher.datastore.query('service_definitions'):
             logger.debug('Loading service {0}'.format(svc['name']))
             enb = svc.get('builtin') or dispatcher.configstore.get('service.{0}.enable'.format(svc['name']))
+
+            if svc.get('auto_enable'):
+                enb = False
 
             if 'launchd' in svc and enb:
                 try:
