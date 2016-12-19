@@ -47,7 +47,8 @@ from freenas.utils import first_or_default, query as q, normalize, human_readabl
 
 logger = logging.getLogger(__name__)
 
-link_cache = CacheStore()
+link_cache = None
+current_state_cache = None
 
 
 class ReplicationActionType(enum.Enum):
@@ -137,6 +138,18 @@ class ReplicationLinkProvider(Provider):
     @private
     def link_cache_remove(self, name):
         link_cache.remove(name)
+
+    @private
+    def put_status(self, id, status):
+        current_state_cache.put(id, status)
+        self.dispatcher.emit_event('replication.changed', {
+            'operation': 'update',
+            'ids': [id]
+        })
+
+    @private
+    def remove_status(self, id):
+        current_state_cache.remove(id)
 
     @private
     def local_datasets_from_link(self, link):
@@ -1605,6 +1618,10 @@ def _depends():
 
 
 def _init(dispatcher, plugin):
+    global link_cache, current_state_cache
+    link_cache = CacheStore()
+    current_state_cache = CacheStore()
+
     plugin.register_schema_definition('replication-options', {
         'type': 'object',
         'properties': {
