@@ -471,31 +471,6 @@ def collect_debug(dispatcher):
 
 
 def _init(dispatcher, plugin):
-    def on_rc_command(args):
-        cmd = args['action']
-        name = args['name']
-        svc = dispatcher.datastore.get_one('service_definitions', (
-            'or', (
-                ('rcng.rc-scripts', '=', name),
-                ('rcng.rc-scripts', 'in', name)
-            )
-        ))
-
-        if svc is None:
-            # ignore unknown rc scripts
-            return
-
-        if cmd not in ('start', 'stop', 'reload', 'restart'):
-            # ignore unknown actions
-            return
-
-        if cmd == 'stop':
-            cmd += 'p'
-
-        dispatcher.dispatch_event('service.{0}ed'.format(cmd), {
-            'name': svc['name']
-        })
-
     def on_ready(args):
         for svc in dispatcher.datastore.query('service_definitions'):
             logger.debug('Loading service {0}'.format(svc['name']))
