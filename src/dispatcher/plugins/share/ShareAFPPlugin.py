@@ -106,7 +106,7 @@ class CreateAFPShareTask(Task):
             'time_machine': False,
             'zero_dev_numbers': False,
             'no_stat': False,
-            'afp3_privileges': False,
+            'afp3_privileges': True,
             'ro_users': None,
             'ro_groups': None,
             'rw_users': None,
