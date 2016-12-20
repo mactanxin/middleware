@@ -874,7 +874,7 @@
                         "--daemon",
                         "--no-detach",
                         "--config",
-                        "/usr/local/etc/rsync/rsyncd.conf"
+                        "/usr/local/etc/rsyncd.conf"
                     ]
                 },
                 "builtin": false,
