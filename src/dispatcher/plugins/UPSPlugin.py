@@ -40,6 +40,15 @@ from task import Task, Provider, TaskException, TaskDescription
 
 logger = logging.getLogger('UPSPlugin')
 
+nut_signal_descriptions = {
+    'ONLINE': 'UPS is back online',
+    'ONBATT':'UPS is on battery',
+    'LOWBATT': 'UPS is on battery and has a low battery',
+    'COMMOK': 'Communications established with the UPS',
+    'COMMBAD': 'Communications lost to the UPS',
+    'REPLBATT': 'The UPS battery is bad and needs to be replaced',
+    'NOCOMM': 'A UPS is unavailable (can’t be contacted for monitoring)'
+}
 
 @description('Provides info about UPS service configuration')
 class UPSProvider(Provider):
@@ -180,7 +189,7 @@ class UPSConfigureTask(Task):
             raise TaskException(errno.EINVAL, 'Please provide a valid port and driver for monitored UPS device')
 
         if node['mode'] == 'SLAVE' and not node['remote_host']:
-            raise TaskException(errno.EINVAL, 'This field is required')
+            raise TaskException(errno.EINVAL, 'remote_host field is required in SLAVE mode')
 
         if not re.search(r'^[a-z0-9\.\-_]+$', node['identifier'], re.I):
             raise TaskException(errno.EINVAL, 'Use alphanumeric characters, ".", "-" and "_"')
@@ -214,29 +223,25 @@ def _init(dispatcher, plugin):
 
     def ups_signal(kwargs):
         ups = dispatcher.call_sync('service.ups.get_config')
-
         name = kwargs.get('name')
-        notifytype = kwargs.get('type')
+        logger.info('UPS Signal: %s received', name)
 
         if name == 'ONBATT':
+            if ups['propagate_alerts']:
+                dispatcher.call_sync('alert.emit', {
+                    'description': nut_signal_descriptions[name],
+                    'title':'UPS signal received', 'class': 'UpsSignal'
+                })
+
             if ups['shutdown_mode'] == 'BATT':
-                logger.warn('Issuing shutdown from UPS signal')
                 system('/usr/local/sbin/upsmon', '-c', 'fsd')
 
-        elif name in ('EMAIL', 'COMMBAD', 'COMMOK'):
-            if ups['email_notify'] and ups['email_recipients']:
-                subject = ups['email_subject'].replace('%d', time.asctime()).replace('%h', socket.gethostname())
-                dispatcher.call_sync('mail.send', {
-                    'to': ups['email_recipients'],
-                    'subject': subject,
-                    'message': 'UPS Status: {0}\n'.format(
-                        notifytype,
-                    ),
-                })
-            else:
-                logger.debug('Email not configured for UPS')
-        else:
-            logger.info('Unhandled UPS Signal: %s', name)
+        elif ups['propagate_alerts']:
+            dispatcher.call_sync('alert.emit', {
+                'description': nut_signal_descriptions[name],
+                'title':'UPS signal received', 'class': 'UpsSignal'
+            })
+
 
     # Register schemas
     plugin.register_schema_definition('service-ups', {
@@ -248,7 +253,7 @@ def _init(dispatcher, plugin):
             'identifier': {'type': 'string'},
             'remote_host': {'type': ['string', 'null']},
             'remote_port': {'type': 'integer'},
-            'driver': {'type': 'string'},
+            'driver': {'type': ['string', 'null']},
             'driver_port': {'type': ['string', 'null']},
             'description': {'type': ['string', 'null']},
             'shutdown_mode': {'$ref': 'service-ups-shutdownmode'},
@@ -257,9 +262,7 @@ def _init(dispatcher, plugin):
             'monitor_password': {'type': 'string'},
             'allow_remote_connections': {'type': 'boolean'},
             'auxiliary_users': {'type': ['string', 'null']},
-            'email_notify': {'type': 'boolean'},
-            'email_recipients': {'type': 'array', 'items': {'$ref': 'email'}},
-            'email_subject': {'type': 'string'},
+            'propagate_alerts': {'type': 'boolean'},
             'powerdown': {'type': 'boolean'},
             'auxiliary': {'type': ['string', 'null']},
         },
