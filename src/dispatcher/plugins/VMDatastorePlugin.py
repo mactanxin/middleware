@@ -85,6 +85,9 @@ class DatastoreProvider(Provider):
     @private
     @accepts(str, str)
     def get_filesystem_path(self, datastore_id, datastore_path):
+        if datastore_path.startswith('/'):
+            datastore_path = datastore_path[1:]
+
         driver = self.get_driver(datastore_id)
         return self.dispatcher.call_sync(
             'vm.datastore.{0}.get_filesystem_path'.format(driver),

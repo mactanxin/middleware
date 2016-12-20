@@ -106,10 +106,20 @@ class VMProvider(Provider):
             return None
 
         if disk['type'] == 'DISK':
+            target_type = q.get(disk, 'properties.target_type')
+            target_path = q.get(disk, 'properties.target_path')
+
+            if target_type == 'DISK':
+                return self.dispatcher.call_sync(
+                    'disk.query',
+                    [('id', '=', target_path)],
+                    {'single': True, 'select': 'path'}
+                )
+
             return self.dispatcher.call_sync(
                 'vm.datastore.get_filesystem_path',
                 vm['target'],
-                os.path.join('vm', vm['name'], disk_name)
+                os.path.join('/vm', vm['name'], target_path)
             )
 
         if disk['type'] == 'CDROM':
@@ -476,24 +486,29 @@ class VMBaseTask(ProgressTask):
         if res['type'] == 'DISK':
             vm_ds = os.path.join('vm', vm['name'])
             ds_name = os.path.join(vm_ds, res['name'])
+            properties = res['properties']
+            normalize(properties, {
+                'mode': 'AHCI',
+                'target_type': 'ZVOL' if self.target_supports_zvols else 'FILE',
+                'target_path': res['name']
+            })
 
-            if self.target_supports_zvols:
+            if properties['target_type'] == 'ZVOL':
+                if not self.target_supports_zvols:
+                    raise TaskException(errno.EINVAL, 'Datastore {0} does not support zvols'.format(vm['target']))
+
                 self.join_subtasks(self.run_subtask(
                     'vm.datastore.create_block_device',
                     vm['target'],
                     ds_name,
-                    res['properties']['size']
+                    properties['size']
                 ))
 
-            normalize(res['properties'], {
-                'mode': 'AHCI'
-            })
-
-            if res['properties'].get('source'):
+            if properties.get('source'):
                 self.join_subtasks(self.run_subtask(
                     'vm.file.install',
                     vm['template']['name'],
-                    res['properties']['source'],
+                    properties['source'],
                     self.dispatcher.call_sync('vm.datastore.get_filesystem_path', vm['target'], ds_name),
                     progress_callback=progress_cb
                 ))
