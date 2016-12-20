@@ -36,7 +36,7 @@ from utils import split_dataset, save_config, load_config, delete_config
 
 @description("Provides information on shares")
 class SharesProvider(Provider):
-    @query('share')
+    @query('Share')
     @generator
     def query(self, filter=None, params=None):
         def extend(share):
@@ -63,7 +63,7 @@ class SharesProvider(Provider):
 
     @description("Returns list of supported sharing providers")
     @accepts()
-    @returns(h.ref('share-types'))
+    @returns(h.ref('ShareTypes'))
     def supported_types(self):
         result = {}
         for p in list(self.dispatcher.plugins.values()):
@@ -77,7 +77,7 @@ class SharesProvider(Provider):
 
     @description("Returns list of clients connected to particular share")
     @accepts(str)
-    @returns(h.array(h.ref('share-client')))
+    @returns(h.array(h.ref('ShareClient')))
     def get_connected_clients(self, id):
         share = self.datastore.get_by_id('shares', id)
         if not share:
@@ -87,7 +87,7 @@ class SharesProvider(Provider):
 
     @description("Get shares dependent on provided filesystem path")
     @accepts(str, bool, bool)
-    @returns(h.array(h.ref('share')))
+    @returns(h.array(h.ref('Share')))
     def get_dependencies(self, path, enabled_only=True, recursive=True):
         result = []
         if enabled_only:
@@ -154,11 +154,11 @@ class SharesProvider(Provider):
 @description("Creates new share")
 @accepts(
     h.all_of(
-        h.ref('share'),
+        h.ref('Share'),
         h.required('name', 'type', 'target_type', 'target_path', 'properties')
     ),
     h.one_of(
-        h.ref('volume-dataset-properties'),
+        h.ref('VolumeDatasetProperties'),
         None
     ),
     bool
@@ -293,7 +293,7 @@ class CreateShareTask(Task):
 
 
 @description("Updates existing share")
-@accepts(str, h.ref('share'), bool)
+@accepts(str, h.ref('Share'), bool)
 class UpdateShareTask(Task):
     @classmethod
     def early_describe(cls):
@@ -572,7 +572,7 @@ class DeleteDependentShares(Task):
 
 @private
 @description("Updates all shares related to specified volume/dataset")
-@accepts(str, h.ref('share'))
+@accepts(str, h.ref('Share'))
 class UpdateRelatedShares(Task):
     @classmethod
     def early_describe(cls):
@@ -614,7 +614,7 @@ def _depends():
 
 
 def _init(dispatcher, plugin):
-    plugin.register_schema_definition('share', {
+    plugin.register_schema_definition('Share', {
         'type': 'object',
         'properties': {
             'id': {'type': 'string'},
@@ -623,7 +623,7 @@ def _init(dispatcher, plugin):
             'enabled': {'type': 'boolean'},
             'immutable': {'type': 'boolean'},
             'type': {'type': 'string'},
-            'target_type': {'$ref': 'share-targettype'},
+            'target_type': {'$ref': 'ShareTargettype'},
             'target_path': {'type': 'string'},
             'filesystem_path': {
                 'type': 'string',
@@ -635,16 +635,16 @@ def _init(dispatcher, plugin):
                     {'type': 'null'}
                 ]
             },
-            'properties': {'$ref': 'share-properties'}
+            'properties': {'$ref': 'ShareProperties'}
         }
     })
 
-    plugin.register_schema_definition('share-targettype', {
+    plugin.register_schema_definition('ShareTargettype', {
         'type': 'string',
         'enum': ['DATASET', 'ZVOL', 'DIRECTORY', 'FILE']
     })
 
-    plugin.register_schema_definition('share-client', {
+    plugin.register_schema_definition('ShareClient', {
         'type': 'object',
         'properties': {
             'host': {'type': 'string'},
@@ -657,14 +657,14 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('share-types', {
+    plugin.register_schema_definition('ShareTypes', {
         'type': 'object',
         'additionalProperties': {
             'type': 'object',
             'properties': {
-                'subtype': {'$ref': 'share-types-subtype'},
+                'subtype': {'$ref': 'ShareTypesSubtype'},
                 'perm_type': { 'oneOf': [
-                    {'$ref': 'share-types-permtype'},
+                    {'$ref': 'ShareTypesPermtype'},
                     {'type': 'null'}
                 ]},
             },
@@ -672,12 +672,12 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('share-types-subtype', {
+    plugin.register_schema_definition('ShareTypesSubtype', {
         'type': 'string',
         'enum': ['FILE', 'BLOCK']
     })
 
-    plugin.register_schema_definition('share-types-permtype', {
+    plugin.register_schema_definition('ShareTypesPermtype', {
         'type': 'string',
         'enum': ['PERM', 'ACL']
     })
@@ -726,7 +726,7 @@ def _init(dispatcher, plugin):
         return True
 
     def update_share_properties_schema():
-        plugin.register_schema_definition('share-properties', {
+        plugin.register_schema_definition('ShareProperties', {
             'discriminator': '%type',
             'oneOf': [
                 {'$ref': 'share-{0}'.format(name)} for name in dispatcher.call_sync('share.supported_types')

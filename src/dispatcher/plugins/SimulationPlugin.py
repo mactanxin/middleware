@@ -43,7 +43,7 @@ class FakeDisksProvider(Provider):
 @description("Creates a Simulated Fake Disk with the parameters provided")
 @accepts(
     h.all_of(
-        h.ref('simulator-disk'),
+        h.ref('SimulatorDisk'),
         h.required('id')
     )
 )
@@ -85,7 +85,7 @@ class CreateFakeDisk(Task):
 @accepts(
     str,
     h.all_of(
-        h.ref('simulator-disk'),
+        h.ref('SimulatorDisk'),
         h.no(h.required('id'))
     )
 )
@@ -141,7 +141,7 @@ def _depends():
 
 def _init(dispatcher, plugin):
 
-    plugin.register_schema_definition('simulator-disk', {
+    plugin.register_schema_definition('SimulatorDisk', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
@@ -153,11 +153,11 @@ def _init(dispatcher, plugin):
             'serial': {'type': 'string'},
             'block_size': {'type': 'integer'},
             'online': {'type': 'boolean'},
-            'rpm': {'$ref': 'simulator-disk-rpm'}
+            'rpm': {'$ref': 'SimulatorDiskRpm'}
         }
     })
 
-    plugin.register_schema_definition('simulator-disk-rpm', {
+    plugin.register_schema_definition('SimulatorDiskRpm', {
         'type': 'string',
         'enum': ['UNKNOWN', 'SSD', '5400', '7200', '10000', '15000']
     })
