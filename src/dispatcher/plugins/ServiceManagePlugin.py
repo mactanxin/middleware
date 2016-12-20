@@ -526,7 +526,6 @@ def _init(dispatcher, plugin):
         ]
     })
 
-    plugin.register_event_handler("service.rc.command", on_rc_command)
     plugin.register_event_handler("serviced.job.started", on_job_changed)
     plugin.register_event_handler("serviced.job.stopped", on_job_changed)
     plugin.register_event_handler("serviced.job.error", on_job_changed)
