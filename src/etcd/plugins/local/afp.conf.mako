@@ -73,6 +73,6 @@ ${opt("unix priv", "yes" if share["properties"].get("afp3_privileges") else "no"
 ${opt("file perm", get_permissions(share["properties"].get("default_file_perms")))}\
 ${opt("directory perm", get_permissions(share["properties"].get("default_directory_perms")))}\
 ${opt("umask", get_permissions(share["properties"].get("default_umask")))}\
-${opt("ea", "samba" if share["properties"].get("smb_compatible") else "")}\
+${opt("ea", "samba" if share["properties"].get("smb_compatible") else None)}\
 ${opt("veto files", ".windows/.mac/")}
 % endfor
