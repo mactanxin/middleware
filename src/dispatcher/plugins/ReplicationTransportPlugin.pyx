@@ -32,10 +32,10 @@ import threading
 import time
 import base64
 from freenas.dispatcher import AsyncResult
-from freenas.utils import first_or_default
+from freenas.utils import first_or_default, human_readable_bytes
 from freenas.dispatcher.fd import FileDescriptor
 from freenas.dispatcher.rpc import SchemaHelper as h, description, accepts, private
-from utils import get_freenas_peer_client, call_task_and_check_state
+from utils import get_freenas_peer_client
 from task import Task, ProgressTask, Provider, TaskException, VerifyException, TaskDescription
 from libc.stdlib cimport malloc, free
 from posix.unistd cimport read, write
@@ -219,6 +219,41 @@ class TransportProvider(Provider):
             return encryption_data.pop(key)
 
 
+class TransportBase(ProgressTask):
+    def __init__(self, dispatcher, datastore):
+        super(TransportBase, self).__init__(dispatcher, datastore)
+        self.running = True
+        self.estimated_size = 0
+        self.done = 0
+
+    def count_progress(self):
+        last_done = 0
+        progress = 0
+        total_time = 0
+        while self.running:
+            if self.estimated_size:
+                progress = int((float(self.done) / float(self.estimated_size)) * 100)
+                if progress > 100:
+                    progress = 100
+
+            delta = self.done - last_done
+            self.set_progress(
+                progress,
+                'Transfer speed {0}'.format(human_readable_bytes(delta, '/s')),
+                extra=delta
+            )
+
+            last_done = self.done
+            time.sleep(1)
+            total_time += 1
+
+        if total_time:
+            transfer_speed = int(float(self.done) / float(total_time))
+        else:
+            transfer_speed = 0
+        logger.debug('Overall transfer speed {0} B/s - {1}:{2}'.format(transfer_speed, *self.addr))
+
+
 @private
 @description('Send side of replication transport layer')
 @accepts(
@@ -228,7 +263,7 @@ class TransportProvider(Provider):
         h.required('client_address', 'receive_properties')
     )
 )
-class TransportSendTask(Task):
+class TransportSendTask(TransportBase):
     def __init__(self, dispatcher, datastore):
         super(TransportSendTask, self).__init__(dispatcher, datastore)
         self.finished = AsyncResult()
@@ -274,6 +309,7 @@ class TransportSendTask(Task):
             remote_client = get_freenas_peer_client(self, client_address)
             server_address = remote_client.local_address[0]
             server_port = transport.get('server_port', 0)
+            self.estimated_size = transport.get('estimated_size', 0)
 
             for conn_option in socket.getaddrinfo(server_address, server_port, socket.AF_UNSPEC, socket.SOCK_STREAM):
                 af, sock_type, proto, canonname, addr = conn_option
@@ -411,6 +447,8 @@ class TransportSendTask(Task):
                 'Transport layer plugins registration finished for {0}:{1} connection. Starting transfer.'.format(*addr)
             )
             self.addr = addr
+            progress_t = threading.Thread(target=self.count_progress)
+            progress_t.start()
 
             wr_fd = header_wr
             with nogil:
@@ -420,6 +458,9 @@ class TransportSendTask(Task):
             while True:
                 with nogil:
                     ret = read_fd(rd_fd, buffer, buffer_size, header_size)
+
+                if ret != -1:
+                    self.done += ret
 
                 IF REPLICATION_TRANSPORT_DEBUG:
                     logger.debug('Got {0} bytes of payload ({1}:{2})'.format(ret, *self.addr))
@@ -442,6 +483,10 @@ class TransportSendTask(Task):
                     logger.debug('Written {0} bytes -> TCP socket ({1}:{2})'.format(ret, *self.addr))
 
         finally:
+            self.running = False
+            if progress_t:
+                progress_t.join()
+
             if conn_fd and header_wr != conn_fd:
                 close_fds(header_wr)
 
@@ -518,12 +563,9 @@ class TransportSendTask(Task):
 @private
 @description('Receive side of replication transport layer')
 @accepts(h.ref('replication-transport'))
-class TransportReceiveTask(ProgressTask):
+class TransportReceiveTask(TransportBase):
     def __init__(self, dispatcher, datastore):
         super(TransportReceiveTask, self).__init__(dispatcher, datastore)
-        self.done = 0
-        self.estimated_size = 0
-        self.running = True
         self.addr = None
         self.aborted = False
         self.fds = []
@@ -739,26 +781,6 @@ class TransportReceiveTask(ProgressTask):
                 free(buffer)
                 free(header_buffer)
                 close_fds(self.fds)
-
-    def count_progress(self):
-        last_done = 0
-        progress = 0
-        total_time = 0
-        while self.running:
-            if self.estimated_size:
-                progress = int((float(self.done) / float(self.estimated_size)) * 100)
-                if progress > 100:
-                    progress = 100
-            self.set_progress(progress, 'Transfer speed {0} B/s'.format(self.done - last_done))
-            last_done = self.done
-            time.sleep(1)
-            total_time += 1
-
-        if total_time:
-            transfer_speed = int(float(self.done) / float(total_time))
-        else:
-            transfer_speed = 0
-        logger.debug('Overall transfer speed {0} B/s - {1}:{2}'.format(transfer_speed, *self.addr))
 
     def abort(self):
         self.aborted = True

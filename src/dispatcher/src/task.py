@@ -65,7 +65,8 @@ class Task(object):
             try:
                 self.progress_callbacks[id](
                     args['percentage'],
-                    args['message']
+                    args['message'],
+                    args['extra']
                 )
             except:
                 # ignore
@@ -152,11 +153,13 @@ class ProgressTask(Task):
         self.put_progress(TaskStatus(percentage, message, extra))
 
     def chunk_progress(self, start_percentage, end_percentage, message, child_percentage, child_message=None, extra=None):
+        progress = start_percentage + ((end_percentage - start_percentage) * (child_percentage / 100))
         self.set_progress(
-            start_percentage + ((end_percentage - start_percentage) * (child_percentage / 100)),
+            progress,
             '{0} {1}'.format(message, child_message),
             extra
         )
+        return progress
 
 
 class TaskException(RpcException):
