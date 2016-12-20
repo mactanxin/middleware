@@ -1,4 +1,6 @@
 <%
+    from freenas.utils.permissions import perm_to_oct_string
+
     afp = dispatcher.call_sync('service.afp.get_config')
 
     uam_list = ['uams_dhx.so', 'uams_dhx2.so']
@@ -9,6 +11,10 @@
         if groups:
             groups = ['@' + group for group in groups]
         return (users if users else []) + (groups if groups else [])
+
+    def get_permissions(perms):
+        if perms:
+            return "0" + perm_to_oct_string(perms)
 %>\
 <%def name="opt(name, val)">\
 % if val:
@@ -64,8 +70,9 @@ ${opt("read only", "yes" if share["properties"].get("read_only") else "no")}\
 ${opt("cnid dev", "no" if share["properties"].get("zero_dev_numbers") else "yes")}\
 ${opt("stat vol", "no" if share["properties"].get("no_stat") else "yes")}\
 ${opt("unix priv", "yes" if share["properties"].get("afp3_privileges") else "no")}\
-${opt("file perm", share["properties"].get("default_file_perms"))}\
-${opt("directory perm", share["properties"].get("default_directory_perms"))}\
-${opt("umask", share["properties"].get("default_umask"))}\
+${opt("file perm", get_permissions(share["properties"].get("default_file_perms")))}\
+${opt("directory perm", get_permissions(share["properties"].get("default_directory_perms")))}\
+${opt("umask", get_permissions(share["properties"].get("default_umask")))}\
+${opt("ea", "samba" if share["properties"].get("smb_compatible") else "")}\
 ${opt("veto files", ".windows/.mac/")}
 % endfor
