@@ -107,6 +107,7 @@ class CreateAFPShareTask(Task):
             'zero_dev_numbers': False,
             'no_stat': False,
             'afp3_privileges': True,
+            'smb_compatible': False,
             'ro_users': None,
             'ro_groups': None,
             'rw_users': None,
@@ -263,6 +264,7 @@ def _init(dispatcher, plugin):
             'zero_dev_numbers': {'type': 'boolean'},
             'no_stat': {'type': 'boolean'},
             'afp3_privileges': {'type': 'boolean'},
+            'smb_compatible': {'type': 'boolean'},
             'default_file_perms': {
                 'oneOf': [{'$ref': 'unix-permissions'}, {'type': 'null'}]
             },
