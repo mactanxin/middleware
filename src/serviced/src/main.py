@@ -576,10 +576,11 @@ class Context(object):
                             except ProcessLookupError:
                                 continue
 
-                            job = Job(self)
-                            job.load_anonymous(pjob, ev.ident)
-                            self.jobs[job.id] = job
-                            self.logger.info('Added job {0}'.format(job.label))
+                            with self.lock:
+                                job = Job(self)
+                                job.load_anonymous(pjob, ev.ident)
+                                self.jobs[job.id] = job
+                                self.logger.info('Added job {0}'.format(job.label))
 
     def track_pid(self, pid):
         ev = select.kevent(
