@@ -504,16 +504,6 @@ class JobService(RpcService):
             job.cv.wait_for(lambda: job.state in states)
             return job.state
 
-    def wait(self, name_or_id):
-        with self.context.lock:
-            job = first_or_default(lambda j: j.label == name_or_id or j.id == name_or_id, self.context.jobs.values())
-            if not job:
-                raise RpcException(errno.ENOENT, 'Job {0} not found'.format(name_or_id))
-
-            oldstate = job.state
-            job.cv.wait_for(lambda: job.state != oldstate)
-            return job.state
-
     def checkin(self):
         sender = get_sender()
         job = self.context.job_by_pid(sender.credentials['pid'])
