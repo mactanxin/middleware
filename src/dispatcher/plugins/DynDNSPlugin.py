@@ -55,7 +55,7 @@ PROVIDERS = {
 class DynDNSProvider(Provider):
     @private
     @accepts()
-    @returns(h.ref('service-dyndns'))
+    @returns(h.ref('ServiceDyndns'))
     def get_config(self):
         return ConfigNode('service.dyndns', self.configstore).__getstate__()
 
@@ -67,7 +67,7 @@ class DynDNSProvider(Provider):
 
 @private
 @description('Configure DynamicDNS service')
-@accepts(h.ref('service-dyndns'))
+@accepts(h.ref('ServiceDyndns'))
 class DynDNSConfigureTask(Task):
     @classmethod
     def early_describe(cls):
@@ -107,10 +107,10 @@ def _depends():
 
 def _init(dispatcher, plugin):
     # Register schemas
-    plugin.register_schema_definition('service-dyndns', {
+    plugin.register_schema_definition('ServiceDyndns', {
         'type': 'object',
         'properties': {
-            'type': {'enum': ['service-dyndns']},
+            'type': {'enum': ['ServiceDyndns']},
             'enable': {'type': 'boolean'},
             'provider': {'$ref': 'ServiceDyndnsProvider'},
             'ipserver': {'type': ['string', 'null']},
