@@ -61,6 +61,7 @@ from threading import Condition
 from gevent.queue import Queue
 from gevent.event import Event
 from gevent.lock import RLock
+from gevent.threadpool import ThreadPool
 from geventwebsocket import WebSocketServer, WebSocketApplication, Resource
 from geventwebsocket.exceptions import WebSocketError
 from pyee import EventEmitter
@@ -89,12 +90,14 @@ SCROLLBACK_SIZE = 20 * 1024
 vtx_enabled = False
 svm_features = False
 unrestricted_guest = True
+threadpool = ThreadPool(128)
 
 
 class VirtualMachineState(enum.Enum):
     STOPPED = 1
     BOOTLOADER = 2
     RUNNING = 3
+    PAUSED = 4
 
 
 class DockerHostState(enum.Enum):
@@ -205,6 +208,7 @@ class VirtualMachine(object):
         self.devices = []
         self.files_root = None
         self.bhyve_process = None
+        self.output_thread = None
         self.scrollback = BinaryRingBuffer(SCROLLBACK_SIZE)
         self.console_fd = None
         self.console_queues = []
@@ -535,6 +539,7 @@ class VirtualMachine(object):
             i.put(b'\033[2J')
 
     def set_state(self, state):
+        self.logger.debug('State change: {0} -> {1}'.format(self.state, state))
         self.state = state
         self.changed()
 
@@ -626,11 +631,20 @@ class VirtualMachine(object):
 
             # Now it's time to start vmtools worker, because bhyve should be running now
             self.vmtools_thread = gevent.spawn(self.vmtools_worker)
+            self.output_thread = gevent.spawn(self.output_worker)
 
-            for line in self.bhyve_process.stdout:
-                self.logger.debug('bhyve: {0}'.format(line.decode('utf-8', 'ignore').strip()))
+            while True:
+                pid, status = self.waitpid()
+                if os.WIFSTOPPED(status):
+                    self.set_state(VirtualMachineState.PAUSED)
+                    continue
 
-            self.bhyve_process.wait()
+                if os.WIFCONTINUED(status):
+                    self.set_state(VirtualMachineState.RUNNING)
+                    continue
+
+                if os.WIFEXITED(status):
+                    break
 
             with contextlib.suppress(OSError):
                 os.unlink(self.vmtools_socket)
@@ -650,6 +664,13 @@ class VirtualMachine(object):
             self.logger.debug('VM {0} was a Docker host - shutting down Docker facilities'.format(self.name))
             self.docker_host.shutdown()
             self.context.docker_hosts.pop(self.id, None)
+
+    def waitpid(self):
+        return threadpool.apply(os.waitpid, args=(self.bhyve_process.pid, os.WUNTRACED | os.WCONTINUED))
+
+    def output_worker(self):
+        for line in self.bhyve_process.stdout:
+            self.logger.debug('bhyve: {0}'.format(line.decode('utf-8', 'ignore').strip()))
 
     def console_worker(self):
         self.logger.debug('Opening console at {0}'.format(self.nmdm[1]))
