@@ -1982,7 +1982,7 @@ def _init(dispatcher, plugin):
     plugin.register_event_handler('replication.changed', on_replication_change)
     plugin.register_event_handler('network.changed', update_link_cache)
     plugin.register_event_handler('zfs.dataset.changed', update_resources)
-    for link in dispatcher.datastore.query_stream('replication_links'):
+    for link in dispatcher.datastore.query_stream('replication.links'):
         dispatcher.register_resource(
             Resource('replication:{0}'.format(link['name'])),
             parents=get_replication_resources(dispatcher, link)
