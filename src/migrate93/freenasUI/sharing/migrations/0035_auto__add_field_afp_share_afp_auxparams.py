@@ -1,49 +1,23 @@
 # -*- coding: utf-8 -*-
-import os
-import re
 from south.utils import datetime_utils as datetime
 from south.db import db
-from south.v2 import DataMigration
+from south.v2 import SchemaMigration
 from django.db import models
 
-from datastore import get_datastore
 
-
-class Migration(DataMigration):
+class Migration(SchemaMigration):
 
     def forwards(self, orm):
-        # Skip for install time, we only care for upgrades here
-        if 'FREENAS_INSTALL' in os.environ:
-            return
-
-        ds = get_datastore()
-
-        return  # To be fixed
-
-        for share in orm['sharing.CIFS_Share'].objects.all():
-            ds.insert('shares', {
-                'description': share.cifs_comment,
-                'enabled': True,
-            })
-
-        for share in orm['sharing.AFP_Share'].objects.all():
-            ds.insert('shares', {
-                'enabled': True,
-            })
-
-        for share in orm['sharing.NFS_Share'].objects.all():
-            ds.insert('shares', {
-                'enabled': True,
-            })
-
-        for share in orm['sharing.WebDAV_Share'].objects.all():
-            ds.insert('shares', {
-                'enabled': True,
-            })
+        # Adding field 'AFP_Share.afp_auxparams'
+        db.add_column(u'sharing_afp_share', 'afp_auxparams',
+                      self.gf('django.db.models.fields.TextField')(default='', max_length=255, blank=True),
+                      keep_default=False)
 
 
     def backwards(self, orm):
-        "Write your backwards methods here."
+        # Deleting field 'AFP_Share.afp_auxparams'
+        db.delete_column(u'sharing_afp_share', 'afp_auxparams')
+
 
     models = {
         u'sharing.afp_share': {
@@ -134,4 +108,3 @@ class Migration(DataMigration):
     }
 
     complete_apps = ['sharing']
-    symmetrical = True

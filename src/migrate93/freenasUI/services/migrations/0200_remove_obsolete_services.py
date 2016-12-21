@@ -1,44 +1,22 @@
 # -*- coding: utf-8 -*-
-import os
 from south.utils import datetime_utils as datetime
 from south.db import db
 from south.v2 import DataMigration
 from django.db import models
 
-from datastore import get_datastore
-from datastore.config import ConfigStore
-
 class Migration(DataMigration):
 
     def forwards(self, orm):
-
-        # Skip for install time, we only care for upgrades here
-        if 'FREENAS_INSTALL' in os.environ:
-            return
-
-        ds = get_datastore()
-        cs = ConfigStore(ds)
-
-        snmp = orm['services.SNMP'].objects.all()[0]
-        svc = orm['services.services'].objects.filter(srv_service='snmp')
-        svc = svc[0] if svc.exists() else None
-
-        if svc:
-            cs.set('service.snmp.enable', svc.srv_enable)
-
-        cs.set('service.snmp.location', snmp.snmp_location or None)
-        cs.set('service.snmp.contact', snmp.snmp_contact or None)
-        cs.set('service.snmp.community', snmp.snmp_community or 'public')
-        cs.set('service.snmp.v3', snmp.snmp_v3)
-        cs.set('service.snmp.v3_username', snmp.snmp_v3_username or None)
-        cs.set('service.snmp.v3_password', snmp.snmp_v3_password or None)
-        cs.set('service.snmp.v3_auth_type', snmp.snmp_v3_authtype or 'SHA')
-        cs.set('service.snmp.v3_privacy_protocol', snmp.snmp_v3_privproto or 'AES')
-        cs.set('service.snmp.v3_privacy_passphrase', snmp.snmp_v3_privpassphrase or None)
-        cs.set('service.snmp.auxiliary', snmp.snmp_options or None)
+        orm['services.services'].objects.filter(srv_service__in=[
+            'unison',
+            'bittorrent',
+            'webserver',
+            'plugins',
+            'ldap',
+        ]).delete()
 
     def backwards(self, orm):
-        "Write your backwards methods here."
+        pass
 
     models = {
         u'directoryservice.kerberosrealm': {

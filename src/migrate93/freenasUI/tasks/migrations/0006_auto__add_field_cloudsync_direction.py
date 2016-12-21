@@ -1,57 +1,23 @@
 # -*- coding: utf-8 -*-
-import os
 from south.utils import datetime_utils as datetime
 from south.db import db
-from south.v2 import DataMigration
+from south.v2 import SchemaMigration
 from django.db import models
 
-from apscheduler.triggers.cron.expressions import WEEKDAYS
-from datastore import get_datastore
 
-
-class Migration(DataMigration):
+class Migration(SchemaMigration):
 
     def forwards(self, orm):
+        # Adding field 'CloudSync.direction'
+        db.add_column(u'tasks_cloudsync', 'direction',
+                      self.gf('django.db.models.fields.CharField')(default='PUSH', max_length=10),
+                      keep_default=False)
 
-        # Skip for install time, we only care for upgrades here
-        if 'FREENAS_INSTALL' in os.environ:
-            return
-
-        ds = get_datastore()
-
-        for cron in orm['tasks.CronJob'].objects.all():
-
-            day_of_week = []
-            for w in cron.cron_dayweek.split(','):
-                try:
-                    day_of_week.append(WEEKDAYS[int(w) - 1])
-                except:
-                    pass
-            if not day_of_week:
-                day_of_week = '*'
-            else:
-                day_of_week = ','.join(day_of_week)
-
-            ds.insert('schedulerd.runs', {
-                'id': 'cronjob_{0}_{1}'.format(cron.cron_user, cron.id),
-                'description': cron.cron_description,
-                'name': 'calendar_task.command',
-                'args': [cron.cron_user, cron.cron_command],
-                'enabled': cron.cron_enabled,
-                'schedule': {
-                    'year': '*',
-                    'month': cron.cron_month,
-                    'week': '*',
-                    'day_of_week': day_of_week,
-                    'day': cron.cron_daymonth,
-                    'hour': cron.cron_hour,
-                    'minute': cron.cron_minute,
-                    'second': 0,
-                }
-            })
 
     def backwards(self, orm):
-        pass
+        # Deleting field 'CloudSync.direction'
+        db.delete_column(u'tasks_cloudsync', 'direction')
+
 
     models = {
         u'storage.disk': {
@@ -162,5 +128,3 @@ class Migration(DataMigration):
     }
 
     complete_apps = ['tasks']
-    symmetrical = True
-

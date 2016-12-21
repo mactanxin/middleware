@@ -1,47 +1,23 @@
 # -*- coding: utf-8 -*-
-import os
 from south.utils import datetime_utils as datetime
 from south.db import db
-from south.v2 import DataMigration
+from south.v2 import SchemaMigration
 from django.db import models
 
-from datastore import get_datastore
-from datastore.config import ConfigStore
 
-class Migration(DataMigration):
+class Migration(SchemaMigration):
 
     def forwards(self, orm):
-
-        # Skip for install time, we only care for upgrades here
-        if 'FREENAS_INSTALL' in os.environ:
-            return
-
-        ds = get_datastore()
-        cs = ConfigStore(ds)
-
-        settings = orm['system.Settings'].objects.order_by('-id')[0]
-
-        cs.set('system.language', settings.stg_language)
-        cs.set('system.timezone', settings.stg_timezone)
-        cs.set('system.console.keymap', settings.stg_kbdmap)
-        cs.set('system.syslog_server', settings.stg_syslogserver)
-
-        listen = []
-        if settings.stg_guiaddress:
-            listen.append(settings.stg_guiaddress)
-        if settings.stg_guiv6address:
-            listen.append('[{0}]'.format(settings.stg_guiv6address))
-
-        cs.set('service.nginx.http.enable', settings.stg_guiprotocol in ('http', 'httphttps'))
-        cs.set('service.nginx.https.enable', settings.stg_guiprotocol in ('https', 'httphttps'))
-        cs.set('service.nginx.listen', listen)
-        cs.set('service.nginx.http.port', settings.stg_guiport)
-        cs.set('service.nginx.http.redirect_https', settings.stg_guihttpsredirect)
-        cs.set('service.nginx.https.port', settings.stg_guihttpsport)
+        # Adding field 'Advanced.adv_fqdn_syslog'
+        db.add_column(u'system_advanced', 'adv_fqdn_syslog',
+                      self.gf('django.db.models.fields.BooleanField')(default=0),
+                      keep_default=False)
 
 
     def backwards(self, orm):
-        "Write your backwards methods here."
+        # Deleting field 'Advanced.adv_fqdn_syslog'
+        db.delete_column(u'system_advanced', 'adv_fqdn_syslog')
+
 
     models = {
         u'system.advanced': {
@@ -203,4 +179,3 @@ class Migration(DataMigration):
     }
 
     complete_apps = ['system']
-    symmetrical = True

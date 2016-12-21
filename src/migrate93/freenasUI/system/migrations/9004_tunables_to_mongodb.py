@@ -49,6 +49,7 @@ class Migration(DataMigration):
             'adv_consolemsg': ('django.db.models.fields.BooleanField', [], {'default': 'True'}),
             'adv_consolescreensaver': ('django.db.models.fields.BooleanField', [], {'default': 'False'}),
             'adv_debugkernel': ('django.db.models.fields.BooleanField', [], {'default': 'False'}),
+            'adv_fqdn_syslog': ('django.db.models.fields.BooleanField', [], {'default': 'False'}),
             'adv_graphite': ('django.db.models.fields.CharField', [], {'default': "''", 'max_length': '120', 'blank': 'True'}),
             'adv_motd': ('django.db.models.fields.TextField', [], {'default': "'Welcome'", 'max_length': '1024'}),
             'adv_periodic_notifyuser': ('freenasUI.freeadmin.models.fields.UserField', [], {'default': "'root'", 'max_length': '120'}),
@@ -67,7 +68,7 @@ class Migration(DataMigration):
             u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
             'message_id': ('django.db.models.fields.CharField', [], {'max_length': '100'}),
             'node': ('django.db.models.fields.CharField', [], {'default': "'A'", 'max_length': '100'}),
-            'timestamp': ('django.db.models.fields.IntegerField', [], {'default': '1473772176'})
+            'timestamp': ('django.db.models.fields.IntegerField', [], {'default': '1479413347'})
         },
         u'system.backup': {
             'Meta': {'object_name': 'Backup'},

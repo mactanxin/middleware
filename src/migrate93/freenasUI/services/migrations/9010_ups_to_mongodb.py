@@ -68,6 +68,7 @@ class Migration(DataMigration):
             'afp_srv_homedir': ('freenasUI.freeadmin.models.fields.PathField', [], {'max_length': '255', 'null': 'True', 'blank': 'True'}),
             'afp_srv_homedir_enable': ('django.db.models.fields.BooleanField', [], {'default': 'False'}),
             'afp_srv_homename': ('django.db.models.fields.CharField', [], {'max_length': '50', 'blank': 'True'}),
+            'afp_srv_map_acls': ('django.db.models.fields.CharField', [], {'default': "'rights'", 'max_length': '120'}),
             u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'})
         },
         u'services.cifs': {
@@ -216,13 +217,14 @@ class Migration(DataMigration):
             'iscsi_target_extent_pblocksize': ('django.db.models.fields.BooleanField', [], {'default': 'False'}),
             'iscsi_target_extent_ro': ('django.db.models.fields.BooleanField', [], {'default': 'False'}),
             'iscsi_target_extent_rpm': ('django.db.models.fields.CharField', [], {'default': "u'SSD'", 'max_length': '20'}),
-            'iscsi_target_extent_serial': ('django.db.models.fields.CharField', [], {'default': "'0007430a5ae613'", 'max_length': '16'}),
+            'iscsi_target_extent_serial': ('django.db.models.fields.CharField', [], {'default': "'10000001'", 'max_length': '16'}),
             'iscsi_target_extent_type': ('django.db.models.fields.CharField', [], {'max_length': '120'}),
             'iscsi_target_extent_xen': ('django.db.models.fields.BooleanField', [], {'default': 'False'})
         },
         u'services.iscsitargetglobalconfiguration': {
             'Meta': {'object_name': 'iSCSITargetGlobalConfiguration'},
             u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
+            'iscsi_alua': ('django.db.models.fields.BooleanField', [], {'default': 'False'}),
             'iscsi_basename': ('django.db.models.fields.CharField', [], {'max_length': '120'}),
             'iscsi_isns_servers': ('django.db.models.fields.TextField', [], {'blank': 'True'}),
             'iscsi_pool_avail_threshold': ('django.db.models.fields.IntegerField', [], {'null': 'True', 'blank': 'True'})

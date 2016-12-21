@@ -1,44 +1,23 @@
 # -*- coding: utf-8 -*-
-import os
 from south.utils import datetime_utils as datetime
 from south.db import db
-from south.v2 import DataMigration
+from south.v2 import SchemaMigration
 from django.db import models
 
-from datastore import get_datastore
-from datastore.config import ConfigStore
 
-class Migration(DataMigration):
+class Migration(SchemaMigration):
 
     def forwards(self, orm):
+        # Adding field 'iSCSITargetGlobalConfiguration.iscsi_alua'
+        db.add_column(u'services_iscsitargetglobalconfiguration', 'iscsi_alua',
+                      self.gf('django.db.models.fields.BooleanField')(default=0),
+                      keep_default=False)
 
-        # Skip for install time, we only care for upgrades here
-        if 'FREENAS_INSTALL' in os.environ:
-            return
-
-        ds = get_datastore()
-        cs = ConfigStore(ds)
-
-        snmp = orm['services.SNMP'].objects.all()[0]
-        svc = orm['services.services'].objects.filter(srv_service='snmp')
-        svc = svc[0] if svc.exists() else None
-
-        if svc:
-            cs.set('service.snmp.enable', svc.srv_enable)
-
-        cs.set('service.snmp.location', snmp.snmp_location or None)
-        cs.set('service.snmp.contact', snmp.snmp_contact or None)
-        cs.set('service.snmp.community', snmp.snmp_community or 'public')
-        cs.set('service.snmp.v3', snmp.snmp_v3)
-        cs.set('service.snmp.v3_username', snmp.snmp_v3_username or None)
-        cs.set('service.snmp.v3_password', snmp.snmp_v3_password or None)
-        cs.set('service.snmp.v3_auth_type', snmp.snmp_v3_authtype or 'SHA')
-        cs.set('service.snmp.v3_privacy_protocol', snmp.snmp_v3_privproto or 'AES')
-        cs.set('service.snmp.v3_privacy_passphrase', snmp.snmp_v3_privpassphrase or None)
-        cs.set('service.snmp.auxiliary', snmp.snmp_options or None)
 
     def backwards(self, orm):
-        "Write your backwards methods here."
+        # Deleting field 'iSCSITargetGlobalConfiguration.iscsi_alua'
+        db.delete_column(u'services_iscsitargetglobalconfiguration', 'iscsi_alua')
+
 
     models = {
         u'directoryservice.kerberosrealm': {
@@ -209,7 +188,7 @@ class Migration(DataMigration):
             'iscsi_target_extent_pblocksize': ('django.db.models.fields.BooleanField', [], {'default': 'False'}),
             'iscsi_target_extent_ro': ('django.db.models.fields.BooleanField', [], {'default': 'False'}),
             'iscsi_target_extent_rpm': ('django.db.models.fields.CharField', [], {'default': "u'SSD'", 'max_length': '20'}),
-            'iscsi_target_extent_serial': ('django.db.models.fields.CharField', [], {'default': "'10000001'", 'max_length': '16'}),
+            'iscsi_target_extent_serial': ('django.db.models.fields.CharField', [], {'default': "'52540013985401'", 'max_length': '16'}),
             'iscsi_target_extent_type': ('django.db.models.fields.CharField', [], {'max_length': '120'}),
             'iscsi_target_extent_xen': ('django.db.models.fields.BooleanField', [], {'default': 'False'})
         },
@@ -452,4 +431,3 @@ class Migration(DataMigration):
     }
 
     complete_apps = ['services']
-    symmetrical = True
