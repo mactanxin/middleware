@@ -237,6 +237,9 @@ class Job(object):
                     group = grp.getgrnam(self.group)
                     os.setgid(group.gr_gid)
 
+                if not self.program_arguments:
+                    self.program_arguments = [self.program]
+
                 bsd.closefrom(3)
                 os.setsid()
                 env = BASE_ENV.copy()
