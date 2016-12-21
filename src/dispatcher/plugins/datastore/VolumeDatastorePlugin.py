@@ -110,11 +110,23 @@ class VolumeBlockDeviceDeleteTask(Task):
 
 
 class VolumeBlockDeviceRenameTask(Task):
-    def verify(self, id, path):
+    def verify(self, id, old_path):
         return []
 
-    def run(self, id, path, size):
-        return self.run_subtask_sync('volume.dataset.delete', os.path.join(id, path))
+    def run(self, id, old_path, new_path):
+        return self.run_subtask_sync('volume.dataset.delete', os.path.join(id, old_path), {
+            'id': os.path.join(id, new_path)
+        })
+
+
+class VolumeBlockDeviceResizeTask(Task):
+    def verify(self, id, path, new_size):
+        return []
+
+    def run(self, id, path, new_size):
+        return self.run_subtask_sync('volume.dataset.update', os.path.join(id, path), {
+            'volsize': new_size
+        })
 
 
 def _metadata():
@@ -135,3 +147,4 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('vm.datastore.volume.create_block_device', VolumeBlockDeviceCreateTask)
     plugin.register_task_handler('vm.datastore.volume.delete_block_device', VolumeBlockDeviceCreateTask)
     plugin.register_task_handler('vm.datastore.volume.rename_block_device', VolumeBlockDeviceRenameTask)
+    plugin.register_task_handler('vm.datastore.volume.resize_block_device', VolumeBlockDeviceResizeTask)

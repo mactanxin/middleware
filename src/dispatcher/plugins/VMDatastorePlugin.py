@@ -234,9 +234,9 @@ class BlockDeviceResizeTask(Task):
     def verify(self, id, path, size):
         return []
 
-    def run(self, id, path):
+    def run(self, id, path, new_size):
         driver = self.dispatcher.call_sync('vm.datastore.get_driver', id)
-        return self.run_subtask_sync('vm.datastore.{0}.resize_block_device'.format(driver), id, path)
+        return self.run_subtask_sync('vm.datastore.{0}.resize_block_device'.format(driver), id, path, new_size)
 
 
 class BlockDeviceCloneTask(Task):

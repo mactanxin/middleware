@@ -577,9 +577,12 @@ class VMBaseTask(ProgressTask):
 
     def update_device(self, vm, old_res, new_res):
         vm_ds = os.path.join(vm['target'], 'vm', vm['name'])
+        old_properties = old_res['properties']
+        new_properties = new_res['properties']
+
         if new_res['type'] in ['DISK', 'VOLUME']:
             if old_res['name'] != new_res['name']:
-                if not (new_res['type'] == 'VOLUME' and not new_res['properties']['auto']):
+                if not (new_res['type'] == 'VOLUME' and not new_properties['auto']):
                     self.run_subtask_sync('vm.datastore.rename_directory',
                         vm['target'],
                         os.path.join(vm_ds, old_res['name']),
@@ -587,16 +590,27 @@ class VMBaseTask(ProgressTask):
                     )
 
         if new_res['type'] == 'DISK':
-            if old_res['properties']['size'] != new_res['properties']['size']:
-                ds_name = os.path.join(vm_ds, new_res['name'])
-                self.join_subtasks(self.run_subtask(
-                    'zfs.update',
-                    ds_name,
-                    {'volsize': {'value': new_res['properties']['size']}}
-                ))
+            if old_properties['size'] != new_properties['size']:
+                if new_properties['target_type'] == 'ZVOL':
+                    ds_name = os.path.join(vm_ds, new_res['name'])
+                    self.run_subtask_sync(
+                        'vm.datastore.resize_block_device',
+                        vm['target'],
+                        ds_name,
+                        new_properties['size']
+                    )
+                else:
+                    os.truncate(
+                        self.dispatcher.call_sync(
+                            'vm.datastore.get_filesystem_path',
+                            vm['target'],
+                            vm_ds
+                        ),
+                        new_properties['size']
+                    )
 
         if new_res['type'] == 'NIC':
-            brigde = new_res['properties'].get('bridge', 'default')
+            brigde = new_properties.get('bridge', 'default')
             if brigde != 'default':
                 if_exists = self.dispatcher.call_sync(
                     'network.interface.query',
