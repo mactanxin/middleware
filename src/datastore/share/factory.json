@@ -844,7 +844,7 @@
                     "Label": "net.sourceforge.inadyn-mt.inadyn-mt",
                     "RunAtLoad": true,
                     "Requires": ["logging", "etc"],
-                    "Program": ["/usr/local/bin/inadyn-mt"]
+                    "Program": "/usr/local/bin/inadyn-mt"
                 },
                 "builtin": false,
                 "get_config_rpc": "service.dyndns.get_config",
