@@ -1281,10 +1281,12 @@ class DockerService(RpcService):
                     continue
 
                 external = q.get(details, 'NetworkSettings.Networks.external')
+                names = list(normalize_names(container['Names']))
                 result.append({
                     'id': container['Id'],
                     'image': container['Image'],
-                    'names': list(normalize_names(container['Names'])),
+                    'name': names[0],
+                    'names': names,
                     'command': container['Command'] if isinstance(container['Command'], list) else [container['Command']],
                     'running': details['State'].get('Running', False),
                     'host': host.vm.id,
