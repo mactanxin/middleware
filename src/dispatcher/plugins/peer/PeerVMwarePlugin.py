@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 
 @description('Provides information about VMware peers')
 class PeerVMwareProvider(Provider):
-    @query('peer')
+    @query('Peer')
     @generator
     def query(self, filter=None, params=None):
         return q.query(
@@ -52,7 +52,7 @@ class PeerVMwareProvider(Provider):
 
     @private
     @accepts(str)
-    @returns(h.ref('peer-status'))
+    @returns(h.ref('PeerStatus'))
     def get_status(self, id):
         si = None
         peer = self.datastore.get_by_id('peers', id)
@@ -82,7 +82,7 @@ class PeerVMwareProvider(Provider):
 @private
 @description('Creates a VMware peer entry')
 @accepts(h.all_of(
-    h.ref('peer'),
+    h.ref('Peer'),
     h.required('type', 'credentials')
 ))
 class VMwarePeerCreateTask(Task):
@@ -111,7 +111,7 @@ class VMwarePeerCreateTask(Task):
 
 @private
 @description('Updates a VMware peer entry')
-@accepts(str, h.ref('peer'))
+@accepts(str, h.ref('Peer'))
 class VMwarePeerUpdateTask(Task):
     @classmethod
     def early_describe(cls):
@@ -174,10 +174,10 @@ def _metadata():
 
 def _init(dispatcher, plugin):
     # Register schemas
-    plugin.register_schema_definition('vmware-credentials', {
+    plugin.register_schema_definition('VmwareCredentials', {
         'type': 'object',
         'properties': {
-            '%type': {'enum': ['vmware-credentials']},
+            '%type': {'enum': ['VmwareCredentials']},
             'address': {'type': 'string'},
             'username': {'type': 'string'},
             'password': {'type': 'string'}

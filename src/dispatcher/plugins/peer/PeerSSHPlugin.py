@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 
 @description('Provides information about SSH peers')
 class PeerSSHProvider(Provider):
-    @query('peer')
+    @query('Peer')
     @generator
     def query(self, filter=None, params=None):
         return q.query(
@@ -51,7 +51,7 @@ class PeerSSHProvider(Provider):
 
     @private
     @accepts(str)
-    @returns(h.ref('peer-status'))
+    @returns(h.ref('PeerStatus'))
     def get_status(self, id):
         peer = self.dispatcher.call_sync('peer.query', [('id', '=', id), ('type', '=', 'ssh')], {'single': True})
         if not peer:
@@ -74,7 +74,7 @@ class PeerSSHProvider(Provider):
 @private
 @description('Creates a SSH peer entry')
 @accepts(h.all_of(
-    h.ref('peer'),
+    h.ref('Peer'),
     h.required('type', 'credentials')
 ))
 class SSHPeerCreateTask(Task):
@@ -110,7 +110,7 @@ class SSHPeerCreateTask(Task):
 
 @private
 @description('Updates a SSH peer entry')
-@accepts(str, h.ref('peer'))
+@accepts(str, h.ref('Peer'))
 class SSHPeerUpdateTask(Task):
     @classmethod
     def early_describe(cls):
@@ -173,10 +173,10 @@ def _metadata():
 
 def _init(dispatcher, plugin):
     # Register schemas
-    plugin.register_schema_definition('ssh-credentials', {
+    plugin.register_schema_definition('SshCredentials', {
         'type': 'object',
         'properties': {
-            '%type': {'enum': ['ssh-credentials']},
+            '%type': {'enum': ['SshCredentials']},
             'address': {'type': 'string'},
             'username': {'type': 'string'},
             'port': {'type': 'number'},

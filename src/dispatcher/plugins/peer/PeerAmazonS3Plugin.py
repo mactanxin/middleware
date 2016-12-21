@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 
 @description('Provides information about Amazon S3 peers')
 class PeerAmazonS3Provider(Provider):
-    @query('peer')
+    @query('Peer')
     @generator
     def query(self, filter=None, params=None):
         return q.query(
@@ -57,7 +57,7 @@ class PeerAmazonS3Provider(Provider):
 @private
 @description('Creates a Amazon S3 peer entry')
 @accepts(h.all_of(
-    h.ref('peer'),
+    h.ref('Peer'),
     h.required('type', 'credentials')
 ))
 class AmazonS3PeerCreateTask(Task):
@@ -86,7 +86,7 @@ class AmazonS3PeerCreateTask(Task):
 
 @private
 @description('Updates a Amazon S3 peer entry')
-@accepts(str, h.ref('peer'))
+@accepts(str, h.ref('Peer'))
 class AmazonS3PeerUpdateTask(Task):
     @classmethod
     def early_describe(cls):
@@ -149,10 +149,10 @@ def _metadata():
 
 def _init(dispatcher, plugin):
     # Register schemas
-    plugin.register_schema_definition('amazon-s3-credentials', {
+    plugin.register_schema_definition('AmazonS3Credentials', {
         'type': 'object',
         'properties': {
-            '%type': {'enum': ['amazon-s3-credentials']},
+            '%type': {'enum': ['AmazonS3Credentials']},
             'access_key': {'type': 'string'},
             'secret_key': {'type': 'string'},
             'region': {'type': ['string', 'null']},
