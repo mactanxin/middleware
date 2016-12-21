@@ -196,10 +196,10 @@ class BinaryRingBuffer(object):
 
 
 class VirtualMachine(object):
-    def __init__(self, context):
+    def __init__(self, context, name):
         self.context = context
         self.id = None
-        self.name = None
+        self.name = name
         self.nmdm = None
         self.state = VirtualMachineState.STOPPED
         self.guest_type = 'other'
@@ -1145,9 +1145,8 @@ class ManagementService(RpcService):
                 )
             )
 
-        vm = VirtualMachine(self.context)
+        vm = VirtualMachine(self.context, container['name'])
         vm.id = container['id']
-        vm.name = container['name']
         vm.guest_type = container['guest_type']
         vm.config = container['config']
         vm.devices = container['devices']
