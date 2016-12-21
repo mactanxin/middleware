@@ -41,8 +41,8 @@ http {
         ssl_session_timeout	120m;
         ssl_session_cache	shared:ssl:16m;
 
-        ssl_certificate ${certificate.get("certificate_path")};
-        ssl_certificate_key ${certificate.get("privatekey_path")};
+        ssl_certificate ${'"' + certificate.get("certificate_path") + '"'};
+        ssl_certificate_key ${'"' + certificate.get("privatekey_path") + '"'};
         ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
         ssl_prefer_server_ciphers on;
         ssl_ciphers EECDH+ECDSA+AESGCM:EECDH+aRSA+AESGCM:EECDH+ECDSA+SHA256:EECDH+aRSA+RC4:EDH+aRSA:EECDH:RC4:!aNULL:!eNULL:!LOW:!3DES:!MD5:!EXP:!PSK:!SRP:!DSS;
