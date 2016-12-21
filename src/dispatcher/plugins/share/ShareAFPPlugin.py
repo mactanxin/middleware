@@ -87,7 +87,7 @@ class AFPSharesProvider(Provider):
 
 
 @private
-@accepts(h.ref('share'))
+@accepts(h.ref('Share'))
 @description("Adds new AFP share")
 class CreateAFPShareTask(Task):
     @classmethod
@@ -134,7 +134,7 @@ class CreateAFPShareTask(Task):
 
 
 @private
-@accepts(str, h.ref('share'))
+@accepts(str, h.ref('Share'))
 @description("Updates existing AFP share")
 class UpdateAFPShareTask(Task):
     @classmethod
@@ -191,7 +191,7 @@ class DeleteAFPShareTask(Task):
 
 
 @private
-@accepts(h.ref('share'))
+@accepts(h.ref('Share'))
 @description("Imports existing AFP share")
 class ImportAFPShareTask(CreateAFPShareTask):
     @classmethod
@@ -252,11 +252,11 @@ def _metadata():
 
 
 def _init(dispatcher, plugin):
-    plugin.register_schema_definition('share-afp', {
+    plugin.register_schema_definition('ShareAfp', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
-            '%type': {'enum': ['share-afp']},
+            '%type': {'enum': ['ShareAfp']},
             'comment': {'type': 'string'},
             'read_only': {'type': 'boolean'},
             'time_machine': {'type': 'boolean'},

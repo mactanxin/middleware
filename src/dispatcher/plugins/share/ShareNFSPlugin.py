@@ -59,7 +59,7 @@ class NFSSharesProvider(Provider):
 
 
 @private
-@accepts(h.ref('share'))
+@accepts(h.ref('Share'))
 @description("Adds new NFS share")
 class CreateNFSShareTask(Task):
     @classmethod
@@ -104,7 +104,7 @@ class CreateNFSShareTask(Task):
 
 
 @private
-@accepts(str, h.ref('share'))
+@accepts(str, h.ref('Share'))
 @description("Updates existing NFS share")
 class UpdateNFSShareTask(Task):
     @classmethod
@@ -171,7 +171,7 @@ class DeleteNFSShareTask(Task):
 
 
 @private
-@accepts(h.ref('share'))
+@accepts(h.ref('Share'))
 @description("Imports existing NFS share")
 class ImportNFSShareTask(CreateNFSShareTask):
     @classmethod
@@ -224,11 +224,11 @@ def _depends():
 
 
 def _init(dispatcher, plugin):
-    plugin.register_schema_definition('share-nfs', {
+    plugin.register_schema_definition('ShareNfs', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
-            '%type': {'enum': ['share-nfs']},
+            '%type': {'enum': ['ShareNfs']},
             'alldirs': {'type': 'boolean'},
             'read_only': {'type': 'boolean'},
             'maproot_user': {'type': ['string', 'null']},
@@ -241,12 +241,12 @@ def _init(dispatcher, plugin):
             },
             'security': {
                 'type': 'array',
-                'items': {'$ref': 'share-nfs-security-items'}
+                'items': {'$ref': 'ShareNfsSecurityItems'}
             }
         }
     })
 
-    plugin.register_schema_definition('share-nfs-security-items', {
+    plugin.register_schema_definition('ShareNfsSecurityItems', {
         'type': 'string',
         'enum': ['sys', 'krb5', 'krb5i', 'krb5p']
     })
