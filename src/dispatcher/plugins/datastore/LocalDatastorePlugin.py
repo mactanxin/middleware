@@ -72,6 +72,13 @@ class LocalDirectoryDeleteTask(Task):
         shutil.rmtree(path, ignore_errors=True)
 
 
+class LocalDirectoryRenameTask(Task):
+    def run(self, id, old_path, new_path):
+        old_path = self.dispatcher.call_sync('vm.datastore.get_filesystem_path', id, old_path)
+        new_path = self.dispatcher.call_sync('vm.datastore.get_filesystem_path', id, new_path)
+        os.rename(old_path, new_path)
+
+
 def _metadata():
     return {
         'type': 'datastore',
@@ -95,3 +102,4 @@ def _init(dispatcher, plugin):
     plugin.register_provider('vm.datastore.local', LocalDatastoreProvider)
     plugin.register_task_handler('vm.datastore.local.create_directory', LocalDirectoryCreateTask)
     plugin.register_task_handler('vm.datastore.local.delete_directory', LocalDirectoryDeleteTask)
+    plugin.register_task_handler('vm.datastore.local.rename_directory', LocalDirectoryRenameTask)

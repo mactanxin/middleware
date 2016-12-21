@@ -55,6 +55,7 @@ from debug import AttachData, AttachDirectory, AttachCommandOutput
 
 
 VM_OUI = '00:a0:98'  # NetApp
+VM_ROOT = '/vm'
 BLOCKSIZE = 65536
 
 
@@ -579,11 +580,11 @@ class VMBaseTask(ProgressTask):
         if new_res['type'] in ['DISK', 'VOLUME']:
             if old_res['name'] != new_res['name']:
                 if not (new_res['type'] == 'VOLUME' and not new_res['properties']['auto']):
-                    self.join_subtasks(self.run_subtask(
-                        'zfs.rename',
+                    self.run_subtask_sync('vm.datastore.rename_directory',
+                        vm['target'],
                         os.path.join(vm_ds, old_res['name']),
                         os.path.join(vm_ds, new_res['name'])
-                    ))
+                    )
 
         if new_res['type'] == 'DISK':
             if old_res['properties']['size'] != new_res['properties']['size']:
@@ -940,11 +941,9 @@ class VMUpdateTask(VMBaseTask):
         self.target_supports_zvols = q.get(datastore, 'capabilities.block_devices')
 
         if 'name' in updated_params:
-            root_ds = os.path.join(vm['target'], 'vm')
-            vm_ds = os.path.join(root_ds, vm['name'])
-            new_vm_ds = os.path.join(root_ds, updated_params['name'])
-
-            self.join_subtasks(self.run_subtask('zfs.rename', vm_ds, new_vm_ds))
+            vm_ds = os.path.join(VM_ROOT, vm['name'])
+            new_vm_ds = os.path.join(VM_ROOT, updated_params['name'])
+            self.run_subtask_sync('vm.datastore.rename_directory', vm['target'], vm_ds, new_vm_ds)
 
         old_vm = copy.deepcopy(vm)
         vm.update(updated_params)

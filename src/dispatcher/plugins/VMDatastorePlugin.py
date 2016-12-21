@@ -85,14 +85,11 @@ class DatastoreProvider(Provider):
     @private
     @accepts(str, str)
     def get_filesystem_path(self, datastore_id, datastore_path):
-        if datastore_path.startswith('/'):
-            datastore_path = datastore_path[1:]
-
         driver = self.get_driver(datastore_id)
         return self.dispatcher.call_sync(
             'vm.datastore.{0}.get_filesystem_path'.format(driver),
             datastore_id,
-            datastore_path
+            normpath(datastore_path)
         )
 
     @private
@@ -107,7 +104,12 @@ class DatastoreProvider(Provider):
     @private
     @generator
     def get_snapshots(self, datastore_id, path):
-        pass
+        driver = self.get_driver(datastore_id)
+        return self.dispatcher.call_sync(
+            'vm.datastore.{0}.get_snapshots'.format(driver),
+            datastore_id,
+            path
+        )
 
 
 class DatastoreCreateTask(Task):
@@ -182,12 +184,17 @@ class DirectoryDeleteTask(Task):
 
 
 class DirectoryRenameTask(Task):
-    def verify(self, id, path, size):
+    def verify(self, id, old_path, new_path):
         return []
 
-    def run(self, id, path):
+    def run(self, id, old_path, new_path):
         driver = self.dispatcher.call_sync('vm.datastore.get_driver', id)
-        return self.run_subtask_sync('vm.datastore.{0}.resize_block_device'.format(driver), id, path)
+        return self.run_subtask_sync(
+            'vm.datastore.{0}.rename_directory'.format(driver),
+            id,
+            normpath(old_path),
+            normpath(new_path)
+        )
 
 
 class BlockDeviceCreateTask(Task):
@@ -197,7 +204,7 @@ class BlockDeviceCreateTask(Task):
     def run(self, id, path, size):
         driver = self.dispatcher.call_sync('vm.datastore.get_driver', id)
         return self.run_subtask_sync(
-            'vm.datastore.{0}.create_block_device'.format(driver), id, path, size)
+            'vm.datastore.{0}.create_block_device'.format(driver), id, normpath(path), size)
 
 
 class BlockDeviceDeleteTask(Task):
@@ -206,16 +213,21 @@ class BlockDeviceDeleteTask(Task):
 
     def run(self, id, path):
         driver = self.dispatcher.call_sync('vm.datastore.get_driver', id)
-        return self.run_subtask_sync('vm.datastore.{0}.delete_block_device'.format(driver), id, path)
+        return self.run_subtask_sync('vm.datastore.{0}.delete_block_device'.format(driver), id, normpath(path))
 
 
 class BlockDeviceRenameTask(Task):
-    def verify(self, id, path, size):
+    def verify(self, id, old_path, new_path):
         return []
 
-    def run(self, id, path):
+    def run(self, id, old_path, new_path):
         driver = self.dispatcher.call_sync('vm.datastore.get_driver', id)
-        return self.run_subtask_sync('vm.datastore.{0}.resize_block_device'.format(driver), id, path)
+        return self.run_subtask_sync(
+            'vm.datastore.{0}.resize_block_device'.format(driver),
+            id,
+            normpath(old_path),
+            normpath(new_path)
+        )
 
 
 class BlockDeviceResizeTask(Task):
@@ -234,6 +246,28 @@ class BlockDeviceCloneTask(Task):
     def run(self, id, path):
         driver = self.dispatcher.call_sync('vm.datastore.get_driver', id)
         return self.run_subtask_sync('vm.datastore.{0}.clone_block_device'.format(driver), id, path)
+
+
+class SnapshotCreateTask(Task):
+    def verify(self, id, path, new_path):
+        return []
+
+    def run(self, id, path):
+        driver = self.dispatcher.call_sync('vm.datastore.get_driver', id)
+        return self.run_subtask_sync('vm.datastore.{0}.create_snapshot'.format(driver), id, path)
+
+
+class SnapshotDeleteTask(Task):
+    def verify(self, id, path, new_path):
+        return []
+
+    def run(self, id, path):
+        driver = self.dispatcher.call_sync('vm.datastore.get_driver', id)
+        return self.run_subtask_sync('vm.datastore.{0}.delete_snapshot'.format(driver), id, path)
+
+
+def normpath(p):
+    return p[1:] if p.startswith('/') else p
 
 
 def _init(dispatcher, plugin):
@@ -281,8 +315,10 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('vm.datastore.delete', DatastoreDeleteTask)
     plugin.register_task_handler('vm.datastore.create_directory', DirectoryCreateTask)
     plugin.register_task_handler('vm.datastore.delete_directory', DirectoryDeleteTask)
+    plugin.register_task_handler('vm.datastore.rename_directory', DirectoryRenameTask)
     plugin.register_task_handler('vm.datastore.create_block_device', BlockDeviceCreateTask)
     plugin.register_task_handler('vm.datastore.delete_block_device', BlockDeviceDeleteTask)
+    plugin.register_task_handler('vm.datastore.rename_block_device', BlockDeviceRenameTask)
     plugin.register_task_handler('vm.datastore.resize_block_device', BlockDeviceResizeTask)
     plugin.register_task_handler('vm.datastore.clone_block_device', BlockDeviceCloneTask)
     plugin.register_event_type('vm.datastore.changed')
