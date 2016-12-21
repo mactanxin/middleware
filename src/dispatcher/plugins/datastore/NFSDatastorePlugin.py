@@ -73,7 +73,9 @@ class NFSDatastoreUpdateTask(Task):
         return ['system']
 
     def run(self, id, updated_fields):
-        pass
+        ds = self.datastore.get_by_id('vm.datastores', id)
+        umount(ds['name'])
+        mount(ds['name', ds['properties']])
 
 
 class NFSDatastoreDeleteTask(Task):
@@ -96,8 +98,19 @@ def _metadata():
 
 
 def mount(name, properties):
+    path = os.path.join('/nfs', name)
+    if not os.path.isdir(path):
+        os.makedirs(path)
+
+    try:
+        stat = bsd.statfs(path)
+        if stat.fstype == 'nfs':
+            umount(name)
+    except:
+        pass
+
     # XXX: Couldn't figure out how to do that with py-bsd's nmount
-    system('/sbin/mount_nfs', '-osoft,intr,retrycnt=1,timeout=10', '{address}:{path}'.format(**properties), os.path.join('/nfs', name))
+    system('/sbin/mount_nfs', '-osoft,intr,retrans=1,timeout=100', '{address}:{path}'.format(**properties), path)
 
 
 def umount(name):
