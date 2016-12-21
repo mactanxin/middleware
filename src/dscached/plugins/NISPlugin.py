@@ -55,7 +55,7 @@ class NISPlugin(DirectoryServicePlugin):
     @staticmethod
     def normalize_parameters(parameters):
         return normalize(parameters, {
-            '%type': 'nis-directory-params',
+            '%type': 'NisDirectoryParams',
             'server': None
         })
 
@@ -197,11 +197,11 @@ class NISPlugin(DirectoryServicePlugin):
 def _init(context):
     context.register_plugin('nis', NISPlugin)
 
-    context.register_schema('nis-directory-params', {
+    context.register_schema('NisDirectoryParams', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
-            '%type': {'enum': ['nis-directory-params']},
+            '%type': {'enum': ['NisDirectoryParams']},
             'server': {'type': ['string', 'null']},
             'domain': {'type': 'string'}
         }

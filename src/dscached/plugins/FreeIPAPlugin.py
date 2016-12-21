@@ -96,7 +96,7 @@ class FreeIPAPlugin(DirectoryServicePlugin):
     @staticmethod
     def normalize_parameters(parameters):
         return normalize(parameters, {
-            '%type': 'freeipa-directory-params',
+            '%type': 'FreeipaDirectoryParams',
             'realm': '',
             'server': None,
             'kdc': None,
@@ -291,11 +291,11 @@ class FreeIPAPlugin(DirectoryServicePlugin):
 def _init(context):
     context.register_plugin('freeipa', FreeIPAPlugin)
 
-    context.register_schema('freeipa-directory-params', {
+    context.register_schema('FreeipaDirectoryParams', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
-            '%type': {'enum': ['freeipa-directory-params']},
+            '%type': {'enum': ['FreeipaDirectoryParams']},
             'realm': {'type': 'string'},
             'server': {'type': ['string', 'null']},
             'kdc': {'type': ['string', 'null']},
@@ -312,6 +312,6 @@ def _init(context):
         }
     })
 
-    context.register_schema('freeipa-directory-status', {
+    context.register_schema('FreeipaDirectoryStatus', {
 
     })
