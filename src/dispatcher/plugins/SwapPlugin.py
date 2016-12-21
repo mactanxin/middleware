@@ -43,7 +43,7 @@ logger = logging.getLogger('SwapPlugin')
 @description("Provides informations about system swap")
 class SwapProvider(Provider):
     @accepts()
-    @returns(h.array(h.ref('swap-mirror')))
+    @returns(h.array(h.ref('SwapMirror')))
     @description("Returns information about swap mirrors present in the system")
     def info(self):
         return list(get_swap_info(self.dispatcher).values())
@@ -187,7 +187,7 @@ def _init(dispatcher, plugin):
         with dispatcher.get_lock('swap'):
             rearrange_swap(dispatcher)
 
-    plugin.register_schema_definition('swap-mirror', {
+    plugin.register_schema_definition('SwapMirror', {
         'type': 'object',
         'properties': {
             'name': {'type': 'string'},

@@ -39,7 +39,7 @@ logger = logging.getLogger('TFTPPlugin')
 class TFTPProvider(Provider):
     @private
     @accepts()
-    @returns(h.ref('service-tftpd'))
+    @returns(h.ref('ServiceTftpd'))
     def get_config(self):
         config = ConfigNode('service.tftpd', self.configstore).__getstate__()
         config['umask'] = get_unix_permissions(config['umask'])
@@ -48,7 +48,7 @@ class TFTPProvider(Provider):
 
 @private
 @description('Configure TFTP service')
-@accepts(h.ref('service-tftpd'))
+@accepts(h.ref('ServiceTftpd'))
 class TFTPConfigureTask(Task):
     @classmethod
     def early_describe(cls):
@@ -90,16 +90,16 @@ def _depends():
 def _init(dispatcher, plugin):
 
     # Register schemas
-    plugin.register_schema_definition('service-tftpd', {
+    plugin.register_schema_definition('ServiceTftpd', {
         'type': 'object',
         'properties': {
-            'type': {'enum': ['service-tftpd']},
+            'type': {'enum': ['ServiceTftpd']},
             'enable': {'type': 'boolean'},
             'port': {'type': 'integer'},
             'path': {'type': 'string'},
             'allow_new_files': {'type': 'boolean'},
             'username': {'type': 'string'},
-            'umask': {'$ref': 'unix-permissions'},
+            'umask': {'$ref': 'UnixPermissions'},
             'auxiliary': {'type': ['string', 'null']},
         },
         'additionalProperties': False,

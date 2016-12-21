@@ -390,7 +390,7 @@ class UpdateProvider(Provider):
             ))
 
     @accepts()
-    @returns(h.array(h.ref('update-ops')))
+    @returns(h.array(h.ref('UpdateOps')))
     def get_update_ops(self):
         temp_operations = update_cache.get('operations', timeout=1)
         if temp_operations is not None:
@@ -404,7 +404,7 @@ class UpdateProvider(Provider):
             ))
 
     @accepts()
-    @returns(h.ref('update-info'))
+    @returns(h.ref('UpdateInfo'))
     def update_info(self):
         if not update_cache.is_valid('available'):
             raise RpcException(errno.EBUSY, (
@@ -418,7 +418,7 @@ class UpdateProvider(Provider):
         return {key: update_cache.get(key, timeout=1) for key in info_item_list}
 
     @returns(h.any_of(
-        h.array(h.ref('update-train')),
+        h.array(h.ref('UpdateTrain')),
         None,
     ))
     def trains(self):
@@ -453,7 +453,7 @@ class UpdateProvider(Provider):
         return conf.CurrentTrain()
 
     @accepts()
-    @returns(h.ref('update'))
+    @returns(h.ref('Update'))
     def get_config(self):
         return {
             'train': self.dispatcher.configstore.get('update.train'),
@@ -544,7 +544,7 @@ class UpdateProvider(Provider):
 
 
 @description("Set the System Updater Cofiguration Settings")
-@accepts(h.ref('update'))
+@accepts(h.ref('Update'))
 class UpdateConfigureTask(Task):
     @classmethod
     def early_describe(cls):
@@ -981,7 +981,7 @@ def _depends():
 
 def _init(dispatcher, plugin):
     # Register Schemas
-    plugin.register_schema_definition('update', {
+    plugin.register_schema_definition('Update', {
         'type': 'object',
         'properties': {
             'train': {'type': 'string'},
@@ -990,10 +990,10 @@ def _init(dispatcher, plugin):
         },
     })
 
-    plugin.register_schema_definition('update-progress', {
+    plugin.register_schema_definition('UpdateProgress', {
         'type': 'object',
         'properties': {
-            'operation': {'$ref': 'update-progress-operation'},
+            'operation': {'$ref': 'UpdateProgressOperation'},
             'details': {'type': 'string'},
             'indeterminate': {'type': 'boolean'},
             'percent': {'type': 'integer'},
@@ -1008,15 +1008,15 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('update-progress-operation', {
+    plugin.register_schema_definition('UpdateProgressOperation', {
         'type': 'string',
         'enum': ['DOWNLOADING', 'INSTALLING']
     })
 
-    plugin.register_schema_definition('update-ops', {
+    plugin.register_schema_definition('UpdateOps', {
         'type': 'object',
         'properties': {
-            'operation': {'$ref': 'update-ops-operation'},
+            'operation': {'$ref': 'UpdateOpsOperation'},
             'new_name': {'type': ['string', 'null']},
             'new_version': {'type': ['string', 'null']},
             'previous_name': {'type': ['string', 'null']},
@@ -1024,12 +1024,12 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('update-ops-operation', {
+    plugin.register_schema_definition('UpdateOpsOperation', {
         'type': 'string',
         'enum': ['delete', 'install', 'upgrade']
     })
 
-    plugin.register_schema_definition('update-info', {
+    plugin.register_schema_definition('UpdateInfo', {
         'type': 'object',
         'properties': {
             'available': {'type': 'boolean'},
@@ -1039,7 +1039,7 @@ def _init(dispatcher, plugin):
                 'type': 'array',
                 'items': {'type': 'string'},
             },
-            'operations': {'$ref': 'update-ops'},
+            'operations': {'$ref': 'UpdateOps'},
             'downloaded': {'type': 'boolean'},
             'version': {'type': 'string'},
             'installed': {'type': 'boolean'},
@@ -1047,7 +1047,7 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('update-train', {
+    plugin.register_schema_definition('UpdateTrain', {
         'type': 'object',
         'properties': {
             'name': {'type': 'string'},
@@ -1071,7 +1071,7 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler("update.updatenow", UpdateNowTask)
 
     # Register Event Types
-    plugin.register_event_type('update.in_progress', schema=h.ref('update-progress'))
+    plugin.register_event_type('update.in_progress', schema=h.ref('UpdateProgress'))
     plugin.register_event_type('update.update_info.updated')
     plugin.register_event_type('update.changed')
 

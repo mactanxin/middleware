@@ -66,7 +66,7 @@ def sysctl_set(name, value):
 
 @description("Provides access to OS tunables")
 class TunablesProvider(Provider):
-    @query('tunable')
+    @query('Tunable')
     @generator
     def query(self, filter=None, params=None):
         return self.datastore.query_stream('tunables', *(filter or []), **(params or {}))
@@ -74,7 +74,7 @@ class TunablesProvider(Provider):
 
 @description("Adds Tunable")
 @accepts(h.all_of(
-    h.ref('tunable'),
+    h.ref('Tunable'),
     h.required('var', 'value', 'type'),
 ))
 class TunableCreateTask(Task):
@@ -139,7 +139,7 @@ class TunableCreateTask(Task):
 
 
 @description("Updates Tunable")
-@accepts(str, h.ref('tunable'))
+@accepts(str, h.ref('Tunable'))
 class TunableUpdateTask(Task):
     @classmethod
     def early_describe(cls):
@@ -256,11 +256,11 @@ def _init_sysctls(dispatcher):
 
 
 def _init(dispatcher, plugin):
-    plugin.register_schema_definition('tunable', {
+    plugin.register_schema_definition('Tunable', {
         'type': 'object',
         'properties': {
             'id': {'type': 'string'},
-            'type': {'$ref': 'tunable-type'},
+            'type': {'$ref': 'TunableType'},
             'var': {'type': 'string'},
             'value': {'type': 'string'},
             'comment': {'type': 'string'},
@@ -269,7 +269,7 @@ def _init(dispatcher, plugin):
         'additionalProperties': False,
     })
 
-    plugin.register_schema_definition('tunable-type', {
+    plugin.register_schema_definition('TunableType', {
         'type': 'string',
         'enum': ['LOADER', 'RC', 'SYSCTL']
     })

@@ -40,14 +40,14 @@ logger = logging.getLogger('WebDAVPlugin')
 class WebDAVProvider(Provider):
     @private
     @accepts()
-    @returns(h.ref('service-webdav'))
+    @returns(h.ref('ServiceWebdav'))
     def get_config(self):
         return ConfigNode('service.webdav', self.configstore).__getstate__()
 
 
 @private
 @description('Configure WebDAV service')
-@accepts(h.ref('service-webdav'))
+@accepts(h.ref('ServiceWebdav'))
 class WebDAVConfigureTask(Task):
     @classmethod
     def early_describe(cls):
@@ -103,14 +103,14 @@ def _depends():
 
 def _init(dispatcher, plugin):
     # Register schemas
-    plugin.register_schema_definition('service-webdav', {
+    plugin.register_schema_definition('ServiceWebdav', {
         'type': 'object',
         'properties': {
-            'type': {'enum': ['service-webdav']},
+            'type': {'enum': ['ServiceWebdav']},
             'enable': {'type': 'boolean'},
             'protocol': {
                 'type': ['array'],
-                'items': {'$ref': 'service-webdav-protocol-items'},
+                'items': {'$ref': 'ServiceWebdavProtocolItems'},
             },
             'http_port': {
                 'type': 'integer',
@@ -123,18 +123,18 @@ def _init(dispatcher, plugin):
                 'maximum': 65535
             },
             'password': {'type': 'string'},
-            'authentication': {'$ref': 'service-webdav-authentication'},
+            'authentication': {'$ref': 'ServiceWebdavAuthentication'},
             'certificate': {'type': ['string', 'null']},
         },
         'additionalProperties': False,
     })
 
-    plugin.register_schema_definition('service-webdav-protocol-items', {
+    plugin.register_schema_definition('ServiceWebdavProtocolItems', {
         'type': 'string',
         'enum': ['HTTP', 'HTTPS']
     })
 
-    plugin.register_schema_definition('service-webdav-authentication', {
+    plugin.register_schema_definition('ServiceWebdavAuthentication', {
         'type': 'string',
         'enum': ['BASIC', 'DIGEST']
     })

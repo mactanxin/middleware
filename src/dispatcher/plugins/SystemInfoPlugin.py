@@ -124,7 +124,7 @@ class SystemInfoProvider(Provider):
 class SystemGeneralProvider(Provider):
 
     @accepts()
-    @returns(h.ref('system-general'))
+    @returns(h.ref('SystemGeneral'))
     def get_config(self):
         return {
             'hostname': self.configstore.get('system.hostname'),
@@ -177,7 +177,7 @@ class SystemGeneralProvider(Provider):
 class SystemAdvancedProvider(Provider):
 
     @accepts()
-    @returns(h.ref('system-advanced'))
+    @returns(h.ref('SystemAdvanced'))
     def get_config(self):
         cs = self.configstore
         return {
@@ -203,7 +203,7 @@ class SystemAdvancedProvider(Provider):
 class SystemTimeProvider(Provider):
 
     @accepts()
-    @returns(h.ref('system-time'))
+    @returns(h.ref('SystemTime'))
     def get_config(self):
         boot_time = datetime.utcfromtimestamp(psutil.boot_time())
         return {
@@ -218,7 +218,7 @@ class SystemTimeProvider(Provider):
 class SystemUIProvider(Provider):
 
     @accepts()
-    @returns(h.ref('system-ui'))
+    @returns(h.ref('SystemUi'))
     def get_config(self):
 
         protocol = []
@@ -238,7 +238,7 @@ class SystemUIProvider(Provider):
 
 
 @description("Configures general system settings")
-@accepts(h.ref('system-general'))
+@accepts(h.ref('SystemGeneral'))
 class SystemGeneralConfigureTask(Task):
     @classmethod
     def early_describe(cls):
@@ -310,7 +310,7 @@ class SystemGeneralConfigureTask(Task):
 
 
 @description("Configures advanced system settings")
-@accepts(h.ref('system-advanced'))
+@accepts(h.ref('SystemAdvanced'))
 class SystemAdvancedConfigureTask(Task):
     @classmethod
     def early_describe(cls):
@@ -425,7 +425,7 @@ class SystemAdvancedConfigureTask(Task):
 
 
 @description("Configures the System UI settings")
-@accepts(h.ref('system-ui'))
+@accepts(h.ref('SystemUi'))
 class SystemUIConfigureTask(Task):
     @classmethod
     def early_describe(cls):
@@ -489,7 +489,7 @@ class SystemUIConfigureTask(Task):
 
 
 @accepts(h.all_of(
-    h.ref('system-time'),
+    h.ref('SystemTime'),
     h.forbidden('boot_time', 'uptime')
 ))
 @description("Configures system time")
@@ -642,14 +642,14 @@ def _init(dispatcher, plugin):
         time.tzset()
 
     # Register schemas
-    plugin.register_schema_definition('system-advanced', {
+    plugin.register_schema_definition('SystemAdvanced', {
         'type': 'object',
         'properties': {
             'console_cli': {'type': 'boolean'},
             'console_screensaver': {'type': 'boolean'},
             'serial_console': {'type': 'boolean'},
             'serial_port': {'type': 'string'},
-            'serial_speed': {'$ref': 'system-advanced-serialspeed'},
+            'serial_speed': {'$ref': 'SystemAdvancedSerialspeed'},
             'powerd': {'type': 'boolean'},
             'swapondrive': {'type': 'integer'},
             'debugkernel': {'type': 'boolean'},
@@ -667,13 +667,13 @@ def _init(dispatcher, plugin):
         'additionalProperties': False,
     })
 
-    plugin.register_schema_definition('system-advanced-serialspeed', {
+    plugin.register_schema_definition('SystemAdvancedSerialspeed', {
         'type': 'integer',
         'enum': [110, 300, 600, 1200, 2400, 4800,
                  9600, 14400, 19200, 38400, 57600, 115200]
     })
 
-    plugin.register_schema_definition('system-general', {
+    plugin.register_schema_definition('SystemGeneral', {
         'type': 'object',
         'properties': {
             'hostname': {'type': 'string'},
@@ -690,16 +690,16 @@ def _init(dispatcher, plugin):
         'additionalProperties': False,
     })
 
-    plugin.register_schema_definition('system-ui', {
+    plugin.register_schema_definition('SystemUi', {
         'type': 'object',
         'properties': {
             'webui_protocol': {
                 'type': ['array'],
-                'items': {'$ref': 'system-ui-webuiprotocol-items'}
+                'items': {'$ref': 'SystemUiWebuiprotocolItems'}
             },
             'webui_listen': {
                 'type': ['array'],
-                'items': {'$ref': 'ip-address'},
+                'items': {'$ref': 'IpAddress'},
             },
             'webui_http_redirect_https': {'type': 'boolean'},
             'webui_http_port': {'type': 'integer'},
@@ -709,12 +709,12 @@ def _init(dispatcher, plugin):
         'additionalProperties': False,
     })
 
-    plugin.register_schema_definition('system-ui-webuiprotocol-items', {
+    plugin.register_schema_definition('SystemUiWebuiprotocolItems', {
         'type': 'string',
         'enum': ['HTTP', 'HTTPS'],
     })
 
-    plugin.register_schema_definition('system-time', {
+    plugin.register_schema_definition('SystemTime', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
@@ -725,15 +725,15 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('power-changed', {
+    plugin.register_schema_definition('PowerChanged', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
-            'operation': {'$ref': 'power-changed-operation'},
+            'operation': {'$ref': 'PowerChangedOperation'},
         }
     })
 
-    plugin.register_schema_definition('power-changed-operation', {
+    plugin.register_schema_definition('PowerChangedOperation', {
         'type': 'string',
         'enum': ['SHUTDOWN', 'REBOOT']
     })
@@ -746,7 +746,7 @@ def _init(dispatcher, plugin):
     plugin.register_event_type('system.general.changed')
     plugin.register_event_type('system.advanced.changed')
     plugin.register_event_type('system.ui.changed')
-    plugin.register_event_type('power.changed', schema=h.ref('power-changed'))
+    plugin.register_event_type('power.changed', schema=h.ref('PowerChanged'))
 
     # Register providers
     plugin.register_provider("system.advanced", SystemAdvancedProvider)

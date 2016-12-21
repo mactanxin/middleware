@@ -57,7 +57,7 @@ Following VMware snapshot operations failed during creation of snapshot ${id}:
 class VMwareProvider(Provider):
     @generator
     @accepts(str, str, str, bool)
-    @returns(h.ref('vmware-datastore'))
+    @returns(h.ref('VmwareDatastore'))
     def get_datastores(self, address, username, password, full=False):
         ssl_context = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
         ssl_context.verify_mode = ssl.CERT_NONE
@@ -96,13 +96,13 @@ class VMwareProvider(Provider):
 
 class VMwareDatasetsProvider(Provider):
     @generator
-    @query('vmware-dataset')
+    @query('VmwareDataset')
     def query(self, filter=None, params=None):
         return self.datastore.query_stream('vmware.datasets', *(filter or []), **(params or {}))
 
 
 @accepts(h.all_of(
-    h.ref('vmware-dataset'),
+    h.ref('VmwareDataset'),
     h.required('name', 'dataset', 'datastore', 'peer')
 ))
 class VMWareDatasetCreateTask(Task):
@@ -433,7 +433,7 @@ def _depends():
 
 
 def _init(dispatcher, plugin):
-    plugin.register_schema_definition('vmware-datastore', {
+    plugin.register_schema_definition('VmwareDatastore', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
@@ -456,12 +456,12 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('vmware-dataset-filter-op', {
+    plugin.register_schema_definition('VmwareDatasetFilterOp', {
         'type': 'string',
         'enum': ['NONE', 'INCLUDE', 'EXCLUDE']
     })
 
-    plugin.register_schema_definition('vmware-dataset', {
+    plugin.register_schema_definition('VmwareDataset', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
@@ -470,7 +470,7 @@ def _init(dispatcher, plugin):
             'dataset': {'type': 'string'},
             'datastore': {'type': 'string'},
             'peer': {'type': 'string'},
-            'vm_filter_op': {'$ref': 'vmware-dataset-filter-op'},
+            'vm_filter_op': {'$ref': 'VmwareDatasetFilterOp'},
             'vm_filter_entries': {
                 'type': 'array',
                 'items': {'type': 'string'}

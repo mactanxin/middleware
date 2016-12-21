@@ -59,7 +59,7 @@ def validate_netbios_name(netbiosname):
 class SMBProvider(Provider):
     @private
     @accepts()
-    @returns(h.ref('service-smb'))
+    @returns(h.ref('ServiceSmb'))
     def get_config(self):
         config = ConfigNode('service.smb', self.configstore).__getstate__()
         if 'filemask' in config:
@@ -76,7 +76,7 @@ class SMBProvider(Provider):
 
 @private
 @description('Configure SMB service')
-@accepts(h.ref('service-smb'))
+@accepts(h.ref('ServiceSmb'))
 class SMBConfigureTask(Task):
     @classmethod
     def early_describe(cls):
@@ -262,10 +262,10 @@ def _init(dispatcher, plugin):
         'SMB3_00',
     ]
 
-    plugin.register_schema_definition('service-smb', {
+    plugin.register_schema_definition('ServiceSmb', {
         'type': 'object',
         'properties': {
-            'type': {'enum': ['service-smb']},
+            'type': {'enum': ['ServiceSmb']},
             'enable': {'type': 'boolean'},
             'netbiosname': {
                 'type': 'array',
@@ -273,9 +273,9 @@ def _init(dispatcher, plugin):
             },
             'workgroup': {'type': 'string'},
             'description': {'type': 'string'},
-            'dos_charset': {'$ref': 'service-smb-doscharset'},
-            'unix_charset': {'$ref': 'service-smb-unixcharset'},
-            'log_level': {'$ref': 'service-smb-loglevel'},
+            'dos_charset': {'$ref': 'ServiceSmbDoscharset'},
+            'unix_charset': {'$ref': 'ServiceSmbUnixcharset'},
+            'log_level': {'$ref': 'ServiceSmbLoglevel'},
             'syslog': {'type': 'boolean'},
             'local_master': {'type': 'boolean'},
             'domain_logons': {'type': 'boolean'},
@@ -297,8 +297,8 @@ def _init(dispatcher, plugin):
             'unixext': {'type': 'boolean'},
             'zeroconf': {'type': 'boolean'},
             'hostlookup': {'type': 'boolean'},
-            'min_protocol': {'$ref': 'service-smb-minprotocol'},
-            'max_protocol': {'$ref': 'service-smb-maxprotocol'},
+            'min_protocol': {'$ref': 'ServiceSmbMinprotocol'},
+            'max_protocol': {'$ref': 'ServiceSmbMaxprotocol'},
             'execute_always': {'type': 'boolean'},
             'obey_pam_restrictions': {'type': 'boolean'},
             'bind_addresses': {
@@ -311,28 +311,28 @@ def _init(dispatcher, plugin):
         'additionalProperties': False,
     })
 
-    plugin.register_schema_definition('service-smb-doscharset', {
+    plugin.register_schema_definition('ServiceSmbDoscharset', {
         'type': 'string',
         'enum': ['CP437', 'CP850', 'CP852', 'CP866', 'CP932', 'CP949',
                  'CP950', 'CP1029', 'CP1251', 'ASCII']
     })
 
-    plugin.register_schema_definition('service-smb-unixcharset', {
+    plugin.register_schema_definition('ServiceSmbUnixcharset', {
         'type': 'string',
         'enum': ['UTF-8', 'iso-8859-1', 'iso-8859-15', 'gb2312', 'EUC-JP', 'ASCII']
     })
 
-    plugin.register_schema_definition('service-smb-loglevel', {
+    plugin.register_schema_definition('ServiceSmbLoglevel', {
         'type': 'string',
         'enum': list(LogLevel.__members__.keys())
     })
 
-    plugin.register_schema_definition('service-smb-minprotocol', {
+    plugin.register_schema_definition('ServiceSmbMinprotocol', {
         'type': ['string', 'null'],
         'enum': [None] + PROTOCOLS
     })
 
-    plugin.register_schema_definition('service-smb-maxprotocol', {
+    plugin.register_schema_definition('ServiceSmbMaxprotocol', {
         'type': 'string',
         'enum': PROTOCOLS
     })

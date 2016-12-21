@@ -77,7 +77,7 @@ def check_unixname(name):
 @description("Provides access to users database")
 class UserProvider(Provider):
     @description("Lists users present in the system")
-    @query('user')
+    @query('User')
     @generator
     def query(self, filter=None, params=None):
         if params and params.get('count'):
@@ -136,7 +136,7 @@ class UserProvider(Provider):
 @description("Provides access to groups database")
 class GroupProvider(Provider):
     @description("Lists groups present in the system")
-    @query('group')
+    @query('Group')
     @generator
     def query(self, filter=None, params=None):
         if params and params.get('count'):
@@ -187,7 +187,7 @@ class GroupProvider(Provider):
 
 @description("Create an user in the system")
 @accepts(h.all_of(
-    h.ref('user'),
+    h.ref('User'),
     h.required('username'),
     h.forbidden('builtin'),
     h.object(properties={'password': {'type': ['string', 'null']}}),
@@ -473,7 +473,7 @@ class UserDeleteTask(Task):
 @accepts(
     str,
     h.all_of(
-        h.ref('user'),
+        h.ref('User'),
         h.forbidden('builtin')
     )
 )
@@ -668,7 +668,7 @@ class UserUpdateTask(Task):
 
 @description("Creates a group")
 @accepts(h.all_of(
-    h.ref('group'),
+    h.ref('Group'),
     h.required('name'),
     h.forbidden('builtin')
 ))
@@ -735,7 +735,7 @@ class GroupCreateTask(Task):
 @accepts(
     str,
     h.all_of(
-        h.ref('group'),
+        h.ref('Group'),
         h.forbidden('builtin')
     )
 )
@@ -839,7 +839,7 @@ def collect_debug(dispatcher):
 
 def _init(dispatcher, plugin):
     # Register definitions for objects used
-    plugin.register_schema_definition('user', {
+    plugin.register_schema_definition('User', {
         'type': 'object',
         'properties': {
             'id': {'type': 'string'},
@@ -891,7 +891,7 @@ def _init(dispatcher, plugin):
         'additionalProperties': False,
     })
 
-    plugin.register_schema_definition('group', {
+    plugin.register_schema_definition('Group', {
         'type': 'object',
         'properties': {
             'id': {'type': 'string'},

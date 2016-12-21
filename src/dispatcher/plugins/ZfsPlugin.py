@@ -66,19 +66,19 @@ zfs = None
 @description("Provides information about ZFS pools")
 class ZpoolProvider(Provider):
     @description("Lists ZFS pools")
-    @query('zfs-pool')
+    @query('ZfsPool')
     @generator
     def query(self, filter=None, params=None):
         return pools.query(*(filter or []), stream=True, **(params or {}))
 
     @accepts(h.one_of(str, None))
-    @returns(h.array(h.ref('zfs-pool')))
+    @returns(h.array(h.ref('ZfsPool')))
     def find(self, name=None):
         zfs = get_zfs()
         return self.dispatcher.threaded(lambda: [p.__getstate__() for p in zfs.find_import(name=name)])
 
     @accepts()
-    @returns(h.ref('zfs-pool'))
+    @returns(h.ref('ZfsPool'))
     def get_boot_pool(self):
         name = self.configstore.get('system.boot_pool_name')
         return pools[name]
@@ -145,13 +145,13 @@ class ZpoolProvider(Provider):
         }
 
     @accepts(str, str)
-    @returns(h.ref('zfs-vdev'))
+    @returns(h.ref('ZfsVdev'))
     def vdev_by_guid(self, name, guid):
         pool = pools.get(name)
         return first_or_default(lambda v: v['guid'] == guid, iterate_vdevs(pool['groups']))
 
     @accepts(str, str)
-    @returns(h.ref('zfs-vdev'))
+    @returns(h.ref('ZfsVdev'))
     def vdev_by_path(self, name, path):
         pool = pools.get(name)
         return first_or_default(lambda v: v['path'] == path, iterate_vdevs(pool['groups']))
@@ -176,7 +176,7 @@ class ZpoolProvider(Provider):
 
 @description('Provides information about ZFS datasets')
 class ZfsDatasetProvider(Provider):
-    @query('zfs-dataset')
+    @query('ZfsDataset')
     @generator
     def query(self, filter=None, params=None):
         return datasets.query(*(filter or []), stream=True, **(params or {}))
@@ -213,8 +213,8 @@ class ZfsDatasetProvider(Provider):
     @accepts(str)
     @returns(h.array(
         h.one_of(
-            h.ref('zfs-dataset'),
-            h.ref('zfs-snapshot')
+            h.ref('ZfsDataset'),
+            h.ref('ZfsSnapshot')
         )
     ))
     def get_dependencies(self, dataset_name):
@@ -230,7 +230,7 @@ class ZfsDatasetProvider(Provider):
             raise RpcException(zfs_error_to_errno(err.code), str(err))
 
     @accepts(str)
-    @returns(h.array(h.ref('zfs-snapshot')))
+    @returns(h.array(h.ref('ZfsSnapshot')))
     def get_snapshots(self, dataset_name):
         try:
             zfs = get_zfs()
@@ -259,7 +259,7 @@ class ZfsDatasetProvider(Provider):
 
 @description('Provides information about ZFS snapshots')
 class ZfsSnapshotProvider(Provider):
-    @query('zfs-snapshot')
+    @query('ZfsSnapshot')
     @generator
     def query(self, filter=None, params=None):
         return snapshots.query(*(filter or []), stream=True, **(params or {}))
@@ -356,7 +356,7 @@ class ZpoolScrubTask(ProgressTask, ScanStatusTaskMixin):
 
 @private
 @description("Creates new ZFS pool")
-@accepts(str, h.ref('zfs-topology'), h.object())
+@accepts(str, h.ref('ZfsTopology'), h.object())
 class ZpoolCreateTask(Task):
     def __partition_to_disk(self, part):
         result = self.dispatcher.call_sync('disk.get_partition_config', part)
@@ -504,11 +504,11 @@ class ZpoolDestroyTask(ZpoolBaseTask):
 @accepts(
     str,
     h.any_of(
-        h.ref('zfs-topology'),
+        h.ref('ZfsTopology'),
         None
     ),
     h.any_of(
-        h.array(h.ref('zfs-vdev-extension')),
+        h.array(h.ref('ZfsVdevExtension')),
         None
     )
 )
@@ -583,7 +583,7 @@ class ZpoolDetachTask(ZpoolBaseTask):
 
 
 @private
-@accepts(str, str, h.ref('zfs-vdev'))
+@accepts(str, str, h.ref('ZfsVdev'))
 @description('Replaces one of ZFS pool\'s disks with a new disk')
 class ZpoolReplaceTask(ZpoolBaseTask, ScanStatusTaskMixin):
     @classmethod
@@ -909,7 +909,7 @@ class ZfsDatasetUmountTask(ZfsBaseTask):
 
 
 @private
-@accepts(str, h.ref('dataset-type'), h.object())
+@accepts(str, h.ref('DatasetType'), h.object())
 @description('Creates ZFS dataset')
 class ZfsDatasetCreateTask(Task):
     def check_type(self, type):
@@ -1637,7 +1637,7 @@ def _init(dispatcher, plugin):
                     except libzfs.ZFSException:
                         pass
 
-    plugin.register_schema_definition('zfs-vdev', {
+    plugin.register_schema_definition('ZfsVdev', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
@@ -1652,53 +1652,53 @@ def _init(dispatcher, plugin):
                 'type': 'object',
                 'readOnly': True
             },
-            'type': {'$ref': 'zfs-vdev-type'},
+            'type': {'$ref': 'ZfsVdevType'},
             'children': {
                 'type': 'array',
-                'items': {'$ref': 'zfs-vdev'}
+                'items': {'$ref': 'ZfsVdev'}
             }
         }
     })
 
-    plugin.register_schema_definition('zfs-vdev-type', {
+    plugin.register_schema_definition('ZfsVdevType', {
         'type': 'string',
         'enum': ['disk', 'file', 'mirror', 'raidz1', 'raidz2', 'raidz3']
     })
 
-    plugin.register_schema_definition('zfs-topology', {
+    plugin.register_schema_definition('ZfsTopology', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
             'data': {
                 'type': 'array',
-                'items': {'$ref': 'zfs-vdev'},
+                'items': {'$ref': 'ZfsVdev'},
             },
             'log': {
                 'type': 'array',
-                'items': {'$ref': 'zfs-vdev'},
+                'items': {'$ref': 'ZfsVdev'},
             },
             'cache': {
                 'type': 'array',
-                'items': {'$ref': 'zfs-vdev'},
+                'items': {'$ref': 'ZfsVdev'},
             },
             'spare': {
                 'type': 'array',
-                'items': {'$ref': 'zfs-vdev'},
+                'items': {'$ref': 'ZfsVdev'},
             },
         }
     })
 
-    plugin.register_schema_definition('zfs-vdev-extension', {
+    plugin.register_schema_definition('ZfsVdevExtension', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
             'target_guid': {'type': 'string'},
-            'vdev': {'$ref': 'zfs-vdev'}
+            'vdev': {'$ref': 'ZfsVdev'}
         }
     })
 
     # TODO: Add ENUM to the 'state' property below
-    plugin.register_schema_definition('zfs-scan', {
+    plugin.register_schema_definition('ZfsScan', {
         'type': 'object',
         'readOnly': True,
         'properties': {
@@ -1713,74 +1713,74 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('zfs-dataset', {
+    plugin.register_schema_definition('ZfsDataset', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
             'name': {'type': 'string'},
             'pool': {'type': 'string'},
-            'type': {'$ref': 'dataset-type'},
+            'type': {'$ref': 'DatasetType'},
             'properties': {
                 'type': 'object',
-                'additionalProperties': {'$ref': 'zfs-property'}
+                'additionalProperties': {'$ref': 'ZfsProperty'}
             },
             'children': {
                 'type': 'array',
-                'items': {'$ref': 'zfs-dataset'},
+                'items': {'$ref': 'ZfsDataset'},
             },
         }
     })
 
-    plugin.register_schema_definition('dataset-type', {
+    plugin.register_schema_definition('DatasetType', {
         'type': 'string',
         'enum': list(libzfs.DatasetType.__members__.keys())
     })
 
-    plugin.register_schema_definition('zfs-snapshot', {
+    plugin.register_schema_definition('ZfsSnapshot', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
             'pool': {'type': 'string'},
             'dataset': {'type': 'string'},
-            'type': {'$ref': 'dataset-type'},
+            'type': {'$ref': 'DatasetType'},
             'name': {'type': 'string'},
             'holds': {'type': 'object'},
             'properties': {'type': 'object'}
         }
     })
 
-    plugin.register_schema_definition('zfs-property-source', {
+    plugin.register_schema_definition('ZfsPropertySource', {
         'type': 'string',
         'enum': ['NONE', 'DEFAULT', 'LOCAL', 'INHERITED', 'RECEIVED']
     })
 
-    plugin.register_schema_definition('zfs-property', {
+    plugin.register_schema_definition('ZfsProperty', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
-            'source': {'$ref': 'zfs-property-source'},
+            'source': {'$ref': 'ZfsPropertySource'},
             'value': {'type': 'string'},
             'rawvalue': {'type': 'string'},
             'parsed': {'type': ['string', 'integer', 'boolean', 'datetime', 'null']}
         }
     })
 
-    plugin.register_schema_definition('zfs-pool', {
+    plugin.register_schema_definition('ZfsPool', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
-            'status': {'$ref': 'zfs-pool-status'},
+            'status': {'$ref': 'ZfsPoolStatus'},
             'name': {'type': 'string'},
-            'scan': {'$ref': 'zfs-scan'},
+            'scan': {'$ref': 'ZfsScan'},
             'hostname': {'type': 'string'},
-            'root_dataset': {'$ref': 'zfs-dataset'},
-            'groups': {'$ref': 'zfs-topology'},
+            'root_dataset': {'$ref': 'ZfsDataset'},
+            'groups': {'$ref': 'ZfsTopology'},
             'guid': {'type': 'integer'},
             'properties': {'$ref': 'zfs-properties'},
         }
     })
 
-    plugin.register_schema_definition('zfs-pool-status', {
+    plugin.register_schema_definition('ZfsPoolStatus', {
         'type': 'string',
         'enum': ['ONLINE', 'OFFLINE', 'DEGRADED', 'FAULTED', 'REMOVED', 'UNAVAIL']
     })

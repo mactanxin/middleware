@@ -63,7 +63,7 @@ logger = logging.getLogger(__name__)
 
 @description('Provides information about VMs')
 class VMProvider(Provider):
-    @query('vm')
+    @query('Vm')
     @generator
     def query(self, filter=None, params=None):
         def extend(obj):
@@ -142,7 +142,7 @@ class VMProvider(Provider):
     @private
     @description("Get VMs dependent on provided filesystem path")
     @accepts(str, bool, bool)
-    @returns(h.array(h.ref('vm')))
+    @returns(h.array(h.ref('Vm')))
     def get_dependencies(self, path, enabled_only=True, recursive=True):
         result = []
 
@@ -203,7 +203,7 @@ class VMProvider(Provider):
         return dependent_datasets
 
     @accepts(str)
-    @returns(h.ref('vm-guest-info'))
+    @returns(h.ref('VmGuestInfo'))
     def get_guest_info(self, id):
         interfaces = self.dispatcher.call_sync('containerd.management.call_vmtools', id, 'network.interfaces')
         loadavg = self.dispatcher.call_sync('containerd.management.call_vmtools', id, 'system.loadavg')
@@ -237,7 +237,7 @@ class VMProvider(Provider):
     def request_webvnc_console(self, id):
         return self.dispatcher.call_sync('containerd.console.request_webvnc_console', id)
 
-    @returns(h.ref('vm-hw-capabilites'))
+    @returns(h.ref('VmHwCapabilites'))
     def get_hw_vm_capabilities(self):
         hw_capabilities = {'vtx_enabled': False, 'svm_features': False, 'unrestricted_guest': False}
         try:
@@ -256,7 +256,7 @@ class VMProvider(Provider):
 
 @description('Provides information about VM snapshots')
 class VMSnapshotProvider(Provider):
-    @query('vm-snapshot')
+    @query('VmSnapshot')
     @generator
     def query(self, filter=None, params=None):
         return self.datastore.query_stream('vm.snapshots', *(filter or []), **(params or {}))
@@ -287,7 +287,7 @@ class VMSnapshotProvider(Provider):
 
 @description('Provides information about VM templates')
 class VMTemplateProvider(Provider):
-    @query('vm')
+    @query('Vm')
     @generator
     def query(self, filter=None, params=None):
         fetch_lock = self.dispatcher.get_lock('vm_templates')
@@ -342,12 +342,12 @@ class VMTemplateProvider(Provider):
 
 
 class VMConfigProvider(Provider):
-    @returns(h.ref('vm-config'))
+    @returns(h.ref('VmConfig'))
     def get_config(self):
         return ConfigNode('container', self.configstore).__getstate__()
 
 
-@accepts(h.ref('vm-config'))
+@accepts(h.ref('VmConfig'))
 class VMConfigUpdateTask(Task):
     @classmethod
     def early_describe(cls):
@@ -626,7 +626,7 @@ class VMBaseTask(ProgressTask):
 
 
 @accepts(h.all_of(
-    h.ref('vm'),
+    h.ref('Vm'),
     h.required('name', 'target')
 ))
 @description('Creates a VM')
@@ -852,7 +852,7 @@ class VMSetImmutableTask(VMBaseTask):
         })
 
 
-@accepts(str, h.ref('vm'))
+@accepts(str, h.ref('Vm'))
 @description('Updates VM')
 class VMUpdateTask(VMBaseTask):
     @classmethod
@@ -1266,7 +1266,7 @@ class VMSnapshotCreateTask(Task):
         ))
 
 
-@accepts(str, h.ref('vm-snapshot'))
+@accepts(str, h.ref('VmSnapshot'))
 @description('Updates a snapshot of VM')
 class VMSnapshotUpdateTask(Task):
     @classmethod
@@ -1895,49 +1895,49 @@ def _depends():
 
 
 def _init(dispatcher, plugin):
-    plugin.register_schema_definition('vm-status', {
+    plugin.register_schema_definition('VmStatus', {
         'type': 'object',
         'readOnly': True,
         'properties': {
-            'state': {'$ref': 'vm-status-state'},
-            'health': {'$ref': 'vm-status-health'},
+            'state': {'$ref': 'VmStatusState'},
+            'health': {'$ref': 'VmStatusHealth'},
             'vm_tools_available': {'type': 'boolean'},
             'nat_lease': {'oneOf': [
-                {'$ref': 'vm-status-lease'},
+                {'$ref': 'VmStatusLease'},
                 {'type': 'null'}
             ]},
             'management_lease': {'oneOf': [
-                {'$ref': 'vm-status-lease'},
+                {'$ref': 'VmStatusLease'},
                 {'type': 'null'}
             ]}
         }
     })
 
-    plugin.register_schema_definition('vm-status-state', {
+    plugin.register_schema_definition('VmStatusState', {
         'type': 'string',
         'enum': ['STOPPED', 'BOOTLOADER', 'RUNNING']
     })
 
-    plugin.register_schema_definition('vm-status-health', {
+    plugin.register_schema_definition('VmStatusHealth', {
         'type': 'string',
         'enum': ['HEALTHY', 'DYING', 'DEAD', 'UNKNOWN']
     })
 
-    plugin.register_schema_definition('vm-status-lease', {
+    plugin.register_schema_definition('VmStatusLease', {
         'type': 'object',
         'properties': {
             'client_ip': {'type': 'string'},
         }
     })
 
-    plugin.register_schema_definition('vm', {
+    plugin.register_schema_definition('Vm', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
             'id': {'type': 'string'},
             'name': {'type': 'string'},
-            'guest_type': {'$ref': 'vm-guest-type'},
-            'status': {'$ref': 'vm-status'},
+            'guest_type': {'$ref': 'VmGuestType'},
+            'status': {'$ref': 'VmStatus'},
             'description': {'type': 'string'},
             'enabled': {'type': 'boolean'},
             'immutable': {'type': 'boolean'},
@@ -1958,7 +1958,7 @@ def _init(dispatcher, plugin):
                 'properties': {
                     'memsize': {'type': 'integer'},
                     'ncpus': {'type': 'integer'},
-                    'bootloader': {'$ref': 'vm-config-bootloader'},
+                    'bootloader': {'$ref': 'VmConfigBootloader'},
                     'boot_device': {'type': ['string', 'null']},
                     'boot_partition': {'type': ['string', 'null']},
                     'boot_directory': {'type': ['string', 'null']},
@@ -1975,12 +1975,12 @@ def _init(dispatcher, plugin):
             },
             'devices': {
                 'type': 'array',
-                'items': {'$ref': 'vm-device'}
+                'items': {'$ref': 'VmDevice'}
             }
         }
     })
 
-    plugin.register_schema_definition('vm-snapshot', {
+    plugin.register_schema_definition('VmSnapshot', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
@@ -1991,111 +1991,111 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('vm-config-bootloader', {
+    plugin.register_schema_definition('VmConfigBootloader', {
         'type': 'string',
         'enum': ['BHYVELOAD', 'GRUB', 'UEFI', 'UEFI_CSM']
     })
 
-    plugin.register_schema_definition('vm-device', {
+    plugin.register_schema_definition('VmDevice', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
             'id': {'type': 'string'},
             'name': {'type': 'string'},
-            'type': {'$ref': 'vm-device-type'},
+            'type': {'$ref': 'VmDeviceType'},
             'properties': {
                 'discriminator': '%type',
                 'oneOf': [
-                    {'$ref': 'vm-device-nic'},
-                    {'$ref': 'vm-device-disk'},
-                    {'$ref': 'vm-device-cdrom'},
-                    {'$ref': 'vm-device-volume'},
-                    {'$ref': 'vm-device-graphics'},
-                    {'$ref': 'vm-device-usb'}
+                    {'$ref': 'VmDeviceNic'},
+                    {'$ref': 'VmDeviceDisk'},
+                    {'$ref': 'VmDeviceCdrom'},
+                    {'$ref': 'VmDeviceVolume'},
+                    {'$ref': 'VmDeviceGraphics'},
+                    {'$ref': 'VmDeviceUsb'}
                 ]
             }
         },
         'required': ['name', 'type', 'properties']
     })
 
-    plugin.register_schema_definition('vm-device-type', {
+    plugin.register_schema_definition('VmDeviceType', {
         'type': 'string',
         'enum': ['DISK', 'CDROM', 'NIC', 'VOLUME', 'GRAPHICS', 'USB']
     })
 
-    plugin.register_schema_definition('vm-device-nic', {
+    plugin.register_schema_definition('VmDeviceNic', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
-            '%type': {'enum': ['vm-device-nic']},
-            'device': {'$ref': 'vm-device-nic-device'},
-            'mode': {'$ref': 'vm-device-nic-mode'},
+            '%type': {'enum': ['VmDeviceNic']},
+            'device': {'$ref': 'VmDeviceNicDevice'},
+            'mode': {'$ref': 'VmDeviceNicMode'},
             'link_address': {'type': 'string'},
             'bridge': {'type': ['string', 'null']}
         }
     })
 
-    plugin.register_schema_definition('vm-device-nic-device', {
+    plugin.register_schema_definition('VmDeviceNicDevice', {
         'type': 'string',
         'enum': ['VIRTIO', 'E1000', 'NE2K']
     })
 
-    plugin.register_schema_definition('vm-device-nic-mode', {
+    plugin.register_schema_definition('VmDeviceNicMode', {
         'type': 'string',
         'enum': ['BRIDGED', 'NAT', 'HOSTONLY', 'MANAGEMENT']
     })
 
-    plugin.register_schema_definition('vm-device-disk', {
+    plugin.register_schema_definition('VmDeviceDisk', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
-            '%type': {'enum': ['vm-device-disk']},
-            'mode': {'$ref': 'vm-device-disk-mode'},
+            '%type': {'enum': ['VmDeviceDisk']},
+            'mode': {'$ref': 'VmDeviceDiskMode'},
             'size': {'type': 'integer'},
             'source': {'type': 'string'}
         },
         'required': ['size']
     })
 
-    plugin.register_schema_definition('vm-device-disk-mode', {
+    plugin.register_schema_definition('VmDeviceDiskMode', {
         'type': 'string',
         'enum': ['AHCI', 'VIRTIO']
     })
 
-    plugin.register_schema_definition('vm-device-cdrom', {
+    plugin.register_schema_definition('VmDeviceCdrom', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
-            '%type': {'enum': ['vm-device-cdrom']},
+            '%type': {'enum': ['VmDeviceCdrom']},
             'path': {'type': 'string'}
         },
         'required': ['path']
 
     })
 
-    plugin.register_schema_definition('vm-device-volume', {
+    plugin.register_schema_definition('VmDeviceVolume', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
-            '%type': {'enum': ['vm-device-volume']},
-            'type': {'$ref': 'vm-device-volume-type'},
+            '%type': {'enum': ['VmDeviceVolume']},
+            'type': {'$ref': 'VmDeviceVolumeType'},
             'auto': {'type': ['boolean', 'null']},
             'destination': {'type': ['string', 'null']},
             'source': {'type': 'string'}
         }
     })
 
-    plugin.register_schema_definition('vm-device-volume-type', {
+    plugin.register_schema_definition('VmDeviceVolumeType', {
         'type': 'string',
         'enum': ['VT9P', 'NFS']
     })
 
-    plugin.register_schema_definition('vm-device-graphics', {
+    plugin.register_schema_definition('VmDeviceGraphics', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
-            '%type': {'enum': ['vm-device-graphics']},
-            'resolution': {'$ref': 'vm-device-graphics-resolution'},
+            '%type': {'enum': ['VmDeviceGraphics']},
+            'resolution': {'$ref': 'VmDeviceGraphicsResolution'},
             'vnc_enabled': {'type': 'boolean'},
             'vnc_port': {
                 'type': ['integer', 'null'],
@@ -2105,7 +2105,7 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('vm-device-graphics-resolution', {
+    plugin.register_schema_definition('VmDeviceGraphicsResolution', {
         'type': 'string',
         'enum': [
             '1920x1200',
@@ -2120,7 +2120,7 @@ def _init(dispatcher, plugin):
         ]
     })
 
-    plugin.register_schema_definition('vm-guest-type', {
+    plugin.register_schema_definition('VmGuestType', {
         'type': 'string',
         'enum': [
             'linux64',
@@ -2135,12 +2135,12 @@ def _init(dispatcher, plugin):
         ]
     })
 
-    plugin.register_schema_definition('vm-device-usb', {
+    plugin.register_schema_definition('VmDeviceUsb', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
-            '%type': {'enum': ['vm-device-usb']},
-            'device': {'$ref': 'vm-device-usb-device'},
+            '%type': {'enum': ['VmDeviceUsb']},
+            'device': {'$ref': 'VmDeviceUsbDevice'},
             'config': {
                 'type': 'object'  # XXX: not sure what goes there
             }
@@ -2148,12 +2148,12 @@ def _init(dispatcher, plugin):
         'required': ['device']
     })
 
-    plugin.register_schema_definition('vm-device-usb-device', {
+    plugin.register_schema_definition('VmDeviceUsbDevice', {
         'type': 'string',
         'enum': ['tablet']
     })
 
-    plugin.register_schema_definition('vm-config', {
+    plugin.register_schema_definition('VmConfig', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
@@ -2167,12 +2167,12 @@ def _init(dispatcher, plugin):
             },
             'additional_templates': {
                 'type': 'array',
-                'items': {'$ref': 'vm-template-source'}
+                'items': {'$ref': 'VmTemplateSource'}
             }
         }
     })
 
-    plugin.register_schema_definition('vm-template-source', {
+    plugin.register_schema_definition('VmTemplateSource', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
@@ -2182,7 +2182,7 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('vm-guest-info', {
+    plugin.register_schema_definition('VmGuestInfo', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
@@ -2198,7 +2198,7 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('vm-hw-capabilites', {
+    plugin.register_schema_definition('VmHwCapabilites', {
         'type': 'object',
         'properties': {
             'vtx_enabled': {'type': 'boolean'},
