@@ -54,6 +54,7 @@ import pf
 import urllib.parse
 import requests
 import contextlib
+import dhcp.client as dhcp
 from docker.errors import NotFound
 from datetime import datetime
 from bsd import kld, sysctl, setproctitle
@@ -76,7 +77,6 @@ from vnc import app
 from mgmt import ManagementNetwork
 from ec2 import EC2MetadataServer
 from proxy import ReverseProxyServer
-import dhcp.client as dhcp
 
 
 BOOTROM_PATH = '/usr/local/share/uefi-firmware/BHYVE_UEFI.fd'
