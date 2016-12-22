@@ -175,7 +175,7 @@ def rearrange_swap(dispatcher):
 def init_textdumps():
     system('/sbin/ddb', 'script', 'kdb.enter.break=watchdog 38; textdump set; capture on')
     system('/sbin/ddb', 'script', 'kdb.enter.sysctl=watchdog 38; textdump set; capture on')
-    system('/sbin/ddb', 'script', 'kdb.enter.default=watchdog 38; textdump set; capture on; show allpcpu; bt; ps; alltrace; textdump dump; call doadump; reset')
+    system('/sbin/ddb', 'script', 'kdb.enter.default=watchdog 38; textdump set; capture on; show allpcpu; bt; ps; alltrace; textdump dump; reset')
     sysctl.sysctlbyname('debug.ddb.textdump.pending', new=1)
     sysctl.sysctlbyname('debug.debugger_on_panic', new=1)
 
