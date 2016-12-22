@@ -67,7 +67,7 @@ class Migration(DataMigration):
             u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
             'message_id': ('django.db.models.fields.CharField', [], {'max_length': '100'}),
             'node': ('django.db.models.fields.CharField', [], {'default': "'A'", 'max_length': '100'}),
-            'timestamp': ('django.db.models.fields.IntegerField', [], {'default': '1479413347'})
+            'timestamp': ('django.db.models.fields.IntegerField', [], {'default': '1482323505'})
         },
         u'system.backup': {
             'Meta': {'object_name': 'Backup'},

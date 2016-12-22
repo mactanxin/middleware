@@ -1,100 +1,45 @@
 # -*- coding: utf-8 -*-
-import os
 from south.utils import datetime_utils as datetime
 from south.db import db
 from south.v2 import DataMigration
 from django.db import models
-
-from datastore import get_datastore
-from datastore.config import ConfigStore
-
+import re
+import unicodedata
 
 class Migration(DataMigration):
 
+    def certname(self, model):
+        """
+        We have allowed certificate names (identifiers) to contain non-ascii
+        and spaces, this was a bad idea for various reasons. Because it is used
+        to name the certificate files.
+        """
+        for cert in model.objects.all():
+            reg = re.search(r'^[a-z0-9_\-]+$', cert.cert_name, re.I)
+            if reg:
+                continue
+
+            name = unicodedata.normalize('NFKD', cert.cert_name)
+            name = re.sub('[^0-9a-z_-]', '_', name, flags=re.I)
+            new_name = name
+
+            i = 1
+            while model.objects.filter(cert_name=new_name).exclude(id=cert.id).exists():
+                new_name = name + str(i)
+                i += 1
+
+            cert.cert_name = new_name
+            cert.save()
+
     def forwards(self, orm):
-
-        # Skip for install time, we only care for upgrades here
-        if 'FREENAS_INSTALL' in os.environ:
-            return
-
-        ds = get_datastore()
-        cs = ConfigStore(ds)
-
-        def migrate_cert(certs):
-            id_uuid_map = {}
-            signedby = []
-
-            for obj in certs:
-
-                if obj.cert_type == 0x1:
-                    _type = 'CA_EXISTING'
-                elif obj.cert_type == 0x2:
-                    _type = 'CA_INTERNAL'
-                elif obj.cert_type == 0x4:
-                    _type = 'CA_INTERMEDIATE'
-                elif obj.cert_type == 0x8:
-                    _type = 'CERT_EXISTING'
-                elif obj.cert_type == 0x10:
-                    _type = 'CERT_INTERNAL'
-                else:
-                    _type = 'CERT_CSR'
-
-                cert = {
-                    'type': _type,
-                    'name': obj.cert_name,
-                    'certificate': obj.cert_certificate,
-                    'privatekey': obj.cert_privatekey,
-                    'csr': obj.cert_CSR,
-                    'key_length': obj.cert_key_length,
-                    'digest_algorithm': obj.cert_digest_algorithm,
-                    'lifetime': obj.cert_lifetime,
-                    'country': obj.cert_country,
-                    'state': obj.cert_state,
-                    'city': obj.cert_city,
-                    'organization': obj.cert_organization,
-                    'email': obj.cert_email,
-                    'common': obj.cert_common,
-                    'serial': obj.cert_serial,
-                }
-
-                pkey = ds.insert('crypto.certificates', cert)
-                id_uuid_map[obj.id] = pkey
-
-                if obj.cert_signedby is not None:
-                    signedby.append(obj.id)
-
-            return id_uuid_map, signedby
-
-        def migrate_signedby(model, id_uuid_map, signedby, ca_map):
-            for id in signedby:
-                cobj = model.objects.get(id=id)
-                pkey = id_uuid_map.get(id)
-                if pkey is None:
-                    continue
-                cert = ds.get_by_id('crypto.certificates', pkey)
-                if cobj.cert_signedby is None:
-                    continue
-
-                signedby = ca_map.get(cobj.cert_signedby.id)
-                if signedby is None:
-                    continue
-                cert['signedby'] = signedby
-                ds.update('crypto.certificates', pkey, cert)
-
-        id_uuid_map, signedby = migrate_cert(orm['system.CertificateAuthority'].objects.order_by('cert_signedby'))
-        migrate_signedby(orm['system.CertificateAuthority'], id_uuid_map, signedby, id_uuid_map)
-
-        cert_id_uuid_map, cert_signedby = migrate_cert(orm['system.Certificate'].objects.order_by('cert_signedby'))
-        migrate_signedby(orm['system.Certificate'], cert_id_uuid_map, cert_signedby, id_uuid_map)
-
-        settings = orm['system.Settings'].objects.order_by('-id')[0]
-        if settings.stg_guicertificate:
-            uuid = cert_id_uuid_map.get(settings.stg_guicertificate.id)
-            if uuid:
-                cs.set('service.nginx.https.certificate', uuid)
-
-        ds.collection_record_migration('crypto.certificates', 'freenas9_migration')
-
+        try:
+            self.certname(orm['system.CertificateAuthority'])
+        except:
+            pass
+        try:
+            self.certname(orm['system.Certificate'])
+        except:
+            pass
 
     def backwards(self, orm):
         "Write your backwards methods here."
