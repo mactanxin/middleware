@@ -576,7 +576,7 @@ class VMBaseTask(ProgressTask):
             progress_cb(100, 'Creating {0}'.format(res['type'].lower()))
 
     def update_device(self, vm, old_res, new_res):
-        vm_ds = os.path.join(vm['target'], 'vm', vm['name'])
+        vm_ds = os.path.join(VM_ROOT, vm['name'])
         old_properties = old_res['properties']
         new_properties = new_res['properties']
 

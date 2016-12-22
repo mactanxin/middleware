@@ -171,7 +171,7 @@ class DirectoryCreateTask(Task):
 
     def run(self, id, path):
         driver = self.dispatcher.call_sync('vm.datastore.get_driver', id)
-        return self.run_subtask_sync('vm.datastore.{0}.create_directory'.format(driver), id, path)
+        return self.run_subtask_sync('vm.datastore.{0}.create_directory'.format(driver), id, normpath(path))
 
 
 class DirectoryDeleteTask(Task):
@@ -180,7 +180,7 @@ class DirectoryDeleteTask(Task):
 
     def run(self, id, path):
         driver = self.dispatcher.call_sync('vm.datastore.get_driver', id)
-        return self.run_subtask_sync('vm.datastore.{0}.delete_directory'.format(driver), id, path)
+        return self.run_subtask_sync('vm.datastore.{0}.delete_directory'.format(driver), id, normpath(path))
 
 
 class DirectoryRenameTask(Task):
@@ -236,7 +236,12 @@ class BlockDeviceResizeTask(Task):
 
     def run(self, id, path, new_size):
         driver = self.dispatcher.call_sync('vm.datastore.get_driver', id)
-        return self.run_subtask_sync('vm.datastore.{0}.resize_block_device'.format(driver), id, path, new_size)
+        return self.run_subtask_sync(
+            'vm.datastore.{0}.resize_block_device'.format(driver),
+            id,
+            normpath(path),
+            new_size
+        )
 
 
 class BlockDeviceCloneTask(Task):
