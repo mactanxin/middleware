@@ -29,6 +29,7 @@ import os
 import re
 import logging
 import bsd.kld
+from bsd import sysctl
 from task import Provider
 from lib.system import system, SubprocessException
 from lib.geom import confxml
@@ -37,6 +38,7 @@ from freenas.utils.decorators import delay
 from freenas.utils.trace_logger import TRACE
 
 
+MAX_MIRRORS = 6
 logger = logging.getLogger('SwapPlugin')
 
 
@@ -147,15 +149,18 @@ def create_swap(dispatcher, disks):
     for pair in zip(*[iter(disks)] * 2):
         name = get_swap_name()
         disk_a, disk_b = pair
-        logger.info('Creating swap partition %s from disks: %s, %s', name, disk_a, disk_b)
-        system('/sbin/gmirror', 'create', '-b', 'prefer', name, disk_a, disk_b)
-        system('/sbin/swapon', '/dev/mirror/{0}'.format(name))
-        configure_dumpdev('/dev/mirror/{0}'.format(name))
+        try:
+            logger.info('Creating swap partition %s from disks: %s, %s', name, disk_a, disk_b)
+            system('/sbin/gmirror', 'create', '-b', 'prefer', name, disk_a, disk_b)
+            system('/sbin/swapon', '/dev/mirror/{0}'.format(name))
+            configure_dumpdev('/dev/mirror/{0}'.format(name))
+        except BaseException as err:
+            logger.warning('Failed to create swap from disks {0}, {1}: {2}'.format(disk_a, disk_b, err))
 
 
 def rearrange_swap(dispatcher):
     swap_info = list(get_swap_info(dispatcher).values())
-    swap_disks = set(get_available_disks(dispatcher))
+    swap_disks = set(get_available_disks(dispatcher)[:MAX_MIRRORS * 2])
     active_swap_disks = set(sum([s['disks'] for s in swap_info], []))
 
     logger.log(TRACE, 'Rescanning available disks')
@@ -165,6 +170,24 @@ def rearrange_swap(dispatcher):
 
     create_swap(dispatcher, list(swap_disks - active_swap_disks))
     remove_swap(dispatcher, list(active_swap_disks - swap_disks))
+
+
+def init_textdumps():
+    system('/sbin/ddb', 'script', 'kdb.enter.break=watchdog 38; textdump set; capture on')
+    system('/sbin/ddb', 'script', 'kdb.enter.sysctl=watchdog 38; textdump set; capture on')
+    system('/sbin/ddb', 'script', 'kdb.enter.default=watchdog 38; textdump set; capture on; show allpcpu; bt; ps; alltrace; textdump dump; call doadump; reset')
+    sysctl.sysctlbyname('debug.ddb.textdump.pending', new=1)
+    sysctl.sysctlbyname('debug.debugger_on_panic', new=1)
+
+
+def find_dumps(dispatcher):
+    logger.warning('Finding and saving crash dumps')
+    for mirror in get_swap_info(dispatcher):
+        try:
+            path = os.path.join('/dev/mirror', mirror)
+            system('/sbin/savecore', '/var/crash', path)
+        except SubprocessException:
+            continue
 
 
 def _depends():
@@ -208,5 +231,7 @@ def _init(dispatcher, plugin):
     except FileExistsError:
         pass
 
+    init_textdumps()
     clear_swap(dispatcher)
     rearrange_swap(dispatcher)
+    find_dumps(dispatcher)
