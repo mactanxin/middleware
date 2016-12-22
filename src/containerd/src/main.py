@@ -1124,14 +1124,6 @@ class ManagementService(RpcService):
                 )
             )
 
-        if not vtx_enabled and svm_features and container['config']['bootloader'] not in ('GRUB', 'BHYVELOAD'):
-            raise RpcException(
-                errno.ENOTSUP,
-                'Cannot start VM {0}. Only GRUB and BHYVELOAD bootloaders are supported for AMD architecture'.format(
-                    container['name']
-                )
-            )
-
         vm = VirtualMachine(self.context)
         vm.id = container['id']
         vm.name = container['name']
