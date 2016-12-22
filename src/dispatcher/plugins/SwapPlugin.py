@@ -184,7 +184,7 @@ def find_dumps(dispatcher):
     logger.warning('Finding and saving crash dumps')
     for disk in get_available_disks(dispatcher):
         try:
-            system('/sbin/savecore', '/var/crash', disk + 'p1')
+            system('/sbin/savecore', '/data/crash', disk + 'p1')
         except SubprocessException:
             continue
 
@@ -229,6 +229,9 @@ def _init(dispatcher, plugin):
         bsd.kld.kldload('/boot/kernel/geom_mirror.ko')
     except FileExistsError:
         pass
+
+    if not os.path.isdir('/data/crash'):
+        os.makedirs('/data/crash')
 
     init_textdumps()
     clear_swap(dispatcher)
