@@ -635,10 +635,12 @@ class Dispatcher(object):
                 ev.decref()
 
     def register_event_handler_once(self, name, handler):
-        @sync
+        lock = RLock()
+
         def doit(args):
-            handler(args)
-            self.unregister_event_handler(name, doit)
+            with lock:
+                handler(args)
+                self.unregister_event_handler(name, doit)
 
         self.register_event_handler(name, doit)
 
