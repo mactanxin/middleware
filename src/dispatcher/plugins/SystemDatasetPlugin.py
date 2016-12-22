@@ -300,7 +300,7 @@ class SystemDatasetConfigure(ProgressTask):
 
                 self.set_progress(70, 'Copying freenas-log database and switching to the new system dataset')
 
-                self.datastore.lock(data=True, log=True)
+                self.dispatcher.call_sync('management.stop_logdb')
 
                 try:
                     copytree(
@@ -324,11 +324,6 @@ class SystemDatasetConfigure(ProgressTask):
 
                 mount_system_dataset(self.dispatcher, self.id, self.src_pool, SYSTEM_DIR)
 
-                try:
-                    self.datastore.unlock(data=True, log=True)
-                except pymongo.errors.OperationFailure:
-                    pass
-
                 self.dispatcher.call_sync('management.stop_logdb')
                 self.dispatcher.call_sync('management.start_logdb')
                 self.manage_services('start')
@@ -340,7 +335,7 @@ class SystemDatasetConfigure(ProgressTask):
 
             remove_system_dataset(self.dispatcher, self.id, self.src_pool)
 
-            self.datastore.unlock(data=True, log=True)
+            self.dispatcher.call_sync('management.start_logdb')
             self.configstore.set('system.dataset.pool', pool)
 
             self.manage_services('start', 90)
