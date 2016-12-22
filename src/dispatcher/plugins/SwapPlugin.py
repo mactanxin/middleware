@@ -182,10 +182,9 @@ def init_textdumps():
 
 def find_dumps(dispatcher):
     logger.warning('Finding and saving crash dumps')
-    for mirror in get_swap_info(dispatcher):
+    for disk in get_available_disks(dispatcher):
         try:
-            path = os.path.join('/dev/mirror', mirror)
-            system('/sbin/savecore', '/var/crash', path)
+            system('/sbin/savecore', '/var/crash', disk + 'p1')
         except SubprocessException:
             continue
 
@@ -233,5 +232,5 @@ def _init(dispatcher, plugin):
 
     init_textdumps()
     clear_swap(dispatcher)
-    rearrange_swap(dispatcher)
     find_dumps(dispatcher)
+    rearrange_swap(dispatcher)
