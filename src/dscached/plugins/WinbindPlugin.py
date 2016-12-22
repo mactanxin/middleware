@@ -567,7 +567,7 @@ class WinbindPlugin(DirectoryServicePlugin):
 def _init(context):
     context.register_plugin('winbind', WinbindPlugin)
 
-    context.register_schema('ldap-directory-params-sasl-wrapping', {
+    context.register_schema('winbind-directory-params-sasl-wrapping', {
         'type': 'string',
         'enum': ['PLAIN', 'SIGN', 'SEAL']
     })
@@ -585,7 +585,7 @@ def _init(context):
             'dc_address': {'type': ['string', 'null']},
             'gcs_address': {'type': ['string', 'null']},
             'allow_dns_updates': {'type': 'boolean'},
-            'sasl_wrapping': {'$ref': 'ldap-directory-params-sasl-wrapping'}
+            'sasl_wrapping': {'$ref': 'winbind-directory-params-sasl-wrapping'}
         }
     })
 
