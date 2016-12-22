@@ -243,4 +243,6 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('kerberos.keytab.update', KerberosKeytabUpdateTask)
     plugin.register_task_handler('kerberos.keytab.delete', KerberosKeytabDeleteTask)
 
+    plugin.register_debug_hook(collect_debug)
+
     generate_keytab(dispatcher.datastore)
