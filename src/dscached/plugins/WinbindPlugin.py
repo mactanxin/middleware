@@ -310,7 +310,7 @@ class WinbindPlugin(DirectoryServicePlugin):
                 logger.debug('Setting samba parameter "{0}" to "{1}"'.format(k, v))
                 cfg[k] = v
 
-        subprocess.call(['/usr/sbin/service', 'samba_server', 'restart'])
+        self.context.client.call_sync('service.restart', 'smb')
 
     def get_directory_info(self):
         return {
@@ -523,7 +523,7 @@ class WinbindPlugin(DirectoryServicePlugin):
 
             try:
                 subprocess.check_output(['/usr/local/bin/net', 'ads', 'join', self.realm, '-k'])
-                subprocess.call(['/usr/sbin/service', 'samba_server', 'restart'])
+                self.context.client.call_sync('service.restart', 'smb')
             except subprocess.CalledProcessError as err:
                 # Undo possibly partially successful join
                 subprocess.call(['/usr/local/bin/net', 'ads', 'leave'])
