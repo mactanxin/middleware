@@ -843,14 +843,14 @@ class DockerHost(object):
                             'ids': [ev['id']]
                         })
                         details = self.connection.inspect_container(ev['id'])
+                        name = q.get(ev, 'Actor.Attributes.name')
 
                         if ev['Action'] == 'die':
                             state = details['State']
-                            name = details['Name'][1:]
                             if not state.get('Running') and state.get('ExitCode') not in (None, 0, 137):
                                 self.context.client.call_sync('alert.emit', {
                                     'class': 'DockerContainerDied',
-                                    'target': details['Name'],
+                                    'target': name,
                                     'title': 'Docker container {0} exited with nonzero status.'.format(name),
                                     'description': 'Docker container {0} has exited with status {1}'.format(
                                         name,
@@ -865,7 +865,7 @@ class DockerHost(object):
                         elif ev['Action'] == 'oom':
                             self.context.client.call_sync('alert.emit', {
                                 'class': 'DockerContainerDied',
-                                'target': details['Name'],
+                                'target': name,
                                 'title': 'Docker container {0} ran out of memory.'.format(name),
                                 'description': 'Docker container {0} has run out of memory.'.format(name)
                             })
@@ -883,6 +883,17 @@ class DockerHost(object):
                                     p.delete_rule('rdr', rule.index)
 
                         elif ev['Action'] == 'start':
+                            self.logger.debug('Cancelling active alerts for container {0}'.format(name))
+                            active_alerts = self.context.client.call_sync(
+                                'alert.query',
+                                [('class', '=', 'DockerContainerDied'), ('target', '=', name), ('active', '=', True)]
+                            )
+                            for alert in active_alerts:
+                                self.logger.debug(
+                                    '{0} started. Cancelling old container died alert {1}'.format(name, alert['id'])
+                                )
+                                self.context.client.call_sync('alert.cancel', alert['id'])
+
                             if 'org.freenas.expose-ports-at-host' not in details['Config']['Labels']:
                                 continue
 

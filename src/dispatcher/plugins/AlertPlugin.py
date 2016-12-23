@@ -90,7 +90,6 @@ class AlertsProvider(Provider):
             'ids': [id]
         })
 
-
     @description("Dismisses/Deletes all alerts from the database")
     @accepts()
     def dismiss_all(self):
