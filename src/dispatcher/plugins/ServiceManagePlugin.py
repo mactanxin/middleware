@@ -488,6 +488,8 @@ def _init(dispatcher, plugin):
 
             plugin.register_resource(Resource('service:{0}'.format(svc['name'])), parents=['system'])
 
+        dispatcher.emit_event('service.ready', {})
+
     def on_job_changed(args):
         svc = dispatcher.datastore.get_one('service_definitions', ('launchd.Label', '=', args['Label']))
         if svc:
@@ -534,5 +536,6 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler("service.update", UpdateServiceConfigTask)
     plugin.register_provider("service", ServiceInfoProvider)
     plugin.register_event_type("service.changed")
+    plugin.register_event_type("service.ready")
 
     plugin.register_debug_hook(collect_debug)
