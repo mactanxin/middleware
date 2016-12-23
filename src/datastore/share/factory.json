@@ -1634,6 +1634,11 @@
                 "type": "SYSTEM",
                 "subtype": "UPS",
                 "severity": "WARNING"
+            },
+            "CrashDataFound": {
+                "type": "SYSTEM",
+                "subtype": "SYSTEM",
+                "severity": "WARNING"
             }
         }
     },
