@@ -264,7 +264,11 @@ class VolumeProvider(Provider):
         if not volume['mountpoint']:
             raise RpcException(errno.EINVAL, 'Volume {0} not mounted'.format(volname))
 
-        if self.query([('id', '=', os.path.join(volname, path)), ('type', '=', 'VOLUME')], {'single': True}):
+        if self.dispatcher.call_sync(
+            'volume.dataset.query',
+            [('id', '=', os.path.join(volname, path)), ('type', '=', 'VOLUME')],
+            {'single': True}
+        ):
             return os.path.join('/dev/zvol', volname, path)
 
         return os.path.join(volume['mountpoint'], path)

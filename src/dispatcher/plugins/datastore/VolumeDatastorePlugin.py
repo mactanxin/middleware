@@ -44,7 +44,7 @@ class VolumeDatastoreProvider(Provider):
     @private
     @accepts(str, str)
     def get_filesystem_path(self, datastore_id, datastore_path):
-        return self.dispatcher.call_sync('volume.get_dataset_path', os.path.join(datastore_id, datastore_path))
+        return self.dispatcher.call_sync('volume.resolve_path', datastore_id, datastore_path)
 
     @private
     @accepts(str)
