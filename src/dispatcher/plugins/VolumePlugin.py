@@ -2502,11 +2502,11 @@ class DatasetTemporaryMountTask(Task):
             return ['system']
 
     def run(self, id, dest):
-        ds_ro = self.dispatcher.call_sync(
+        ds_ro = list(self.dispatcher.call_sync(
             'zfs.dataset.query',
             [('id', '=', id)],
             {'select': 'properties.readonly.rawvalue'}
-        )
+        ))
         if not ds_ro:
             raise TaskException(errno.ENOENT, 'Dataset {0} does not exist'.format(id))
         if not ds_ro[0]:
