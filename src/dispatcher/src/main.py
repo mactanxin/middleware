@@ -78,8 +78,8 @@ from services import (
 from event import sync
 from schemas import register_general_purpose_schemas
 from balancer import Balancer
-from auth import PasswordAuthenticator, TokenStore, Token, TokenException, User, Service
-from freenas.utils import FaultTolerantLogHandler, load_module_from_file, xrecvmsg, xsendmsg, serialize_exception
+from auth import PasswordAuthenticator, TokenStore, Token, User, Service
+from freenas.utils import FaultTolerantLogHandler, load_module_from_file, serialize_exception
 from freenas.utils.trace_logger import TraceLogger, TRACE
 from freenas.serviced import checkin, push_status
 
