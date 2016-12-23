@@ -840,10 +840,27 @@ class DockerHost(object):
                         })
                         details = self.connection.inspect_container(ev['id'])
 
+                        existing_alerts = []
+                        if ev['Action'] in ('die', 'oom'):
+                            existing_alerts = self.context.client.call_sync(
+                                'alert.query',
+                                [
+                                    ('dismissed', '=', False),
+                                    ('class', '=', 'DockerContainerDied'),
+                                    ('target', '=', details['Name'])
+                                ],
+                                {'select': 'id'}
+                            )
+
+                        def dismiss_old_alerts(alerts):
+                            for i in alerts:
+                                self.context.client.call_sync('alert.dismiss', i)
+
                         if ev['Action'] == 'die':
                             state = details['State']
                             name = details['Name'][1:]
                             if not state.get('Running') and state.get('ExitCode') not in (None, 0, 137):
+                                dismiss_old_alerts(existing_alerts)
                                 self.context.client.call_sync('alert.emit', {
                                     'class': 'DockerContainerDied',
                                     'target': details['Name'],
@@ -851,7 +868,8 @@ class DockerHost(object):
                                     'description': 'Docker container {0} has exited with status {1}'.format(
                                         name,
                                         state.get('ExitCode')
-                                    )
+                                    ),
+                                    'one_shot': True
                                 })
                                 self.logger.debug('Container {0} exited with nonzero status {1}'.format(
                                     name,
@@ -859,11 +877,13 @@ class DockerHost(object):
                                 ))
 
                         elif ev['Action'] == 'oom':
+                            dismiss_old_alerts(existing_alerts)
                             self.context.client.call_sync('alert.emit', {
                                 'class': 'DockerContainerDied',
                                 'target': details['Name'],
                                 'title': 'Docker container {0} ran out of memory.'.format(name),
-                                'description': 'Docker container {0} has run out of memory.'.format(name)
+                                'description': 'Docker container {0} has run out of memory.'.format(name),
+                                'one_shot': True
                             })
                             self.logger.debug('Container {0} has run out of memory'.format(name))
 
