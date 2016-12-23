@@ -120,7 +120,7 @@ class VMProvider(Provider):
             return self.dispatcher.call_sync(
                 'vm.datastore.get_filesystem_path',
                 vm['target'],
-                os.path.join('/vm', vm['name'], target_path)
+                os.path.join(VM_ROOT, vm['name'], target_path)
             )
 
         if disk['type'] == 'CDROM':
