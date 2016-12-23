@@ -884,14 +884,12 @@ class DockerHost(object):
 
                         elif ev['Action'] == 'start':
                             self.logger.debug('Cancelling active alerts for container {0}'.format(name))
-                            active_alerts = self.context.client.call_sync(
-                                'alert.query',
-                                [('class', '=', 'DockerContainerDied'), ('target', '=', name), ('active', '=', True)]
+                            alert = self.context.client.call_sync(
+                                'alert.get_active_alert',
+                                'DockerContainerDied',
+                                name
                             )
-                            for alert in active_alerts:
-                                self.logger.debug(
-                                    '{0} started. Cancelling old container died alert {1}'.format(name, alert['id'])
-                                )
+                            if alert:
                                 self.context.client.call_sync('alert.cancel', alert['id'])
 
                             if 'org.freenas.expose-ports-at-host' not in details['Config']['Labels']:
