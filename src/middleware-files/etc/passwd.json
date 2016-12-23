@@ -551,7 +551,7 @@
     },
     {
         "uid": 100,
-        "full_name": "Replication worker",
+        "full_name": "Remote FreeNAS worker",
         "shell": "/bin/sh",
         "id": "08c571c4-3c36-4652-af3b-27d5864f70c0",
         "password_disabled": false,
@@ -568,7 +568,7 @@
         "attributes": {},
         "sudo": false,
         "groups": ["36dd1308-699e-45b9-ba9e-d3253a14e1d5", "0562d3be-679b-45e3-a220-f9d9a2e938a9"],
-        "home": "/nonexistent",
+        "home": "/",
         "unixhash": "*",
         "smbhash": "*",
         "created_at": {

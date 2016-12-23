@@ -516,7 +516,6 @@ class TransportSendTask(TransportBase):
             free(buffer)
             free(token_buffer)
             if self.sock:
-                self.sock.shutdown(socket.SHUT_RDWR)
                 self.sock.close()
                 self.sock = None
             close_fds(self.fds)
@@ -524,13 +523,13 @@ class TransportSendTask(TransportBase):
     def get_recv_status(self, status):
         if status.get('state') != 'FINISHED':
             error = status.get('error')
+            self.aborted = True
             close_fds(self.fds)
             if self.conn:
                 self.conn.shutdown(socket.SHUT_RDWR)
                 self.conn.close()
                 self.conn = None
             if self.sock:
-                self.sock.shutdown(socket.SHUT_RDWR)
                 self.sock.close()
                 self.sock = None
             self.finished.set_exception(
@@ -555,7 +554,6 @@ class TransportSendTask(TransportBase):
             self.conn.close()
             self.conn = None
         if self.sock:
-            self.sock.shutdown(socket.SHUT_RDWR)
             self.sock.close()
             self.sock = None
 
@@ -773,7 +771,6 @@ class TransportReceiveTask(TransportBase):
                 if addr:
                     logger.debug('Receive from {0}:{1} finished. Closing connection'.format(*addr))
                     if self.sock:
-                        self.sock.shutdown(socket.SHUT_RDWR)
                         self.sock.close()
                         self.sock = None
                 else:
@@ -786,7 +783,6 @@ class TransportReceiveTask(TransportBase):
         self.aborted = True
         close_fds(self.fds)
         if self.sock:
-            self.sock.shutdown(socket.SHUT_RDWR)
             self.sock.close()
             self.sock = None
 
