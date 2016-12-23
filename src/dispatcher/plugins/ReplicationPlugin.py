@@ -462,6 +462,7 @@ class ReplicationCreateTask(ReplicationBaseTask):
     def rollback(self, link):
         if self.datastore.exists('replication.links', ('name', '=', link['name'])):
             self.datastore.delete('replication.links', link['name'])
+            self.dispatcher.call_sync('replication.link_cache_remove', link['name'])
 
 
 @private
@@ -577,10 +578,7 @@ class ReplicationDeleteTask(ReplicationBaseTask):
         return TaskDescription("Deleting the replication link {name}", name=name)
 
     def verify(self, name, scrub=False):
-        if not self.datastore.exists('replication.links', ('name', '=', name)):
-            raise VerifyException(errno.ENOENT, 'Replication link {0} do not exist.'.format(name))
-
-        return ['replication:{0}'.format(name)]
+        return ['replication']
 
     def run(self, name, scrub=False):
         if not self.datastore.exists('replication.links', ('name', '=', name)):
