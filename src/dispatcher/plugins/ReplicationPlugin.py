@@ -457,6 +457,7 @@ class ReplicationCreateTask(ReplicationBaseTask):
             parents=get_replication_resources(self.dispatcher, link)
         )
         remote_client.disconnect()
+        return id
 
     def rollback(self, link):
         if self.datastore.exists('replication.links', ('name', '=', link['name'])):
