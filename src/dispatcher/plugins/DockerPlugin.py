@@ -500,6 +500,9 @@ class DockerBaseTask(ProgressTask):
             timeout=300
         )
 
+        if not host:
+            raise TaskException(errno.ENOENT, 'Docker host {0} does not exist'.format(hostid))
+
         if host['state'] == 'DOWN':
             raise TaskException(errno.EHOSTDOWN, 'Docker host {0} is down'.format(host['name']))
 
@@ -1148,7 +1151,10 @@ class DockerImagePullTask(DockerBaseTask):
             self.set_progress(progress, message)
 
         for h in hosts:
-            self.check_host_state(h)
+            try:
+                self.check_host_state(h)
+            except TaskException:
+                continue
 
             for i in self.dispatcher.call_sync('containerd.docker.pull', name, h, timeout=3600):
                 if 'progressDetail' in i and 'current' in i['progressDetail'] and 'total' in i['progressDetail']:
@@ -1195,7 +1201,11 @@ class DockerImageDeleteTask(DockerBaseTask):
 
         def delete_image():
             for id in hosts:
-                self.check_host_state(id)
+                try:
+                    self.check_host_state(id)
+                except TaskException:
+                    continue
+
                 try:
                     self.dispatcher.call_sync('containerd.docker.delete_image', name, id)
                 except RpcException as err:
