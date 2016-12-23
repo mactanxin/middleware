@@ -92,7 +92,11 @@ class VMProvider(Provider):
         if not vm:
             return None
 
-        return self.dispatcher.call_sync('vm.datastore.get_filesystem_path', vm['target'], '')
+        return self.dispatcher.call_sync(
+            'vm.datastore.get_filesystem_path',
+            vm['target'],
+            os.path.join(VM_ROOT, vm['name'])
+        )
 
     @private
     @accepts(str, str)

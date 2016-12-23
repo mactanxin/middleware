@@ -644,6 +644,7 @@ class VirtualMachine(object):
                     continue
 
                 if os.WIFEXITED(status):
+                    self.logger.info('bhyve process exited with code {0}'.format(os.WEXITSTATUS(status)))
                     break
 
             with contextlib.suppress(OSError):
