@@ -837,7 +837,7 @@ class VMImportTask(VMBaseTask):
                 'vm-{0}'.format(name)
             )
         except FileNotFoundError:
-            raise TaskException(errno.ENOENT, 'There is no {0} on {1} volume to be imported.'.format(name, volume))
+            raise TaskException(errno.ENOENT, 'There is no {0} on {1} volume to be imported.'.format(name, datastore))
         except ValueError:
             raise VerifyException(
                 errno.EINVAL,
