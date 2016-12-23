@@ -124,6 +124,10 @@ class Task(object):
                     self.subtasks.remove(t)
                     self.progress_callbacks.pop(t, None)
 
+    def run_subtask_sync(self, classname, *args, **kwargs):
+        ret, = self.join_subtasks(self.run_subtask(classname, *args, **kwargs))
+        return ret
+
     def abort_subtask(self, id):
         return self.dispatcher.abort_subtask(id)
 
@@ -137,7 +141,7 @@ class Task(object):
         self.dispatcher.balancer.submit(task, *args)
 
     def verify(self, *args, **kwargs):
-        raise NotImplementedError()
+        return []
 
     def run(self, *args, **kwargs):
         raise NotImplementedError()

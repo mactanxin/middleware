@@ -55,6 +55,7 @@ from debug import AttachData, AttachDirectory, AttachCommandOutput
 
 
 VM_OUI = '00:a0:98'  # NetApp
+VM_ROOT = '/vm'
 BLOCKSIZE = 65536
 
 
@@ -91,14 +92,7 @@ class VMProvider(Provider):
         if not vm:
             return None
 
-        return os.path.join(self.dispatcher.call_sync('volume.get_volumes_root'), self.get_dataset(vm_id))
-
-    @private
-    @accepts(str)
-    @returns(str)
-    def get_dataset(self, vm_id):
-        vm = self.datastore.get_by_id('vms', vm_id)
-        return os.path.join(vm['target'], 'vm', vm['name'])
+        return self.dispatcher.call_sync('vm.datastore.get_filesystem_path', vm['target'], '')
 
     @private
     @accepts(str, str)
@@ -113,7 +107,21 @@ class VMProvider(Provider):
             return None
 
         if disk['type'] == 'DISK':
-            return os.path.join('/dev/zvol', vm['target'], 'vm', vm['name'], disk_name)
+            target_type = q.get(disk, 'properties.target_type')
+            target_path = q.get(disk, 'properties.target_path')
+
+            if target_type == 'DISK':
+                return self.dispatcher.call_sync(
+                    'disk.query',
+                    [('id', '=', target_path)],
+                    {'single': True, 'select': 'path'}
+                )
+
+            return self.dispatcher.call_sync(
+                'vm.datastore.get_filesystem_path',
+                vm['target'],
+                os.path.join(VM_ROOT, vm['name'], target_path)
+            )
 
         if disk['type'] == 'CDROM':
             path = disk['properties']['path']
@@ -389,23 +397,17 @@ class VMBaseTask(ProgressTask):
     def __init__(self, dispatcher, datastore):
         super(VMBaseTask, self).__init__(dispatcher, datastore)
         self.vm_ds = None
+        self.target_supports_zvols = None
 
     def init_dataset(self, vm):
-        pool = vm['target']
-        root_ds = os.path.join(pool, 'vm')
-        self.vm_ds = os.path.join(root_ds, vm['name'])
+        self.vm_ds = os.path.join('vm', vm['name'])
 
-        if not self.dispatcher.call_sync('zfs.dataset.query', [('name', '=', root_ds)], {'single': True}):
+        if not self.dispatcher.call_sync('vm.datastore.directory_exists', vm['target'], 'vm'):
             # Create VM root
-            self.join_subtasks(self.run_subtask('volume.dataset.create', {
-                'volume': pool,
-                'id': root_ds
-            }))
+            self.join_subtasks(self.run_subtask('vm.datastore.create_directory', vm['target'], 'vm'))
+
         try:
-            self.join_subtasks(self.run_subtask('volume.dataset.create', {
-                'volume': pool,
-                'id': self.vm_ds
-            }))
+            self.join_subtasks(self.run_subtask('vm.datastore.create_directory', vm['target'], self.vm_ds))
         except RpcException:
             raise TaskException(
                 errno.EACCES,
@@ -419,7 +421,7 @@ class VMBaseTask(ProgressTask):
         if not template:
             return
 
-        dest_root = self.dispatcher.call_sync('volume.get_dataset_path', self.vm_ds)
+        dest_root = self.dispatcher.call_sync('vm.datastore.get_filesystem_path', vm['target'], self.vm_ds)
         try:
             shutil.copy(os.path.join(template['path'], 'README.md'), dest_root)
         except OSError:
@@ -491,25 +493,32 @@ class VMBaseTask(ProgressTask):
             normalize(res['properties'], {'resolution': '1024x768'})
 
         if res['type'] == 'DISK':
-            vm_ds = os.path.join(vm['target'], 'vm', vm['name'])
+            vm_ds = os.path.join('vm', vm['name'])
             ds_name = os.path.join(vm_ds, res['name'])
-            self.join_subtasks(self.run_subtask('volume.dataset.create', {
-                'volume': vm['target'],
-                'id': ds_name,
-                'type': 'VOLUME',
-                'volsize': res['properties']['size']
-            }))
-
-            normalize(res['properties'], {
-                'mode': 'AHCI'
+            properties = res['properties']
+            normalize(properties, {
+                'mode': 'AHCI',
+                'target_type': 'ZVOL' if self.target_supports_zvols else 'FILE',
+                'target_path': res['name']
             })
 
-            if res['properties'].get('source'):
+            if properties['target_type'] == 'ZVOL':
+                if not self.target_supports_zvols:
+                    raise TaskException(errno.EINVAL, 'Datastore {0} does not support zvols'.format(vm['target']))
+
+                self.join_subtasks(self.run_subtask(
+                    'vm.datastore.create_block_device',
+                    vm['target'],
+                    ds_name,
+                    properties['size']
+                ))
+
+            if properties.get('source'):
                 self.join_subtasks(self.run_subtask(
                     'vm.file.install',
                     vm['template']['name'],
-                    res['properties']['source'],
-                    os.path.join('/dev/zvol', ds_name),
+                    properties['source'],
+                    self.dispatcher.call_sync('vm.datastore.get_filesystem_path', vm['target'], ds_name),
                     progress_callback=progress_cb
                 ))
 
@@ -536,7 +545,7 @@ class VMBaseTask(ProgressTask):
         if res['type'] == 'VOLUME':
             properties = res['properties']
             mgmt_net = ipaddress.ip_interface(self.configstore.get('container.network.management'))
-            vm_ds = os.path.join(vm['target'], 'vm', vm['name'])
+            vm_ds = os.path.join('vm', vm['name'])
             opts = {}
 
             normalize(res['properties'], {
@@ -554,15 +563,12 @@ class VMBaseTask(ProgressTask):
                     ds_name = os.path.join(vm_ds, res['name'])
                     old_ds = self.dispatcher.call_sync('zfs.dataset.query', [('name', '=', ds_name)], {'single': True})
                     if not old_ds:
-                        self.join_subtasks(self.run_subtask('volume.dataset.create', {
-                            'volume': vm['target'],
-                            'id': ds_name
-                        }))
+                        self.join_subtasks(self.run_subtask('vm.datastore.create_directory', vm['target'], ds_name))
 
                     if properties.get('source'):
                         if old_ds:
                             shutil.rmtree(
-                                self.dispatcher.call_sync('volume.get_dataset_path', ds_name),
+                                self.dispatcher.call_sync('vm.datastore.get_filesystem_path', vm['target'], ds_name),
                                 ignore_errors=True
                             )
 
@@ -570,7 +576,7 @@ class VMBaseTask(ProgressTask):
                             'vm.file.install',
                             vm['template']['name'],
                             properties['source'],
-                            self.dispatcher.call_sync('volume.get_dataset_path', ds_name),
+                            self.dispatcher.call_sync('vm.datastore.get_filesystem_path', vm['target'], ds_name),
                             progress_callback=progress_cb
                         ))
 
@@ -578,30 +584,41 @@ class VMBaseTask(ProgressTask):
             progress_cb(100, 'Creating {0}'.format(res['type'].lower()))
 
     def update_device(self, vm, old_res, new_res):
-        vm_ds = os.path.join(vm['target'], 'vm', vm['name'])
+        vm_ds = os.path.join(VM_ROOT, vm['name'])
+        old_properties = old_res['properties']
+        new_properties = new_res['properties']
+
         if new_res['type'] in ['DISK', 'VOLUME']:
             if old_res['name'] != new_res['name']:
-                if not (new_res['type'] == 'VOLUME' and not new_res['properties']['auto']):
-                    self.join_subtasks(self.run_subtask(
-                        'zfs.rename',
+                if not (new_res['type'] == 'VOLUME' and not new_properties['auto']):
+                    self.run_subtask_sync('vm.datastore.rename_directory',
+                        vm['target'],
                         os.path.join(vm_ds, old_res['name']),
                         os.path.join(vm_ds, new_res['name'])
-                    ))
-                    if new_res['type'] == 'VOLUME':
-                        self.join_subtasks(self.run_subtask('zfs.mount', os.path.join(vm_ds, new_res['name'])))
-                        self.join_subtasks(self.run_subtask('zfs.umount', os.path.join(vm_ds, new_res['name'])))
+                    )
 
         if new_res['type'] == 'DISK':
-            if old_res['properties']['size'] != new_res['properties']['size']:
-                ds_name = os.path.join(vm_ds, new_res['name'])
-                self.join_subtasks(self.run_subtask(
-                    'zfs.update',
-                    ds_name,
-                    {'volsize': {'value': new_res['properties']['size']}}
-                ))
+            if old_properties['size'] != new_properties['size']:
+                if new_properties['target_type'] == 'ZVOL':
+                    ds_name = os.path.join(vm_ds, new_res['name'])
+                    self.run_subtask_sync(
+                        'vm.datastore.resize_block_device',
+                        vm['target'],
+                        ds_name,
+                        new_properties['size']
+                    )
+                else:
+                    os.truncate(
+                        self.dispatcher.call_sync(
+                            'vm.datastore.get_filesystem_path',
+                            vm['target'],
+                            vm_ds
+                        ),
+                        new_properties['size']
+                    )
 
         if new_res['type'] == 'NIC':
-            brigde = new_res['properties'].get('bridge', 'default')
+            brigde = new_properties.get('bridge', 'default')
             if brigde != 'default':
                 if_exists = self.dispatcher.call_sync(
                     'network.interface.query',
@@ -627,7 +644,8 @@ class VMBaseTask(ProgressTask):
                 ))
             else:
                 self.join_subtasks(self.run_subtask(
-                    'volume.dataset.delete',
+                    'vm.datastore.delete_directory',
+                    vm['target'],
                     ds_name
                 ))
 
@@ -650,10 +668,12 @@ class VMCreateTask(VMBaseTask):
         return TaskDescription('Creating VM {name}', name=vm.get('name', ''))
 
     def verify(self, vm):
-        if not self.dispatcher.call_sync('volume.query', [('id', '=', vm['target'])], {'single': True}):
-            raise VerifyException(errno.ENXIO, 'Volume {0} doesn\'t exist'.format(vm['target']))
+        try:
+            resources = self.dispatcher.call_sync('vm.datastore.get_resources', vm['target'])
+        except RpcException as err:
+            raise VerifyException(err.code, 'Invalid datastore: {0}'.format(err.message))
 
-        return ['zpool:{0}'.format(vm['target'])]
+        return resources
 
     def run(self, vm):
         def collect_download_progress(percentage, message=None, extra=None):
@@ -733,6 +753,11 @@ class VMCreateTask(VMBaseTask):
         if vm['config']['ncpus'] > 16:
             raise TaskException(errno.EINVAL, 'Upper limit of VM cores exceeded. Maximum permissible value is 16.')
 
+        datastore = self.dispatcher.call_sync('vm.datastore.query', [('id', '=', vm['target'])], {'single': True})
+        if not datastore:
+            raise TaskException(errno.EINVAL, 'Datastore {0} not found'.format(vm['target']))
+
+        self.target_supports_zvols = q.get(datastore, 'capabilities.block_devices')
         self.set_progress(25, 'Initializing VM dataset')
         self.init_dataset(vm)
         devices_len = len(vm['devices'])
@@ -752,7 +777,7 @@ class VMCreateTask(VMBaseTask):
         self.set_progress(90, 'Saving VM configuration')
         save_config(
             self.dispatcher.call_sync(
-                'volume.resolve_path',
+                'vm.datastore.get_filesystem_path',
                 vm['target'],
                 os.path.join('vm', vm['name'])
             ),
@@ -787,24 +812,26 @@ class VMImportTask(VMBaseTask):
     def early_describe(cls):
         return 'Importing VM'
 
-    def describe(self, name, volume):
+    def describe(self, name, datastore):
         return TaskDescription('Importing VM {name}', name=name)
 
-    def verify(self, name, volume):
-        if not self.dispatcher.call_sync('volume.query', [('id', '=', volume)], {'single': True}):
-            raise VerifyException(errno.ENXIO, 'Volume {0} doesn\'t exist'.format(volume))
+    def verify(self, name, datastore):
+        try:
+            resources = self.dispatcher.call_sync('vm.datastore.get_resources', datastore)
+        except RpcException as err:
+            raise VerifyException(err.code, 'Invalid datastore: {0}'.format(err.message))
 
-        return ['zpool:{0}'.format(volume)]
+        return resources
 
-    def run(self, name, volume):
+    def run(self, name, datastore):
         if self.datastore.exists('vms', ('name', '=', name)):
             raise TaskException(errno.EEXIST, 'VM {0} already exists'.format(name))
 
         try:
             vm = load_config(
                 self.dispatcher.call_sync(
-                    'volume.resolve_path',
-                    volume,
+                    'vm.datastore.get_filesystem_path',
+                    datastore,
                     os.path.join('vm', name)
                 ),
                 'vm-{0}'.format(name)
@@ -920,7 +947,7 @@ class VMUpdateTask(VMBaseTask):
         try:
             delete_config(
                 self.dispatcher.call_sync(
-                    'volume.resolve_path',
+                    'vm.datastore.get_filesystem_path',
                     vm['target'],
                     os.path.join('vm', vm['name'])
                 ),
@@ -929,12 +956,16 @@ class VMUpdateTask(VMBaseTask):
         except (RpcException, OSError):
             pass
 
-        if 'name' in updated_params:
-            root_ds = os.path.join(vm['target'], 'vm')
-            vm_ds = os.path.join(root_ds, vm['name'])
-            new_vm_ds = os.path.join(root_ds, updated_params['name'])
+        datastore = self.dispatcher.call_sync('vm.datastore.query', [('id', '=', vm['target'])], {'single': True})
+        if not datastore:
+            raise TaskException(errno.EINVAL, 'Datastore {0} not found'.format(vm['target']))
 
-            self.join_subtasks(self.run_subtask('zfs.rename', vm_ds, new_vm_ds))
+        self.target_supports_zvols = q.get(datastore, 'capabilities.block_devices')
+
+        if 'name' in updated_params:
+            vm_ds = os.path.join(VM_ROOT, vm['name'])
+            new_vm_ds = os.path.join(VM_ROOT, updated_params['name'])
+            self.run_subtask_sync('vm.datastore.rename_directory', vm['target'], vm_ds, new_vm_ds)
 
         old_vm = copy.deepcopy(vm)
         vm.update(updated_params)
@@ -979,7 +1010,7 @@ class VMUpdateTask(VMBaseTask):
         vm = self.datastore.get_by_id('vms', id)
         save_config(
             self.dispatcher.call_sync(
-                'volume.resolve_path',
+                'vm.datastore.get_filesystem_path',
                 vm['target'],
                 os.path.join('vm', vm['name'])
             ),
@@ -1010,7 +1041,7 @@ class VMDeleteTask(Task):
         try:
             delete_config(
                 self.dispatcher.call_sync(
-                    'volume.resolve_path',
+                    'vm.datastore.get_filesystem_path',
                     vm['target'],
                     os.path.join('vm', vm['name'])
                 ),
@@ -1024,15 +1055,13 @@ class VMDeleteTask(Task):
             subtasks.append(self.run_subtask('vm.snapshot.delete', snapshot['id']))
         self.join_subtasks(*subtasks)
 
-        vm_ds = self.dispatcher.call_sync('vm.get_dataset', id)
-
         try:
             self.join_subtasks(self.run_subtask('vm.stop', id, True))
         except RpcException:
             pass
 
         try:
-            self.join_subtasks(self.run_subtask('volume.dataset.delete', vm_ds))
+            self.run_subtask_sync('vm.datastore.delete_directory', vm['target'], get_vm_path(vm['name']))
         except RpcException as err:
             if err.code != errno.ENOENT:
                 raise err
@@ -1741,7 +1770,8 @@ class VMTemplateFetchTask(ProgressTask):
             except pygit2.GitError:
                 self.add_warning(TaskWarning(
                     errno.EACCES,
-                    'Cannot update template cache. Result is outdated. Check networking.'))
+                    'Cannot update template cache. Result is outdated. Check networking.'
+                ))
                 return
 
         templates_dir = self.dispatcher.call_sync('system_dataset.request_directory', 'vm_templates')
@@ -1870,6 +1900,10 @@ class VMTemplateDeleteTask(ProgressTask):
         shutil.rmtree(template_path)
 
 
+def get_vm_path(name):
+    return os.path.join('vm', name)
+
+
 def get_readme(path):
     file_path = None
     for file in os.listdir(path):
@@ -1898,7 +1932,7 @@ def collect_debug(dispatcher):
 
 
 def _depends():
-    return ['VolumePlugin']
+    return ['VMDatastorePlugin']
 
 
 def _init(dispatcher, plugin):
@@ -1922,7 +1956,7 @@ def _init(dispatcher, plugin):
 
     plugin.register_schema_definition('vm-status-state', {
         'type': 'string',
-        'enum': ['STOPPED', 'BOOTLOADER', 'RUNNING']
+        'enum': ['STOPPED', 'BOOTLOADER', 'RUNNING', 'PAUSED']
     })
 
     plugin.register_schema_definition('vm-status-health', {
@@ -2052,6 +2086,11 @@ def _init(dispatcher, plugin):
         'enum': ['BRIDGED', 'NAT', 'HOSTONLY', 'MANAGEMENT']
     })
 
+    plugin.register_schema_definition('vm-device-disk-target-type', {
+        'type': 'string',
+        'enum': ['ZVOL', 'FILE', 'DISK']
+    })
+
     plugin.register_schema_definition('vm-device-disk', {
         'type': 'object',
         'additionalProperties': False,
@@ -2059,6 +2098,8 @@ def _init(dispatcher, plugin):
             '%type': {'enum': ['vm-device-disk']},
             'mode': {'$ref': 'vm-device-disk-mode'},
             'size': {'type': 'integer'},
+            'target_type': {'$ref': 'vm-device-disk-target-type'},
+            'target_path': {'type': 'string'},
             'source': {'type': 'string'}
         },
         'required': ['size']
@@ -2207,12 +2248,12 @@ def _init(dispatcher, plugin):
 
     plugin.register_schema_definition('vm-hw-capabilites', {
         'type': 'object',
+        'additionalProperties': False,
         'properties': {
             'vtx_enabled': {'type': 'boolean'},
             'svm_features': {'type': 'boolean'},
             'unrestricted_guest': {'type': 'boolean'}
         },
-        'additionalProperties': False,
     })
 
     def volume_pre_detach(args):
