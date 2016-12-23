@@ -243,6 +243,10 @@ class VirtualMachine(object):
     def vm_root(self):
         return self.context.client.call_sync('vm.get_vm_root', self.id)
 
+    @property
+    def files_root(self):
+        return os.path.join(self.vm_root, 'files')
+
     def get_link_address(self, mode):
         nic = first_or_default(
             lambda d: d['type'] == 'NIC' and d['properties']['mode'] == mode,
@@ -1151,10 +1155,6 @@ class ManagementService(RpcService):
         vm.guest_type = container['guest_type']
         vm.config = container['config']
         vm.devices = container['devices']
-        vm.files_root = self.context.client.call_sync(
-            'volume.get_dataset_path',
-            os.path.join(container['target'], 'vm', container['name'], 'files')
-        )
 
         try:
             vm.start()
