@@ -977,7 +977,7 @@
                     "ProgramArguments": [
                         "/usr/sbin/ctld",
                         "-u",
-                        "-d"
+                        "-D"
                     ]
                 },
                 "builtin": true,
