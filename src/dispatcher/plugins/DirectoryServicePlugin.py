@@ -96,7 +96,7 @@ class DirectoryServiceCreateTask(Task):
         return "Creating a directory"
 
     def describe(self, directory):
-        return TaskDescription("Creating directory {name}", name=directory['name'])
+        return TaskDescription("Creating directory {name}", name=directory.get('name', ''))
 
     def verify(self, directory):
         return ['system']
