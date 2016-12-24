@@ -667,8 +667,9 @@ class ConfigurationService(RpcService):
                     for port in old_ports - new_ports:
                         iface.delete_port(port)
 
-                    for port in new_ports - old_ports:
-                        iface.add_port(port)
+                    for port in lagg['ports']:
+                        if port in new_ports:
+                            iface.add_port(port)
 
             # Configure member interfaces for a bridge
             if entity.get('type') == 'BRIDGE':
