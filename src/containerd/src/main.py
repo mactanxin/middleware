@@ -519,8 +519,23 @@ class VirtualMachine(object):
         self.context.init_mgmt()
         self.context.logger.info('Starting VM {0} ({1})'.format(self.name, self.id))
         self.nmdm = self.get_nmdm()
+        dropped_devices = list(self.drop_invalid_devices())
         self.thread = gevent.spawn(self.run)
         self.console_thread = gevent.spawn(self.console_worker)
+        return dropped_devices
+
+    def drop_invalid_devices(self):
+        for i in list(self.devices):
+            if i['type'] == 'DISK':
+                path = self.context.client.call_sync('vm.get_disk_path', self.id, i['name'])
+            elif i['type'] == 'VOLUME' and i['properties']['type'] == 'VT9P':
+                path = self.context.client.call_sync('vm.get_volume_path', self.id, i['name'])
+            else:
+                continue
+
+            if not os.path.exists(path):
+                self.devices.remove(i)
+                yield i
 
     def stop(self, force=False):
         self.logger.info('Stopping VM {0}'.format(self.name))
@@ -1165,7 +1180,7 @@ class ManagementService(RpcService):
         vm.devices = container['devices']
 
         try:
-            vm.start()
+            dropped_devices = vm.start()
         except BaseException as err:
             raise RpcException(errno.EFAULT, 'Cannot start VM: {0}'.format(err))
 
@@ -1177,6 +1192,8 @@ class ManagementService(RpcService):
         with self.context.cv:
             self.context.vms[id] = vm
             self.context.cv.notify_all()
+
+        return dropped_devices
 
     @private
     def stop_vm(self, id, force=False):

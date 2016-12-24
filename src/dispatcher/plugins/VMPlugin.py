@@ -1133,9 +1133,21 @@ class VMStartTask(Task):
             raise TaskException(errno.EACCES, "Cannot start disabled VM {0}".format(id))
 
         try:
-            self.dispatcher.call_sync('containerd.management.start_vm', id)
+            dropped_devices = self.dispatcher.call_sync('containerd.management.start_vm', id)
         except RpcException as err:
             raise TaskException(err.code, err.message)
+
+        for d in dropped_devices:
+            if d['type'] in ('DISK', 'VOLUME'):
+                self.add_warning(TaskWarning(
+                    errno.EACCES,
+                    'Cannot access storage resources of device {0}. Cannot connect device'.format(d['name'])
+                ))
+            else:
+                self.add_warning(TaskWarning(
+                    errno.EINVAL,
+                    'Cannot connect device {0}. Check configuration'.format(d['name'])
+                ))
 
         self.dispatcher.dispatch_event('vm.changed', {
             'operation': 'update',
