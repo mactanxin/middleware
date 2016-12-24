@@ -206,7 +206,6 @@ class VirtualMachine(object):
         self.health = 'UNKNOWN'
         self.config = None
         self.devices = []
-        self.files_root = None
         self.bhyve_process = None
         self.output_thread = None
         self.scrollback = BinaryRingBuffer(SCROLLBACK_SIZE)
