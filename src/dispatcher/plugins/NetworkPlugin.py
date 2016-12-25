@@ -140,7 +140,7 @@ class NetworkConfigureTask(Task):
                 node['dns.addresses'] = []
                 node['dns.search'] = []
 
-        configure_proxy(node['http_proxy'].value)
+        configure_proxy(self.dispatcher, node['http_proxy'].value)
 
         try:
             for code, message in self.dispatcher.call_sync('networkd.configuration.configure_network', timeout=60):
@@ -765,16 +765,19 @@ class DeleteRouteTask(Task):
         })
 
 
-def configure_proxy(address):
+def configure_proxy(dispatcher, address):
     if not address:
         return
 
-    os.environ.update({
+    env = {
         'HTTP_PROXY': address,
         'HTTPS_PROXY': address,
         'http_proxy': address,
         'https_proxy': address
-    })
+    }
+
+    os.environ.update(env)
+    dispatcher.call_sync('task.update_executor_environment', env)
 
 
 def collect_debug(dispatcher):
@@ -1032,4 +1035,4 @@ def _init(dispatcher, plugin):
 
     plugin.register_debug_hook(collect_debug)
 
-    configure_proxy(dispatcher.configstore.get('network.http_proxy'))
+    configure_proxy(dispatcher, dispatcher.configstore.get('network.http_proxy'))
