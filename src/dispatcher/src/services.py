@@ -559,7 +559,7 @@ class TaskService(RpcService):
         if not executor:
             raise RpcException(errno.EPERM, 'Not authorized')
 
-        ret = self.__dispatcher.balancer.run_subtask(executor.task, name, args, env)
+        ret = self.__balancer.run_subtask(executor.task, name, args, env)
         return ret.id
 
     @private
@@ -570,7 +570,7 @@ class TaskService(RpcService):
             raise RpcException(errno.EPERM, 'Not authorized')
 
         subtasks = list(map(self.__balancer.get_task, subtask_ids))
-        self.__dispatcher.balancer.join_subtasks(*subtasks)
+        self.__balancer.join_subtasks(*subtasks)
 
         for i in subtasks:
             if i.state != TaskState.FINISHED:
@@ -586,6 +586,10 @@ class TaskService(RpcService):
             raise RpcException(errno.EPERM, 'Not authorized')
 
         self.__balancer.abort(id)
+
+    @private
+    def update_executor_environment(self, env):
+        self.__balancer.update_executor_environment(env)
 
 
 class LockService(RpcService):
