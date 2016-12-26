@@ -3223,16 +3223,6 @@ def _init(dispatcher, plugin):
         datasets.propagate(args, callback=convert_dataset)
 
     @sync
-    def on_vdev_remove(args):
-        """
-        dispatcher.call_sync('alert.emit', {
-            'name': 'volume.disk_removed',
-            'description': 'Some disk was removed from the system',
-            'severity': 'WARNING'
-        })
-        """
-
-    @sync
     def on_vdev_state_change(args):
         guid = args['guid']
         volume = dispatcher.call_sync('volume.query', [('guid', '=', guid)], {'single': True})
@@ -3250,11 +3240,11 @@ def _init(dispatcher, plugin):
         if not vdev:
             return
 
-        if args['vdev_state'] in ('FAULTED', 'REMOVED', 'OFFLINE') and args['vdev_state'] != vdev['status']:
+        if args['status'] in ('FAULTED', 'REMOVED', 'OFFLINE'):
             logger.warning('Vdev {0} of pool {1} is now in {2} state - attempting to replace'.format(
                 args['vdev_guid'],
                 volume['id'],
-                args['vdev_state']
+                args['status']
             ))
 
             dispatcher.call_task_sync('volume.autoreplace', volume['id'], args['vdev_guid'])
@@ -3571,8 +3561,7 @@ def _init(dispatcher, plugin):
     plugin.register_hook('volume.post_rename')
 
     plugin.register_event_handler('entity-subscriber.zfs.pool.changed', on_pool_change)
-    plugin.register_event_handler('fs.zfs.vdev.removed', on_vdev_remove)
-    plugin.register_event_handler('fs.zfs.vdev.state_changed', on_vdev_state_change)
+    plugin.register_event_handler('zfs.pool.vdev_state_changed', on_vdev_state_change)
     plugin.register_event_handler('disk.attached', on_disk_attached)
 
     plugin.register_event_type('volume.changed')

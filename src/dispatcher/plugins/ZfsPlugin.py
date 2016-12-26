@@ -1297,6 +1297,12 @@ def iterate_vdevs(topology):
                     yield child
 
 
+def vdev_by_guid(topology, guid):
+    for vd in iterate_vdevs(topology):
+        if vd['guid'] == guid:
+            return vd
+
+
 def get_disk_names(dispatcher, pool):
     ret = []
     for x in pool.disks:
@@ -1313,7 +1319,22 @@ def get_disk_names(dispatcher, pool):
 def sync_zpool_cache(dispatcher, pool, guid=None):
     zfs = get_zfs()
     try:
+        oldpool = pools.get(pool)
         zfspool = dispatcher.threaded(lambda: zfs.get(pool).__getstate__(False))
+
+        for vd in iterate_vdevs(zfspool['groups']):
+            oldvd = vdev_by_guid(oldpool['groups'], vd['guid'])
+            if not oldvd:
+                continue
+
+            if vd['status'] != oldvd['status']:
+                dispatcher.emit_event('zfs.pool.vdev_state_changed', {
+                    'pool': pool,
+                    'guid': zfspool['guid'],
+                    'vdev_guid': vd['guid'],
+                    'status': vd['status']
+                })
+
         pools.put(pool, zfspool)
         zpool_sync_resources(dispatcher, pool)
     except libzfs.ZFSException as e:
@@ -1792,6 +1813,7 @@ def _init(dispatcher, plugin):
 
     # Register Event Types
     plugin.register_event_type('zfs.pool.changed')
+    plugin.register_event_type('zfs.pool.vdev_state_changed')
     plugin.register_event_type('zfs.dataset.changed')
     plugin.register_event_type('zfs.snapshot.changed')
 
