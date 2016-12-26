@@ -3247,7 +3247,7 @@ def _init(dispatcher, plugin):
                 args['status']
             ))
 
-            dispatcher.call_task_sync('volume.autoreplace', volume['id'], args['vdev_guid'])
+            dispatcher.submit_task('volume.autoreplace', volume['id'], args['vdev_guid'])
 
     @sync
     def on_disk_attached(args):
