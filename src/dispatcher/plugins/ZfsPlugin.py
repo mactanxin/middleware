@@ -1322,18 +1322,19 @@ def sync_zpool_cache(dispatcher, pool, guid=None):
         oldpool = pools.get(pool)
         zfspool = dispatcher.threaded(lambda: zfs.get(pool).__getstate__(False))
 
-        for vd in iterate_vdevs(zfspool['groups']):
-            oldvd = vdev_by_guid(oldpool['groups'], vd['guid'])
-            if not oldvd:
-                continue
+        if oldpool:
+            for vd in iterate_vdevs(zfspool['groups']):
+                oldvd = vdev_by_guid(oldpool['groups'], vd['guid'])
+                if not oldvd:
+                    continue
 
-            if vd['status'] != oldvd['status']:
-                dispatcher.emit_event('zfs.pool.vdev_state_changed', {
-                    'pool': pool,
-                    'guid': zfspool['guid'],
-                    'vdev_guid': vd['guid'],
-                    'status': vd['status']
-                })
+                if vd['status'] != oldvd['status']:
+                    dispatcher.emit_event('zfs.pool.vdev_state_changed', {
+                        'pool': pool,
+                        'guid': zfspool['guid'],
+                        'vdev_guid': vd['guid'],
+                        'status': vd['status']
+                    })
 
         pools.put(pool, zfspool)
         zpool_sync_resources(dispatcher, pool)
