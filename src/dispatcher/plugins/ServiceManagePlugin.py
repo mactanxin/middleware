@@ -474,10 +474,13 @@ def _init(dispatcher, plugin):
     def on_ready(args):
         for svc in dispatcher.datastore.query('service_definitions'):
             logger.debug('Loading service {0}'.format(svc['name']))
-            enb = svc.get('builtin') or dispatcher.configstore.get('service.{0}.enable'.format(svc['name']))
+            enb = svc.get('builtin')
 
             if svc.get('auto_enable'):
                 enb = False
+
+            if dispatcher.configstore.get('service.{0}.enable'.format(svc['name'])):
+                enb = True
 
             if 'launchd' in svc and enb:
                 try:
