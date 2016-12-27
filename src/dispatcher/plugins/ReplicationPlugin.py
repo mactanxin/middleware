@@ -460,9 +460,10 @@ class ReplicationCreateTask(ReplicationBaseTask):
         return id
 
     def rollback(self, link):
-        if self.datastore.exists('replication.links', ('name', '=', link['name'])):
-            self.datastore.delete('replication.links', link['name'])
-            self.dispatcher.call_sync('replication.link_cache_remove', link['name'])
+        id = self.datastore.query('replication.links', ('name', '=', link['name']), single=True, select='id')
+        if id:
+            self.datastore.delete('replication.links', id)
+        self.dispatcher.call_sync('replication.link_cache_remove', link['name'])
 
 
 @private
