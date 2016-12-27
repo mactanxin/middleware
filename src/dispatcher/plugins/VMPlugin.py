@@ -548,19 +548,12 @@ class VMBaseTask(ProgressTask):
 
         if res['type'] == 'VOLUME':
             properties = res['properties']
-            mgmt_net = ipaddress.ip_interface(self.configstore.get('container.network.management'))
             vm_ds = os.path.join('vm', vm['name'])
-            opts = {}
 
             normalize(res['properties'], {
                 'type': 'VT9P',
                 'auto': False
             })
-
-            if properties['type'] == 'NFS':
-                opts['sharenfs'] = {'value': '-network={0}'.format(str(mgmt_net.network))}
-                if not self.configstore.get('service.nfs.enable'):
-                    self.join_subtasks(self.run_subtask('service.update', 'nfs', {'enable': True}))
 
             if properties['type'] == 'VT9P':
                 if properties.get('auto'):
@@ -2151,7 +2144,7 @@ def _init(dispatcher, plugin):
 
     plugin.register_schema_definition('vm-device-volume-type', {
         'type': 'string',
-        'enum': ['VT9P', 'NFS']
+        'enum': ['VT9P']
     })
 
     plugin.register_schema_definition('vm-device-graphics', {
