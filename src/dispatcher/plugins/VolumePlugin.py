@@ -1534,7 +1534,22 @@ class VolumeAutoReplaceTask(ProgressTask):
         return "Replacing failed disk in a volume"
 
     def describe(self, id, failed_vdev, password=None):
-        return TaskDescription("Replacing the failed disk {vdev} in the volume {name}", name=id, vdev=failed_vdev)
+        disk_name = None
+        vdev_path = None
+        vdev = self.dispatcher.call_sync('zfs.pool.vdev_by_guid', id, failed_vdev)
+        if vdev:
+            vdev_path = vdev['path']
+            disk_name = self.dispatcher.call_sync(
+                'disk.query',
+                [('status.data_partition_path', '=', vdev_path)],
+                {'select': 'name'}
+            )
+
+        return TaskDescription(
+            "Replacing the failed disk {vdev} in the volume {name}",
+            name=id,
+            vdev=disk_name or vdev_path or failed_vdev
+        )
 
     def verify(self, id, failed_vdev, password=None):
         vol = self.datastore.get_by_id('volumes', id)
