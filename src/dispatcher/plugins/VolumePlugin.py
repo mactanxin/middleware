@@ -2206,15 +2206,21 @@ class VolumeOfflineVdevTask(Task):
         return "Turning offline a disk of a volume"
 
     def describe(self, id, vdev_guid):
-        try:
-            config = self.dispatcher.call_sync('disk.get_disk_config_by_id', vdev_guid)
-        except RpcException:
-            config = None
+        disk_name = None
+        vdev_path = None
+        vdev = self.dispatcher.call_sync('zfs.pool.vdev_by_guid', id, vdev_guid)
+        if vdev:
+            vdev_path = vdev['path']
+            disk_name = self.dispatcher.call_sync(
+                'disk.query',
+                [('status.data_partition_path', '=', vdev_path)],
+                {'select': 'name', 'single': True}
+            )
 
         return TaskDescription(
             "Turning offline the {disk} disk of the volume {name}",
             name=id,
-            disk=config['path'] if config else vdev_guid
+            disk=disk_name or vdev_path or vdev_guid
         )
 
     def verify(self, id, vdev_guid):
@@ -2244,15 +2250,21 @@ class VolumeOnlineVdevTask(Task):
         return "Turning online a disk of a volume"
 
     def describe(self, id, vdev_guid):
-        try:
-            config = self.dispatcher.call_sync('disk.get_disk_config_by_id', vdev_guid)
-        except RpcException:
-            config = None
+        disk_name = None
+        vdev_path = None
+        vdev = self.dispatcher.call_sync('zfs.pool.vdev_by_guid', id, vdev_guid)
+        if vdev:
+            vdev_path = vdev['path']
+            disk_name = self.dispatcher.call_sync(
+                'disk.query',
+                [('status.data_partition_path', '=', vdev_path)],
+                {'select': 'name', 'single': True}
+            )
 
         return TaskDescription(
             "Turning online the {disk} disk of the volume {name}",
             name=id,
-            disk=config['path'] if config else vdev_guid
+            disk=disk_name or vdev_path or vdev_guid
         )
 
     def verify(self, id, vdev_guid):
