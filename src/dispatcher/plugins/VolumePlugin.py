@@ -397,10 +397,11 @@ class VolumeProvider(Provider):
     @returns(h.ref('zfs-vdev'))
     def vdev_by_guid(self, volume, guid):
         vdev = self.dispatcher.call_sync('zfs.pool.vdev_by_guid', volume, guid)
-        vdev['path'] = self.dispatcher.call_sync(
-            'disk.partition_to_disk',
-            vdev['path']
-        )
+        if vdev:
+            vdev['path'] = self.dispatcher.call_sync(
+                'disk.partition_to_disk',
+                vdev['path']
+            )
 
         return vdev
 
@@ -1534,7 +1535,16 @@ class VolumeAutoReplaceTask(ProgressTask):
         return "Replacing failed disk in a volume"
 
     def describe(self, id, failed_vdev, password=None):
-        return TaskDescription("Replacing the failed disk {vdev} in the volume {name}", name=id, vdev=failed_vdev)
+        vdev = self.dispatcher.call_sync('volume.vdev_by_guid', id, failed_vdev)
+        vdev_path = None
+        if vdev:
+            vdev_path = vdev['path']
+
+        return TaskDescription(
+            "Replacing the failed disk {vdev} in the volume {name}",
+            name=id,
+            vdev=vdev_path or failed_vdev
+        )
 
     def verify(self, id, failed_vdev, password=None):
         vol = self.datastore.get_by_id('volumes', id)
@@ -2191,15 +2201,15 @@ class VolumeOfflineVdevTask(Task):
         return "Turning offline a disk of a volume"
 
     def describe(self, id, vdev_guid):
-        try:
-            config = self.dispatcher.call_sync('disk.get_disk_config_by_id', vdev_guid)
-        except RpcException:
-            config = None
+        vdev = self.dispatcher.call_sync('volume.vdev_by_guid', id, vdev_guid)
+        vdev_path = None
+        if vdev:
+            vdev_path = vdev['path']
 
         return TaskDescription(
             "Turning offline the {disk} disk of the volume {name}",
             name=id,
-            disk=config['path'] if config else vdev_guid
+            disk=vdev_path or vdev_guid
         )
 
     def verify(self, id, vdev_guid):
@@ -2229,15 +2239,15 @@ class VolumeOnlineVdevTask(Task):
         return "Turning online a disk of a volume"
 
     def describe(self, id, vdev_guid):
-        try:
-            config = self.dispatcher.call_sync('disk.get_disk_config_by_id', vdev_guid)
-        except RpcException:
-            config = None
+        vdev = self.dispatcher.call_sync('volume.vdev_by_guid', id, vdev_guid)
+        vdev_path = None
+        if vdev:
+            vdev_path = vdev['path']
 
         return TaskDescription(
             "Turning online the {disk} disk of the volume {name}",
             name=id,
-            disk=config['path'] if config else vdev_guid
+            disk=vdev_path or vdev_guid
         )
 
     def verify(self, id, vdev_guid):
