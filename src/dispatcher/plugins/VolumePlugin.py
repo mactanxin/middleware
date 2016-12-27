@@ -1542,7 +1542,7 @@ class VolumeAutoReplaceTask(ProgressTask):
             disk_name = self.dispatcher.call_sync(
                 'disk.query',
                 [('status.data_partition_path', '=', vdev_path)],
-                {'select': 'name'}
+                {'select': 'name', 'single': True}
             )
 
         return TaskDescription(
