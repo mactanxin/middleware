@@ -1870,14 +1870,18 @@ def _init(dispatcher, plugin):
     plugin.register_event_type('replication.changed')
 
     def on_replication_change(args):
+        if args['operation'] == 'delete':
+            return
+
         for i in args['ids']:
-            link = dispatcher.call_sync('replication.local_query', [('name', '=', i)], {'single': True})
-            dispatcher.update_resource(
-                'replication:{0}'.format(link['name']),
-                new_parents=get_replication_resources(dispatcher, link)
-            )
-            if link['bidirectional']:
-                dispatcher.call_task_sync('replication.role_update', i)
+            link = dispatcher.call_sync('replication.local_query', [('id', '=', i)], {'single': True})
+            if link:
+                dispatcher.update_resource(
+                    'replication:{0}'.format(link['name']),
+                    new_parents=get_replication_resources(dispatcher, link)
+                )
+                if link['bidirectional']:
+                    dispatcher.call_task_sync('replication.role_update', i)
 
     def update_link_cache(args):
         sshd_service = dispatcher.call_sync('service.query', [('name', '=', 'sshd')], {'single': True})
