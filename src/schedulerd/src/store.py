@@ -121,7 +121,7 @@ class FreeNASJobStore(BaseJobStore):
 
         job.coalesce = True
         job.max_instances = 1
-        job.misfire_grace_time = 0
+        job.misfire_grace_time = 3600
         job._jobstore_alias = self._alias
         return job
 
