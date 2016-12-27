@@ -1157,6 +1157,10 @@ class Main(object):
                 'active_media_type': {'type': 'string'},
                 'active_media_subtype': {'type': 'string'},
                 'media_options': {'$ref': 'network-interface-mediaopts'},
+                'supported_media': {
+                    'type': 'array',
+                    'items': {'type': 'string'}
+                },
                 'cloned': {'type': 'boolean'},
                 'capabilities': {'$ref': 'network-interface-capabilities'},
                 'flags': {'$ref': 'network-interface-flags'},
