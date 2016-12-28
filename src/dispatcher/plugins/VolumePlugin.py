@@ -2297,8 +2297,12 @@ class DatasetCreateTask(Task):
             'type': 'FILESYSTEM',
             'permissions_type': 'PERM',
             'mounted': True,
-            'properties': {}
+            'properties': {},
+            'metadata': {}
         })
+
+        for name, value in dataset['metadata']:
+            props[name] = {'value': value}
 
         if dataset['type'] == 'FILESYSTEM':
             props = {
@@ -2460,6 +2464,10 @@ class DatasetConfigureTask(Task):
                 'volsize': {'value': int(updated_params['volsize'])}
             }))
 
+        if 'metadata' in updated_params:
+            props = {name: {'value': value} for name, value in updated_params['metadata'].items()}
+            self.join_subtasks(self.run_subtask('zfs.update', ds['id'], props))
+
         if 'properties' in updated_params:
             props = exclude(
                 updated_params['properties'],
@@ -2589,6 +2597,15 @@ class SnapshotCreateTask(Task):
             'replicable': True,
             'lifetime': None,
             'hidden': False,
+            'metadata': {}
+        })
+
+        props = {name: {'value': value} for name, value in dataset['metadata'].items()}
+        props.update({
+            'org.freenas:replicable': {'value': 'yes' if snapshot['replicable'] else 'no'},
+            'org.freenas:hidden': {'value': 'yes' if snapshot['hidden'] else 'no'},
+            'org.freenas:lifetime': {'value': str(snapshot['lifetime'] or 'no')},
+            'org.freenas:uuid': {'value': str(uuid.uuid4())}
         })
 
         if snapshot.get('id'):
@@ -2603,12 +2620,7 @@ class SnapshotCreateTask(Task):
             dataset,
             name,
             recursive,
-            {
-                'org.freenas:replicable': {'value': 'yes' if snapshot['replicable'] else 'no'},
-                'org.freenas:hidden': {'value': 'yes' if snapshot['hidden'] else 'no'},
-                'org.freenas:lifetime': {'value': str(snapshot['lifetime'] or 'no')},
-                'org.freenas:uuid': {'value': str(uuid.uuid4())}
-            }
+            props
         ))
 
         wait_for_cache(self.dispatcher, 'volume.snapshot', 'create', snapshot['id'])
@@ -2667,6 +2679,10 @@ class SnapshotConfigureTask(Task):
             new_id = '{0}@{1}'.format(ds, updated_params['name'])
             self.join_subtasks(self.run_subtask('zfs.rename', id, new_id))
             id = new_id
+
+        if 'metadata' in updated_params:
+            for name, value in updated_params['metadata'].items():
+                params[name] = {'value': value}
 
         if 'lifetime' in updated_params:
             params['org.freenas:lifetime'] = {'value': str(updated_params['lifetime'] or 'no')}
@@ -2852,6 +2868,15 @@ def simplify_topology(topology):
             if 'children' in vdev:
                 for child in vdev['children']:
                     simplify_vdev(child)
+
+
+def convert_properties(properties):
+    metadata = {}
+    for name, prop in properties.items():
+        if ':' in name:
+            metadata[name] = prop['value']
+
+    return metadata
 
 
 def register_property_schemas(plugin):
@@ -3093,7 +3118,8 @@ def _init(dispatcher, plugin):
                 snapshot['properties'],
                 'used', 'referenced', 'compressratio', 'clones', 'creation'
             ),
-            'holds': snapshot['holds']
+            'holds': snapshot['holds'],
+            'metadata': convert_properties(snapshot['properties'])
         }
 
     def convert_dataset(ds):
@@ -3150,7 +3176,8 @@ def _init(dispatcher, plugin):
             'permissions_type': q.get(ds, 'properties.org\\.freenas:permissions_type.value'),
             'permissions': perms['permissions'] if perms else None,
             'last_replicated_by': last_replicated_by,
-            'last_replicated_at': last_replicated_at
+            'last_replicated_at': last_replicated_at,
+            'metadata': convert_properties(ds['properties'])
         }
 
     @sync
@@ -3400,7 +3427,11 @@ def _init(dispatcher, plugin):
             'permissions': {'$ref': 'permissions'},
             'permissions_type': {'$ref': 'volume-dataset-permissionstype'},
             'last_replicated_by': {'type': ['string', 'null']},
-            'last_replicated_at': {'type': ['datetime', 'null']}
+            'last_replicated_at': {'type': ['datetime', 'null']},
+            'metadata': {
+                'type': 'object',
+                'additionalProperties': {'type': 'string'}
+            }
         }
     })
 
@@ -3426,7 +3457,11 @@ def _init(dispatcher, plugin):
             'hidden': {'type': 'boolean'},
             'lifetime': {'type': ['integer', 'null']},
             'properties': {'$ref': 'volume-snapshot-properties'},
-            'holds': {'type': 'object'}
+            'holds': {'type': 'object'},
+            'metadata': {
+                'type': 'object',
+                'additionalProperties': {'type': 'string'}
+            }
         }
     })
 
