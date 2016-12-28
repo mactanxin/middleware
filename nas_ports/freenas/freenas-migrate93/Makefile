@@ -21,7 +21,7 @@ EXTRACT_ONLY=
 
 NO_BUILD=	yes
 MAKE_JOBS_UNSAFE= yes
-WRKSRC=		/usr/middleware_src/migrate93
+WRKSRC=		/usr/migrate93_src
 
 checksum fetch:
 	${ECHO_CMD} ${.TARGET} not needed because building direct
