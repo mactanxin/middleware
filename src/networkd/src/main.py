@@ -456,6 +456,7 @@ class ConfigurationService(RpcService):
                 else:
                     i.down()
 
+            self.config.set('network.autoconfigure', False)
             yield errno.ENOENT, 'Failed to configure any network interface'
             return
 
