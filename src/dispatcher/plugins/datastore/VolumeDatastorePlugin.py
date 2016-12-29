@@ -26,9 +26,11 @@
 #####################################################################
 
 import os
-from task import ProgressTask, Provider, TaskDescription
+import errno
+from task import ProgressTask, Provider, TaskDescription, TaskException
 from freenas.dispatcher.rpc import SchemaHelper as h
 from freenas.dispatcher.rpc import private, accepts, returns, generator, description
+from freenas.utils import query as q
 
 
 @description('Provides information about ZFS VM datastores')
@@ -224,7 +226,7 @@ class VolumeCloneTask(ProgressTask):
 
     def describe(self, id, path, new_path):
         return TaskDescription(
-            'Cloning the dataset {name} to {new_name}',
+            'Cloning {name} to {new_name}',
             name=os.path.join(id, path),
             new_name=os.path.join(id, new_path)
         )
@@ -233,7 +235,36 @@ class VolumeCloneTask(ProgressTask):
         return self.dispatcher.call_sync('vm.datastore.volume.get_resources', id)
 
     def run(self, id, path, new_path):
-        pass
+        if '@' in path:
+            full_path = os.path.join(id, path)
+            dataset, vm_snap_id = full_path.split('@', 1)
+            snapshot_id = self.dispatcher.call_sync(
+                'volume.snapshot.query',
+                [('dataset', '=', dataset), ('metadata.org\.freenas:vm_snapshot', '=', vm_snap_id)],
+                {'single': True, 'select': 'id'}
+            )
+
+            if not snapshot_id:
+                raise TaskException(errno.ENOENT, 'Snapshot {0} not found'.format(path))
+
+        else:
+            dataset = os.path.join(id, path)
+            snap_cnt = self.dispatcher.call_sync(
+                'volume.snapshot.query',
+                [('id', '~', '^{0}@vm-clone-'.format(dataset))],
+                {'count': True}
+            )
+            snapshot_id = '{0}@vm-clone-{1}'.format(dataset, snap_cnt)
+
+            self.run_subtask_sync_with_progress(
+                'volume.snapshot.create',
+                {
+                    'id': snapshot_id,
+                    'replicable': False,
+                }
+            )
+
+        return self.run_subtask_sync_with_progress('volume.snapshot.clone', snapshot_id, os.path.join(id, new_path))
 
 
 @accepts(str, str, str)
