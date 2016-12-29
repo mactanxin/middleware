@@ -10,9 +10,9 @@ VALID_CATEGORIES+= freenas
 MAINTAINER=	dev@ixsystems.com
 COMMENT=	FreeNAS javascript dispatcher client
 
-FETCH_DEPENDS=	npm012>0:${PORTSDIR}/www/npm012
+FETCH_DEPENDS=	npm2>0:${PORTSDIR}/www/npm2
 
-BUILD_DEPENDS=  npm012>0:${PORTSDIR}/www/npm012
+BUILD_DEPENDS=  npm2>0:${PORTSDIR}/www/npm2
 
 BROWSERIFY_BUNDLE= ${STAGEDIR}/${PREFIX}/share/js-freenas-dispatcher
 
