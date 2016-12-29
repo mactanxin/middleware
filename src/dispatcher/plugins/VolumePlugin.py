@@ -2600,7 +2600,7 @@ class SnapshotCreateTask(Task):
             'metadata': {}
         })
 
-        props = {name: {'value': value} for name, value in dataset['metadata'].items()}
+        props = {name: {'value': value} for name, value in snapshot['metadata'].items()}
         props.update({
             'org.freenas:replicable': {'value': 'yes' if snapshot['replicable'] else 'no'},
             'org.freenas:hidden': {'value': 'yes' if snapshot['hidden'] else 'no'},
