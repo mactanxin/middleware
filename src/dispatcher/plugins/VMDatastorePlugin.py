@@ -173,7 +173,7 @@ class DatastoreCreateTask(DatastoreBaseTask):
         return ['system']
 
     def run(self, datastore):
-        self.run_subtask_sync('vm.datastore.{0}.create'.format(datastore['type']), datastore)
+        self.run_subtask_sync_with_progress('vm.datastore.{0}.create'.format(datastore['type']), datastore)
         id = self.datastore.insert('vm.datastores', datastore)
         self.dispatcher.emit_event('vm.datastore.changed', {
             'operation': 'create',
@@ -203,7 +203,7 @@ class DatastoreUpdateTask(DatastoreBaseTask):
         if not ds:
             raise TaskException(errno.ENOENT, 'Datastore {0} not found'.format(id))
 
-        self.run_subtask_sync('vm.datastore.{0}.update'.format(ds['type']), id, updated_fields)
+        self.run_subtask_sync_with_progress('vm.datastore.{0}.update'.format(ds['type']), id, updated_fields)
 
         ds.update(updated_fields)
         self.datastore.update('vm.datastores', id, ds)
@@ -234,7 +234,7 @@ class DatastoreDeleteTask(DatastoreBaseTask):
         if not ds:
             raise TaskException(errno.ENOENT, 'Datastore {0} not found'.format(id))
 
-        self.run_subtask_sync('vm.datastore.{0}.delete'.format(ds['type']), id)
+        self.run_subtask_sync_with_progress('vm.datastore.{0}.delete'.format(ds['type']), id)
         self.datastore.delete('vm.datastores', id)
         self.dispatcher.emit_event('vm.datastore.changed', {
             'operation': 'delete',
@@ -256,8 +256,12 @@ class DirectoryCreateTask(DatastoreBaseTask):
         return self.get_resources(id)
 
     def run(self, id, path):
-        driver = self.dispatcher.call_sync('vm.datastore.get_driver', id)
-        return self.run_subtask_sync('vm.datastore.{0}.create_directory'.format(driver), id, normpath(path))
+        driver = self.get_driver_and_check_capabilities(id)
+        return self.run_subtask_sync_with_progress(
+            'vm.datastore.{0}.directory.create'.format(driver),
+            id,
+            normpath(path)
+        )
 
 
 @accepts(str, str)
@@ -274,8 +278,12 @@ class DirectoryDeleteTask(DatastoreBaseTask):
         return self.get_resources(id)
 
     def run(self, id, path):
-        driver = self.dispatcher.call_sync('vm.datastore.get_driver', id)
-        return self.run_subtask_sync('vm.datastore.{0}.delete_directory'.format(driver), id, normpath(path))
+        driver = self.get_driver_and_check_capabilities(id)
+        return self.run_subtask_sync_with_progress(
+            'vm.datastore.{0}.directory.delete'.format(driver),
+            id,
+            normpath(path)
+        )
 
 
 @accepts(str, str, str)
@@ -292,9 +300,9 @@ class DirectoryRenameTask(DatastoreBaseTask):
         return self.get_resources(id)
 
     def run(self, id, old_path, new_path):
-        driver = self.dispatcher.call_sync('vm.datastore.get_driver', id)
-        return self.run_subtask_sync(
-            'vm.datastore.{0}.rename_directory'.format(driver),
+        driver = self.get_driver_and_check_capabilities(id)
+        return self.run_subtask_sync_with_progress(
+            'vm.datastore.{0}.directory.rename'.format(driver),
             id,
             normpath(old_path),
             normpath(new_path)
@@ -315,9 +323,13 @@ class BlockDeviceCreateTask(DatastoreBaseTask):
         return self.get_resources(id)
 
     def run(self, id, path, size):
-        driver = self.dispatcher.call_sync('vm.datastore.get_driver', id)
-        return self.run_subtask_sync(
-            'vm.datastore.{0}.create_block_device'.format(driver), id, normpath(path), size)
+        driver = self.get_driver_and_check_capabilities(id, block_devices=True)
+        return self.run_subtask_sync_with_progress(
+            'vm.datastore.{0}.block_device.create'.format(driver),
+            id,
+            normpath(path),
+            size
+        )
 
 
 @accepts(str, str)
@@ -334,8 +346,12 @@ class BlockDeviceDeleteTask(DatastoreBaseTask):
         return self.get_resources(id)
 
     def run(self, id, path):
-        driver = self.dispatcher.call_sync('vm.datastore.get_driver', id)
-        return self.run_subtask_sync('vm.datastore.{0}.delete_block_device'.format(driver), id, normpath(path))
+        driver = self.get_driver_and_check_capabilities(id, block_devices=True)
+        return self.run_subtask_sync_with_progress(
+            'vm.datastore.{0}.block_device.delete'.format(driver),
+            id,
+            normpath(path)
+        )
 
 
 @accepts(str, str, str)
@@ -352,9 +368,9 @@ class BlockDeviceRenameTask(DatastoreBaseTask):
         return self.get_resources(id)
 
     def run(self, id, old_path, new_path):
-        driver = self.dispatcher.call_sync('vm.datastore.get_driver', id)
-        return self.run_subtask_sync(
-            'vm.datastore.{0}.resize_block_device'.format(driver),
+        driver = self.get_driver_and_check_capabilities(id, block_devices=True)
+        return self.run_subtask_sync_with_progress(
+            'vm.datastore.{0}.block_device.rename'.format(driver),
             id,
             normpath(old_path),
             normpath(new_path)
@@ -375,9 +391,9 @@ class BlockDeviceResizeTask(DatastoreBaseTask):
         return self.get_resources(id)
 
     def run(self, id, path, new_size):
-        driver = self.dispatcher.call_sync('vm.datastore.get_driver', id)
-        return self.run_subtask_sync(
-            'vm.datastore.{0}.resize_block_device'.format(driver),
+        driver = self.get_driver_and_check_capabilities(id, block_devices=True)
+        return self.run_subtask_sync_with_progress(
+            'vm.datastore.{0}.block_device.resize'.format(driver),
             id,
             normpath(path),
             new_size
@@ -397,9 +413,15 @@ class BlockDeviceCloneTask(DatastoreBaseTask):
     def verify(self, id, path, new_path):
         return self.get_resources(id)
 
-    def run(self, id, path):
-        driver = self.dispatcher.call_sync('vm.datastore.get_driver', id)
-        return self.run_subtask_sync('vm.datastore.{0}.clone_block_device'.format(driver), id, path)
+    def run(self, id, path, new_path):
+        driver = self.get_driver_and_check_capabilities(id, clones=True)
+        return self.run_subtask_sync_with_progress(
+            'vm.datastore.{0}.block_device.clone'.format(driver),
+            id,
+            path,
+            new_path
+        )
+
 
 @accepts(str, str, str)
 @description('Creates a snapshot of a block device using a VM datastore')
@@ -418,9 +440,14 @@ class BlockDeviceSnapshotCreateTask(DatastoreBaseTask):
     def verify(self, id, path, new_path):
         return self.get_resources(id)
 
-    def run(self, id, path):
-        driver = self.dispatcher.call_sync('vm.datastore.get_driver', id)
-        return self.run_subtask_sync('vm.datastore.{0}.create_snapshot'.format(driver), id, path)
+    def run(self, id, path, new_path):
+        driver = self.get_driver_and_check_capabilities(id, snapshots=True)
+        return self.run_subtask_sync_with_progress(
+            'vm.datastore.{0}.block_device.snapshot.create'.format(driver),
+            id,
+            path,
+            new_path
+        )
 
 
 @accepts(str, str)
@@ -437,8 +464,12 @@ class BlockDeviceSnapshotDeleteTask(DatastoreBaseTask):
         return self.get_resources(id)
 
     def run(self, id, path):
-        driver = self.dispatcher.call_sync('vm.datastore.get_driver', id)
-        return self.run_subtask_sync('vm.datastore.{0}.delete_snapshot'.format(driver), id, path)
+        driver = self.get_driver_and_check_capabilities(id, snapshots=True)
+        return self.run_subtask_sync_with_progress(
+            'vm.datastore.{0}.block_device.snapshot.delete'.format(driver),
+            id,
+            path
+        )
 
 
 def normpath(p):
