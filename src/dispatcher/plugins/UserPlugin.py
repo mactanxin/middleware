@@ -402,31 +402,32 @@ class UserCreateTask(Task):
 
 
 @description("Deletes an user from the system")
-@accepts(str, bool, bool)
+@accepts(str, h.ref('user-delete'))
 class UserDeleteTask(Task):
     @classmethod
     def early_describe(cls):
         return "Deleting user"
 
-    def describe(self, id, delete_homedir=False, delete_own_group=False):
+    def describe(self, id, delete_params=False):
         user = self.datastore.get_by_id('users', id)
         return TaskDescription("Deleting user {name}", name=user['username'] if user else id)
 
-    def verify(self, id, delete_homedir=False, delete_own_group=False):
+    def verify(self, id, delete_params=False):
         user = self.datastore.get_by_id('users', id)
         if user and user['builtin']:
             raise VerifyException(errno.EPERM, 'Cannot delete builtin user {0}'.format(user['username']))
 
         return ['system']
 
-    def run(self, id, delete_homedir=False, delete_own_group=False):
+    def run(self, id, delete_params=None):
         subtasks = []
         try:
             user = self.datastore.get_by_id('users', id)
             if user is None:
                 raise TaskException(errno.ENOENT, 'User with UID {0} does not exist'.format(id))
 
-            if delete_homedir and user['home'] not in (None, '/nonexistent') and os.path.exists(user['home']):
+            if (delete_params and delete_params.get('delete_home_directory') and
+                    user['home'] not in (None, '/nonexistent') and os.path.exists(user['home'])):
                 homedir_dataset = self.dispatcher.call_sync(
                     'volume.dataset.query',
                     [('mountpoint', '=', user['home'])],
@@ -442,13 +443,14 @@ class UserDeleteTask(Task):
 
             group = self.datastore.get_by_id('groups', user['group'])
             if group and user['uid'] == group['gid']:
-                if not delete_own_group:
+                if delete_params and delete_params.get('delete_own_group'):
+                    subtasks.append(self.run_subtask('group.delete', user['group']))
+
+                else:
                     self.add_warning(TaskWarning(
                         errno.EBUSY,
                         'Group {0} ({1}) left behind, you need to delete it separately'.format(group['name'], group['gid']))
                     )
-                else:
-                    subtasks.append(self.run_subtask('group.delete', user['group']))
 
             self.join_subtasks(*subtasks)
 
@@ -920,6 +922,15 @@ def _init(dispatcher, plugin):
             }
         },
         'additionalProperties': False,
+    })
+
+    plugin.register_schema_definition('user-delete', {
+        'type': 'object',
+        'additionalProperties': False,
+        'properties': {
+            'delete_own_group': {'type': 'boolean'},
+            'delete_home_directory': {'type': 'boolean'},
+        }
     })
 
     # Register provider for querying accounts and groups data
