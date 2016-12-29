@@ -27,7 +27,7 @@
 
 import errno
 import contextlib
-from task import Task, TaskException, Provider, query
+from task import ProgressTask, TaskException, Provider, query, TaskDescription
 from freenas.dispatcher.rpc import RpcException, accepts, returns, private, description, generator
 from freenas.utils import query as q
 
@@ -112,7 +112,39 @@ class DatastoreProvider(Provider):
         )
 
 
-class DatastoreCreateTask(Task):
+class DatastoreBaseTask(ProgressTask):
+    def __init__(self, dispatcher, datastore):
+        super(DatastoreBaseTask, self).__init__(dispatcher, datastore)
+
+    def get_driver_and_check_capabilities(self, id, block_devices=False, clones=False, snapshots=False):
+        ds = self.dispatcher.call_sync('vm.datastore.query', [('id', '=', id)], {'single': True})
+        if not ds:
+            raise RpcException(errno.ENOENT, 'Datastore {0} not found'.format(id))
+
+        capabilities = ds['capabilities']
+        name = ds['name']
+
+        if block_devices and 'block_devices' not in capabilities:
+            raise TaskException(errno.ENOTSUP, 'Datastore {0} does not support block devices'.format(name))
+
+        if clones and 'clones' not in capabilities:
+            raise TaskException(errno.ENOTSUP, 'Datastore {0} does not support clones'.format(name))
+
+        if snapshots and 'snapshots' not in capabilities:
+            raise TaskException(errno.ENOTSUP, 'Datastore {0} does not support snapshots'.format(name))
+
+        return ds['type']
+
+    def get_resources(self, id):
+        try:
+            res = self.dispatcher.call_sync('vm.datastore.get_resources', id)
+        except RpcException:
+            res = ['system']
+
+        return res
+
+
+class DatastoreCreateTask(DatastoreBaseTask):
     def verify(self, datastore):
         return ['system']
 
@@ -127,7 +159,7 @@ class DatastoreCreateTask(Task):
         return id
 
 
-class DatastoreUpdateTask(Task):
+class DatastoreUpdateTask(DatastoreBaseTask):
     def verify(self, id, updated_fields):
         return ['system']
 
@@ -148,7 +180,7 @@ class DatastoreUpdateTask(Task):
         return id
 
 
-class DatastoreDeleteTask(Task):
+class DatastoreDeleteTask(DatastoreBaseTask):
     def verify(self, id):
         return ['system']
 
@@ -165,7 +197,7 @@ class DatastoreDeleteTask(Task):
         })
 
 
-class DirectoryCreateTask(Task):
+class DirectoryCreateTask(DatastoreBaseTask):
     def verify(self, id, path):
         return []
 
@@ -174,7 +206,7 @@ class DirectoryCreateTask(Task):
         return self.run_subtask_sync('vm.datastore.{0}.create_directory'.format(driver), id, normpath(path))
 
 
-class DirectoryDeleteTask(Task):
+class DirectoryDeleteTask(DatastoreBaseTask):
     def verify(self, id, path):
         return []
 
@@ -183,7 +215,7 @@ class DirectoryDeleteTask(Task):
         return self.run_subtask_sync('vm.datastore.{0}.delete_directory'.format(driver), id, normpath(path))
 
 
-class DirectoryRenameTask(Task):
+class DirectoryRenameTask(DatastoreBaseTask):
     def verify(self, id, old_path, new_path):
         return []
 
@@ -197,7 +229,7 @@ class DirectoryRenameTask(Task):
         )
 
 
-class BlockDeviceCreateTask(Task):
+class BlockDeviceCreateTask(DatastoreBaseTask):
     def verify(self, id, path, size):
         return []
 
@@ -207,7 +239,7 @@ class BlockDeviceCreateTask(Task):
             'vm.datastore.{0}.create_block_device'.format(driver), id, normpath(path), size)
 
 
-class BlockDeviceDeleteTask(Task):
+class BlockDeviceDeleteTask(DatastoreBaseTask):
     def verify(self, id, path):
         return []
 
@@ -216,7 +248,7 @@ class BlockDeviceDeleteTask(Task):
         return self.run_subtask_sync('vm.datastore.{0}.delete_block_device'.format(driver), id, normpath(path))
 
 
-class BlockDeviceRenameTask(Task):
+class BlockDeviceRenameTask(DatastoreBaseTask):
     def verify(self, id, old_path, new_path):
         return []
 
@@ -244,7 +276,7 @@ class BlockDeviceResizeTask(Task):
         )
 
 
-class BlockDeviceCloneTask(Task):
+class BlockDeviceCloneTask(DatastoreBaseTask):
     def verify(self, id, path, new_path):
         return []
 
