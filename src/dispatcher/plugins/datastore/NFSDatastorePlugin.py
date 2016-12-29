@@ -114,7 +114,7 @@ class NFSDatastoreUpdateTask(Task):
     def run(self, id, updated_fields):
         ds = self.datastore.get_by_id('vm.datastores', id)
         umount(ds['name'])
-        mount(ds['name', ds['properties']])
+        mount(ds['name'], ds['properties'])
 
 
 @accepts(str)
