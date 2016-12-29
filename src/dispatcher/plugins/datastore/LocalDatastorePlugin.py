@@ -154,6 +154,6 @@ def _init(dispatcher, plugin):
     })
 
     plugin.register_provider('vm.datastore.local', LocalDatastoreProvider)
-    plugin.register_task_handler('vm.datastore.local.create_directory', LocalDirectoryCreateTask)
-    plugin.register_task_handler('vm.datastore.local.delete_directory', LocalDirectoryDeleteTask)
-    plugin.register_task_handler('vm.datastore.local.rename_directory', LocalDirectoryRenameTask)
+    plugin.register_task_handler('vm.datastore.local.directory.create', LocalDirectoryCreateTask)
+    plugin.register_task_handler('vm.datastore.local.directory.delete', LocalDirectoryDeleteTask)
+    plugin.register_task_handler('vm.datastore.local.directory.rename', LocalDirectoryRenameTask)

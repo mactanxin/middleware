@@ -191,9 +191,9 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('vm.datastore.nfs.create', NFSDatastoreCreateTask)
     plugin.register_task_handler('vm.datastore.nfs.update', NFSDatastoreUpdateTask)
     plugin.register_task_handler('vm.datastore.nfs.delete', NFSDatastoreDeleteTask)
-    plugin.register_task_alias('vm.datastore.nfs.create_directory', 'vm.datastore.local.create_directory')
-    plugin.register_task_alias('vm.datastore.nfs.delete_directory', 'vm.datastore.local.delete_directory')
-    plugin.register_task_alias('vm.datastore.nfs.rename_directory', 'vm.datastore.local.rename_directory')
+    plugin.register_task_alias('vm.datastore.nfs.directory.create', 'vm.datastore.local.directory.create')
+    plugin.register_task_alias('vm.datastore.nfs.directory.delete', 'vm.datastore.local.directory.delete')
+    plugin.register_task_alias('vm.datastore.nfs.directory.rename', 'vm.datastore.local.directory.rename')
 
     if not os.path.isdir('/nfs'):
         os.mkdir('/nfs')

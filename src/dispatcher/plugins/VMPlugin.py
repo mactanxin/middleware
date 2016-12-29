@@ -408,10 +408,10 @@ class VMBaseTask(ProgressTask):
 
         if not self.dispatcher.call_sync('vm.datastore.directory_exists', vm['target'], 'vm'):
             # Create VM root
-            self.join_subtasks(self.run_subtask('vm.datastore.create_directory', vm['target'], 'vm'))
+            self.join_subtasks(self.run_subtask('vm.datastore.directory.create', vm['target'], 'vm'))
 
         try:
-            self.join_subtasks(self.run_subtask('vm.datastore.create_directory', vm['target'], self.vm_ds))
+            self.join_subtasks(self.run_subtask('vm.datastore.directory.create', vm['target'], self.vm_ds))
         except RpcException:
             raise TaskException(
                 errno.EACCES,
@@ -511,7 +511,7 @@ class VMBaseTask(ProgressTask):
                     raise TaskException(errno.EINVAL, 'Datastore {0} does not support zvols'.format(vm['target']))
 
                 self.join_subtasks(self.run_subtask(
-                    'vm.datastore.create_block_device',
+                    'vm.datastore.block_device.create',
                     vm['target'],
                     ds_name,
                     properties['size']
@@ -560,7 +560,7 @@ class VMBaseTask(ProgressTask):
                     ds_name = os.path.join(vm_ds, res['name'])
                     old_ds = self.dispatcher.call_sync('zfs.dataset.query', [('name', '=', ds_name)], {'single': True})
                     if not old_ds:
-                        self.join_subtasks(self.run_subtask('vm.datastore.create_directory', vm['target'], ds_name))
+                        self.join_subtasks(self.run_subtask('vm.datastore.directory.create', vm['target'], ds_name))
 
                     if properties.get('source'):
                         if old_ds:
@@ -588,7 +588,7 @@ class VMBaseTask(ProgressTask):
         if new_res['type'] in ['DISK', 'VOLUME']:
             if old_res['name'] != new_res['name']:
                 if not (new_res['type'] == 'VOLUME' and not new_properties['auto']):
-                    self.run_subtask_sync('vm.datastore.rename_directory',
+                    self.run_subtask_sync('vm.datastore.directory.rename',
                         vm['target'],
                         os.path.join(vm_ds, old_res['name']),
                         os.path.join(vm_ds, new_res['name'])
@@ -599,7 +599,7 @@ class VMBaseTask(ProgressTask):
                 if new_properties['target_type'] == 'ZVOL':
                     ds_name = os.path.join(vm_ds, new_res['name'])
                     self.run_subtask_sync(
-                        'vm.datastore.resize_block_device',
+                        'vm.datastore.block_device.resize',
                         vm['target'],
                         ds_name,
                         new_properties['size']
@@ -641,7 +641,7 @@ class VMBaseTask(ProgressTask):
                 ))
             else:
                 self.join_subtasks(self.run_subtask(
-                    'vm.datastore.delete_directory',
+                    'vm.datastore.directory.delete',
                     vm['target'],
                     ds_name
                 ))
@@ -962,7 +962,7 @@ class VMUpdateTask(VMBaseTask):
         if 'name' in updated_params:
             vm_ds = os.path.join(VM_ROOT, vm['name'])
             new_vm_ds = os.path.join(VM_ROOT, updated_params['name'])
-            self.run_subtask_sync('vm.datastore.rename_directory', vm['target'], vm_ds, new_vm_ds)
+            self.run_subtask_sync('vm.datastore.directory.rename', vm['target'], vm_ds, new_vm_ds)
 
         old_vm = copy.deepcopy(vm)
         vm.update(updated_params)
@@ -1058,7 +1058,7 @@ class VMDeleteTask(Task):
             pass
 
         try:
-            self.run_subtask_sync('vm.datastore.delete_directory', vm['target'], get_vm_path(vm['name']))
+            self.run_subtask_sync('vm.datastore.directory.delete', vm['target'], get_vm_path(vm['name']))
         except RpcException as err:
             if err.code != errno.ENOENT:
                 raise err
