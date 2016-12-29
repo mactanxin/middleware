@@ -274,6 +274,27 @@ class VolumeSnapshotDeleteTask(ProgressTask):
         pass
 
 
+@accepts(str, str)
+@description('Does a rollback of a dataset or a ZVOL representing a block device or a directory to a selected snapshot')
+class VolumeSnapshotRollbackTask(ProgressTask):
+    @classmethod
+    def early_describe(cls):
+        return 'Doing a rollback on a dataset'
+
+    def describe(self, id, path, snapshot_path):
+        return TaskDescription(
+            'Doing a rollback to the {snapshot} snapshot on the dataset {name}',
+            name=os.path.join(id, path),
+            snapshot=os.path.join(id, snapshot_path)
+        )
+
+    def verify(self, id, path, snapshot_path):
+        return self.dispatcher.call_sync('vm.datastore.volume.get_resources', id)
+
+    def run(self, id, path, snapshot_path):
+        pass
+
+
 def _metadata():
     return {
         'type': 'datastore',
@@ -292,6 +313,7 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('vm.datastore.volume.directory.clone', VolumeCloneTask)
     plugin.register_task_handler('vm.datastore.volume.directory.snapshot.create', VolumeSnapshotCreateTask)
     plugin.register_task_handler('vm.datastore.volume.directory.snapshot.delete', VolumeSnapshotDeleteTask)
+    plugin.register_task_handler('vm.datastore.volume.directory.snapshot.rollback', VolumeSnapshotRollbackTask)
     plugin.register_task_handler('vm.datastore.volume.block_device.create', VolumeBlockDeviceCreateTask)
     plugin.register_task_handler('vm.datastore.volume.block_device.delete', VolumeBlockDeviceCreateTask)
     plugin.register_task_handler('vm.datastore.volume.block_device.rename', VolumeBlockDeviceRenameTask)
@@ -299,4 +321,5 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('vm.datastore.volume.block_device.clone', VolumeCloneTask)
     plugin.register_task_handler('vm.datastore.volume.block_device.snapshot.create', VolumeSnapshotCreateTask)
     plugin.register_task_handler('vm.datastore.volume.block_device.snapshot.delete', VolumeSnapshotDeleteTask)
+    plugin.register_task_handler('vm.datastore.volume.block_device.snapshot.rollback', VolumeSnapshotRollbackTask)
 
