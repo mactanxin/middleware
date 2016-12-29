@@ -29,9 +29,11 @@ import errno
 import contextlib
 from task import ProgressTask, TaskException, Provider, query, TaskDescription
 from freenas.dispatcher.rpc import RpcException, accepts, returns, private, description, generator
-from freenas.utils import query as q
+from freenas.dispatcher.rpc import SchemaHelper as h
+from freenas.utils import query as q, first_or_default
 
 
+@description('Provides information about VM datastores')
 class DatastoreProvider(Provider):
     @query('vm-datastore')
     @generator
@@ -66,6 +68,9 @@ class DatastoreProvider(Provider):
         return result
 
     @private
+    @accepts(str)
+    @returns(str)
+    @description('Returns type of a datastore driver')
     def get_driver(self, id):
         ds = self.query([('id', '=', id)], {'single': True})
         if not ds:
@@ -74,6 +79,9 @@ class DatastoreProvider(Provider):
         return ds['type']
 
     @private
+    @accepts(str, str)
+    @returns(bool)
+    @description('Checks for directory existence under a selected VM datastore')
     def directory_exists(self, datastore_id, datastore_path):
         driver = self.get_driver(datastore_id)
         return self.dispatcher.call_sync(
@@ -84,6 +92,8 @@ class DatastoreProvider(Provider):
 
     @private
     @accepts(str, str)
+    @returns(str)
+    @description('Converts VM datastore path to local filesystem path')
     def get_filesystem_path(self, datastore_id, datastore_path):
         driver = self.get_driver(datastore_id)
         return self.dispatcher.call_sync(
@@ -94,6 +104,8 @@ class DatastoreProvider(Provider):
 
     @private
     @accepts(str)
+    @returns(h.array(str))
+    @description('Returns list of resources which have to be locked to safely perform VM datastore operations')
     def get_resources(self, datastore_id):
         driver = self.get_driver(datastore_id)
         return self.dispatcher.call_sync(
@@ -103,6 +115,8 @@ class DatastoreProvider(Provider):
 
     @private
     @generator
+    @accepts(str, str)
+    @description('Returns a list of snapshots on a given VM datastore path')
     def get_snapshots(self, datastore_id, path):
         driver = self.get_driver(datastore_id)
         return self.dispatcher.call_sync(
@@ -144,7 +158,17 @@ class DatastoreBaseTask(ProgressTask):
         return res
 
 
+@accepts(h.ref('vm-datastore'))
+@returns(str)
+@description('Creates a VM datastore')
 class DatastoreCreateTask(DatastoreBaseTask):
+    @classmethod
+    def early_describe(cls):
+        return 'Creating a datastore'
+
+    def describe(self, datastore):
+        return TaskDescription('Creating the datastore {name}', name=datastore['name'])
+
     def verify(self, datastore):
         return ['system']
 
@@ -159,7 +183,18 @@ class DatastoreCreateTask(DatastoreBaseTask):
         return id
 
 
+@accepts(str, h.ref('vm-datastore'))
+@returns(str)
+@description('Updates a VM datastore')
 class DatastoreUpdateTask(DatastoreBaseTask):
+    @classmethod
+    def early_describe(cls):
+        return 'Updating a datastore'
+
+    def describe(self, id, updated_fields):
+        ds = self.datastore.get_by_id('vm.datastores', id) or {}
+        return TaskDescription('Updating the datastore {name}', name=ds.get('name', ''))
+
     def verify(self, id, updated_fields):
         return ['system']
 
@@ -180,7 +215,17 @@ class DatastoreUpdateTask(DatastoreBaseTask):
         return id
 
 
+@accepts(str)
+@description('Deletes a VM datastore')
 class DatastoreDeleteTask(DatastoreBaseTask):
+    @classmethod
+    def early_describe(cls):
+        return 'Deleting a datastore'
+
+    def describe(self, id):
+        ds = self.datastore.get_by_id('vm.datastores', id) or {}
+        return TaskDescription('Deleting the datastore {name}', name=ds.get('name', ''))
+
     def verify(self, id):
         return ['system']
 
@@ -197,27 +242,54 @@ class DatastoreDeleteTask(DatastoreBaseTask):
         })
 
 
+@accepts(str, str)
+@description('Creates a directory using a VM datastore')
 class DirectoryCreateTask(DatastoreBaseTask):
+    @classmethod
+    def early_describe(cls):
+        return 'Creating a directory'
+
+    def describe(self, id, path):
+        return TaskDescription('Creating the directory {name}', name=path)
+
     def verify(self, id, path):
-        return []
+        return self.get_resources(id)
 
     def run(self, id, path):
         driver = self.dispatcher.call_sync('vm.datastore.get_driver', id)
         return self.run_subtask_sync('vm.datastore.{0}.create_directory'.format(driver), id, normpath(path))
 
 
+@accepts(str, str)
+@description('Deletes a directory using a VM datastore')
 class DirectoryDeleteTask(DatastoreBaseTask):
+    @classmethod
+    def early_describe(cls):
+        return 'Deleting a directory'
+
+    def describe(self, id, path):
+        return TaskDescription('Deleting the directory {name}', name=path)
+
     def verify(self, id, path):
-        return []
+        return self.get_resources(id)
 
     def run(self, id, path):
         driver = self.dispatcher.call_sync('vm.datastore.get_driver', id)
         return self.run_subtask_sync('vm.datastore.{0}.delete_directory'.format(driver), id, normpath(path))
 
 
+@accepts(str, str, str)
+@description('Renames a directory using a VM datastore')
 class DirectoryRenameTask(DatastoreBaseTask):
+    @classmethod
+    def early_describe(cls):
+        return 'Renaming a directory'
+
+    def describe(self, id, old_path, new_path):
+        return TaskDescription('Renaming the directory {name} to {new_name}', name=old_path, new_name=new_path)
+
     def verify(self, id, old_path, new_path):
-        return []
+        return self.get_resources(id)
 
     def run(self, id, old_path, new_path):
         driver = self.dispatcher.call_sync('vm.datastore.get_driver', id)
@@ -229,9 +301,18 @@ class DirectoryRenameTask(DatastoreBaseTask):
         )
 
 
+@accepts(str, str, int)
+@description('Creates a block device using a VM datastore')
 class BlockDeviceCreateTask(DatastoreBaseTask):
+    @classmethod
+    def early_describe(cls):
+        return 'Creating a block device'
+
+    def describe(self, id, path, size):
+        return TaskDescription('Creating a block device {name}', name=path)
+
     def verify(self, id, path, size):
-        return []
+        return self.get_resources(id)
 
     def run(self, id, path, size):
         driver = self.dispatcher.call_sync('vm.datastore.get_driver', id)
@@ -239,18 +320,36 @@ class BlockDeviceCreateTask(DatastoreBaseTask):
             'vm.datastore.{0}.create_block_device'.format(driver), id, normpath(path), size)
 
 
+@accepts(str, str)
+@description('Deletes a block device using a VM datastore')
 class BlockDeviceDeleteTask(DatastoreBaseTask):
+    @classmethod
+    def early_describe(cls):
+        return 'Deleting a block device'
+
+    def describe(self, id, path):
+        return TaskDescription('Deleting the block device {name}', name=path)
+
     def verify(self, id, path):
-        return []
+        return self.get_resources(id)
 
     def run(self, id, path):
         driver = self.dispatcher.call_sync('vm.datastore.get_driver', id)
         return self.run_subtask_sync('vm.datastore.{0}.delete_block_device'.format(driver), id, normpath(path))
 
 
+@accepts(str, str, str)
+@description('Renames a block device using a VM datastore')
 class BlockDeviceRenameTask(DatastoreBaseTask):
+    @classmethod
+    def early_describe(cls):
+        return 'Renaming a block device'
+
+    def describe(self, id, old_path, new_path):
+        return TaskDescription('Renaming the block device {name} to {new_name}', name=old_path, new_name=new_path)
+
     def verify(self, id, old_path, new_path):
-        return []
+        return self.get_resources(id)
 
     def run(self, id, old_path, new_path):
         driver = self.dispatcher.call_sync('vm.datastore.get_driver', id)
@@ -262,9 +361,18 @@ class BlockDeviceRenameTask(DatastoreBaseTask):
         )
 
 
-class BlockDeviceResizeTask(Task):
-    def verify(self, id, path, size):
-        return []
+@accepts(str, str, int)
+@description('Resizes a block device using a VM datastore')
+class BlockDeviceResizeTask(DatastoreBaseTask):
+    @classmethod
+    def early_describe(cls):
+        return 'Resizing a block device'
+
+    def describe(self, id, path, new_size):
+        return TaskDescription('Resizing the block device {name}', name=path)
+
+    def verify(self, id, path, new_size):
+        return self.get_resources(id)
 
     def run(self, id, path, new_size):
         driver = self.dispatcher.call_sync('vm.datastore.get_driver', id)
@@ -276,27 +384,57 @@ class BlockDeviceResizeTask(Task):
         )
 
 
+@accepts(str, str, str)
+@description('Clones a block device using a VM datastore')
 class BlockDeviceCloneTask(DatastoreBaseTask):
+    @classmethod
+    def early_describe(cls):
+        return 'Cloning a block device'
+
+    def describe(self, id, path, new_path):
+        return TaskDescription('Cloning the block device {name} to {new_name}', name=path, new_name=new_path)
+
     def verify(self, id, path, new_path):
-        return []
+        return self.get_resources(id)
 
     def run(self, id, path):
         driver = self.dispatcher.call_sync('vm.datastore.get_driver', id)
         return self.run_subtask_sync('vm.datastore.{0}.clone_block_device'.format(driver), id, path)
 
+@accepts(str, str, str)
+@description('Creates a snapshot of a block device using a VM datastore')
+class BlockDeviceSnapshotCreateTask(DatastoreBaseTask):
+    @classmethod
+    def early_describe(cls):
+        return 'Creating a block device snapshot'
 
-class SnapshotCreateTask(Task):
+    def describe(self, id, path, new_path):
+        return TaskDescription(
+            'Creating the block device {name} snapshot under {new_name}',
+            name=path,
+            new_name=new_path
+        )
+
     def verify(self, id, path, new_path):
-        return []
+        return self.get_resources(id)
 
     def run(self, id, path):
         driver = self.dispatcher.call_sync('vm.datastore.get_driver', id)
         return self.run_subtask_sync('vm.datastore.{0}.create_snapshot'.format(driver), id, path)
 
 
-class SnapshotDeleteTask(Task):
-    def verify(self, id, path, new_path):
-        return []
+@accepts(str, str)
+@description('Deletes a snapshot of a block device using a VM datastore')
+class BlockDeviceSnapshotDeleteTask(DatastoreBaseTask):
+    @classmethod
+    def early_describe(cls):
+        return 'Deleting a block device snapshot'
+
+    def describe(self, id, path):
+        return TaskDescription('Deleting the block device snapshot {name}', name=path)
+
+    def verify(self, id, path):
+        return self.get_resources(id)
 
     def run(self, id, path):
         driver = self.dispatcher.call_sync('vm.datastore.get_driver', id)
