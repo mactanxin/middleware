@@ -215,6 +215,65 @@ class VolumeBlockDeviceResizeTask(ProgressTask):
         })
 
 
+@accepts(str, str, str)
+@description('Clones a dataset or a ZVOL representing a block device or a directory')
+class VolumeCloneTask(ProgressTask):
+    @classmethod
+    def early_describe(cls):
+        return 'Cloning a dataset'
+
+    def describe(self, id, path, new_path):
+        return TaskDescription(
+            'Cloning the dataset {name} to {new_name}',
+            name=os.path.join(id, path),
+            new_name=os.path.join(id, new_path)
+        )
+
+    def verify(self, id, path, new_path):
+        return self.dispatcher.call_sync('vm.datastore.volume.get_resources', id)
+
+    def run(self, id, path, new_path):
+        pass
+
+
+@accepts(str, str, str)
+@description('Creates a snapshot of a dataset or a ZVOL representing a block device or a directory')
+class VolumeSnapshotCreateTask(ProgressTask):
+    @classmethod
+    def early_describe(cls):
+        return 'Creating a dataset snapshot'
+
+    def describe(self, id, path, new_path):
+        return TaskDescription(
+            'Creating the dataset {name} snapshot under {new_name}',
+            name=os.path.join(id, path),
+            new_name=os.path.join(id, new_path)
+        )
+
+    def verify(self, id, path, new_path):
+        return self.dispatcher.call_sync('vm.datastore.volume.get_resources', id)
+
+    def run(self, id, path, new_path):
+        pass
+
+
+@accepts(str, str)
+@description('Deletes a snapshot of a dataset or a ZVOL representing a block device or a directory')
+class VolumeSnapshotDeleteTask(ProgressTask):
+    @classmethod
+    def early_describe(cls):
+        return 'Deleting a dataset snapshot'
+
+    def describe(self, id, path):
+        return TaskDescription('Deleting the dataset snapshot {name}', name=os.path.join(id, path))
+
+    def verify(self, id, path):
+        return self.dispatcher.call_sync('vm.datastore.volume.get_resources', id)
+
+    def run(self, id, path):
+        pass
+
+
 def _metadata():
     return {
         'type': 'datastore',
