@@ -309,6 +309,78 @@ class DirectoryRenameTask(DatastoreBaseTask):
         )
 
 
+@accepts(str, str, str)
+@description('Clones a directory using a VM datastore')
+class DirectoryCloneTask(DatastoreBaseTask):
+    @classmethod
+    def early_describe(cls):
+        return 'Cloning a directory'
+
+    def describe(self, id, path, new_path):
+        return TaskDescription('Cloning the directory {name} to {new_name}', name=path, new_name=new_path)
+
+    def verify(self, id, path, new_path):
+        return self.get_resources(id)
+
+    def run(self, id, path, new_path):
+        driver = self.get_driver_and_check_capabilities(id, clones=True)
+        return self.run_subtask_sync_with_progress(
+            'vm.datastore.{0}.directory.clone'.format(driver),
+            id,
+            path,
+            new_path
+        )
+
+
+@accepts(str, str, str)
+@description('Creates a snapshot of a directory using a VM datastore')
+class DirectorySnapshotCreateTask(DatastoreBaseTask):
+    @classmethod
+    def early_describe(cls):
+        return 'Creating a directory snapshot'
+
+    def describe(self, id, path, new_path):
+        return TaskDescription(
+            'Creating the directory {name} snapshot under {new_name}',
+            name=path,
+            new_name=new_path
+        )
+
+    def verify(self, id, path, new_path):
+        return self.get_resources(id)
+
+    def run(self, id, path, new_path):
+        driver = self.get_driver_and_check_capabilities(id, snapshots=True)
+        return self.run_subtask_sync_with_progress(
+            'vm.datastore.{0}.directory.snapshot.create'.format(driver),
+            id,
+            path,
+            new_path
+        )
+
+
+@accepts(str, str)
+@description('Deletes a snapshot of a directory using a VM datastore')
+class DirectorySnapshotDeleteTask(DatastoreBaseTask):
+    @classmethod
+    def early_describe(cls):
+        return 'Deleting a directory snapshot'
+
+    def describe(self, id, path):
+        return TaskDescription('Deleting the directory snapshot {name}', name=path)
+
+    def verify(self, id, path):
+        return self.get_resources(id)
+
+    def run(self, id, path):
+        driver = self.get_driver_and_check_capabilities(id, snapshots=True)
+        return self.run_subtask_sync_with_progress(
+            'vm.datastore.{0}.directory.snapshot.delete'.format(driver),
+            id,
+            path
+        )
+
+
 @accepts(str, str, int)
 @description('Creates a block device using a VM datastore')
 class BlockDeviceCreateTask(DatastoreBaseTask):
