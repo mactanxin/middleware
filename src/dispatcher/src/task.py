@@ -165,6 +165,14 @@ class ProgressTask(Task):
         )
         return progress
 
+    def run_subtask_sync_with_progress(self, classname, *args, **kwargs):
+        return self.run_subtask_sync(
+            classname,
+            *args,
+            progress_callback=lambda p, m=None, e=None: self.set_progress(p, m, e),
+            **kwargs
+        )
+
 
 class TaskException(RpcException):
     pass
