@@ -28,11 +28,13 @@
 import os
 import shutil
 import errno
-from task import Task, TaskException, Provider
-from freenas.dispatcher.rpc import RpcException, private, accepts, returns, generator
+from task import Task, TaskDescription, Provider
+from freenas.dispatcher.rpc import SchemaHelper as h
+from freenas.dispatcher.rpc import RpcException, private, accepts, returns, generator, description
 from freenas.utils import query as q
 
 
+@description('Provides information about local VM datastores')
 class LocalDatastoreProvider(Provider):
     @private
     @generator
@@ -40,6 +42,9 @@ class LocalDatastoreProvider(Provider):
         return
 
     @private
+    @accepts(str, str)
+    @returns(str)
+    @description('Converts VM datastore path to local filesystem path')
     def get_filesystem_path(self, datastore_id, datastore_path):
         ds = self.datastore.get_by_id('vm.datastores', datastore_id)
         if ds['type'] != 'local':
@@ -48,6 +53,9 @@ class LocalDatastoreProvider(Provider):
         return os.path.join(q.get(ds, 'properties.path'), datastore_path)
 
     @private
+    @accepts(str, str)
+    @returns(bool)
+    @description('Checks for directory existence in local VM datastore')
     def directory_exists(self, datastore_id, datastore_path):
         ds = self.datastore.get_by_id('vm.datastores', datastore_id)
         if ds['type'] != 'local':
@@ -56,23 +64,69 @@ class LocalDatastoreProvider(Provider):
         return os.path.exists(os.path.join(q.get(ds, 'properties.path'), datastore_path))
 
     @private
+    @accepts(str)
+    @returns(h.array(str))
+    @description('Returns list of resources which have to be locked to safely perform VM datastore operations')
     def get_resources(self, datastore_id):
         return ['system']
 
+    @private
+    @generator
+    @accepts(str, str)
+    @description('Returns a list of snapshots on a given VM datastore path')
+    def get_snapshots(self, datastore_id, path):
+        return
 
+
+@accepts(str, str)
+@description('Creates a directory on a local filesystem')
 class LocalDirectoryCreateTask(Task):
+    @classmethod
+    def early_describe(cls):
+        return 'Creating a directory'
+
+    def describe(self, id, path):
+        return TaskDescription('Creating the directory {name}', name=path)
+
+    def verify(self, id, path):
+        return ['system']
+
     def run(self, id, path):
         path = self.dispatcher.call_sync('vm.datastore.get_filesystem_path', id, path)
         os.mkdir(path)
 
 
+@accepts(str, str)
+@description('Deletes a directory on a local filesystem')
 class LocalDirectoryDeleteTask(Task):
+    @classmethod
+    def early_describe(cls):
+        return 'Deleting a directory'
+
+    def describe(self, id, path):
+        return TaskDescription('Deleting the directory {name}', name=path)
+
+    def verify(self, id, path):
+        return ['system']
+
     def run(self, id, path):
         path = self.dispatcher.call_sync('vm.datastore.get_filesystem_path', id, path)
         shutil.rmtree(path, ignore_errors=True)
 
 
+@accepts(str, str, str)
+@description('Renames a directory on a local filesystem')
 class LocalDirectoryRenameTask(Task):
+    @classmethod
+    def early_describe(cls):
+        return 'Renaming a directory'
+
+    def describe(self, id, old_path, new_path):
+        return TaskDescription('Renaming the directory {name} to {new_name}', name=old_path, new_name=new_path)
+
+    def verify(self, id, old_path, new_path):
+        return ['system']
+
     def run(self, id, old_path, new_path):
         old_path = self.dispatcher.call_sync('vm.datastore.get_filesystem_path', id, old_path)
         new_path = self.dispatcher.call_sync('vm.datastore.get_filesystem_path', id, new_path)

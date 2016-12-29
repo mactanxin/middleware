@@ -29,10 +29,12 @@ import os
 import bsd
 import errno
 from lib.system import system
-from task import Task, TaskException, Provider
-from freenas.dispatcher.rpc import RpcException, private, accepts, returns, generator
+from task import Task, TaskDescription, Provider
+from freenas.dispatcher.rpc import SchemaHelper as h
+from freenas.dispatcher.rpc import RpcException, private, accepts, returns, generator, description
 
 
+@description('Provides information about NFS VM datastores')
 class NFSDatastoreProvider(Provider):
     @private
     @generator
@@ -40,6 +42,9 @@ class NFSDatastoreProvider(Provider):
         return
 
     @private
+    @accepts(str, str)
+    @returns(str)
+    @description('Converts remote NFS VM datastore path to local filesystem path')
     def get_filesystem_path(self, datastore_id, datastore_path):
         ds = self.datastore.get_by_id('vm.datastores', datastore_id)
         if ds['type'] != 'nfs':
@@ -48,6 +53,9 @@ class NFSDatastoreProvider(Provider):
         return os.path.join('/nfs', ds['name'], datastore_path)
 
     @private
+    @accepts(str, str)
+    @returns(bool)
+    @description('Checks for directory existence in NFS VM datastore')
     def directory_exists(self, datastore_id, datastore_path):
         ds = self.datastore.get_by_id('vm.datastores', datastore_id)
         if ds['type'] != 'nfs':
@@ -56,11 +64,31 @@ class NFSDatastoreProvider(Provider):
         return os.path.exists(os.path.join('/nfs', ds['name'], datastore_path))
 
     @private
+    @accepts(str)
+    @returns(h.array(str))
+    @description('Returns list of resources which have to be locked to safely perform VM datastore operations')
     def get_resources(self, datastore_id):
         return ['system']
 
+    @private
+    @generator
+    @accepts(str, str)
+    @description('Returns a list of snapshots on a given VM datastore path')
+    def get_snapshots(self, datastore_id, path):
+        return
 
+
+@accepts(h.ref('vm-datastore'))
+@returns(str)
+@description('Creates a NFS VM datastore')
 class NFSDatastoreCreateTask(Task):
+    @classmethod
+    def early_describe(cls):
+        return 'Creating a NFS datastore'
+
+    def describe(self, datastore):
+        return TaskDescription('Creating the NFS datastore {name}', name=datastore['name'])
+
     def verify(self, datastore):
         return ['system']
 
@@ -68,7 +96,18 @@ class NFSDatastoreCreateTask(Task):
         mount(datastore['name'], datastore['properties'])
 
 
+@accepts(str, h.ref('vm-datastore'))
+@returns(str)
+@description('Updates a NFS VM datastore')
 class NFSDatastoreUpdateTask(Task):
+    @classmethod
+    def early_describe(cls):
+        return 'Updating a NFS datastore'
+
+    def describe(self, id, updated_fields):
+        ds = self.datastore.get_by_id('vm.datastores', id) or {}
+        return TaskDescription('Updating the NFS datastore {name}', name=ds.get('name', ''))
+
     def verify(self, id, updated_fields):
         return ['system']
 
@@ -78,7 +117,17 @@ class NFSDatastoreUpdateTask(Task):
         mount(ds['name', ds['properties']])
 
 
+@accepts(str)
+@description('Deletes a NFS VM datastore')
 class NFSDatastoreDeleteTask(Task):
+    @classmethod
+    def early_describe(cls):
+        return 'Deleting a NFS datastore'
+
+    def describe(self, id):
+        ds = self.datastore.get_by_id('vm.datastores', id) or {}
+        return TaskDescription('Deleting the NFS datastore {name}', name=ds.get('name', ''))
+
     def verify(self, id):
         return ['system']
 

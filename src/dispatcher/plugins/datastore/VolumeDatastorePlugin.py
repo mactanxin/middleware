@@ -26,10 +26,12 @@
 #####################################################################
 
 import os
-from task import Task, Provider
-from freenas.dispatcher.rpc import private, accepts, returns, generator
+from task import ProgressTask, Provider, TaskDescription
+from freenas.dispatcher.rpc import SchemaHelper as h
+from freenas.dispatcher.rpc import private, accepts, returns, generator, description
 
 
+@description('Provides information about ZFS VM datastores')
 class VolumeDatastoreProvider(Provider):
     @private
     @generator
@@ -43,57 +45,110 @@ class VolumeDatastoreProvider(Provider):
 
     @private
     @accepts(str, str)
+    @returns(str)
+    @description('Converts dataset path to local filesystem path')
     def get_filesystem_path(self, datastore_id, datastore_path):
         return self.dispatcher.call_sync('volume.resolve_path', datastore_id, datastore_path)
 
     @private
     @accepts(str)
+    @returns(h.array(str))
+    @description('Returns list of resources which have to be locked to safely perform VM datastore operations')
     def get_resources(self, datastore_id):
         return ['zpool:{0}'.format(datastore_id)]
 
     @private
     @accepts(str, str)
+    @returns(bool)
+    @description('Checks for existence of dataset representing a VM datastore\'s directory')
     def directory_exists(self, datastore_id, datastore_path):
         path = os.path.join(datastore_id, datastore_path)
         return self.dispatcher.call_sync('volume.dataset.query', [('id', '=', path)], {'single': True}) is not None
 
+    @private
+    @generator
+    @accepts(str, str)
+    @description('Returns a list of snapshots on a given VM datastore path')
+    def get_snapshots(self, datastore_id, path):
+        return
 
-class VolumeDirectoryCreateTask(Task):
+
+@accepts(str, str)
+@description('Creates a dataset representing a VM datastore\'s directory')
+class VolumeDirectoryCreateTask(ProgressTask):
+    @classmethod
+    def early_describe(cls):
+        return 'Creating a dataset'
+
+    def describe(self, id, path):
+        return TaskDescription('Creating the dataset {name}', name=os.path.join(id, path))
+
     def verify(self, id, path):
-        return []
+        return self.dispatcher.call_sync('vm.datastore.volume.get_resources', id)
 
     def run(self, id, path):
-        return self.run_subtask_sync('volume.dataset.create', {
+        return self.run_subtask_sync_with_progress('volume.dataset.create', {
             'volume': id,
             'id': os.path.join(id, path)
         })
 
 
-class VolumeDirectoryDeleteTask(Task):
+@accepts(str, str)
+@description('Deletes a dataset representing a VM datastore\'s directory')
+class VolumeDirectoryDeleteTask(ProgressTask):
+    @classmethod
+    def early_describe(cls):
+        return 'Deleting a dataset'
+
+    def describe(self, id, path):
+        return TaskDescription('Deleting the dataset {name}', name=os.path.join(id, path))
+
     def verify(self, id, path):
-        return []
+        return self.dispatcher.call_sync('vm.datastore.volume.get_resources', id)
 
     def run(self, id, path):
-        return self.run_subtask_sync('volume.dataset.delete', os.path.join(id, path))
+        return self.run_subtask_sync_with_progress('volume.dataset.delete', os.path.join(id, path))
 
 
-class VolumeDirectoryRenameTask(Task):
+@accepts(str, str, str)
+@description('Renames a dataset representing a VM datastore\'s directory')
+class VolumeDirectoryRenameTask(ProgressTask):
+    @classmethod
+    def early_describe(cls):
+        return 'Renaming a dataset'
+
+    def describe(self, id, old_path, new_path):
+        return TaskDescription(
+            'Renaming the dataset {name} to {new_name}',
+            name=os.path.join(id, old_path),
+            new_name=os.path.join(id, new_path)
+        )
+
     def verify(self, id, old_path, new_path):
-        return []
+        return self.dispatcher.call_sync('vm.datastore.volume.get_resources', id)
 
     def run(self, id, old_path, new_path):
         dataset_id = os.path.join(id, old_path)
-        return self.run_subtask_sync('volume.dataset.update', dataset_id, {
+        return self.run_subtask_sync_with_progress('volume.dataset.update', dataset_id, {
             'id': os.path.join(id, new_path)
         })
 
 
-class VolumeBlockDeviceCreateTask(Task):
+@accepts(str, str, int)
+@description('Creates a ZVOL representing a VM datastore\'s block device')
+class VolumeBlockDeviceCreateTask(ProgressTask):
+    @classmethod
+    def early_describe(cls):
+        return 'Creating a ZVOL'
+
+    def describe(self, id, path, size):
+        return TaskDescription('Creating the ZVOL {name}', name=os.path.join(id, path))
+
     def verify(self, id, path, size):
-        return []
+        return self.dispatcher.call_sync('vm.datastore.volume.get_resources', id)
 
     def run(self, id, path, size):
-        return self.run_subtask_sync('volume.dataset.create', {
+        return self.run_subtask_sync_with_progress('volume.dataset.create', {
             'volume': id,
             'id': os.path.join(id, path),
             'type': 'VOLUME',
@@ -101,30 +156,61 @@ class VolumeBlockDeviceCreateTask(Task):
         })
 
 
-class VolumeBlockDeviceDeleteTask(Task):
+@accepts(str, str)
+@description('Deletes a ZVOL representing a VM datastore\'s block device')
+class VolumeBlockDeviceDeleteTask(ProgressTask):
+    @classmethod
+    def early_describe(cls):
+        return 'Deleting a ZVOL'
+
+    def describe(self, id, path):
+        return TaskDescription('Deleting the ZVOL {name}', name=os.path.join(id, path))
+
     def verify(self, id, path):
-        return []
+        return self.dispatcher.call_sync('vm.datastore.volume.get_resources', id)
 
-    def run(self, id, path, size):
-        return self.run_subtask_sync('volume.dataset.delete', os.path.join(id, path))
+    def run(self, id, path):
+        return self.run_subtask_sync_with_progress('volume.dataset.delete', os.path.join(id, path))
 
 
-class VolumeBlockDeviceRenameTask(Task):
-    def verify(self, id, old_path):
-        return []
+@accepts(str, str, str)
+@description('Renames a ZVOL representing a VM datastore\'s block device')
+class VolumeBlockDeviceRenameTask(ProgressTask):
+    @classmethod
+    def early_describe(cls):
+        return 'Renaming a ZVOL'
+
+    def describe(self, id, old_path, new_path):
+        return TaskDescription(
+            'Renaming the ZVOL {name} to {new_name}',
+            name=os.path.join(id, old_path),
+            new_name=os.path.join(id, new_path)
+        )
+
+    def verify(self, id, old_path, new_path):
+        return self.dispatcher.call_sync('vm.datastore.volume.get_resources', id)
 
     def run(self, id, old_path, new_path):
-        return self.run_subtask_sync('volume.dataset.delete', os.path.join(id, old_path), {
+        return self.run_subtask_sync_with_progress('volume.dataset.delete', os.path.join(id, old_path), {
             'id': os.path.join(id, new_path)
         })
 
 
-class VolumeBlockDeviceResizeTask(Task):
+@accepts(str, str, int)
+@description('Resizes a ZVOL representing a VM datastore\'s block device')
+class VolumeBlockDeviceResizeTask(ProgressTask):
+    @classmethod
+    def early_describe(cls):
+        return 'Resizing a ZVOL'
+
+    def describe(self, id, path, new_size):
+        return TaskDescription('Resizing the ZVOL {name}', name=os.path.join(id, path))
+
     def verify(self, id, path, new_size):
-        return []
+        return self.dispatcher.call_sync('vm.datastore.volume.get_resources', id)
 
     def run(self, id, path, new_size):
-        return self.run_subtask_sync('volume.dataset.update', os.path.join(id, path), {
+        return self.run_subtask_sync_with_progress('volume.dataset.update', os.path.join(id, path), {
             'volsize': new_size
         })
 
