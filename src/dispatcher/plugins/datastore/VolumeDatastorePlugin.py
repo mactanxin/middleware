@@ -30,7 +30,6 @@ import errno
 from task import ProgressTask, Provider, TaskDescription, TaskException
 from freenas.dispatcher.rpc import SchemaHelper as h
 from freenas.dispatcher.rpc import private, accepts, returns, generator, description
-from freenas.utils import query as q
 
 
 @description('Provides information about ZFS VM datastores')
