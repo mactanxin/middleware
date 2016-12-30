@@ -135,7 +135,7 @@ class DockerContainerProvider(Provider):
                         presets['web_ui_protocol'],
                         address,
                         presets['web_ui_port'],
-                        presets['web_ui_path'][1:]
+                        presets['web_ui_path']
                     )
 
                 obj['version'] = presets.get('version', '0')
