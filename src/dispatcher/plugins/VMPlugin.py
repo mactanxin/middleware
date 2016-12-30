@@ -1131,7 +1131,7 @@ class VMStartTask(Task):
             raise TaskException(err.code, err.message)
 
         for d in dropped_devices:
-            if d['type'] in ('DISK', 'VOLUME'):
+            if d['type'] in ('DISK', 'VOLUME', 'CDROM'):
                 self.add_warning(TaskWarning(
                     errno.EACCES,
                     'Cannot access storage resources of device {0}. Cannot connect device'.format(d['name'])

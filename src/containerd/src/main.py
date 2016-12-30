@@ -526,7 +526,7 @@ class VirtualMachine(object):
 
     def drop_invalid_devices(self):
         for i in list(self.devices):
-            if i['type'] == 'DISK':
+            if i['type'] in ('DISK', 'CDROM'):
                 path = self.context.client.call_sync('vm.get_disk_path', self.id, i['name'])
             elif i['type'] == 'VOLUME' and i['properties']['type'] == 'VT9P':
                 path = self.context.client.call_sync('vm.get_volume_path', self.id, i['name'])
