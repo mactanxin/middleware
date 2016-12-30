@@ -333,7 +333,18 @@ class VolumeSnapshotDeleteTask(ProgressTask):
         return self.dispatcher.call_sync('vm.datastore.volume.get_resources', id)
 
     def run(self, id, path):
-        pass
+        full_path = os.path.join(id, path)
+        dataset, vm_snap_id = full_path.split('@', 1)
+        snapshot_id = self.dispatcher.call_sync(
+            'volume.snapshot.query',
+            [('dataset', '=', dataset), ('metadata.org\.freenas:vm_snapshot', '=', vm_snap_id)],
+            {'single': True, 'select': 'id'}
+        )
+
+        if not snapshot_id:
+            raise TaskException(errno.ENOENT, 'Snapshot {0} not found'.format(path))
+
+        return self.run_subtask_sync_with_progress('volume.snapshot.delete', snapshot_id)
 
 
 @accepts(str, str)
