@@ -71,7 +71,14 @@ class VolumeDatastoreProvider(Provider):
     @accepts(str, str)
     @description('Returns a list of snapshots on a given VM datastore path')
     def get_snapshots(self, datastore_id, path):
-        return
+        dataset = os.path.join(datastore_id, path)
+        snapshots = self.dispatcher.call_sync(
+            'volume.snapshot.query',
+            [('dataset', '=', dataset), ('metadata', 'contains', 'org.freenas:vm_snapshot')],
+            {'select': 'metadata.org\.freenas:vm_snapshot'}
+        )
+        for snap_id in snapshots:
+            yield '{0}@{1}'.format(path, snap_id)
 
 
 @accepts(str, str)
