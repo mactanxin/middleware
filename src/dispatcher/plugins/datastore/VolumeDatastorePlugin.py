@@ -286,7 +286,37 @@ class VolumeSnapshotCreateTask(ProgressTask):
         return self.dispatcher.call_sync('vm.datastore.volume.get_resources', id)
 
     def run(self, id, path):
-        pass
+        source_ds, vm_snap_id = os.path.join(id, path).split('@', 1)
+        if not self.dispatcher.call_sync('volume.dataset.query', [('id', '=', source_ds)], {'count': True}):
+            raise TaskException(errno.ENOENT, 'Dataset {0} not found'.format(source_ds))
+
+        metadata = {'org.freenas:vm_snapshot': {'value': str(vm_snap_id)}}
+        snap_cnt = self.dispatcher.call_sync(
+            'volume.snapshot.query',
+            [('dataset', '=', source_ds), ('metadata', 'contains', 'org.freenas:vm_snapshot')],
+            {'count': True}
+        )
+        while True:
+            snap_id = '{0}@vm-snapshot-{1}'.format(source_ds, snap_cnt)
+            snap_exists = self.dispatcher.call_sync(
+                'volume.snapshot.query',
+                [('id', '=', snap_id)],
+                {'count': True}
+            )
+
+            if snap_exists:
+                snap_cnt += 1
+            else:
+                break
+
+        return self.run_subtask_sync_with_progress(
+            'volume.snapshot.create',
+            {
+                'id': snap_id,
+                'replicable': False,
+                'metadata': metadata
+            }
+        )
 
 
 @accepts(str, str)
