@@ -380,30 +380,29 @@ class DirectorySnapshotDeleteTask(DatastoreBaseTask):
         )
 
 
-@accepts(str, str, str)
+@accepts(str, str)
 @description('Does a rollback of a directory to a selected snapshot using a VM datastore')
 class DirectorySnapshotRollbackTask(DatastoreBaseTask):
     @classmethod
     def early_describe(cls):
         return 'Doing a rollback on a directory'
 
-    def describe(self, id, path, snapshot_path):
+    def describe(self, id, path):
         return TaskDescription(
             'Doing a rollback to the {snapshot} snapshot on the directory {name}',
-            name=path,
-            snapshot=snapshot_path
+            name=path.split('@', 1)[0],
+            snapshot=path
         )
 
-    def verify(self, id, path, snapshot_path):
+    def verify(self, id, path):
         return self.get_resources(id)
 
-    def run(self, id, path, snapshot_path):
+    def run(self, id, path):
         driver = self.get_driver_and_check_capabilities(id, snapshots=True)
         return self.run_subtask_sync_with_progress(
             'vm.datastore.{0}.directory.snapshot.rollback'.format(driver),
             id,
-            path,
-            snapshot_path
+            path
         )
 
 
@@ -569,30 +568,29 @@ class BlockDeviceSnapshotDeleteTask(DatastoreBaseTask):
         )
 
 
-@accepts(str, str, str)
+@accepts(str, str)
 @description('Does a rollback of a block device to a selected snapshot using a VM datastore')
 class BlockDeviceSnapshotRollbackTask(DatastoreBaseTask):
     @classmethod
     def early_describe(cls):
         return 'Doing a rollback on a block device'
 
-    def describe(self, id, path, snapshot_path):
+    def describe(self, id, path):
         return TaskDescription(
             'Doing a rollback to the {snapshot} snapshot on the block device {name}',
-            name=path,
-            snapshot=snapshot_path
+            name=path.split('@', 1)[0],
+            snapshot=path
         )
 
-    def verify(self, id, path, snapshot_path):
+    def verify(self, id, path):
         return self.get_resources(id)
 
-    def run(self, id, path, snapshot_path):
+    def run(self, id, path):
         driver = self.get_driver_and_check_capabilities(id, snapshots=True)
         return self.run_subtask_sync_with_progress(
             'vm.datastore.{0}.block_device.snapshot.rollback'.format(driver),
             id,
-            path,
-            snapshot_path
+            path
         )
 
 

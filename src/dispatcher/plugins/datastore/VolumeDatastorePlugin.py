@@ -313,17 +313,18 @@ class VolumeSnapshotRollbackTask(ProgressTask):
     def early_describe(cls):
         return 'Doing a rollback on a dataset'
 
-    def describe(self, id, path, snapshot_path):
+    def describe(self, id, path):
+        snapshot = os.path.join(id, path)
         return TaskDescription(
             'Doing a rollback to the {snapshot} snapshot on the dataset {name}',
-            name=os.path.join(id, path),
-            snapshot=os.path.join(id, snapshot_path)
+            name=snapshot.split('@', 1)[0],
+            snapshot=snapshot
         )
 
-    def verify(self, id, path, snapshot_path):
+    def verify(self, id, path):
         return self.dispatcher.call_sync('vm.datastore.volume.get_resources', id)
 
-    def run(self, id, path, snapshot_path):
+    def run(self, id, path):
         pass
 
 
