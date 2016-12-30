@@ -332,30 +332,29 @@ class DirectoryCloneTask(DatastoreBaseTask):
         )
 
 
-@accepts(str, str, str)
+@accepts(str, str)
 @description('Creates a snapshot of a directory using a VM datastore')
 class DirectorySnapshotCreateTask(DatastoreBaseTask):
     @classmethod
     def early_describe(cls):
         return 'Creating a directory snapshot'
 
-    def describe(self, id, path, new_path):
+    def describe(self, id, path):
         return TaskDescription(
-            'Creating the directory {name} snapshot under {new_name}',
-            name=path,
-            new_name=new_path
+            'Creating the directory {name} snapshot under {snapshot}',
+            name=path.split('@', 1)[0],
+            snapshot=path
         )
 
-    def verify(self, id, path, new_path):
+    def verify(self, id, path):
         return self.get_resources(id)
 
-    def run(self, id, path, new_path):
+    def run(self, id, path):
         driver = self.get_driver_and_check_capabilities(id, snapshots=True)
         return self.run_subtask_sync_with_progress(
             'vm.datastore.{0}.directory.snapshot.create'.format(driver),
             id,
-            path,
-            new_path
+            path
         )
 
 
@@ -522,30 +521,29 @@ class BlockDeviceCloneTask(DatastoreBaseTask):
         )
 
 
-@accepts(str, str, str)
+@accepts(str, str)
 @description('Creates a snapshot of a block device using a VM datastore')
 class BlockDeviceSnapshotCreateTask(DatastoreBaseTask):
     @classmethod
     def early_describe(cls):
         return 'Creating a block device snapshot'
 
-    def describe(self, id, path, new_path):
+    def describe(self, id, path):
         return TaskDescription(
-            'Creating the block device {name} snapshot under {new_name}',
-            name=path,
-            new_name=new_path
+            'Creating the block device {name} snapshot under {snapshot}',
+            name=path.split('@', 1)[0],
+            snapshot=path
         )
 
-    def verify(self, id, path, new_path):
+    def verify(self, id, path):
         return self.get_resources(id)
 
-    def run(self, id, path, new_path):
+    def run(self, id, path):
         driver = self.get_driver_and_check_capabilities(id, snapshots=True)
         return self.run_subtask_sync_with_progress(
             'vm.datastore.{0}.block_device.snapshot.create'.format(driver),
             id,
-            path,
-            new_path
+            path
         )
 
 

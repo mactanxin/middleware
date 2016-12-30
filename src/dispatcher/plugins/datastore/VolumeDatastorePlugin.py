@@ -267,24 +267,25 @@ class VolumeCloneTask(ProgressTask):
         return self.run_subtask_sync_with_progress('volume.snapshot.clone', snapshot_id, os.path.join(id, new_path))
 
 
-@accepts(str, str, str)
+@accepts(str, str)
 @description('Creates a snapshot of a dataset or a ZVOL representing a block device or a directory')
 class VolumeSnapshotCreateTask(ProgressTask):
     @classmethod
     def early_describe(cls):
         return 'Creating a dataset snapshot'
 
-    def describe(self, id, path, new_path):
+    def describe(self, id, path):
+        snapshot = os.path.join(id, path)
         return TaskDescription(
             'Creating the dataset {name} snapshot under {new_name}',
-            name=os.path.join(id, path),
-            new_name=os.path.join(id, new_path)
+            name=snapshot.split('@', 1)[0],
+            new_name=snapshot
         )
 
-    def verify(self, id, path, new_path):
+    def verify(self, id, path):
         return self.dispatcher.call_sync('vm.datastore.volume.get_resources', id)
 
-    def run(self, id, path, new_path):
+    def run(self, id, path):
         pass
 
 
