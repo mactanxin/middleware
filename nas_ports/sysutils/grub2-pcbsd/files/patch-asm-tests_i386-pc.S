@@ -8,16 +8,16 @@
 +   Starting with 3.9 clang emits 3-byte jumps but still creates 8-bytes movl
 +   instead of 5-bytes, so code overflows into data.  */
 
-        .code16
-        jmp far
-        .org 4
--       .space 300
-+       jmp nearer
-+       .org 6
-+       movl nearer, %ebx
-+       .org 11
-+       .space 100
+ 	.code16
+ 	jmp far
+ 	.org 4
+-	.space 300
++	jmp nearer
++	.org 6
++	movl nearer, %ebx
++	.org 11
++	.space 100
 +nearer:
-+       .space 200
++	.space 200
  far:
-        .byte 0
+ 	.byte 0
