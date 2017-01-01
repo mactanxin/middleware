@@ -113,8 +113,8 @@ RUN_DEPENDS+=		tevent>=0.9.25:${PORTSDIR}/devel/tevent
 SAMBA4_BUNDLED_LIBS+=	!tevent
 
 # tdb
-BUILD_DEPENDS+=		tdb>=1.3.7_1:${PORTSDIR}/databases/tdb
-RUN_DEPENDS+=		tdb>=1.3.7_1:${PORTSDIR}/databases/tdb
+BUILD_DEPENDS+=		tdb>=1.3.10:${PORTSDIR}/databases/tdb
+RUN_DEPENDS+=		tdb>=1.3.10:${PORTSDIR}/databases/tdb
 SAMBA4_BUNDLED_LIBS+=	!tdb
 
 # ntdb
