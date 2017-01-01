@@ -13,10 +13,10 @@ COMMENT=	Python wrapper around Samba libsmbconf.
 
 BUILD_DEPENDS=  ${LOCALBASE}/bin/cython:${PORTSDIR}/lang/cython \
 		talloc>=2.1.2:${PORTSDIR}/devel/talloc \
-		samba44>=0:${PORTSDIR}/net/samba44
+		samba45>=0:${PORTSDIR}/net/samba45
 
 RUN_DEPENDS=	talloc>=2.1.2:${PORTSDIR}/devel/talloc \
-		samba44>=0:${PORTSDIR}/net/samba44
+		samba45>=0:${PORTSDIR}/net/samba45
 
 USES=		python
 USE_PYTHON=	autoplist distutils
