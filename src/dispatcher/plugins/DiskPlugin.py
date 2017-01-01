@@ -42,7 +42,7 @@ from xml.etree import ElementTree
 from bsd import geom, getswapinfo
 from resources import Resource
 from datetime import datetime, timedelta
-from freenas.utils import first_or_default, query as q
+from freenas.utils import first_or_default, remove_non_printable, query as q
 from cam import CamDevice, CamEnclosure, EnclosureStatus, ElementStatus
 from cache import CacheStore
 from lib.geom import confxml
@@ -1017,7 +1017,13 @@ def device_to_identifier(name, serial=None):
     if not gdisk:
         return None
 
+    if serial:
+        serial = remove_non_printable(serial)
+
     if 'lunid' in gdisk.provider.config:
+        if serial:
+            return "lunid+serial:{0}_{1}".format(gdisk.provider.config['lunid'], serial)
+
         return "lunid:{0}".format(gdisk.provider.config['lunid'])
 
     if serial:
