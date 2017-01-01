@@ -120,7 +120,8 @@ class DockerContainerProvider(Provider):
                 'settings': [],
                 'version': '0',
                 'running': containers_state.get(obj['id'], False),
-                'reachable': obj['host'] in hosts
+                'reachable': obj['host'] in hosts,
+                'hub_url': 'https://hub.docker.com/r/{0}'.format(obj['image'].split(':')[0])
             })
 
             if presets:
@@ -1921,6 +1922,7 @@ def _init(dispatcher, plugin):
             'interactive': {'type': 'boolean'},
             'version': {'type': 'string'},
             'web_ui_url': {'type': 'string'},
+            'hub_url': {'type': 'string'},
             'environment': {
                 'type': 'array',
                 'items': {'type': 'string'}
