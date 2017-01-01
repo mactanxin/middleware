@@ -1,4 +1,4 @@
-#!/usr/local/bin/python3
+#!/usr/local/bin/python3 -u
 #
 # Copyright (c) 2016 iXsystems, Inc.
 # All rights reserved.
@@ -92,6 +92,7 @@ def main():
     ]
 
     try:
+        signal.signal(signal.SIGHUP, signal.SIG_DFL)
         checkin()
         while True:
             sig = signal.sigwait([signal.SIGTERM, signal.SIGINT, signal.SIGHUP])
