@@ -293,9 +293,6 @@ class Context(object):
 
 
 if __name__ == '__main__':
-    global ctx
-
     c = Context()
     ctx = c
     c.main()
-
