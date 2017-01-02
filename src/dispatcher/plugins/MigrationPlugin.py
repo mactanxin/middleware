@@ -35,7 +35,6 @@ from freenas.dispatcher.rpc import (
     returns
 )
 from task import (
-    Provider,
     Task,
     ProgressTask,
     TaskException,
