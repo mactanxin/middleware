@@ -44,5 +44,18 @@ from task import (
 logger = logging.getLogger('MigrationPlugin')
 
 
+def _depends():
+    return [
+        'UserPlugin', 'NetworkPlugin', 'VolumePlugin', 'AlertPlugin',
+        'ShareISCSIPlugin', 'ShareNFSPlugin', 'ShareAFPPlugin', 'ShareSMBPlugin',
+        'ShareWebDAVPlugin', 'IPMIPlugin', 'NTPPlugin', 'SupportPlugin',
+        'SystemDatasetPlugin', 'SystemInfoPlugin', 'FTPPlugin', 'TFTPPlugin',
+        'UpdatePlugin', 'CryptoPlugin', 'UPSPlugin', 'BootPlugin',
+        'KerberosPlugin', 'KerberosPlugin', 'CalendarTasksPlugin', 'RsyncdPlugin',
+        'ServiceManagePlugin', 'SNMPPlugin', 'SSHPlugin', 'TunablePlugin',
+        'MailPlugin', 'LLDPPlugin', 'DynDNSPlugin', 'DirectoryServicePlugin'
+    ]
+
+
 def _init(dispatcher, plugin):
     pass
