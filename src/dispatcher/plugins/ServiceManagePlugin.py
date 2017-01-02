@@ -63,8 +63,13 @@ class ServiceInfoProvider(Provider):
             entry['config'] = self.get_service_config(i['id'])
             return entry
 
-        return self.datastore.query_stream('service_definitions', *(filter or []), callback=extend, **(params or {}))
-
+        return q.query(
+            self.datastore.query_stream('service_definitions', callback=extend),
+            *(filter or []),
+            stream=True,
+            **(params or {})
+        )
+    
     @accepts(str)
     @returns(h.object())
     def get_service_config(self, id):
