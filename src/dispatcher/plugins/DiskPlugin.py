@@ -1054,8 +1054,8 @@ def get_disk_by_path(path):
     return None
 
 
-def get_disk_by_lunid(lunid):
-    return first_or_default(lambda d: d['lunid'] == lunid, diskinfo_cache.validvalues())
+def get_disk_by_lunid_and_serial(lunid, serial):
+    return first_or_default(lambda d: d['lunid'] == lunid and d['serial'] == serial, diskinfo_cache.validvalues())
 
 
 def clean_multipaths(dispatcher):
@@ -1358,7 +1358,7 @@ def generate_disk_cache(dispatcher, path):
         lunid = gdisk.provider.config.get('lunid')
         if lunid:
             # Check if device could be part of multipath configuration
-            d = get_disk_by_lunid(lunid)
+            d = get_disk_by_lunid_and_serial(lunid, serial)
             if (d and d['path'] != path) or (ds_disk and ds_disk['is_multipath']):
                 multipath_info = attach_to_multipath(dispatcher, d, ds_disk, path)
 
