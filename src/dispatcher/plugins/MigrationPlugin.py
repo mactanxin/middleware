@@ -25,6 +25,7 @@
 #
 #####################################################################
 
+import os
 import logging
 from freenas.dispatcher.rpc import (
     RpcException,
@@ -72,4 +73,13 @@ def _depends():
 
 
 def _init(dispatcher, plugin):
-    pass
+
+    def start_migration(args):
+        logger.debug("Starting migration from 9.x database to 10")
+        # TODO: PLace migrate93 syncdb call here
+        dispatcher.call_task_sync('migration.mastermigrate')
+
+    if os.path.exists("/data/freenas-v1.db"):
+        plugin.register_event_handler('service.ready', start_migration)
+
+    plugin.register_task_handler('migration.mastermigrate', MasterMigrateTask)
