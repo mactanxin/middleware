@@ -36,12 +36,26 @@ from freenas.dispatcher.rpc import (
 from task import (
     Provider,
     Task,
+    ProgressTask,
     TaskException,
     TaskDescription,
     VerifyException
 )
 
 logger = logging.getLogger('MigrationPlugin')
+
+
+@description("Master top level migration task for 9.x to 10.x")
+class MasterMigrateTask(ProgressTask):
+    @classmethod
+    def early_describe(cls):
+        return "Migration of FreeNAS 9.x settings to 10"
+
+    def describe(self):
+        return TaskDescription("Migration of FreeNAS 9.x settings to 10")
+
+    def run(self):
+        pass
 
 
 def _depends():
