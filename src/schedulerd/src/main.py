@@ -255,8 +255,8 @@ class Context(object):
         if result['state'] != 'FINISHED':
             try:
                 self.client.call_sync('alert.emit', {
-                    'name': 'scheduler.task.failed',
-                    'severity': 'CRITICAL',
+                    'class': 'CalendarTaskFailed',
+                    'title': 'Task {0} failed'.format(kwargs.get('name', tid)),
                     'description': 'Task {0} has failed: {1}'.format(
                         kwargs.get('name', tid),
                         result['error']['message']
