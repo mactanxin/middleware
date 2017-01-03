@@ -318,7 +318,7 @@ class DockerCollectionProvider(Provider):
         if not collection:
             raise RpcException(errno.ENOENT, 'Collection {0} not found'.format(id))
 
-        for i in self.dispatcher.call_sync('docker.image.get_collection_images', collection['collection']):
+        for i in self.dispatcher.call_sync('docker.image.get_collection_images', collection['collection'], timeout=300):
             if collection['match_expr'] in i['name']:
                 yield i
 
