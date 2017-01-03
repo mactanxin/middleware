@@ -175,12 +175,7 @@ class DockerImagesProvider(Provider):
     @query('docker-image')
     @generator
     def query(self, filter=None, params=None):
-        def extend(obj):
-            obj['presets'] = self.labels_to_presets(obj['labels'])
-            obj['version'] = '0' if not obj['presets'] else obj['presets'].get('version', '0')
-            return obj
-
-        return images.query(*(filter or []), stream=True, callback=extend, **(params or {}))
+        return images.query(*(filter or []), stream=True, **(params or {}))
 
     @description('Returns a result of searching Docker Hub for a specified term - part of image name')
     @accepts(str)
