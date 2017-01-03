@@ -1406,8 +1406,6 @@ class DockerService(RpcService):
 
     @generator
     def query_containers(self, filter=None, params=None):
-        result = []
-
         def normalize_names(names):
             for i in names:
                 if i[0] == '/':
@@ -1415,16 +1413,47 @@ class DockerService(RpcService):
                 else:
                     yield i
 
+        def find_env(env, name):
+            for i in env:
+                n, v = i.split('=', maxsplit=1)
+                if n == name:
+                    return v
+
+            return None
+
+        result = []
         for host in self.context.iterate_docker_hosts():
             for container in host.connection.containers(all=True):
+                obj = {}
                 try:
                     details = host.connection.inspect_container(container['Id'])
                 except NotFound:
                     continue
 
                 external = q.get(details, 'NetworkSettings.Networks.external')
+                labels = q.get(details, 'Config.Labels')
+                environment = q.get(details, 'Config.Env')
                 names = list(normalize_names(container['Names']))
-                result.append({
+                bridge_address = external['IPAddress'] if external else None
+                presets = self.labels_to_presets(labels)
+                settings = []
+                web_ui_url = None
+                if presets:
+                    for i in presets.get('settings', []):
+                        settings.append({
+                            'id': i['id'],
+                            'value': find_env(environment, i['id'])
+                        })
+
+                    if presets.get('web_ui_protocol'):
+                        web_ui_url = '{0}://{1}:{2}/{3}'.format(
+                            presets['web_ui_protocol'],
+                            bridge_address or socket.gethostname(),
+                            presets['web_ui_port'],
+                            presets['web_ui_path']
+                    )
+
+                obj.update({
                     'id': container['Id'],
                     'image': container['Image'],
                     'name': names[0],
@@ -1435,18 +1464,22 @@ class DockerService(RpcService):
                     'ports': list(get_docker_ports(details)),
                     'volumes': list(get_docker_volumes(details)),
                     'interactive': get_interactive(details),
-                    'labels': details['Config']['Labels'],
-                    'expose_ports': 'org.freenas.expose-ports-at-host' in details['Config']['Labels'],
-                    'autostart': 'org.freenas.autostart' in details['Config']['Labels'],
-                    'environment': details['Config']['Env'],
+                    'upgradeable': labels.get('org.freenas.upgradeable') == 'true',
+                    'expose_ports': labels.get('org.freenas.expose-ports-at-host') == 'true',
+                    'autostart': labels.get('org.freenas.autostart') == 'true',
+                    'environment': environment,
                     'hostname': details['Config']['Hostname'],
                     'exec_ids': details['ExecIDs'] or [],
                     'bridge': {
-                        'enabled': external is not None,
-                        'dhcp': 'org.freenas.dhcp' in details['Config']['Labels'],
-                        'address': external['IPAddress'] if external else None
-                    }
+                        'enable': external is not None,
+                        'dhcp': labels.get('org.freenas.dhcp') == 'true',
+                        'address': bridge_address
+                    },
+                    'web_ui_url': web_ui_url,
+                    'settings': settings,
+                    'version': presets.get('version')
                 })
+                result.append(obj)
 
         return q.query(result, *(filter or []), stream=True, **(params or {}))
 

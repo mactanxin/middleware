@@ -102,45 +102,13 @@ class DockerContainerProvider(Provider):
     @query('docker-container')
     @generator
     def query(self, filter=None, params=None):
-        def find_env(env, name):
-            for i in env:
-                n, v = i.split('=', maxsplit=1)
-                if n == name:
-                    return v
-
-            return None
 
         def extend(obj, hosts):
-            obj = unpack_labels(obj)
-            presets = self.dispatcher.call_sync('docker.image.labels_to_presets', obj['labels'])
-            settings = obj.setdefault('settings', [])
-            address = q.get(obj, 'bridge.address') or socket.gethostname()
             obj.update({
-                'web_ui_url': None,
-                'settings': [],
-                'version': '0',
                 'running': containers_state.get(obj['id'], False),
                 'reachable': obj['host'] in hosts,
                 'hub_url': 'https://hub.docker.com/r/{0}'.format(obj['image'].split(':')[0])
             })
-
-            if presets:
-                for i in presets.get('settings', []):
-                    settings.append({
-                        'id': i['id'],
-                        'value': find_env(obj['environment'], i['id'])
-                    })
-
-                if presets.get('web_ui_protocol'):
-                    obj['web_ui_url'] = '{0}://{1}:{2}/{3}'.format(
-                        presets['web_ui_protocol'],
-                        address,
-                        presets['web_ui_port'],
-                        presets['web_ui_path']
-                    )
-
-                obj['version'] = presets.get('version', '0')
-
             return obj
 
         reachable_hosts = list(self.dispatcher.call_sync('docker.host.query', [('state', '=', 'UP')], {'select': 'id'}))
