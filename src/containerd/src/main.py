@@ -31,6 +31,7 @@ gevent.monkey.patch_all()
 import os
 import enum
 import sys
+import re
 import argparse
 import json
 import logging
@@ -70,6 +71,7 @@ from datastore import DatastoreException, get_datastore
 from datastore.config import ConfigStore
 from freenas.dispatcher.client import Client, ClientError
 from freenas.dispatcher.rpc import RpcService, RpcException, private, generator
+from freenas.dispatcher.jsonenc import loads, dumps
 from freenas.utils.debug import DebugService
 from freenas.utils import normalize, first_or_default, configure_logging, query as q
 from freenas.serviced import checkin
@@ -849,7 +851,7 @@ class DockerHost(object):
     def init_autostart(self):
         for container in self.connection.containers(all=True):
             details = self.connection.inspect_container(container['Id'])
-            if 'org.freenas.autostart' in details['Config']['Labels']:
+            if details['Config']['Labels'].get('org.freenas.autostart') == 'true':
                 try:
                     self.connection.start(container=container['Id'])
                 except BaseException as err:
@@ -927,10 +929,10 @@ class DockerHost(object):
                             if alert:
                                 self.context.client.call_sync('alert.cancel', alert['id'])
 
-                            if 'org.freenas.expose-ports-at-host' not in details['Config']['Labels']:
+                            if details['Config']['Labels'].get('org.freenas.expose-ports-at-host') != 'true':
                                 continue
 
-                            if 'org.freenas.bridged' in details['Config']['Labels']:
+                            if details['Config']['Labels'].get('org.freenas.bridged') == 'true':
                                 continue
 
                             self.logger.debug('Redirecting container {0} ports on host firewall'.format(ev['id']))
