@@ -73,7 +73,7 @@ from freenas.dispatcher.client import Client, ClientError
 from freenas.dispatcher.rpc import RpcService, RpcException, private, generator
 from freenas.dispatcher.jsonenc import loads, dumps
 from freenas.utils.debug import DebugService
-from freenas.utils import normalize, first_or_default, configure_logging, query as q
+from freenas.utils import bool_to_truefalse, normalize, first_or_default, configure_logging, query as q
 from freenas.serviced import checkin
 from vnc import app
 from mgmt import ManagementNetwork
@@ -1564,32 +1564,18 @@ class DockerService(RpcService):
 
     def create_container(self, container):
         host = self.context.get_docker_host(container['host'])
-        labels = {}
         networking_config = None
         if not host:
             raise RpcException(errno.ENOENT, 'Docker host {0} not found'.format(container['host']))
 
-        if container.get('autostart'):
-            labels.update({'org.freenas.autostart': "true"})
-        else:
-            labels.update({'org.freenas.autostart': "false"})
-
-        if container.get('expose_ports'):
-            labels.update({'org.freenas.expose-ports-at-host': "true"})
-        else:
-            labels.update({'org.freenas.expose-ports-at-host': "false"})
-
         bridge_enabled = q.get(container, 'bridge.enable')
-        if bridge_enabled:
-            labels.update({'org.freenas.bridged': "true"})
-        else:
-            labels.update({'org.freenas.bridged': "false"})
-
         dhcp_enabled = q.get(container, 'bridge.dhcp')
-        if dhcp_enabled:
-            labels.update({'org.freenas.dhcp': "true"})
-        else:
-            labels.update({'org.freenas.dhcp': "false"})
+        labels = {
+            'org.freenas.autostart': bool_to_truefalse(container.get('autostart')),
+            'org.freenas.expose-ports-at-host': bool_to_truefalse(container.get('expose_ports')),
+            'org.freenas.bridged': bool_to_truefalse(bridge_enabled),
+            'org.freenas.dhcp': bool_to_truefalse(dhcp_enabled),
+        }
 
         port_bindings = {
             str(i['container_port']) + '/' + i.get('protocol', 'tcp').lower(): i['host_port'] for i in container['ports']
