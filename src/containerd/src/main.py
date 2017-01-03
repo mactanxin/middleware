@@ -31,6 +31,7 @@ gevent.monkey.patch_all()
 import os
 import enum
 import sys
+import re
 import argparse
 import json
 import logging
@@ -70,8 +71,9 @@ from datastore import DatastoreException, get_datastore
 from datastore.config import ConfigStore
 from freenas.dispatcher.client import Client, ClientError
 from freenas.dispatcher.rpc import RpcService, RpcException, private, generator
+from freenas.dispatcher.jsonenc import loads, dumps
 from freenas.utils.debug import DebugService
-from freenas.utils import first_or_default, configure_logging, query as q
+from freenas.utils import bool_to_truefalse, truefalse_to_bool, normalize, first_or_default, configure_logging, query as q
 from freenas.serviced import checkin
 from vnc import app
 from mgmt import ManagementNetwork
@@ -91,6 +93,27 @@ vtx_enabled = False
 svm_features = False
 unrestricted_guest = True
 threadpool = ThreadPool(128)
+
+
+def normalize_docker_labels(labels):
+    normalize(labels, {
+        'org.freenas.autostart': "false",
+        'org.freenas.bridged': "false",
+        'org.freenas.dhcp': "false",
+        'org.freenas.expose-ports-at-host': "false",
+        'org.freenas.interactive': "false",
+        'org.freenas.port-mappings': "",
+        'org.freenas.settings': [],
+        'org.freenas.static_volumes': [],
+        'org.freenas.upgradeable': "false",
+        'org.freenas.version': '0',
+        'org.freenas.vm-tools': '',
+        'org.freenas.volumes': [],
+        'org.freenas.web-ui-path': '',
+        'org.freenas.web-ui-port': '',
+        'org.freenas.web-ui-protocol': ''
+    })
+    return labels
 
 
 class VirtualMachineState(enum.Enum):
@@ -828,7 +851,7 @@ class DockerHost(object):
     def init_autostart(self):
         for container in self.connection.containers(all=True):
             details = self.connection.inspect_container(container['Id'])
-            if 'org.freenas.autostart' in details['Config']['Labels']:
+            if truefalse_to_bool(q.get(details, 'Config.Labels.org\.freenas\.autostart')):
                 try:
                     self.connection.start(container=container['Id'])
                 except BaseException as err:
@@ -906,10 +929,11 @@ class DockerHost(object):
                             if alert:
                                 self.context.client.call_sync('alert.cancel', alert['id'])
 
-                            if 'org.freenas.expose-ports-at-host' not in details['Config']['Labels']:
+                            labels = details['Config']['Labels']
+                            if not truefalse_to_bool(labels.get('org.freenas.expose-ports-at-host')):
                                 continue
 
-                            if 'org.freenas.bridged' in details['Config']['Labels']:
+                            if truefalse_to_bool(labels.get('org.freenas.bridged')):
                                 continue
 
                             self.logger.debug('Redirecting container {0} ports on host firewall'.format(ev['id']))
@@ -1300,10 +1324,91 @@ class DockerService(RpcService):
         host = self.context.docker_host_by_network_id(id)
         return host.vm.name
 
+    def labels_to_presets(self, labels=None):
+        if not labels:
+            labels = {}
+        labels = normalize_docker_labels(labels)
+        result = {
+            'autostart': truefalse_to_bool(labels.get('org.freenas.autostart')),
+            'bridge': {
+                'enable': truefalse_to_bool(labels.get('org.freenas.bridged')),
+                'dhcp': truefalse_to_bool(labels.get('org.freenas.dhcp')),
+                'address': None
+            },
+            'expose_ports': truefalse_to_bool(labels.get('org.freenas.expose-ports-at-host')),
+            'interactive': truefalse_to_bool(labels.get('org.freenas.interactive')),
+            'ports': [],
+            'settings': [],
+            'static_volumes': [],
+            'upgradeable': truefalse_to_bool(labels.get('org.freenas.upgradeable')),
+            'version': labels.get('org.freenas.version'),
+            'vm-tools': '',
+            'volumes': [],
+            'web_ui_path': labels.get('org.freenas.web-ui-path'),
+            'web_ui_port': labels.get('org.freenas.web-ui-port'),
+            'web_ui_protocol': labels.get('org.freenas.web-ui-protocol'),
+        }
+
+        if labels.get('org.freenas.port-mappings'):
+            for mapping in labels.get('org.freenas.port-mappings').split(','):
+                m = re.match(r'^(\d+):(\d+)/(tcp|udp)$', mapping)
+                if not m:
+                    continue
+
+                result['ports'].append({
+                    'container_port': int(m.group(1)),
+                    'host_port': int(m.group(2)),
+                    'protocol': m.group(3).upper()
+                })
+
+        if labels.get('org.freenas.volumes'):
+            try:
+                j = loads(labels['org.freenas.volumes'])
+            except ValueError:
+                pass
+            else:
+                for vol in j:
+                    if 'name' not in vol:
+                        continue
+
+                    result['volumes'].append({
+                        'description': vol.get('descr'),
+                        'container_path': vol['name'],
+                        'readonly': vol.get('readonly', False)
+                    })
+
+        if labels.get('org.freenas.static_volumes'):
+            try:
+                j = loads(labels['org.freenas.static_volumes'])
+            except ValueError:
+                pass
+            else:
+                for vol in j:
+                    if any(v not in vol for v in ('container_path', 'host_path')):
+                        continue
+
+                    result['volumes'].append(vol)
+
+        if labels.get('org.freenas.settings'):
+            try:
+                j = loads(labels['org.freenas.settings'])
+            except ValueError:
+                pass
+            else:
+                for setting in j:
+                    if 'env' not in setting:
+                        continue
+
+                    result['settings'].append({
+                        'id': setting['env'],
+                        'description': setting.get('descr'),
+                        'optional': setting.get('optional', True)
+                    })
+
+        return result
+
     @generator
     def query_containers(self, filter=None, params=None):
-        result = []
-
         def normalize_names(names):
             for i in names:
                 if i[0] == '/':
@@ -1311,16 +1416,47 @@ class DockerService(RpcService):
                 else:
                     yield i
 
+        def find_env(env, name):
+            for i in env:
+                n, v = i.split('=', maxsplit=1)
+                if n == name:
+                    return v
+
+            return None
+
+        result = []
         for host in self.context.iterate_docker_hosts():
             for container in host.connection.containers(all=True):
+                obj = {}
                 try:
                     details = host.connection.inspect_container(container['Id'])
                 except NotFound:
                     continue
 
                 external = q.get(details, 'NetworkSettings.Networks.external')
+                labels = q.get(details, 'Config.Labels')
+                environment = q.get(details, 'Config.Env')
                 names = list(normalize_names(container['Names']))
-                result.append({
+                bridge_address = external['IPAddress'] if external else None
+                presets = self.labels_to_presets(labels)
+                settings = []
+                web_ui_url = None
+                if presets:
+                    for i in presets.get('settings', []):
+                        settings.append({
+                            'id': i['id'],
+                            'value': find_env(environment, i['id'])
+                        })
+
+                    if presets.get('web_ui_protocol'):
+                        web_ui_url = '{0}://{1}:{2}/{3}'.format(
+                            presets['web_ui_protocol'],
+                            bridge_address or socket.gethostname(),
+                            presets['web_ui_port'],
+                            presets['web_ui_path']
+                    )
+
+                obj.update({
                     'id': container['Id'],
                     'image': container['Image'],
                     'name': names[0],
@@ -1331,18 +1467,22 @@ class DockerService(RpcService):
                     'ports': list(get_docker_ports(details)),
                     'volumes': list(get_docker_volumes(details)),
                     'interactive': get_interactive(details),
-                    'labels': details['Config']['Labels'],
-                    'expose_ports': 'org.freenas.expose-ports-at-host' in details['Config']['Labels'],
-                    'autostart': 'org.freenas.autostart' in details['Config']['Labels'],
-                    'environment': details['Config']['Env'],
+                    'upgradeable': truefalse_to_bool(labels.get('org.freenas.upgradeable')),
+                    'expose_ports': truefalse_to_bool(labels.get('org.freenas.expose-ports-at-host')),
+                    'autostart': truefalse_to_bool(labels.get('org.freenas.autostart')),
+                    'environment': environment,
                     'hostname': details['Config']['Hostname'],
                     'exec_ids': details['ExecIDs'] or [],
                     'bridge': {
-                        'enabled': external is not None,
-                        'dhcp': 'org.freenas.dhcp' in details['Config']['Labels'],
-                        'address': external['IPAddress'] if external else None
-                    }
+                        'enable': external is not None,
+                        'dhcp': truefalse_to_bool(labels.get('org.freenas.dhcp')),
+                        'address': bridge_address
+                    },
+                    'web_ui_url': web_ui_url,
+                    'settings': settings,
+                    'version': presets.get('version')
                 })
+                result.append(obj)
 
         return q.query(result, *(filter or []), stream=True, **(params or {}))
 
@@ -1379,12 +1519,14 @@ class DockerService(RpcService):
                     old_img['hosts'].append(host.vm.id)
 
                 else:
+                    presets = self.labels_to_presets(image['Labels'])
                     result.append({
                         'id': image['Id'],
                         'names': image['RepoTags'] or [image['Id']],
                         'size': image['VirtualSize'],
-                        'labels': image['Labels'],
                         'hosts': [host.vm.id],
+                        'presets': presets,
+                        'version': presets['version'],
                         'created_at': datetime.utcfromtimestamp(int(image['Created']))
                     })
 
@@ -1421,17 +1563,19 @@ class DockerService(RpcService):
             raise RpcException(errno.EFAULT, 'Failed to stop container: {0}'.format(str(err)))
 
     def create_container(self, container):
-        labels = []
-        networking_config = None
         host = self.context.get_docker_host(container['host'])
+        networking_config = None
         if not host:
             raise RpcException(errno.ENOENT, 'Docker host {0} not found'.format(container['host']))
 
-        if container.get('autostart'):
-            labels.append('org.freenas.autostart')
-
-        if container.get('expose_ports'):
-            labels.append('org.freenas.expose-ports-at-host')
+        bridge_enabled = q.get(container, 'bridge.enable')
+        dhcp_enabled = q.get(container, 'bridge.dhcp')
+        labels = {
+            'org.freenas.autostart': bool_to_truefalse(container.get('autostart')),
+            'org.freenas.expose-ports-at-host': bool_to_truefalse(container.get('expose_ports')),
+            'org.freenas.bridged': bool_to_truefalse(bridge_enabled),
+            'org.freenas.dhcp': bool_to_truefalse(dhcp_enabled),
+        }
 
         port_bindings = {
             str(i['container_port']) + '/' + i.get('protocol', 'tcp').lower(): i['host_port'] for i in container['ports']
@@ -1446,14 +1590,11 @@ class DockerService(RpcService):
                     )
                 )
 
-        bridge_enabled = q.get(container, 'bridge.enable')
         if bridge_enabled:
-            dhcp_enabled = q.get(container, 'bridge.dhcp')
             if dhcp_enabled:
                 lease = get_dhcp_lease(self.context, container['name'], container['host'])
                 ipv4 = lease['client_ip']
                 macaddr = lease['client_mac']
-                labels.append('org.freenas.dhcp')
             else:
                 ipv4 = q.get(container, 'bridge.address')
                 macaddr = self.context.client.call_sync('vm.generate_mac')
@@ -1463,7 +1604,6 @@ class DockerService(RpcService):
                     ipv4_address=ipv4
                 )
             })
-            labels.append('org.freenas.bridged')
 
         create_args = {
             'name': container['name'],
