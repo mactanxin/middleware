@@ -1518,12 +1518,14 @@ class DockerService(RpcService):
                     old_img['hosts'].append(host.vm.id)
 
                 else:
+                    presets = self.labels_to_presets(image['Labels'])
                     result.append({
                         'id': image['Id'],
                         'names': image['RepoTags'] or [image['Id']],
                         'size': image['VirtualSize'],
-                        'labels': image['Labels'],
                         'hosts': [host.vm.id],
+                        'presets': presets,
+                        'version': presets['version'],
                         'created_at': datetime.utcfromtimestamp(int(image['Created']))
                     })
 
