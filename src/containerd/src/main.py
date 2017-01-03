@@ -929,10 +929,11 @@ class DockerHost(object):
                             if alert:
                                 self.context.client.call_sync('alert.cancel', alert['id'])
 
-                            if details['Config']['Labels'].get('org.freenas.expose-ports-at-host') != 'true':
+                            labels = details['Config']['Labels']
+                            if labels.get('org.freenas.expose-ports-at-host') != 'true':
                                 continue
 
-                            if details['Config']['Labels'].get('org.freenas.bridged') == 'true':
+                            if labels.get('org.freenas.bridged') == 'true':
                                 continue
 
                             self.logger.debug('Redirecting container {0} ports on host firewall'.format(ev['id']))
