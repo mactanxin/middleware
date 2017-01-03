@@ -73,7 +73,7 @@ from freenas.dispatcher.client import Client, ClientError
 from freenas.dispatcher.rpc import RpcService, RpcException, private, generator
 from freenas.dispatcher.jsonenc import loads, dumps
 from freenas.utils.debug import DebugService
-from freenas.utils import bool_to_truefalse, normalize, first_or_default, configure_logging, query as q
+from freenas.utils import bool_to_truefalse, truefalse_to_bool, normalize, first_or_default, configure_logging, query as q
 from freenas.serviced import checkin
 from vnc import app
 from mgmt import ManagementNetwork
@@ -851,7 +851,7 @@ class DockerHost(object):
     def init_autostart(self):
         for container in self.connection.containers(all=True):
             details = self.connection.inspect_container(container['Id'])
-            if details['Config']['Labels'].get('org.freenas.autostart') == 'true':
+            if truefalse_to_bool(q.get(details, 'Config.Labels.org\.freenas\.autostart')):
                 try:
                     self.connection.start(container=container['Id'])
                 except BaseException as err:
@@ -930,10 +930,10 @@ class DockerHost(object):
                                 self.context.client.call_sync('alert.cancel', alert['id'])
 
                             labels = details['Config']['Labels']
-                            if labels.get('org.freenas.expose-ports-at-host') != 'true':
+                            if not truefalse_to_bool(labels.get('org.freenas.expose-ports-at-host')):
                                 continue
 
-                            if labels.get('org.freenas.bridged') == 'true':
+                            if truefalse_to_bool(labels.get('org.freenas.bridged')):
                                 continue
 
                             self.logger.debug('Redirecting container {0} ports on host firewall'.format(ev['id']))
@@ -1329,18 +1329,18 @@ class DockerService(RpcService):
             labels = {}
         labels = normalize_docker_labels(labels)
         result = {
-            'autostart': labels.get('org.freenas.autostart') == 'true',
+            'autostart': truefalse_to_bool(labels.get('org.freenas.autostart')),
             'bridge': {
-                'enable': labels.get('org.freenas.bridged') == 'true',
-                'dhcp': labels.get('org.freenas.dhcp') == 'true',
+                'enable': truefalse_to_bool(labels.get('org.freenas.bridged')),
+                'dhcp': truefalse_to_bool(labels.get('org.freenas.dhcp')),
                 'address': None
             },
-            'expose_ports': labels.get('org.freenas.expose-ports-at-host') == 'true',
-            'interactive': labels.get('org.freenas.interactive') == 'true',
+            'expose_ports': truefalse_to_bool(labels.get('org.freenas.expose-ports-at-host')),
+            'interactive': truefalse_to_bool(labels.get('org.freenas.interactive')),
             'ports': [],
             'settings': [],
             'static_volumes': [],
-            'upgradeable': labels.get('org.freenas.upgradeable') == 'true',
+            'upgradeable': truefalse_to_bool(labels.get('org.freenas.upgradeable')),
             'version': labels.get('org.freenas.version'),
             'vm-tools': '',
             'volumes': [],
@@ -1467,15 +1467,15 @@ class DockerService(RpcService):
                     'ports': list(get_docker_ports(details)),
                     'volumes': list(get_docker_volumes(details)),
                     'interactive': get_interactive(details),
-                    'upgradeable': labels.get('org.freenas.upgradeable') == 'true',
-                    'expose_ports': labels.get('org.freenas.expose-ports-at-host') == 'true',
-                    'autostart': labels.get('org.freenas.autostart') == 'true',
+                    'upgradeable': truefalse_to_bool(labels.get('org.freenas.upgradeable')),
+                    'expose_ports': truefalse_to_bool(labels.get('org.freenas.expose-ports-at-host')),
+                    'autostart': truefalse_to_bool(labels.get('org.freenas.autostart')),
                     'environment': environment,
                     'hostname': details['Config']['Hostname'],
                     'exec_ids': details['ExecIDs'] or [],
                     'bridge': {
                         'enable': external is not None,
-                        'dhcp': labels.get('org.freenas.dhcp') == 'true',
+                        'dhcp': truefalse_to_bool(labels.get('org.freenas.dhcp')),
                         'address': bridge_address
                     },
                     'web_ui_url': web_ui_url,
