@@ -71,7 +71,7 @@ from datastore.config import ConfigStore
 from freenas.dispatcher.client import Client, ClientError
 from freenas.dispatcher.rpc import RpcService, RpcException, private, generator
 from freenas.utils.debug import DebugService
-from freenas.utils import first_or_default, configure_logging, query as q
+from freenas.utils import normalize, first_or_default, configure_logging, query as q
 from freenas.serviced import checkin
 from vnc import app
 from mgmt import ManagementNetwork
@@ -91,6 +91,27 @@ vtx_enabled = False
 svm_features = False
 unrestricted_guest = True
 threadpool = ThreadPool(128)
+
+
+def normalize_docker_labels(labels):
+    normalize(labels, {
+        'org.freenas.autostart': "false",
+        'org.freenas.bridged': "false",
+        'org.freenas.dhcp': "false",
+        'org.freenas.expose-ports-at-host': "false",
+        'org.freenas.interactive': "false",
+        'org.freenas.port-mappings': "",
+        'org.freenas.settings': [],
+        'org.freenas.static_volumes': [],
+        'org.freenas.upgradeable': "false",
+        'org.freenas.version': '0',
+        'org.freenas.vm-tools': '',
+        'org.freenas.volumes': [],
+        'org.freenas.web-ui-path': '',
+        'org.freenas.web-ui-port': '',
+        'org.freenas.web-ui-protocol': ''
+    })
+    return labels
 
 
 class VirtualMachineState(enum.Enum):
