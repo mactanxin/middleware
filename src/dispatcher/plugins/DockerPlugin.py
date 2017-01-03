@@ -230,7 +230,7 @@ class DockerImagesProvider(Provider):
                 # Fetch dockerfile
                 try:
                     parser.content = hub.get_dockerfile(i['repo_name'])
-                    presets = self.labels_to_presets(parser.labels)
+                    presets = self.dispatcher.call_sync('containerd.docker.labels_to_presets', parser.labels)
                 except:
                     pass
 
@@ -263,7 +263,7 @@ class DockerImagesProvider(Provider):
                         # Fetch dockerfile
                         try:
                             parser.content = hub.get_dockerfile(repo_name)
-                            presets = self.labels_to_presets(parser.labels)
+                            presets = self.dispatcher.call_sync('containerd.docker.labels_to_presets', parser.labels)
                         except:
                             pass
 
@@ -315,86 +315,6 @@ class DockerImagesProvider(Provider):
         except ValueError:
             return None
 
-    def labels_to_presets(self, labels):
-        if not labels:
-            return None
-
-        result = {
-            'interactive': labels.get('org.freenas.interactive', 'false') == 'true',
-            'upgradeable': labels.get('org.freenas.upgradeable', 'false') == 'true',
-            'expose_ports': labels.get('org.freenas.expose-ports-at-host', 'false') == 'true',
-            'web_ui_protocol': labels.get('org.freenas.web-ui-protocol'),
-            'web_ui_port': labels.get('org.freenas.web-ui-port'),
-            'web_ui_path': labels.get('org.freenas.web-ui-path'),
-            'version': labels.get('org.freenas.version'),
-            'bridge': {
-                'enable': labels.get('org.freenas.bridged') == 'true',
-                'dhcp': labels.get('org.freenas.dhcp') == 'true',
-                'address': None
-            },
-            'ports': [],
-            'volumes': [],
-            'static_volumes': [],
-            'settings': []
-        }
-
-        if 'org.freenas.port-mappings' in labels:
-            for mapping in labels['org.freenas.port-mappings'].split(','):
-                m = re.match(r'^(\d+):(\d+)/(tcp|udp)$', mapping)
-                if not m:
-                    continue
-
-                result['ports'].append({
-                    'container_port': int(m.group(1)),
-                    'host_port': int(m.group(2)),
-                    'protocol': m.group(3).upper()
-                })
-
-        if 'org.freenas.volumes' in labels:
-            try:
-                j = loads(labels['org.freenas.volumes'])
-            except ValueError:
-                pass
-            else:
-                for vol in j:
-                    if 'name' not in vol:
-                        continue
-
-                    result['volumes'].append({
-                        'description': vol.get('descr'),
-                        'container_path': vol['name'],
-                        'readonly': vol.get('readonly', False)
-                    })
-
-        if 'org.freenas.static_volumes' in labels:
-            try:
-                j = loads(labels['org.freenas.static_volumes'])
-            except ValueError:
-                pass
-            else:
-                for vol in j:
-                    if any(v not in vol for v in ('container_path', 'host_path')):
-                        continue
-
-                    result['volumes'].append(vol)
-
-        if 'org.freenas.settings' in labels:
-            try:
-                j = loads(labels['org.freenas.settings'])
-            except ValueError:
-                pass
-            else:
-                for setting in j:
-                    if 'env' not in setting:
-                        continue
-
-                    result['settings'].append({
-                        'id': setting['env'],
-                        'description': setting.get('descr'),
-                        'optional': setting.get('optional', True)
-                    })
-
-        return result
 
 
 @description('Provides information about cached Docker container collections')

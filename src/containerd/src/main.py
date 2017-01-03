@@ -1321,6 +1321,89 @@ class DockerService(RpcService):
         host = self.context.docker_host_by_network_id(id)
         return host.vm.name
 
+    def labels_to_presets(self, labels=None):
+        if not labels:
+            labels = {}
+        labels = normalize_docker_labels(labels)
+        result = {
+            'autostart': labels.get('org.freenas.autostart') == 'true',
+            'bridge': {
+                'enable': labels.get('org.freenas.bridged') == 'true',
+                'dhcp': labels.get('org.freenas.dhcp') == 'true',
+                'address': None
+            },
+            'expose_ports': labels.get('org.freenas.expose-ports-at-host') == 'true',
+            'interactive': labels.get('org.freenas.interactive') == 'true',
+            'ports': [],
+            'settings': [],
+            'static_volumes': [],
+            'upgradeable': labels.get('org.freenas.upgradeable') == 'true',
+            'version': labels.get('org.freenas.version'),
+            'vm-tools': '',
+            'volumes': [],
+            'web_ui_path': labels.get('org.freenas.web-ui-path'),
+            'web_ui_port': labels.get('org.freenas.web-ui-port'),
+            'web_ui_protocol': labels.get('org.freenas.web-ui-protocol'),
+        }
+
+        if labels.get('org.freenas.port-mappings'):
+            for mapping in labels.get('org.freenas.port-mappings').split(','):
+                m = re.match(r'^(\d+):(\d+)/(tcp|udp)$', mapping)
+                if not m:
+                    continue
+
+                result['ports'].append({
+                    'container_port': int(m.group(1)),
+                    'host_port': int(m.group(2)),
+                    'protocol': m.group(3).upper()
+                })
+
+        if labels.get('org.freenas.volumes'):
+            try:
+                j = loads(labels['org.freenas.volumes'])
+            except ValueError:
+                pass
+            else:
+                for vol in j:
+                    if 'name' not in vol:
+                        continue
+
+                    result['volumes'].append({
+                        'description': vol.get('descr'),
+                        'container_path': vol['name'],
+                        'readonly': vol.get('readonly', False)
+                    })
+
+        if labels.get('org.freenas.static_volumes'):
+            try:
+                j = loads(labels['org.freenas.static_volumes'])
+            except ValueError:
+                pass
+            else:
+                for vol in j:
+                    if any(v not in vol for v in ('container_path', 'host_path')):
+                        continue
+
+                    result['volumes'].append(vol)
+
+        if labels.get('org.freenas.settings'):
+            try:
+                j = loads(labels['org.freenas.settings'])
+            except ValueError:
+                pass
+            else:
+                for setting in j:
+                    if 'env' not in setting:
+                        continue
+
+                    result['settings'].append({
+                        'id': setting['env'],
+                        'description': setting.get('descr'),
+                        'optional': setting.get('optional', True)
+                    })
+
+        return result
+
     @generator
     def query_containers(self, filter=None, params=None):
         result = []
