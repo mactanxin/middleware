@@ -25,7 +25,6 @@
 #
 #####################################################################
 
-import re
 import copy
 import errno
 import gevent
