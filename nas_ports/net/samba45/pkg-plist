@@ -192,6 +192,8 @@ lib/libsmbldap.so
 lib/libsmbldap.so.0
 lib/libtevent-util.so
 lib/libtevent-util.so.0
+lib/libtevent-unix-util.so
+lib/libtevent-unix-util.so.0
 lib/libwbclient.so
 lib/libwbclient.so.0
 lib/nss_winbind.so.1
