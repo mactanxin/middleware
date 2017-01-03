@@ -1558,17 +1558,33 @@ class DockerService(RpcService):
             raise RpcException(errno.EFAULT, 'Failed to stop container: {0}'.format(str(err)))
 
     def create_container(self, container):
-        labels = []
-        networking_config = None
         host = self.context.get_docker_host(container['host'])
+        labels = {}
+        networking_config = None
         if not host:
             raise RpcException(errno.ENOENT, 'Docker host {0} not found'.format(container['host']))
 
         if container.get('autostart'):
-            labels.append('org.freenas.autostart')
+            labels.update({'org.freenas.autostart': "true"})
+        else:
+            labels.update({'org.freenas.autostart': "false"})
 
         if container.get('expose_ports'):
-            labels.append('org.freenas.expose-ports-at-host')
+            labels.update({'org.freenas.expose-ports-at-host': "true"})
+        else:
+            labels.update({'org.freenas.expose-ports-at-host': "false"})
+
+        bridge_enabled = q.get(container, 'bridge.enable')
+        if bridge_enabled:
+            labels.update({'org.freenas.bridged': "true"})
+        else:
+            labels.update({'org.freenas.bridged': "false"})
+
+        dhcp_enabled = q.get(container, 'bridge.dhcp')
+        if dhcp_enabled:
+            labels.update({'org.freenas.dhcp': "true"})
+        else:
+            labels.update({'org.freenas.dhcp': "false"})
 
         port_bindings = {
             str(i['container_port']) + '/' + i.get('protocol', 'tcp').lower(): i['host_port'] for i in container['ports']
@@ -1583,14 +1599,11 @@ class DockerService(RpcService):
                     )
                 )
 
-        bridge_enabled = q.get(container, 'bridge.enable')
         if bridge_enabled:
-            dhcp_enabled = q.get(container, 'bridge.dhcp')
             if dhcp_enabled:
                 lease = get_dhcp_lease(self.context, container['name'], container['host'])
                 ipv4 = lease['client_ip']
                 macaddr = lease['client_mac']
-                labels.append('org.freenas.dhcp')
             else:
                 ipv4 = q.get(container, 'bridge.address')
                 macaddr = self.context.client.call_sync('vm.generate_mac')
@@ -1600,7 +1613,6 @@ class DockerService(RpcService):
                     ipv4_address=ipv4
                 )
             })
-            labels.append('org.freenas.bridged')
 
         create_args = {
             'name': container['name'],
