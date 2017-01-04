@@ -275,6 +275,7 @@
             "service.iscsid.enable": false,
             "update.check_auto": true,
             "update.train": "FreeNAS-10-Nightlies",
+            "update.internal": false,
             "accounts.local_gid_range": [
                 1000,
                 65000
