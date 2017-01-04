@@ -2260,18 +2260,6 @@ def _init(dispatcher, plugin):
         },
     })
 
-    def volume_pre_detach(args):
-        for vm in dispatcher.call_sync('vm.query'):
-            if vm['target'] == args['name']:
-                dispatcher.call_task_sync('vm.stop', vm['id'])
-        return True
-
-    def volume_pre_destroy(args):
-        for vm in dispatcher.call_sync('vm.query'):
-            if vm['target'] == args['name']:
-                dispatcher.call_task_sync('vm.delete', vm['id'])
-        return True
-
     def on_snapshot_change(args):
         if args['operation'] == 'delete':
             snaps = []
@@ -2329,9 +2317,6 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('vm.config.update', VMConfigUpdateTask)
 
     plugin.register_hook('vm.pre_destroy')
-
-    plugin.attach_hook('volume.pre_destroy', volume_pre_destroy)
-    plugin.attach_hook('volume.pre_detach', volume_pre_detach)
 
     plugin.register_event_type('vm.changed')
     plugin.register_event_type('vm.snapshot.changed')
