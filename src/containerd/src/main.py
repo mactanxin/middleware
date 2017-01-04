@@ -104,7 +104,7 @@ def normalize_docker_labels(labels):
         'org.freenas.interactive': "false",
         'org.freenas.port-mappings': "",
         'org.freenas.settings': [],
-        'org.freenas.static_volumes': [],
+        'org.freenas.static-volumes': [],
         'org.freenas.upgradeable': "false",
         'org.freenas.version': '0',
         'org.freenas.volumes': [],
@@ -1375,9 +1375,9 @@ class DockerService(RpcService):
                         'readonly': vol.get('readonly', False)
                     })
 
-        if labels.get('org.freenas.static_volumes'):
+        if labels.get('org.freenas.static-volumes'):
             try:
-                j = loads(labels['org.freenas.static_volumes'])
+                j = loads(labels['org.freenas.static-volumes'])
             except ValueError:
                 pass
             else:
