@@ -25,7 +25,6 @@
 #
 #####################################################################
 
-import re
 import copy
 import errno
 import gevent
@@ -102,44 +101,13 @@ class DockerContainerProvider(Provider):
     @query('docker-container')
     @generator
     def query(self, filter=None, params=None):
-        def find_env(env, name):
-            for i in env:
-                n, v = i.split('=', maxsplit=1)
-                if n == name:
-                    return v
-
-            return None
 
         def extend(obj, hosts):
-            obj = unpack_labels(obj)
-            presets = self.dispatcher.call_sync('docker.image.labels_to_presets', obj['labels'])
-            settings = obj.setdefault('settings', [])
-            address = q.get(obj, 'bridge.address') or socket.gethostname()
             obj.update({
-                'web_ui_url': None,
-                'settings': [],
-                'version': '0',
                 'running': containers_state.get(obj['id'], False),
-                'reachable': obj['host'] in hosts
+                'reachable': obj['host'] in hosts,
+                'hub_url': 'https://hub.docker.com/r/{0}'.format(obj['image'].split(':')[0])
             })
-
-            if presets:
-                for i in presets.get('settings', []):
-                    settings.append({
-                        'id': i['id'],
-                        'value': find_env(obj['environment'], i['id'])
-                    })
-
-                if presets.get('web_ui_protocol'):
-                    obj['web_ui_url'] = '{0}://{1}:{2}/{3}'.format(
-                        presets['web_ui_protocol'],
-                        address,
-                        presets['web_ui_port'],
-                        presets['web_ui_path'][1:]
-                    )
-
-                obj['version'] = presets.get('version', '0')
-
             return obj
 
         reachable_hosts = list(self.dispatcher.call_sync('docker.host.query', [('state', '=', 'UP')], {'select': 'id'}))
@@ -206,12 +174,7 @@ class DockerImagesProvider(Provider):
     @query('docker-image')
     @generator
     def query(self, filter=None, params=None):
-        def extend(obj):
-            obj['presets'] = self.labels_to_presets(obj['labels'])
-            obj['version'] = '0' if not obj['presets'] else obj['presets'].get('version', '0')
-            return obj
-
-        return images.query(*(filter or []), stream=True, callback=extend, **(params or {}))
+        return images.query(*(filter or []), stream=True, **(params or {}))
 
     @description('Returns a result of searching Docker Hub for a specified term - part of image name')
     @accepts(str)
@@ -229,7 +192,7 @@ class DockerImagesProvider(Provider):
                 # Fetch dockerfile
                 try:
                     parser.content = hub.get_dockerfile(i['repo_name'])
-                    presets = self.labels_to_presets(parser.labels)
+                    presets = self.dispatcher.call_sync('containerd.docker.labels_to_presets', parser.labels)
                 except:
                     pass
 
@@ -262,7 +225,7 @@ class DockerImagesProvider(Provider):
                         # Fetch dockerfile
                         try:
                             parser.content = hub.get_dockerfile(repo_name)
-                            presets = self.labels_to_presets(parser.labels)
+                            presets = self.dispatcher.call_sync('containerd.docker.labels_to_presets', parser.labels)
                         except:
                             pass
 
@@ -314,86 +277,6 @@ class DockerImagesProvider(Provider):
         except ValueError:
             return None
 
-    def labels_to_presets(self, labels):
-        if not labels:
-            return None
-
-        result = {
-            'interactive': labels.get('org.freenas.interactive', 'false') == 'true',
-            'upgradeable': labels.get('org.freenas.upgradeable', 'false') == 'true',
-            'expose_ports': labels.get('org.freenas.expose-ports-at-host', 'false') == 'true',
-            'web_ui_protocol': labels.get('org.freenas.web-ui-protocol'),
-            'web_ui_port': labels.get('org.freenas.web-ui-port'),
-            'web_ui_path': labels.get('org.freenas.web-ui-path'),
-            'version': labels.get('org.freenas.version'),
-            'bridge': {
-                'enable': labels.get('org.freenas.bridged') == 'true',
-                'dhcp': labels.get('org.freenas.dhcp') == 'true',
-                'address': None
-            },
-            'ports': [],
-            'volumes': [],
-            'static_volumes': [],
-            'settings': []
-        }
-
-        if 'org.freenas.port-mappings' in labels:
-            for mapping in labels['org.freenas.port-mappings'].split(','):
-                m = re.match(r'^(\d+):(\d+)/(tcp|udp)$', mapping)
-                if not m:
-                    continue
-
-                result['ports'].append({
-                    'container_port': int(m.group(1)),
-                    'host_port': int(m.group(2)),
-                    'protocol': m.group(3).upper()
-                })
-
-        if 'org.freenas.volumes' in labels:
-            try:
-                j = loads(labels['org.freenas.volumes'])
-            except ValueError:
-                pass
-            else:
-                for vol in j:
-                    if 'name' not in vol:
-                        continue
-
-                    result['volumes'].append({
-                        'description': vol.get('descr'),
-                        'container_path': vol['name'],
-                        'readonly': vol.get('readonly', False)
-                    })
-
-        if 'org.freenas.static_volumes' in labels:
-            try:
-                j = loads(labels['org.freenas.static_volumes'])
-            except ValueError:
-                pass
-            else:
-                for vol in j:
-                    if any(v not in vol for v in ('container_path', 'host_path')):
-                        continue
-
-                    result['volumes'].append(vol)
-
-        if 'org.freenas.settings' in labels:
-            try:
-                j = loads(labels['org.freenas.settings'])
-            except ValueError:
-                pass
-            else:
-                for setting in j:
-                    if 'env' not in setting:
-                        continue
-
-                    result['settings'].append({
-                        'id': setting['env'],
-                        'description': setting.get('descr'),
-                        'optional': setting.get('optional', True)
-                    })
-
-        return result
 
 
 @description('Provides information about cached Docker container collections')
@@ -435,7 +318,7 @@ class DockerCollectionProvider(Provider):
         if not collection:
             raise RpcException(errno.ENOENT, 'Collection {0} not found'.format(id))
 
-        for i in self.dispatcher.call_sync('docker.image.get_collection_images', collection['collection']):
+        for i in self.dispatcher.call_sync('docker.image.get_collection_images', collection['collection'], timeout=300):
             if collection['match_expr'] in i['name']:
                 yield i
 
@@ -1418,16 +1301,6 @@ class DockerCollectionDeleteTask(Task):
         })
 
 
-def pack_labels(obj):
-    obj['labels'] = {k.replace('.', '+'): v for k, v in obj['labels'].items()}
-    return obj
-
-
-def unpack_labels(obj):
-    obj['labels'] = {k.replace('+', '.'): v for k, v in obj['labels'].items()}
-    return obj
-
-
 def collect_debug(dispatcher):
     yield AttachData('hosts-query', dumps(list(dispatcher.call_sync('docker.host.query')), indent=4))
     yield AttachData('containers-query', dumps(list(dispatcher.call_sync('docker.container.query')), indent=4))
@@ -1606,7 +1479,7 @@ def _init(dispatcher, plugin):
                 })
             else:
                 objs = dispatcher.call_sync(CONTAINERS_QUERY, [('id', 'in', args['ids'])])
-                for obj in map(lambda o: pack_labels(exclude(o, 'running')), objs):
+                for obj in map(lambda o: exclude(o, 'running'), objs):
                     if args['operation'] == 'create':
                         dispatcher.datastore.insert(collection, obj)
                     else:
@@ -1667,7 +1540,7 @@ def _init(dispatcher, plugin):
         created = []
         updated = []
         deleted = []
-        for obj in map(lambda o: pack_labels(exclude(o, 'running')), current):
+        for obj in map(lambda o: exclude(o, 'running'), current):
             old_obj = first_or_default(lambda o: o['id'] == obj['id'], old)
             if old_obj:
                 if obj != old_obj:
@@ -1921,6 +1794,7 @@ def _init(dispatcher, plugin):
             'interactive': {'type': 'boolean'},
             'version': {'type': 'string'},
             'web_ui_url': {'type': 'string'},
+            'hub_url': {'type': 'string'},
             'environment': {
                 'type': 'array',
                 'items': {'type': 'string'}

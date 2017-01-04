@@ -796,7 +796,7 @@ class VolumeDestroyTask(Task):
             except FileNotFoundError:
                 pass
 
-            volume_encrypted = vol['key_encrypted'] or vol['password_encrypted']
+            volume_encrypted = vol.get('key_encrypted') or vol.get('password_encrypted')
             subtasks = []
             if 'topology' in vol:
                 for dname, _ in get_disks(vol['topology']):
@@ -1266,6 +1266,7 @@ class VolumeImportTask(Task):
                     'slot': slot if key or password else None},
                 'key_encrypted': True if key else False,
                 'password_encrypted': True if password else False,
+                'auto_unlock': False,
                 'mountpoint': mountpoint
             })
 
@@ -3223,7 +3224,8 @@ def _init(dispatcher, plugin):
                                 'hashed_password': None,
                                 'salt': None,
                                 'slot': None
-                            }
+                            },
+                            'auto_unlock': False
                         })
                     except DuplicateKeyException:
                         # already inserted by task
@@ -3640,6 +3642,15 @@ def _init(dispatcher, plugin):
             'id': pool['name'],
             'guid': str(pool['guid']),
             'type': 'zfs',
+            'encryption': {
+                'key': None,
+                'hashed_password': None,
+                'salt': None,
+                'slot': None
+            },
+            'key_encrypted': False,
+            'password_encrypted': False,
+            'auto_unlock': False,
             'attributes': {}
         })
 

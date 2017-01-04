@@ -39,7 +39,7 @@ from freenas.cli.parser import parse, dump_ast, read_ast
 
 
 DEFAULT_CONFIGFILE = '/usr/local/etc/middleware.conf'
-PLUGIN_DIRS = ['/usr/local/lib/python3.4/site-packages/freenas/cli/plugins']
+PLUGIN_DIRS = ['/usr/local/lib/python3.6/site-packages/freenas/cli/plugins']
 
 
 class ManagementService(RpcService):

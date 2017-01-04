@@ -1,4 +1,4 @@
-PORTNAME?=		${SAMBA4_BASENAME}44
+PORTNAME?=		${SAMBA4_BASENAME}45
 PORTVERSION?=		${SAMBA4_VERSION}
 PORTREVISION?=		${REVISION}
 CATEGORIES?=		net
@@ -8,11 +8,11 @@ COMMENT?=		Free SMB/CIFS and AD/DC server and client for Unix
 
 LICENSE=		GPLv3
 
-CONFLICTS?=		*samba3[2-6]-3.* samba4-4.0.* samba41-4.1.* samba42-4.2.* samba43-4.3.*
+CONFLICTS?=		*samba3[2-6]-3.* samba4-4.0.* samba41-4.1.* samba42-4.2.* samba43-4.3.* samba44-4.4.*
 
 SAMBA4_BASENAME=	samba
 SAMBA4_PORTNAME=	${SAMBA4_BASENAME}4
-SAMBA4_VERSION=		4.4.5
+SAMBA4_VERSION=		4.5.3
 SAMBA4_DISTNAME=	${SAMBA4_BASENAME}-${SAMBA4_VERSION:S|.p|pre|:S|.r|rc|:S|.t|tp|:S|.a|alpha|}
 
 NO_CHECKSUM=		yes
@@ -113,8 +113,8 @@ RUN_DEPENDS+=		tevent>=0.9.25:${PORTSDIR}/devel/tevent
 SAMBA4_BUNDLED_LIBS+=	!tevent
 
 # tdb
-BUILD_DEPENDS+=		tdb>=1.3.7_1:${PORTSDIR}/databases/tdb
-RUN_DEPENDS+=		tdb>=1.3.7_1:${PORTSDIR}/databases/tdb
+BUILD_DEPENDS+=		tdb>=1.3.10:${PORTSDIR}/databases/tdb
+RUN_DEPENDS+=		tdb>=1.3.10:${PORTSDIR}/databases/tdb
 SAMBA4_BUNDLED_LIBS+=	!tdb
 
 # ntdb

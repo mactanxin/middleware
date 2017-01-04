@@ -126,7 +126,7 @@ class TunableCreateTask(Task):
 
             if tunable['enabled']:
                 if tunable['type'] == 'LOADER':
-                    self.dispatcher.call_sync('etcd.generation.generate_group', 'loader', timeout=600)
+                    self.dispatcher.call_sync('etcd.generation.generate_group', 'loader', timeout=3600)
                 elif tunable['type'] == 'RC':
                     self.dispatcher.call_sync('etcd.generation.generate_group', 'services')
         except DatastoreException as e:

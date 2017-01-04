@@ -42,7 +42,7 @@ from xml.etree import ElementTree
 from bsd import geom, getswapinfo
 from resources import Resource
 from datetime import datetime, timedelta
-from freenas.utils import first_or_default, query as q
+from freenas.utils import first_or_default, remove_non_printable, query as q
 from cam import CamDevice, CamEnclosure, EnclosureStatus, ElementStatus
 from cache import CacheStore
 from lib.geom import confxml
@@ -1017,7 +1017,13 @@ def device_to_identifier(name, serial=None):
     if not gdisk:
         return None
 
+    if serial:
+        serial = remove_non_printable(serial)
+
     if 'lunid' in gdisk.provider.config:
+        if serial:
+            return "lunid+serial:{0}_{1}".format(gdisk.provider.config['lunid'], serial)
+
         return "lunid:{0}".format(gdisk.provider.config['lunid'])
 
     if serial:
@@ -1048,8 +1054,8 @@ def get_disk_by_path(path):
     return None
 
 
-def get_disk_by_lunid(lunid):
-    return first_or_default(lambda d: d['lunid'] == lunid, diskinfo_cache.validvalues())
+def get_disk_by_lunid_and_serial(lunid, serial):
+    return first_or_default(lambda d: d['lunid'] == lunid and d['serial'] == serial, diskinfo_cache.validvalues())
 
 
 def clean_multipaths(dispatcher):
@@ -1352,7 +1358,7 @@ def generate_disk_cache(dispatcher, path):
         lunid = gdisk.provider.config.get('lunid')
         if lunid:
             # Check if device could be part of multipath configuration
-            d = get_disk_by_lunid(lunid)
+            d = get_disk_by_lunid_and_serial(lunid, serial)
             if (d and d['path'] != path) or (ds_disk and ds_disk['is_multipath']):
                 multipath_info = attach_to_multipath(dispatcher, d, ds_disk, path)
 

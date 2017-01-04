@@ -27,6 +27,7 @@
 
 
 import os
+import stat
 import errno
 import uuid
 import logging
@@ -34,13 +35,11 @@ import shutil
 import time
 import tempfile
 import libzfs
-import pymongo
+from bsd.copy import copytree
 from resources import Resource
 from freenas.dispatcher.rpc import RpcException, accepts, returns, description, private
 from freenas.dispatcher.rpc import SchemaHelper as h
 from task import Task, ProgressTask, Provider, TaskException, TaskDescription
-from freenas.utils.copytree import copytree, count_files
-from freenas.utils.decorators import throttle
 
 
 SYSTEM_DIR = '/var/db/system'
@@ -225,8 +224,8 @@ class SystemDatasetConfigure(ProgressTask):
     def run(self, pool):
         def log_errors(err):
             logger.warning('Following errors were encountered during migration:')
-            for i in err.args[0]:
-                logger.warning('{0} -> {1}: {2}'.format(*i[0]))
+            for i in err:
+                logger.warning('{0} -> {1}: {2}'.format(*i))
 
         self.set_progress(0, 'Checking free space on target pool {0}'.format(pool))
 
@@ -285,18 +284,26 @@ class SystemDatasetConfigure(ProgressTask):
 
                 self.set_progress(30, 'Copying system dataset')
 
-                try:
-                    copytree(
-                        SYSTEM_DIR,
-                        tmpath,
-                        exclude=['freenas-log.db']
-                    )
-                except shutil.Error as err:
-                    log_errors(err)
+                def copy_error_cb(src, dst, err):
+                    if stat.S_ISSOCK(os.lstat(src).st_mode):
+                        return
+
+                    if stat.S_ISFIFO(os.lstat(src).st_mode):
+                        return
+
+                    log_errors((src, dst, str(err)))
                     raise TaskException(
                         errno.EIO,
-                        'System dataset migration failed. Unable to move system dataset contents'
+                        'System dataset migration failed. Unable to move {0} -> {1} - {2}'.format(src, dst, str(err))
                     )
+
+                copytree(
+                    SYSTEM_DIR,
+                    tmpath,
+                    symlinks=True,
+                    error_cb=copy_error_cb,
+                    exclude=['freenas-log.db']
+                )
 
                 self.set_progress(70, 'Copying freenas-log database and switching to the new system dataset')
 
@@ -305,7 +312,8 @@ class SystemDatasetConfigure(ProgressTask):
                 try:
                     copytree(
                         os.path.join(SYSTEM_DIR, 'freenas-log.db'),
-                        os.path.join(tmpath, 'freenas-log.db')
+                        os.path.join(tmpath, 'freenas-log.db'),
+                        symlinks=True
                     )
                 except shutil.Error as err:
                     log_errors(err)
@@ -459,3 +467,4 @@ def _init(dispatcher, plugin):
 
     plugin.register_hook('system_dataset.pre_detach')
     plugin.register_hook('system_dataset.pre_attach')
+
