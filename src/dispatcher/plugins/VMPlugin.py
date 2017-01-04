@@ -1190,7 +1190,7 @@ class VMSnapshotBaseTask(Task):
         subtasks = []
         for d in devices:
             if d['type'] in ('DISK', 'VOLUME'):
-                path = self.dispatcher.call_sync('vm.get_device_path', id, d['name'], False)
+                path = self.dispatcher.call_sync('vm.get_device_path', datastore, d['name'], False)
                 if path:
                     subtasks.append(self.run_subtask(
                         'vm.datastore.{0}.snapshot.{1}'.format(convert_device_type(d), task),
