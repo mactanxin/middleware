@@ -2208,7 +2208,7 @@ class Main(object):
 
         # WebSockets server
         kwargs = {}
-        s4 = WebSocketServer(('', args.p), ServerResource({
+        s4 = WebSocketServer(('0.0.0.0', args.p), ServerResource({
             '/console': ConsoleConnection,
             '/vnc': VncConnection,
             '/webvnc/[\w]+': app

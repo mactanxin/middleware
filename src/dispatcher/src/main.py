@@ -1550,7 +1550,7 @@ def run(d, args):
         from frontend import frontend
 
         frontend.dispatcher = d
-        http_server4 = WSGIServer(('', args.s), frontend.app, **kwargs)
+        http_server4 = WSGIServer(('0.0.0.0', args.s), frontend.app, **kwargs)
         http_server6 = WSGIServer(('::', args.s), frontend.app, **kwargs)
 
         d.http_servers.extend([http_server4, http_server6])
