@@ -121,7 +121,6 @@ class NFSConfigureTask(Task):
 
 def collect_debug(dispatcher):
     yield AttachFile('exports', '/etc/exports')
-    yield AttachFile('zfs-exports', '/etc/zfs/exports')
 
 
 def _depends():
