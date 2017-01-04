@@ -145,6 +145,7 @@ class FreeIPAPlugin(DirectoryServicePlugin):
             'username': get(entry, 'uid.0'),
             'full_name': get(entry, 'gecos', get(entry, 'displayName', '<unknown>')),
             'nthash': nthash,
+            'password_changed_at': get(entry, 'krbLastPwdChange'),
             'shell': get(entry, 'loginShell', '/bin/sh'),
             'home': get(entry, 'homeDirectory', '/nonexistent'),
             'sshpubkey': get(entry, 'ipaSshPubKey.0', b'').decode('ascii') or None,
