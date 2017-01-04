@@ -580,31 +580,6 @@
                 ],
                 "name": "kerberos"
             },
-            "9a08b24a-7efb-11e5-bbec-005056826348": {
-                "dependencies": [
-                    "file:nsswitch.conf"
-                ],
-                "name": "nsswitch"
-            },
-            "af68cb5c-7efb-11e5-bbec-005056826348": {
-                "dependencies": [
-                    "file:local/openldap/ldap.conf"
-                ],
-                "name": "openldap"
-            },
-            "8310c03f-7efd-11e5-bbec-005056826348": {
-                "dependencies": [
-                    "file:local/ldap.conf",
-                    "file:local/ldap.secret"
-                ],
-                "name": "nss_ldap"
-            },
-            "21fd35e2-7efc-11e5-bbec-005056826348": {
-                "dependencies": [
-                    "file:local/sssd/sssd.conf"
-                ],
-                "name": "sssd"
-            },
             "48b48d67-7efc-11e5-bbec-005056826348": {
                 "dependencies": [
                     "file:pam.d/ftp",
