@@ -1,5 +1,5 @@
---- gevent/_socket3.py.orig
-+++ gevent/_socket3.py
+--- src/gevent/_socket3.py.orig
++++ src/gevent/_socket3.py
 @@ -295,6 +295,15 @@ class socket(object):
                      raise
              self._wait(self._read_event)
