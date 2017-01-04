@@ -124,6 +124,13 @@ class DatastoreProvider(Provider):
             path
         )
 
+    @private
+    @accepts(str, str)
+    @returns(h.ref('vm-datastore-path-type'))
+    def get_path_type(self, id, path):
+        driver = self.get_driver(id)
+        return self.dispatcher.call_sync('vm.datastore.{0}.get_path_type'.format(driver), id, path)
+
 
 class DatastoreBaseTask(ProgressTask):
     def __init__(self, dispatcher, datastore):
@@ -610,6 +617,11 @@ def _init(dispatcher, plugin):
         'enum': ['ONLINE', 'OFFLINE']
     })
 
+    plugin.register_schema_definition('vm-datastore-path-type', {
+        'type': 'string',
+        'enum': ['BLOCK_DEVICE', 'DIRECTORY', 'FILE', 'SNAPSHOT']
+    })
+
     plugin.register_schema_definition('vm-datastore-capabilities', {
         'type': 'object',
         'additionalProperties': False,
@@ -651,7 +663,11 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('vm.datastore.block_device.snapshot.create', BlockDeviceSnapshotCreateTask)
     plugin.register_task_handler('vm.datastore.block_device.snapshot.delete', BlockDeviceSnapshotDeleteTask)
     plugin.register_task_handler('vm.datastore.block_device.snapshot.rollback', BlockDeviceSnapshotRollbackTask)
+
     plugin.register_event_type('vm.datastore.changed')
+    plugin.register_event_type('vm.datastore.directory.changed')
+    plugin.register_event_type('vm.datastore.block_device.changed')
+    plugin.register_event_type('vm.datastore.snapshot.changed')
 
     update_datastore_properties_schema()
     dispatcher.register_event_handler('server.plugin.loaded', update_datastore_properties_schema)

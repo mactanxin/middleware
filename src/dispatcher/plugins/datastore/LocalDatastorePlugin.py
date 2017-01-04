@@ -78,6 +78,19 @@ class LocalDatastoreProvider(Provider):
     def get_snapshots(self, datastore_id, path):
         return
 
+    @private
+    @accepts(str, str)
+    @returns(h.ref('vm-datastore-path-type'))
+    def get_path_type(self, id, path):
+        path = self.dispatcher.call_sync('vm.datastore.get_filesystem_path', id, path)
+        if not os.path.exists(path):
+            raise RpcException(errno.ENOENT, 'Path {0} does not exist'.format(path))
+
+        if os.path.isdir(path):
+            return 'DIRECTORY'
+
+        return 'BLOCK_DEVICE'
+
 
 @accepts(str, str)
 @description('Creates a directory on a local filesystem')

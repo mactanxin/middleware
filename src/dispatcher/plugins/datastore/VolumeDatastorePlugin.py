@@ -28,7 +28,7 @@
 import os
 import errno
 from task import ProgressTask, Provider, TaskDescription, TaskException
-from freenas.dispatcher.rpc import SchemaHelper as h
+from freenas.dispatcher.rpc import SchemaHelper as h, RpcException
 from freenas.dispatcher.rpc import private, accepts, returns, generator, description
 
 
@@ -79,6 +79,30 @@ class VolumeDatastoreProvider(Provider):
         )
         for snap_id in snapshots:
             yield '{0}@{1}'.format(path, snap_id)
+
+    @private
+    @accepts(str, str)
+    @returns(h.ref('vm-datastore-path-type'))
+    def get_path_type(self, id, path):
+        zfs_path = os.path.join(id, path)
+
+        ds_type = self.dispatcher.call_sync(
+            'volume.dataset.query',
+            [('id', '=', zfs_path)],
+            {'single': True, 'select': 'type'}
+        )
+        if ds_type:
+            if ds_type == 'VOLUME':
+                return 'BLOCK_DEVICE'
+            return 'DIRECTORY'
+
+        if self.dispatcher.call_sync('volume.snapshot.query', [('id', '=', zfs_path)], {'count': True}):
+            return 'SNAPSHOT'
+
+        if os.path.exists(self.dispatcher.call_sync('vm.datastore.volume.get_filesystem_path', id, path)):
+            return 'FILE'
+        else:
+            raise RpcException(errno.ENOENT, 'Path {0} does not exist'.format(path))
 
 
 @accepts(str, str)
