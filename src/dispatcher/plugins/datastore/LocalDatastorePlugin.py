@@ -28,6 +28,7 @@
 import os
 import shutil
 import errno
+import contextlib
 from task import Task, TaskDescription, Provider
 from freenas.dispatcher.rpc import SchemaHelper as h
 from freenas.dispatcher.rpc import RpcException, private, accepts, returns, generator, description
@@ -133,11 +134,66 @@ class LocalDirectoryRenameTask(Task):
         os.rename(old_path, new_path)
 
 
+@accepts(str, str, int)
+@description('Truncates a block device on a local filesystem')
+class LocalBlockDeviceTruncateTask(Task):
+    @classmethod
+    def early_describe(cls):
+        return 'Truncating a block device'
+
+    def describe(self, id, path, size):
+        return TaskDescription('Truncating a block device {name}', name=path)
+
+    def verify(self, id, path, size):
+        return ['system']
+
+    def run(self, id, path, size):
+        path = self.dispatcher.call_sync('vm.datastore.get_filesystem_path', id, path)
+        os.truncate(path, size)
+
+
+@accepts(str, str)
+@description('Deletes a block device from a local filesystem')
+class LocalBlockDeviceDeleteTask(Task):
+    @classmethod
+    def early_describe(cls):
+        return 'Deleting a block device'
+
+    def describe(self, id, path):
+        return TaskDescription('Deleting the block device {name}', name=path)
+
+    def verify(self, id, path):
+        return ['system']
+
+    def run(self, id, path):
+        path = self.dispatcher.call_sync('vm.datastore.get_filesystem_path', id, path)
+        with contextlib.suppress(OSError):
+            os.remove(path)
+
+
+@accepts(str, str, str)
+@description('Renames a block device on a local filesystem')
+class LocalBlockDeviceRenameTask(Task):
+    @classmethod
+    def early_describe(cls):
+        return 'Renaming a block device'
+
+    def describe(self, id, old_path, new_path):
+        return TaskDescription('Renaming the block device {name} to {new_name}', name=old_path, new_name=new_path)
+
+    def verify(self, id, old_path, new_path):
+        return ['system']
+
+    def run(self, id, old_path, new_path):
+        old_path = self.dispatcher.call_sync('vm.datastore.get_filesystem_path', id, old_path)
+        new_path = self.dispatcher.call_sync('vm.datastore.get_filesystem_path', id, new_path)
+        os.rename(old_path, new_path)
+
+
 def _metadata():
     return {
         'type': 'datastore',
         'driver': 'local',
-        'block_devices': False,
         'clones': False,
         'snapshots': False
     }
@@ -157,3 +213,7 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('vm.datastore.local.directory.create', LocalDirectoryCreateTask)
     plugin.register_task_handler('vm.datastore.local.directory.delete', LocalDirectoryDeleteTask)
     plugin.register_task_handler('vm.datastore.local.directory.rename', LocalDirectoryRenameTask)
+    plugin.register_task_handler('vm.datastore.local.block_device.create', LocalBlockDeviceTruncateTask)
+    plugin.register_task_handler('vm.datastore.local.block_device.delete', LocalBlockDeviceDeleteTask)
+    plugin.register_task_handler('vm.datastore.local.block_device.rename', LocalBlockDeviceRenameTask)
+    plugin.register_task_handler('vm.datastore.local.block_device.resize', LocalBlockDeviceTruncateTask)

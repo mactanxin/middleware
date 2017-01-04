@@ -140,7 +140,6 @@ def _metadata():
     return {
         'type': 'datastore',
         'driver': 'nfs',
-        'block_devices': False,
         'clones': False,
         'snapshots': False
     }
@@ -194,6 +193,10 @@ def _init(dispatcher, plugin):
     plugin.register_task_alias('vm.datastore.nfs.directory.create', 'vm.datastore.local.directory.create')
     plugin.register_task_alias('vm.datastore.nfs.directory.delete', 'vm.datastore.local.directory.delete')
     plugin.register_task_alias('vm.datastore.nfs.directory.rename', 'vm.datastore.local.directory.rename')
+    plugin.register_task_alias('vm.datastore.nfs.block_device.create', 'vm.datastore.local.directory.create')
+    plugin.register_task_alias('vm.datastore.nfs.block_device.delete', 'vm.datastore.local.directory.delete')
+    plugin.register_task_alias('vm.datastore.nfs.block_device.rename', 'vm.datastore.local.directory.rename')
+    plugin.register_task_alias('vm.datastore.nfs.block_device.resize', 'vm.datastore.local.directory.resize')
 
     if not os.path.isdir('/nfs'):
         os.mkdir('/nfs')

@@ -390,7 +390,6 @@ def _metadata():
     return {
         'type': 'datastore',
         'driver': 'volume',
-        'block_devices': True,
         'clones': True,
         'snapshots': True
     }

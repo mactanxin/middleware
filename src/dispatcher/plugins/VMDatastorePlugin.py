@@ -60,7 +60,6 @@ class DatastoreProvider(Provider):
         for p in list(self.dispatcher.plugins.values()):
             if p.metadata and p.metadata.get('type') == 'datastore':
                 result[p.metadata['driver']] = {
-                    'block_devices': p.metadata['block_devices'],
                     'clones': p.metadata['clones'],
                     'snapshots': p.metadata['snapshots']
                 }
@@ -130,16 +129,13 @@ class DatastoreBaseTask(ProgressTask):
     def __init__(self, dispatcher, datastore):
         super(DatastoreBaseTask, self).__init__(dispatcher, datastore)
 
-    def get_driver_and_check_capabilities(self, id, block_devices=False, clones=False, snapshots=False):
+    def get_driver_and_check_capabilities(self, id, clones=False, snapshots=False):
         ds = self.dispatcher.call_sync('vm.datastore.query', [('id', '=', id)], {'single': True})
         if not ds:
             raise RpcException(errno.ENOENT, 'Datastore {0} not found'.format(id))
 
         capabilities = ds['capabilities']
         name = ds['name']
-
-        if block_devices and 'block_devices' not in capabilities:
-            raise TaskException(errno.ENOTSUP, 'Datastore {0} does not support block devices'.format(name))
 
         if clones and 'clones' not in capabilities:
             raise TaskException(errno.ENOTSUP, 'Datastore {0} does not support clones'.format(name))
@@ -420,7 +416,7 @@ class BlockDeviceCreateTask(DatastoreBaseTask):
         return self.get_resources(id)
 
     def run(self, id, path, size):
-        driver = self.get_driver_and_check_capabilities(id, block_devices=True)
+        driver = self.get_driver_and_check_capabilities(id)
         return self.run_subtask_sync_with_progress(
             'vm.datastore.{0}.block_device.create'.format(driver),
             id,
@@ -443,7 +439,7 @@ class BlockDeviceDeleteTask(DatastoreBaseTask):
         return self.get_resources(id)
 
     def run(self, id, path):
-        driver = self.get_driver_and_check_capabilities(id, block_devices=True)
+        driver = self.get_driver_and_check_capabilities(id)
         return self.run_subtask_sync_with_progress(
             'vm.datastore.{0}.block_device.delete'.format(driver),
             id,
@@ -465,7 +461,7 @@ class BlockDeviceRenameTask(DatastoreBaseTask):
         return self.get_resources(id)
 
     def run(self, id, old_path, new_path):
-        driver = self.get_driver_and_check_capabilities(id, block_devices=True)
+        driver = self.get_driver_and_check_capabilities(id)
         return self.run_subtask_sync_with_progress(
             'vm.datastore.{0}.block_device.rename'.format(driver),
             id,
@@ -488,7 +484,7 @@ class BlockDeviceResizeTask(DatastoreBaseTask):
         return self.get_resources(id)
 
     def run(self, id, path, new_size):
-        driver = self.get_driver_and_check_capabilities(id, block_devices=True)
+        driver = self.get_driver_and_check_capabilities(id)
         return self.run_subtask_sync_with_progress(
             'vm.datastore.{0}.block_device.resize'.format(driver),
             id,
@@ -618,7 +614,6 @@ def _init(dispatcher, plugin):
         'type': 'object',
         'additionalProperties': False,
         'properties': {
-            'block_devices': {'type': 'boolean'},
             'clones': {'type': 'boolean'},
             'snapshots': {'type': 'boolean'},
         }
