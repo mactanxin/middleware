@@ -126,6 +126,17 @@ class DatastoreProvider(Provider):
 
     @private
     @accepts(str, str)
+    @returns(bool)
+    def snapshot_exists(self, datastore_id, path):
+        driver = self.get_driver(datastore_id)
+        return self.dispatcher.call_sync(
+            'vm.datastore.{0}.snapshot_exists'.format(driver),
+            datastore_id,
+            path
+        )
+
+    @private
+    @accepts(str, str)
     @returns(h.ref('vm-datastore-path-type'))
     def get_path_type(self, id, path):
         driver = self.get_driver(id)

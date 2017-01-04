@@ -82,6 +82,18 @@ class VolumeDatastoreProvider(Provider):
 
     @private
     @accepts(str, str)
+    @returns(bool)
+    def snapshot_exists(self, datastore_id, path):
+        raw_dataset, snap_id = path.split('@', 1)
+        dataset = os.path.join(datastore_id, raw_dataset)
+        return bool(self.dispatcher.call_sync(
+            'volume.snapshot.query',
+            [('dataset', '=', dataset), ('metadata.org\.freenas:vm_snapshot', '=', snap_id)],
+            {'count': True}
+        ))
+
+    @private
+    @accepts(str, str)
     @returns(h.ref('vm-datastore-path-type'))
     def get_path_type(self, id, path):
         zfs_path = os.path.join(id, path)
