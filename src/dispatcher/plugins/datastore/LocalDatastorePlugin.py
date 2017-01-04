@@ -162,7 +162,8 @@ class LocalBlockDeviceTruncateTask(Task):
 
     def run(self, id, path, size):
         path = self.dispatcher.call_sync('vm.datastore.get_filesystem_path', id, path)
-        os.truncate(path, size)
+        with open(path, 'ab') as device:
+            os.truncate(device.fileno(), size)
 
 
 @accepts(str, str)
