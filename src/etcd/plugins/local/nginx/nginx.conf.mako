@@ -1,3 +1,20 @@
+<%
+    import ipaddress
+
+    listen_addresses = []
+
+    cert_id = config.get('service.nginx.https.certificate')
+    certificate = dispatcher.call_sync(
+        'crypto.certificate.query', [('id', '=', cert_id)], {'single': True})
+
+    for addr in config.get("service.nginx.listen"):
+        if isinstance(ipaddress.ip_address(addr), ipaddress.IPv6Address):
+            listen_addresses.append('[{}]'.format(addr))
+        else:
+            listen_addresses.append(addr)
+
+%>\
+
 user www;
 pid /var/run/nginx.pid;
 error_log /var/log/nginx-error.log warn;
@@ -19,22 +36,16 @@ http {
     keepalive_timeout 65;
 
     client_body_temp_path /var/tmp/firmware;
-
+\
     server {
 % if config.get("service.nginx.http.enable"):
-    % for addr in config.get("service.nginx.listen"):
+    % for addr in listen_addresses:
         listen ${addr}:${config.get("service.nginx.http.port")};
     % endfor
 % endif
-<%
 
-    cert_id = config.get('service.nginx.https.certificate')
-    certificate = dispatcher.call_sync(
-        'crypto.certificate.query', [('id', '=', cert_id)], {'single': True})
-
-%>\
 % if config.get("service.nginx.https.enable") and certificate:
-    % for addr in config.get("service.nginx.listen"):
+    % for addr in listen_addresses:
         listen ${addr}:${config.get("service.nginx.https.port")} default_server ssl spdy;
     % endfor
 
@@ -120,7 +131,7 @@ http {
     }
 % if config.get("service.nginx.https.enable") and config.get("service.nginx.http.redirect_https"):
     server {
-    % for addr in config.get("service.nginx.listen"):
+    % for addr in listen_addresses:
         listen ${addr}:80;
     % endfor
         server_name localhost;
