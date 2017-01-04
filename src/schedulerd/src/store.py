@@ -25,6 +25,7 @@
 #
 #####################################################################
 
+import time
 from apscheduler.jobstores.base import BaseJobStore, JobLookupError, ConflictingIdError
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.util import datetime_to_utc_timestamp, utc_timestamp_to_datetime
@@ -102,6 +103,11 @@ class FreeNASJobStore(BaseJobStore):
     def _reconstitute_job(self, job_state):
         schedule = job_state['schedule']
         schedule.pop('coalesce', None)
+        next_run_time = None
+
+        if job_state['next_run_time']:
+            next_run_time = max(job_state['next_run_time'], int(time.time()))
+
         job = Job(
             id=job_state['id'],
             func="__main__:job",
@@ -110,7 +116,7 @@ class FreeNASJobStore(BaseJobStore):
             args=[job_state['task']] + job_state['args'],
             scheduler=self._scheduler,
             executor='default',
-            next_run_time=utc_timestamp_to_datetime(job_state['next_run_time']),
+            next_run_time=utc_timestamp_to_datetime(next_run_time),
             kwargs={
                 'id': job_state['id'],
                 'name': job_state['name'],
