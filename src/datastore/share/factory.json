@@ -286,7 +286,7 @@
             "middleware.token_lifetime": 600,
             "middleware.parallel_disk_format": true,
             "middleware.streaming_burst_size": 16,
-            "middleware.zfs_refresh_interval": 30,
+            "middleware.zfs_refresh_interval": 60,
             "middleware.snapshot_scrub_interval": 300,
             "system.console.keymap": "us.iso",
             "system.syslog_server": null,
