@@ -1250,7 +1250,7 @@ class DispatcherConnection(ServerConnection):
                 'following error occured {0}'.format(str(werr)))
 
     def emit_event(self, event, args):
-        for i in self.event_masks:
+        for i in list(self.event_masks):
             if not match_event(event, i):
                 continue
 
