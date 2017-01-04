@@ -102,20 +102,30 @@ class VMProvider(Provider):
             return os.path.join(VM_ROOT, vm['name'])
 
     @private
-    @accepts(str, str)
+    @accepts(str, str, bool)
     @returns(h.one_of(str, None))
-    def get_disk_path(self, vm_id, disk_name):
+    def get_device_path(self, vm_id, device_name, local=True):
+        def return_path(target, path):
+            if local:
+                return self.dispatcher.call_sync(
+                    'vm.datastore.get_filesystem_path',
+                    target,
+                    path
+                )
+            else:
+                return path
+
         vm = self.datastore.get_by_id('vms', vm_id)
         if not vm:
             return None
 
-        disk = first_or_default(lambda d: d['name'] == disk_name, vm['devices'])
-        if not disk:
+        device = first_or_default(lambda d: d['name'] == device_name, vm['devices'])
+        if not device:
             return None
 
-        if disk['type'] == 'DISK':
-            target_type = q.get(disk, 'properties.target_type')
-            target_path = q.get(disk, 'properties.target_path')
+        if device['type'] == 'DISK':
+            target_type = q.get(device, 'properties.target_type')
+            target_path = q.get(device, 'properties.target_path')
 
             if target_type == 'DISK':
                 return self.dispatcher.call_sync(
@@ -124,35 +134,26 @@ class VMProvider(Provider):
                     {'single': True, 'select': 'path'}
                 )
 
-            return self.dispatcher.call_sync(
-                'vm.datastore.get_filesystem_path',
-                vm['target'],
-                os.path.join(VM_ROOT, vm['name'], target_path)
-            )
+            return return_path(vm['target'], os.path.join(VM_ROOT, vm['name'], target_path))
 
-        if disk['type'] == 'CDROM':
-            path = disk['properties']['path']
+        if device['type'] == 'CDROM':
+            path = device['properties']['path']
             if os.path.isabs(path):
-                return path
+                if local:
+                    return path
+                else:
+                    return None
             else:
-                return os.path.join(self.dispatcher.call_sync('vm.get_vm_root', vm_id), path)
+                return return_path(vm['target'], path)
 
-    @private
-    @accepts(str, str)
-    @returns(h.one_of(str, None))
-    def get_volume_path(self, vm_id, volume_name):
-        vm = self.datastore.get_by_id('vms', vm_id)
-        if not vm:
-            return None
+        if device['type'] == 'VOLUME':
+            if device['properties'].get('auto'):
+                return return_path(vm['target'], device['name'])
 
-        vol = first_or_default(lambda v: v['name'] == volume_name, vm['devices'])
-        if not vol:
-            return None
-
-        if vol['properties'].get('auto'):
-            return os.path.join(self.get_vm_root(vm_id), vol['name'])
-
-        return vol['properties']['destination']
+            if local:
+                return device['properties']['destination']
+            else:
+                return None
 
     @private
     @description("Get VMs dependent on provided filesystem path")
