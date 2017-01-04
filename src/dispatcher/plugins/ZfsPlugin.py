@@ -742,12 +742,12 @@ class ZpoolImportTask(Task):
             if guid.isdigit():
                 pool = first_or_default(
                     lambda p: str(p.guid) == guid,
-                    zfs.find_import()
+                    zfs.find_import(search_paths=['/dev/gptid'])
                 )
             else:
                 pool = first_or_default(
                     None,
-                    zfs.find_import(name=guid),
+                    zfs.find_import(search_paths=['/dev/gptid'], name=guid),
                 )
 
             if not pool:
