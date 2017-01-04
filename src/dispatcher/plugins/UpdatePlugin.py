@@ -582,6 +582,7 @@ class UpdateConfigureTask(Task):
 
         if 'internal' in props:
             self.configstore.set('update.internal', props['internal'])
+            self.dispatcher.call_sync('etcd.generation.generate_group', 'update')
 
         self.dispatcher.dispatch_event('update.changed', {'operation': 'update'})
 
