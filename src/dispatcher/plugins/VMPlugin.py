@@ -185,38 +185,36 @@ class VMProvider(Provider):
 
     @private
     @accepts(str)
-    @returns(h.array(str))
-    def get_reserved_datasets(self, id):
+    @returns(str, h.array(str))
+    def get_reserved_storage(self, id):
         vm_snapshots = self.dispatcher.call_sync('vm.snapshot.query', [('parent.id', '=', id)])
 
-        reserved_datasets = []
+        reserved_storage = []
+        datastore = ''
         for snap in vm_snapshots:
-            reserved_datasets.extend(self.dispatcher.call_sync('vm.snapshot.get_dependent_datasets', snap['id']))
+            datastore, storage = self.dispatcher.call_sync('vm.snapshot.get_dependent_storage', snap['id'])
+            reserved_storage.extend(storage)
 
-        return list(set(reserved_datasets))
+        return datastore, list(set(reserved_storage))
 
     @private
     @accepts(str)
-    @returns(h.array(str))
-    def get_dependent_datasets(self, id):
+    @returns(str, h.array(str))
+    def get_dependent_storage(self, id):
         vm = self.dispatcher.call_sync('vm.query', [('id', '=', id)], {'single': True})
         if not vm:
             raise RpcException(errno.ENOENT, 'VM {0} does not exist'.format(id))
 
         devices = vm['devices']
 
-        dataset = self.dispatcher.call_sync('vm.get_dataset', id)
-        child_datasets = self.dispatcher.call_sync(
-            'zfs.dataset.query',
-            [('id', '~', '^({0}/)'.format(dataset))],
-            {'select': 'name'}
-        )
-        dependent_datasets = [dataset]
-        for d in child_datasets:
-            if q.query(devices, ('name', '=', d.split('/')[-1]), ('type', 'in', ['DISK', 'VOLUME'])):
-                dependent_datasets.append(d)
+        root_dir = self.dispatcher.call_sync('vm.get_vm_root', id, False)
 
-        return dependent_datasets
+        dependent_storage = [root_dir]
+        for d in devices:
+            if d['type'] in ('DISK', 'VOLUME'):
+                dependent_storage.append(os.path.join(root_dir, d))
+
+        return vm['target'], dependent_storage
 
     @accepts(str)
     @returns(h.ref('vm-guest-info'))
@@ -279,26 +277,22 @@ class VMSnapshotProvider(Provider):
 
     @private
     @accepts(str)
-    @returns(h.array(str))
-    def get_dependent_datasets(self, id):
+    @returns(str, h.array(str))
+    def get_dependent_storage(self, id):
         snapshot = self.dispatcher.call_sync('vm.snapshot.query', [('id', '=', id)], {'single': True})
         if not snapshot:
             raise RpcException(errno.ENOENT, 'VM snapshot {0} does not exist'.format(id))
 
         devices = snapshot['parent']['devices']
 
-        dataset = self.dispatcher.call_sync('vm.get_dataset', snapshot['parent']['id'])
-        child_datasets = self.dispatcher.call_sync(
-            'zfs.dataset.query',
-            [('id', '~', '^({0}/)'.format(dataset))],
-            {'select': 'name'}
-        )
-        dependent_datasets = [dataset]
-        for d in child_datasets:
-            if q.query(devices, ('name', '=', d.split('/')[-1]), ('type', 'in', ['DISK', 'VOLUME'])):
-                dependent_datasets.append(d)
+        root_dir = self.dispatcher.call_sync('vm.get_vm_root', snapshot['parent']['id'], False)
 
-        return dependent_datasets
+        dependent_storage = [root_dir]
+        for d in devices:
+            if d['type'] in ('DISK', 'VOLUME'):
+                dependent_storage.append(os.path.join(root_dir, d))
+
+        return snapshot['parent']['target'], dependent_storage
 
 
 @description('Provides information about VM templates')
