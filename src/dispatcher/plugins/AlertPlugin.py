@@ -41,7 +41,9 @@ from freenas.dispatcher.rpc import (
     generator
 )
 from task import Provider, Task, TaskException, TaskDescription, VerifyException, query
+from freenas.dispatcher.jsonenc import dumps
 from freenas.utils import normalize
+from debug import AttachData
 
 
 logger = logging.getLogger('AlertPlugin')
@@ -194,7 +196,6 @@ class AlertsProvider(Provider):
 
 @description('Provides access to the alerts filters')
 class AlertsFiltersProvider(Provider):
-
     @query('alert-filter')
     @generator
     def query(self, filter=None, params=None):
@@ -323,6 +324,10 @@ class SendAlertTask(Task):
             'description': message,
             'one_shot': True
         })
+
+
+def collect_debug(dispatcher):
+    yield AttachData('alert-filter-query', dumps(list(dispatcher.call_sync('alert.filter.query')), indent=4))
 
 
 def _init(dispatcher, plugin):
@@ -484,3 +489,5 @@ def _init(dispatcher, plugin):
             'additionalProperties': False
         }
     )
+
+    plugin.register_debug_hook(collect_debug)
