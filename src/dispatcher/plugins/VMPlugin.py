@@ -85,18 +85,21 @@ class VMProvider(Provider):
         )
 
     @private
-    @accepts(str)
+    @accepts(str, bool)
     @returns(h.one_of(str, None))
-    def get_vm_root(self, vm_id):
+    def get_vm_root(self, vm_id, local=True):
         vm = self.datastore.get_by_id('vms', vm_id)
         if not vm:
             return None
 
-        return self.dispatcher.call_sync(
-            'vm.datastore.get_filesystem_path',
-            vm['target'],
-            os.path.join(VM_ROOT, vm['name'])
-        )
+        if local:
+            return self.dispatcher.call_sync(
+                'vm.datastore.get_filesystem_path',
+                vm['target'],
+                os.path.join(VM_ROOT, vm['name'])
+            )
+        else:
+            return os.path.join(VM_ROOT, vm['name'])
 
     @private
     @accepts(str, str)
