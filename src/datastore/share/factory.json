@@ -250,7 +250,7 @@
             "service.nginx.https.port": 443,
             "service.nginx.listen": [
                 "0.0.0.0",
-                "[::]"
+                "::"
             ],
             "service.nginx.enable": true,
             "service.powerd.enable": false,
