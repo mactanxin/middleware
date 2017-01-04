@@ -1085,6 +1085,7 @@
                     "Label": "org.freenas.schedulerd",
                     "RunAtLoad": true,
                     "SupportsCheckin": true,
+                    "Requires": ["networking", "etc"],
                     "Program": "/usr/local/sbin/schedulerd"
                 },
                 "builtin": true,
