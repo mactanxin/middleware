@@ -1185,9 +1185,25 @@ class VMRebootTask(Task):
             raise TaskException(err.code, err.message)
 
 
+class VMSnapshotBaseTask(Task):
+    def run_snapshot_task(self, task, datastore, snapshot_id, devices):
+        subtasks = []
+        for d in devices:
+            if d['type'] in ('DISK', 'VOLUME'):
+                path = self.dispatcher.call_sync('vm.get_device_path', id, d['name'], False)
+                if path:
+                    subtasks.append(self.run_subtask(
+                        'vm.datastore.{0}.snapshot.{1}'.format(convert_device_type(d), task),
+                        datastore,
+                        f'{path}@{snapshot_id}'
+                    ))
+
+        self.join_subtasks(*subtasks)
+
+
 @accepts(str)
 @description('Returns VM to previously saved state')
-class VMSnapshotRollbackTask(Task):
+class VMSnapshotRollbackTask(VMSnapshotBaseTask):
     @classmethod
     def early_describe(cls):
         return 'Rollback of VM'
@@ -1213,15 +1229,16 @@ class VMSnapshotRollbackTask(Task):
 
         vm = self.datastore.get_by_id('vms', snapshot['parent']['id'])
         if not vm:
-            raise TaskException(errno.ENOENT, 'Prent VM {0} does not exist'.format(snapshot['parent']['name']))
+            raise TaskException(errno.ENOENT, 'Parent VM {0} does not exist'.format(snapshot['parent']['name']))
 
-        snapshot_id = self.dispatcher.call_sync(
-            'zfs.snapshot.query',
-            [('properties.org\.freenas:vm_snapshot.rawvalue', '=', id)],
-            {'single': True, 'select': 'id'}
+        snapshot_id = snapshot['id']
+
+        self.run_snapshot_task(
+            'rollback',
+            snapshot['parent']['target'],
+            snapshot_id,
+            snapshot['parent']['devices']
         )
-
-        self.join_subtasks(self.run_subtask('zfs.rollback', snapshot_id, True, True))
 
         self.datastore.update('vms', snapshot['parent']['id'], snapshot['parent'])
         self.dispatcher.dispatch_event('vm.changed', {
@@ -1232,7 +1249,7 @@ class VMSnapshotRollbackTask(Task):
 
 @accepts(str, str, str)
 @description('Creates a snapshot of VM')
-class VMSnapshotCreateTask(Task):
+class VMSnapshotCreateTask(VMSnapshotBaseTask):
     @classmethod
     def early_describe(cls):
         return 'Creating snapshot of VM'
@@ -1258,46 +1275,34 @@ class VMSnapshotCreateTask(Task):
         if self.dispatcher.call_sync('vm.snapshot.query', [('name', '=', name), ('parent.id', '=', id)], {'single': True}):
             raise TaskException(errno.EEXIST, 'Snapshot {0} of VM {1} already exists'.format(name, vm['name']))
 
+        snapshots_support = self.dispatcher.call_sync(
+            'vm.datastore.query',
+            [('id', '=', vm['target'])],
+            {'single': True, 'select': 'capabilities.snapshots'}
+        )
+
+        if not snapshots_support:
+            raise TaskException(
+                errno.EINVAL,
+                'Datastore {0} does not support snapshots or is unreachable'.format(vm['target'])
+            )
+
+        snapshot_id = str(uuid.uuid4())
+
         snapshot = {
+            'id': snapshot_id,
             'name': name,
             'description': descr,
             'parent': vm
         }
 
-        snapshot_id = self.datastore.insert('vm.snapshots', snapshot)
+        self.run_snapshot_task('create', vm['target'], snapshot_id, vm['devices'])
+
+        self.datastore.insert('vm.snapshots', snapshot)
         self.dispatcher.dispatch_event('vm.snapshot.changed', {
             'operation': 'create',
             'ids': [snapshot_id]
         })
-
-        snapname = name
-        base_snapname = name
-        vm_ds = self.dispatcher.call_sync('vm.get_dataset', id)
-
-        # Pick another name in case snapshot already exists
-        for i in range(1, 99):
-            if self.dispatcher.call_sync(
-                'zfs.snapshot.query',
-                [('name', '=', '{0}@{1}'.format(vm_ds, snapname))],
-                {'count': True}
-            ):
-                snapname = '{0}-{1}'.format(base_snapname, i)
-                continue
-
-            break
-
-        self.join_subtasks(self.run_subtask(
-            'zfs.create_snapshot',
-            vm_ds,
-            name,
-            True,
-            {
-                'org.freenas:replicable': {'value': 'no'},
-                'org.freenas:lifetime': {'value': 'no'},
-                'org.freenas:uuid': {'value': str(uuid.uuid4())},
-                'org.freenas:vm_snapshot': {'value': str(snapshot_id)},
-            }
-        ))
 
 
 @accepts(str, h.ref('vm-snapshot'))
@@ -1333,7 +1338,7 @@ class VMSnapshotUpdateTask(Task):
 
 @accepts(str)
 @description('Deletes a snapshot of VM')
-class VMSnapshotDeleteTask(Task):
+class VMSnapshotDeleteTask(VMSnapshotBaseTask):
     @classmethod
     def early_describe(cls):
         return 'Deleting snapshot of VM'
@@ -1350,11 +1355,8 @@ class VMSnapshotDeleteTask(Task):
         if not snapshot:
             raise TaskException(errno.ENOENT, 'Snapshot {0} does not exist'.format(id))
 
-        snapshot_ids = self.dispatcher.call_sync(
-            'zfs.snapshot.query',
-            [('properties.org\.freenas:vm_snapshot.rawvalue', '=', id)],
-            {'select': 'id'}
-        )
+        vm_id = snapshot['parent']['id']
+        datastore, reserved_storage = self.dispatcher.call_sync('vm.get_reserved_storage', vm_id)
 
         self.datastore.delete('vm.snapshots', id)
         self.dispatcher.dispatch_event('vm.snapshot.changed', {
@@ -1362,23 +1364,18 @@ class VMSnapshotDeleteTask(Task):
             'ids': [id]
         })
 
-        for snapshot_id in snapshot_ids:
-            path, name = snapshot_id.split('@')
-            self.join_subtasks(self.run_subtask('zfs.delete_snapshot', path, name))
+        self.run_snapshot_task('delete', snapshot['parent']['target'], id, snapshot['parent']['devices'])
 
-        vm_id = snapshot['parent']['id']
-        related_datasets = self.dispatcher.call_sync('vm.get_dependent_datasets', vm_id)
-        related_datasets.extend(self.dispatcher.call_sync('vm.get_reserved_datasets', vm_id))
-        vm_dataset = self.dispatcher.call_sync('vm.get_dataset', vm_id)
-        child_datasets = self.dispatcher.call_sync(
-            'zfs.dataset.query',
-            [('id', '~', '^({0}/)'.format(vm_dataset))],
-            {'select': 'name'}
-        )
+        datastore, new_reserved_storage = self.dispatcher.call_sync('vm.get_reserved_storage', vm_id)
 
-        unrelated_datasets = [d for d in child_datasets if d not in related_datasets]
-        for d in unrelated_datasets:
-            self.join_subtasks(self.run_subtask('volume.dataset.delete', d))
+        released_storage = [d for d in reserved_storage if d not in new_reserved_storage]
+        subtasks = []
+        for path in released_storage:
+            path_type = self.dispatcher.call_sync('vm.datastore.get_path_type', datastore, path)
+            operation = 'directory' if path_type == 'DIRECTORY' else 'block_device'
+            subtasks.append(self.run_subtask('vm.datastore.{0}.delete'.format(operation), datastore, path))
+
+        self.join_subtasks(*subtasks)
 
 
 @accepts(str, str, str, str, str)
@@ -1911,6 +1908,15 @@ def get_readme(path):
     return file_path
 
 
+def convert_device_type(device):
+    conversion_dict = {
+        'DISK': 'directory',
+        'VOLUME': 'block_device'
+    }
+
+    return conversion_dict.get(device['type'])
+
+
 @throttle(minutes=10)
 def fetch_templates(dispatcher):
     dispatcher.call_task_sync('vm.template.fetch')
@@ -2086,7 +2092,7 @@ def _init(dispatcher, plugin):
 
     plugin.register_schema_definition('vm-device-disk-target-type', {
         'type': 'string',
-        'enum': ['ZVOL', 'FILE', 'DISK']
+        'enum': ['ZVOL', 'DISK']
     })
 
     plugin.register_schema_definition('vm-device-disk', {
