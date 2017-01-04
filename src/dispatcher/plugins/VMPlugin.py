@@ -1364,7 +1364,16 @@ class VMSnapshotDeleteTask(VMSnapshotBaseTask):
             'ids': [id]
         })
 
-        self.run_snapshot_task('delete', snapshot['parent']['target'], id, snapshot['parent']['devices'])
+        devices = snapshot['parent']['devices']
+
+        for d in list(devices):
+            if d['type'] in ('DISK', 'VOLUME'):
+                path = self.dispatcher.call_sync('vm.get_device_path', datastore, d['name'], False)
+                snap_path = f'{path}@{id}'
+                if not self.dispatcher.call_sync('vm.datastore.snapshot_exists', datastore, snap_path):
+                    devices.remove(d)
+
+        self.run_snapshot_task('delete', snapshot['parent']['target'], id, devices)
 
         datastore, new_reserved_storage = self.dispatcher.call_sync('vm.get_reserved_storage', vm_id)
 
