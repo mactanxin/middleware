@@ -31,5 +31,5 @@ def probe(obj, ds):
 
 
 def apply(obj, ds):
-    obj['properties']['case_sensitive'] = 'auto'
+    obj['properties']['case_sensitive'] = 'AUTO'
     return obj

@@ -92,7 +92,7 @@ class CreateSMBShareTask(Task):
             'full_audit_priority': 'notice',
             'full_audit_failure': 'connect',
             'full_audit_success': 'open mkdir unlink rmdir rename',
-            'case_sensitive': 'auto',
+            'case_sensitive': 'AUTO',
             'allocation_roundup_size': 1048576,
             'ea_support': False,
             'store_dos_attributes': False,
@@ -267,24 +267,24 @@ def convert_share(dispatcher, ret, path, enabled, share):
     ret.clear()
     ret['path'] = path
     ret['available'] = yesno(enabled)
-    ret['guest ok'] = yesno(share.get('guest_ok', False))
-    ret['guest only'] = yesno(share.get('guest_only', False))
-    ret['read only'] = yesno(share.get('read_only', False))
-    ret['browseable'] = yesno(share.get('browseable', True))
-    ret['hide dot files'] = yesno(not share.get('show_hidden_files', False))
+    ret['guest ok'] = yesno(share['guest_ok'])
+    ret['guest only'] = yesno(share['guest_only'])
+    ret['read only'] = yesno(['read_only'])
+    ret['browseable'] = yesno(share['browseable'])
+    ret['hide dot files'] = yesno(not share['show_hidden_files'])
     ret['printable'] = 'no'
     ret['nfs4:mode'] = 'special'
     ret['nfs4:acedup'] = 'merge'
     ret['nfs4:chown'] = 'true'
     ret['zfsacl:acesort'] = 'dontcare'
-    ret['case sensitive'] = share['case_sensitive']
+    ret['case sensitive'] = share['case_sensitive'].lower()
     ret['allocation roundup size'] = str(share['allocation_roundup_size'])
-    ret['ea support'] = yesno(share.get('ea_support', False))
-    ret['store dos attributes'] = yesno(share.get('store dos attributes', False))
-    ret['map archive'] = yesno(share.get('map_archive', False))
-    ret['map hidden'] = yesno(share.get('map_hidden', False))
-    ret['map readonly'] = yesno(share.get('map_readonly', False))
-    ret['map system'] = yesno(share.get('map_system', False))
+    ret['ea support'] = yesno(share['ea_support'])
+    ret['store dos attributes'] = yesno(share['store_dos_attributes'])
+    ret['map archive'] = yesno(share['map_archive'])
+    ret['map hidden'] = yesno(share['map_hidden'])
+    ret['map readonly'] = yesno(share['map_readonly'])
+    ret['map system'] = yesno(share['map_system'])
 
     if 'fruit' in vfs_objects:
         ret['fruit:metadata'] = share['fruit_metadata']
@@ -356,7 +356,7 @@ def _init(dispatcher, plugin):
             'full_audit_priority': {'type': 'string'},
             'full_audit_failure': {'type': 'string'},
             'full_audit_success': {'type': 'string'},
-            'case_sensitive': {'type': 'string', 'enum': ['auto', 'yes', 'no']},
+            'case_sensitive': {'type': 'string', 'enum': ['AUTO', 'YES', 'NO']},
             'allocation_roundup_size': {'type': 'integer'},
             'ea_support': {'type': 'boolean'},
             'store_dos_attributes': {'type': 'boolean'},
