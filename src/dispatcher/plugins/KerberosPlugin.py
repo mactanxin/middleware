@@ -193,7 +193,7 @@ def generate_keytab(datastore):
 
 def collect_debug(dispatcher):
     yield AttachFile('krb5.conf', '/etc/krb5.conf')
-    yield AttachCommandOutput('klist', ['/usr/bin/klist', 'conf', 'list'])
+    yield AttachCommandOutput('klist', ['/usr/bin/klist'])
 
 
 def _init(dispatcher, plugin):

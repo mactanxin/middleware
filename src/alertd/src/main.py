@@ -56,6 +56,7 @@ REMINDER_SCHEDULE = {
 
 operators_table = {
     '=': lambda x, y: x == y,
+    '==': lambda x, y: x == y,
     '!=': lambda x, y: x != y,
     '>': lambda x, y: x > y,
     '<': lambda x, y: x < y,

@@ -457,6 +457,7 @@ class UpdateProvider(Provider):
     def get_config(self):
         return {
             'train': self.dispatcher.configstore.get('update.train'),
+            'internal': self.dispatcher.configstore.get('update.internal'),
             'check_auto': self.dispatcher.configstore.get('update.check_auto'),
             'update_server': Configuration.Configuration().UpdateServerURL(),
         }
@@ -575,8 +576,14 @@ class UpdateConfigureTask(Task):
             if train_to_set not in trains:
                 raise TaskException(errno.ENOENT, '{0} is not a valid train'.format(train_to_set))
             self.configstore.set('update.train', train_to_set)
+
         if 'check_auto' in props:
-            self.configstore.set('update.check_auto', props.get('check_auto'))
+            self.configstore.set('update.check_auto', props['check_auto'])
+
+        if 'internal' in props:
+            self.configstore.set('update.internal', props['internal'])
+            self.dispatcher.call_sync('etcd.generation.generate_group', 'update')
+
         self.dispatcher.dispatch_event('update.changed', {'operation': 'update'})
 
 
@@ -986,6 +993,7 @@ def _init(dispatcher, plugin):
         'properties': {
             'train': {'type': 'string'},
             'check_auto': {'type': 'boolean'},
+            'internal': {'type': 'boolean'},
             'update_server': {'type': 'string', 'readOnly': True},
         },
     })

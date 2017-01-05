@@ -87,7 +87,21 @@ class CreateSMBShareTask(Task):
             'vfs_objects': [],
             'hosts_allow': None,
             'hosts_deny': None,
-            'extra_parameters': {}
+            'extra_parameters': {},
+            'full_audit_prefix': '%u|%I|%m|%S',
+            'full_audit_priority': 'notice',
+            'full_audit_failure': 'connect',
+            'full_audit_success': 'open mkdir unlink rmdir rename',
+            'case_sensitive': 'AUTO',
+            'allocation_roundup_size': 1048576,
+            'ea_support': False,
+            'store_dos_attributes': False,
+            'map_archive': True,
+            'map_hidden': False,
+            'map_readonly': True,
+            'map_system': False,
+            'fruit_metadata': 'stream'
+
         })
 
         id = self.datastore.insert('shares', share)
@@ -253,16 +267,27 @@ def convert_share(dispatcher, ret, path, enabled, share):
     ret.clear()
     ret['path'] = path
     ret['available'] = yesno(enabled)
-    ret['guest ok'] = yesno(share.get('guest_ok', False))
-    ret['guest only'] = yesno(share.get('guest_only', False))
-    ret['read only'] = yesno(share.get('read_only', False))
-    ret['browseable'] = yesno(share.get('browseable', True))
-    ret['hide dot files'] = yesno(not share.get('show_hidden_files', False))
+    ret['guest ok'] = yesno(share['guest_ok'])
+    ret['guest only'] = yesno(share['guest_only'])
+    ret['read only'] = yesno(['read_only'])
+    ret['browseable'] = yesno(share['browseable'])
+    ret['hide dot files'] = yesno(not share['show_hidden_files'])
     ret['printable'] = 'no'
     ret['nfs4:mode'] = 'special'
     ret['nfs4:acedup'] = 'merge'
     ret['nfs4:chown'] = 'true'
     ret['zfsacl:acesort'] = 'dontcare'
+    ret['case sensitive'] = share['case_sensitive'].lower()
+    ret['allocation roundup size'] = str(share['allocation_roundup_size'])
+    ret['ea support'] = yesno(share['ea_support'])
+    ret['store dos attributes'] = yesno(share['store_dos_attributes'])
+    ret['map archive'] = yesno(share['map_archive'])
+    ret['map hidden'] = yesno(share['map_hidden'])
+    ret['map readonly'] = yesno(share['map_readonly'])
+    ret['map system'] = yesno(share['map_system'])
+
+    if 'fruit' in vfs_objects:
+        ret['fruit:metadata'] = share['fruit_metadata']
 
     if share.get('hosts_allow'):
         ret['hosts allow'] = ','.join(share['hosts_allow'])
@@ -278,6 +303,12 @@ def convert_share(dispatcher, ret, path, enabled, share):
         ret['recycle:directory_mode'] = '0777'
         ret['recycle:subdir_mode'] = '0700'
         vfs_objects.append('recycle')
+
+    if 'full_audit' in vfs_objects:
+        ret['full_audit:prefix'] = share['full_audit_prefix']
+        ret['full_audit:priority'] = share['full_audit_priority']
+        ret['full_audit:failure'] = share['full_audit_failure']
+        ret['full_audit:success'] = share['full_audit_success']
 
     if share.get('previous_versions'):
         try:
@@ -321,6 +352,19 @@ def _init(dispatcher, plugin):
             'recyclebin': {'type': 'boolean'},
             'show_hidden_files': {'type': 'boolean'},
             'previous_versions': {'type': 'boolean'},
+            'full_audit_prefix': {'type': 'string'},
+            'full_audit_priority': {'type': 'string'},
+            'full_audit_failure': {'type': 'string'},
+            'full_audit_success': {'type': 'string'},
+            'case_sensitive': {'type': 'string', 'enum': ['AUTO', 'YES', 'NO']},
+            'allocation_roundup_size': {'type': 'integer'},
+            'ea_support': {'type': 'boolean'},
+            'store_dos_attributes': {'type': 'boolean'},
+            'map_archive': {'type': 'boolean'},
+            'map_hidden': {'type': 'boolean'},
+            'map_readonly': {'type': 'boolean'},
+            'map_system': {'type': 'boolean'},
+            'fruit_metadata': {'type': 'string', 'enum': ['stream', 'netatalk']},
             'vfs_objects': {
                 'type': 'array',
                 'items': {'type': 'string'}

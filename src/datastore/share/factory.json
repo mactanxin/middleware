@@ -250,7 +250,7 @@
             "service.nginx.https.port": 443,
             "service.nginx.listen": [
                 "0.0.0.0",
-                "[::]"
+                "::"
             ],
             "service.nginx.enable": true,
             "service.powerd.enable": false,
@@ -275,6 +275,7 @@
             "service.iscsid.enable": false,
             "update.check_auto": true,
             "update.train": "FreeNAS-10-Nightlies",
+            "update.internal": false,
             "accounts.local_gid_range": [
                 1000,
                 65000
@@ -286,7 +287,7 @@
             "middleware.token_lifetime": 600,
             "middleware.parallel_disk_format": true,
             "middleware.streaming_burst_size": 16,
-            "middleware.zfs_refresh_interval": 30,
+            "middleware.zfs_refresh_interval": 60,
             "middleware.snapshot_scrub_interval": 300,
             "system.console.keymap": "us.iso",
             "system.syslog_server": null,
@@ -579,31 +580,6 @@
                 ],
                 "name": "kerberos"
             },
-            "9a08b24a-7efb-11e5-bbec-005056826348": {
-                "dependencies": [
-                    "file:nsswitch.conf"
-                ],
-                "name": "nsswitch"
-            },
-            "af68cb5c-7efb-11e5-bbec-005056826348": {
-                "dependencies": [
-                    "file:local/openldap/ldap.conf"
-                ],
-                "name": "openldap"
-            },
-            "8310c03f-7efd-11e5-bbec-005056826348": {
-                "dependencies": [
-                    "file:local/ldap.conf",
-                    "file:local/ldap.secret"
-                ],
-                "name": "nss_ldap"
-            },
-            "21fd35e2-7efc-11e5-bbec-005056826348": {
-                "dependencies": [
-                    "file:local/sssd/sssd.conf"
-                ],
-                "name": "sssd"
-            },
             "48b48d67-7efc-11e5-bbec-005056826348": {
                 "dependencies": [
                     "file:pam.d/ftp",
@@ -616,6 +592,12 @@
                     "file:pam.d/sudo"
                 ],
                 "name": "pam"
+            },
+            "72c5b60b-d2bb-11e6-895f-0cc47a53d4b0": {
+                "dependencies": [
+                    "file:update.conf"
+                ],
+                "name": "update"
             }
         },
         "metadata": {
@@ -1085,6 +1067,7 @@
                     "Label": "org.freenas.schedulerd",
                     "RunAtLoad": true,
                     "SupportsCheckin": true,
+                    "Requires": ["networking", "etc"],
                     "Program": "/usr/local/sbin/schedulerd"
                 },
                 "builtin": true,

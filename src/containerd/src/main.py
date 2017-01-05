@@ -104,7 +104,7 @@ def normalize_docker_labels(labels):
         'org.freenas.interactive': "false",
         'org.freenas.port-mappings': "",
         'org.freenas.settings': [],
-        'org.freenas.static_volumes': [],
+        'org.freenas.static-volumes': [],
         'org.freenas.upgradeable': "false",
         'org.freenas.version': '0',
         'org.freenas.volumes': [],
@@ -668,19 +668,22 @@ class VirtualMachine(object):
             self.vmtools_thread = gevent.spawn(self.vmtools_worker)
             self.output_thread = gevent.spawn(self.output_worker)
 
-            while True:
-                pid, status = self.waitpid()
-                if os.WIFSTOPPED(status):
-                    self.set_state(VirtualMachineState.PAUSED)
-                    continue
+            self.bhyve_process.wait()
 
-                if os.WIFCONTINUED(status):
-                    self.set_state(VirtualMachineState.RUNNING)
-                    continue
-
-                if os.WIFEXITED(status):
-                    self.logger.info('bhyve process exited with code {0}'.format(os.WEXITSTATUS(status)))
-                    break
+            # not yet - broken in gevent
+            # while True:
+            #    pid, status = self.waitpid()
+            #    if os.WIFSTOPPED(status):
+            #        self.set_state(VirtualMachineState.PAUSED)
+            #        continue
+            #
+            #    if os.WIFCONTINUED(status):
+            #        self.set_state(VirtualMachineState.RUNNING)
+            #        continue
+            #
+            #    if os.WIFEXITED(status):
+            #        self.logger.info('bhyve process exited with code {0}'.format(os.WEXITSTATUS(status)))
+            #        break
 
             with contextlib.suppress(OSError):
                 os.unlink(self.vmtools_socket)
@@ -702,7 +705,7 @@ class VirtualMachine(object):
             self.context.docker_hosts.pop(self.id, None)
 
     def waitpid(self):
-        return threadpool.apply(os.waitpid, args=(self.bhyve_process.pid, os.WUNTRACED | os.WCONTINUED))
+        return os.waitpid(self.bhyve_process.pid, os.WUNTRACED | os.WCONTINUED)
 
     def output_worker(self):
         for line in self.bhyve_process.stdout:
@@ -1370,9 +1373,9 @@ class DockerService(RpcService):
                         'readonly': vol.get('readonly', False)
                     })
 
-        if labels.get('org.freenas.static_volumes'):
+        if labels.get('org.freenas.static-volumes'):
             try:
-                j = loads(labels['org.freenas.static_volumes'])
+                j = loads(labels['org.freenas.static-volumes'])
             except ValueError:
                 pass
             else:
@@ -2203,7 +2206,7 @@ class Main(object):
 
         # WebSockets server
         kwargs = {}
-        s4 = WebSocketServer(('', args.p), ServerResource({
+        s4 = WebSocketServer(('0.0.0.0', args.p), ServerResource({
             '/console': ConsoleConnection,
             '/vnc': VncConnection,
             '/webvnc/[\w]+': app

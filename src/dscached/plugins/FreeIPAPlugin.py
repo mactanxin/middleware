@@ -25,6 +25,7 @@
 #
 #####################################################################
 
+import binascii
 import uuid
 import ldap3
 import ldap3.utils.dn
@@ -111,6 +112,7 @@ class FreeIPAPlugin(DirectoryServicePlugin):
         entry = dict(entry['attributes'])
         groups = []
         group = None
+        nthash = None
 
         if contains(entry, 'gidNumber'):
             ret = self.search_one(
@@ -131,13 +133,19 @@ class FreeIPAPlugin(DirectoryServicePlugin):
                 r = dict(r['attributes'])
                 groups.append(get(r, 'ipaUniqueID.0'))
 
+        if contains(entry, 'ipaNTHash'):
+            nthash = binascii.hexlify(entry['ipaNTHash']).decode('ascii')
+
         return {
             'id': get(entry, 'ipaUniqueID.0'),
             'uid': int(get(entry, 'uidNumber')),
             'gid': int(get(entry, 'gidNumber')),
+            'sid': get(entry, 'ipaNTSecurityIdentifier'),
             'builtin': False,
             'username': get(entry, 'uid.0'),
             'full_name': get(entry, 'gecos', get(entry, 'displayName', '<unknown>')),
+            'nthash': nthash,
+            'password_changed_at': get(entry, 'krbLastPwdChange'),
             'shell': get(entry, 'loginShell', '/bin/sh'),
             'home': get(entry, 'homeDirectory', '/nonexistent'),
             'sshpubkey': get(entry, 'ipaSshPubKey.0', b'').decode('ascii') or None,
