@@ -216,7 +216,14 @@ class DockerImagesProvider(Provider):
             items = []
 
             with self.update_collection_lock:
-                for i in hub.get_repositories(c):
+                try:
+                    repos = hub.get_repositories(c)
+                except TimeoutError as e:
+                    raise RpcException(errno.ETIMEDOUT, e)
+                except ConnectionError as e:
+                    raise RpcException(errno.ECONNABORTED, e)
+
+                for i in repos:
                     presets = None
                     icon = None
                     repo_name = '{0}/{1}'.format(i['user'], i['name'])
