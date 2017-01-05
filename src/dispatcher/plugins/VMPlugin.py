@@ -351,15 +351,6 @@ class VMTemplateProvider(Provider):
 
         return q.query(templates, *(filter or []), stream=True, **(params or {}))
 
-    def get_allocation_size(self):
-        cache_dir = self.dispatcher.call_sync('system_dataset.request_directory', 'vm_image_cache')
-        total_size = 0
-        for root, _, files in os.walk(cache_dir):
-            for file in files:
-                total_size += os.path.getsize(os.path.join(root, file))
-
-        return total_size
-
 
 class VMConfigProvider(Provider):
     @returns(h.ref('vm-config'))
