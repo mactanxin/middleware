@@ -40,6 +40,8 @@ import shutil
 import tarfile
 import logging
 import datetime
+import tempfile
+from bsd.copy import copytree
 from bsd import sysctl
 from task import Provider, Task, ProgressTask, VerifyException, TaskException, query, TaskWarning, TaskDescription
 from task import ValidationException
@@ -51,11 +53,12 @@ from freenas.utils import first_or_default, normalize, deep_update, process_temp
 from utils import save_config, load_config, delete_config
 from freenas.utils.decorators import throttle
 from freenas.utils.copytree import copytree
-from debug import AttachData, AttachDirectory, AttachCommandOutput
+from debug import AttachData, AttachDirectory
 
 
 VM_OUI = '00:a0:98'  # NetApp
 VM_ROOT = '/vm'
+CACHE_ROOT = '/.vm_cache'
 BLOCKSIZE = 65536
 
 
@@ -401,11 +404,11 @@ class VMBaseTask(ProgressTask):
         self.vm_root_dir = None
 
     def init_root_dir(self, vm):
-        self.vm_root_dir = os.path.join('vm', vm['name'])
+        self.vm_root_dir = os.path.join(VM_ROOT, vm['name'])
 
-        if not self.dispatcher.call_sync('vm.datastore.directory_exists', vm['target'], 'vm'):
+        if not self.dispatcher.call_sync('vm.datastore.directory_exists', vm['target'], VM_ROOT):
             # Create VM root
-            self.join_subtasks(self.run_subtask('vm.datastore.directory.create', vm['target'], 'vm'))
+            self.join_subtasks(self.run_subtask('vm.datastore.directory.create', vm['target'], VM_ROOT))
 
         try:
             self.join_subtasks(self.run_subtask('vm.datastore.directory.create', vm['target'], self.vm_root_dir))
@@ -433,9 +436,19 @@ class VMBaseTask(ProgressTask):
 
         if template.get('files'):
             source_root = os.path.join(template['path'], 'files')
-            files_root = os.path.join(dest_root, 'files')
+            datastore = vm['target']
+            files_datastore_path = os.path.join(self.vm_root_dir, 'files')
 
-            os.mkdir(files_root)
+            self.run_subtask_sync(
+                'vm.datastore.directory.create',
+                datastore,
+                files_datastore_path
+            )
+            files_root = self.dispatcher.call_sync(
+                'vm.datastore.get_filesystem_path',
+                datastore,
+                files_datastore_path
+            )
 
             for root, dirs, files in os.walk(source_root):
                 r = os.path.relpath(root, source_root)
@@ -453,15 +466,28 @@ class VMBaseTask(ProgressTask):
                     os.mkdir(os.path.join(files_root, r, d))
 
             if template.get('fetch'):
+                cloning_supported = self.dispatcher.call_sync(
+                    'vm.datastore.query',
+                    [('id', '=', datastore)],
+                    {'single': True, 'select': 'capabilities.clones'}
+                )
                 for f in template['fetch']:
                     if f.get('dest'):
-                        self.join_subtasks(self.run_subtask(
-                            'vm.file.install',
-                            vm['template']['name'],
-                            f['name'],
-                            files_root if f['dest'] == '.' else os.path.join(files_root, f['dest']),
-                            progress_callback=progress_cb
-                        ))
+                        source = os.path.join(CACHE_ROOT, vm['template']['name'], f['name'], f['name'])
+                        source_type = self.dispatcher.call_sync('vm.datastore.get_path_type', datastore, source)
+                        if cloning_supported and f['dest'] != '.':
+                            self.run_subtask_sync(
+                                'vm.datastore.{0}.clone'.format(source_type.lower()),
+                                datastore,
+                                source,
+                                os.path.join(files_datastore_path, f['dest'])
+                            )
+                        else:
+                            dest = files_datastore_path if f['dest'] == '.' else os.path.join(files_datastore_path, f['dest'])
+                            copytree(
+                                self.dispatcher.call_sync('vm.datastore.get_filesystem_path', datastore, source),
+                                self.dispatcher.call_sync('vm.datastore.get_filesystem_path', datastore, dest),
+                            )
 
         if progress_cb:
             progress_cb(100, 'Initializing VM files')
@@ -489,31 +515,49 @@ class VMBaseTask(ProgressTask):
             normalize(res['properties'], {'resolution': '1024x768'})
 
         if res['type'] == 'DISK':
-            vm_root_dir = os.path.join('vm', vm['name'])
+            vm_root_dir = os.path.join(VM_ROOT, vm['name'])
             dev_path = os.path.join(vm_root_dir, res['name'])
             properties = res['properties']
+            datastore = vm['target']
             normalize(properties, {
                 'mode': 'AHCI',
                 'target_type': 'ZVOL',
                 'target_path': res['name']
             })
-
-            if properties['target_type'] == 'ZVOL':
-                self.join_subtasks(self.run_subtask(
-                    'vm.datastore.block_device.create',
-                    vm['target'],
-                    dev_path,
-                    properties['size']
-                ))
-
+            cloning_supported = self.dispatcher.call_sync(
+                'vm.datastore.query',
+                [('id', '=', datastore)],
+                {'single': True, 'select': 'capabilities.clones'}
+            )
             if properties.get('source'):
-                self.join_subtasks(self.run_subtask(
+                source = os.path.join(CACHE_ROOT, vm['template']['name'], res['name'], res['name'])
+                if cloning_supported:
+                    self.run_subtask_sync(
+                        'vm.datastore.block_device.clone',
+                        datastore,
+                        source,
+                        dev_path
+                    )
+                else:
+                    copytree(
+                        self.dispatcher.call_sync('vm.datastore.get_filesystem_path', datastore, source),
+                        self.dispatcher.call_sync('vm.datastore.get_filesystem_path', datastore, dev_path),
+                    )
+                self.run_subtask_sync(
                     'vm.file.install',
                     vm['template']['name'],
                     properties['source'],
                     self.dispatcher.call_sync('vm.datastore.get_filesystem_path', vm['target'], dev_path),
                     progress_callback=progress_cb
-                ))
+                )
+            else:
+                if properties['target_type'] == 'ZVOL':
+                    self.join_subtasks(self.run_subtask(
+                        'vm.datastore.block_device.create',
+                        vm['target'],
+                        dev_path,
+                        properties['size']
+                    ))
 
         if res['type'] == 'NIC':
             normalize(res['properties'], {
@@ -585,23 +629,13 @@ class VMBaseTask(ProgressTask):
 
         if new_res['type'] == 'DISK':
             if old_properties['size'] != new_properties['size']:
-                if new_properties['target_type'] == 'ZVOL':
-                    ds_name = os.path.join(vm_root_dir, new_res['name'])
-                    self.run_subtask_sync(
-                        'vm.datastore.block_device.resize',
-                        vm['target'],
-                        ds_name,
-                        new_properties['size']
-                    )
-                else:
-                    os.truncate(
-                        self.dispatcher.call_sync(
-                            'vm.datastore.get_filesystem_path',
-                            vm['target'],
-                            vm_root_dir
-                        ),
-                        new_properties['size']
-                    )
+                path = os.path.join(vm_root_dir, new_res['name'])
+                self.run_subtask_sync(
+                    'vm.datastore.block_device.resize',
+                    vm['target'],
+                    path,
+                    new_properties['size']
+                )
 
         if new_res['type'] == 'NIC':
             brigde = new_properties.get('bridge', 'default')
@@ -662,17 +696,9 @@ class VMCreateTask(VMBaseTask):
         return resources
 
     def run(self, vm):
-        def collect_download_progress(percentage, message=None, extra=None):
-            split_message = message.split(' ')
-            self.set_progress(
-                percentage / 4,
-                'Downloading VM files: {0} {1}'.format(split_message[-2], split_message[-1]),
-                extra
-            )
-
         def collect_progress(static_message, start_percentage, percentage, message=None, extra=None):
             self.set_progress(
-                start_percentage + ((30 * (idx / devices_len)) + (0.3 * (percentage / devices_len))),
+                start_percentage + ((20 * (idx / devices_len)) + (0.2 * (percentage / devices_len))),
                 '{0} {1}'.format(static_message, message),
                 extra
             )
@@ -714,7 +740,7 @@ class VMCreateTask(VMBaseTask):
             self.join_subtasks(self.run_subtask(
                 'vm.cache.update',
                 vm['template']['name'],
-                progress_callback=collect_download_progress
+                progress_callback=lambda p, m, e: self.chunk_progress(0, 50, '', p, m, e)
             ))
         else:
             normalize(vm, {
@@ -743,14 +769,14 @@ class VMCreateTask(VMBaseTask):
         if not datastore:
             raise TaskException(errno.EINVAL, 'Datastore {0} not found'.format(vm['target']))
 
-        self.set_progress(25, 'Initializing VM root directory')
+        self.set_progress(50, 'Initializing VM root directory')
         self.init_root_dir(vm)
         devices_len = len(vm['devices'])
         for idx, res in enumerate(vm['devices']):
             res.pop('id', None)
-            self.create_device(vm, res, lambda p, m, e=None: collect_progress('Initializing VM devices:', 30, p, m, e))
+            self.create_device(vm, res, lambda p, m, e=None: collect_progress('Initializing VM devices:', 60, p, m, e))
 
-        self.init_files(vm, lambda p, m, e=None: self.chunk_progress(60, 90, 'Initializing VM files:', p, m, e))
+        self.init_files(vm, lambda p, m, e=None: self.chunk_progress(80, 90, 'Initializing VM files:', p, m, e))
 
         self.id = self.datastore.insert('vms', vm)
         self.dispatcher.dispatch_event('vm.changed', {
@@ -1533,27 +1559,32 @@ class VMSnapshotPublishTask(ProgressTask):
                 return ipfs_hash['Hash']
 
 
-@accepts(str)
+@accepts(str, str)
 @description('Caches VM files')
 class CacheFilesTask(ProgressTask):
     @classmethod
     def early_describe(cls):
         return 'Caching VM files'
 
-    def describe(self, name):
-        return TaskDescription('Caching VM files {name}', name=name or '')
+    def describe(self, name, datastore):
+        return TaskDescription('Caching VM files {name} on datastore {ds}', name=name or '', ds=datastore or '')
 
-    def verify(self, name):
-        return ['system-dataset']
+    def verify(self, name, datastore):
+        resources = ['system']
+        try:
+            resources = self.dispatcher.call_sync('vm.datastore.get_resources', datastore)
+        except RpcException:
+            pass
 
-    def run(self, name):
+        return resources
+
+    def run(self, name, datastore):
         def collect_progress(percentage, message=None, extra=None):
             self.set_progress(
-                (100 * (weight * idx)) + (percentage * weight),
+                (100 * (weight * idx)) + ((percentage * weight) / 2) + step_progress,
                 'Caching files: {0}'.format(message), extra
             )
 
-        cache_dir = self.dispatcher.call_sync('system_dataset.request_directory', 'vm_image_cache')
         template = self.dispatcher.call_sync(
             'vm.template.query',
             [('template.name', '=', name)],
@@ -1563,31 +1594,62 @@ class CacheFilesTask(ProgressTask):
             raise TaskException(errno.ENOENT, 'Template of VM {0} does not exist'.format(name))
 
         self.set_progress(0, 'Caching images')
+
+        if not self.dispatcher.call_sync('vm.datastore.directory_exists', datastore, CACHE_ROOT):
+            # Create cache root
+            self.run_subtask_sync('vm.datastore.directory.create', datastore, CACHE_ROOT)
+
+        if not self.dispatcher.call_sync('vm.datastore.directory_exists', datastore, os.path.join(CACHE_ROOT, name)):
+            # Create template root
+            self.run_subtask_sync('vm.datastore.directory.create', datastore, os.path.join(CACHE_ROOT, name))
+
+        cache_root_path = self.dispatcher.call_sync('vm.datastore.get_filesystem_path', datastore, CACHE_ROOT)
+
         res_cnt = len(template['template']['fetch'])
         weight = 1 / res_cnt
 
         for idx, res in enumerate(template['template']['fetch']):
             url = res['url']
             res_name = res['name']
-            destination = os.path.join(cache_dir, name, res_name)
+            destination = os.path.join(CACHE_ROOT, name, res_name)
             sha256 = res['sha256']
 
-            sha256_path = os.path.join(destination, 'sha256')
-            if os.path.isdir(destination):
+            if not self.dispatcher.call_sync('vm.datastore.directory_exists', datastore, destination):
+                root_dir_path = self.dispatcher.call_sync('vm.datastore.get_filesystem_path', datastore, destination)
+                sha256_path = os.path.join(root_dir_path, 'sha256')
                 if os.path.exists(sha256_path):
                     with open(sha256_path) as sha256_file:
                         if sha256_file.read() == sha256:
                             continue
             else:
-                os.makedirs(destination)
+                self.run_subtask_sync('vm.datastore.directory.create', datastore, destination)
 
-            self.join_subtasks(self.run_subtask(
-                'vm.file.download',
-                url,
-                sha256,
-                destination,
-                progress_callback=collect_progress
-            ))
+            device = first_or_default(
+                lambda o: q.get(o, 'properties.source') == res_name,
+                template['template']['devices'],
+                {}
+            )
+            size = q.get(device, 'properties.size')
+
+            with tempfile.TemporaryDirectory(dir=cache_root_path) as download_dir:
+                step_progress = 0
+                self.run_subtask_sync(
+                    'vm.file.download',
+                    url,
+                    sha256,
+                    datastore,
+                    download_dir,
+                    progress_callback=collect_progress
+                )
+                step_progress = weight / 2
+                self.run_subtask_sync(
+                    'vm.file.install',
+                    datastore,
+                    download_dir,
+                    os.path.join(destination, res_name),
+                    size,
+                    progress_callback=collect_progress
+                )
 
         self.set_progress(100, 'Cached images')
 
@@ -1629,20 +1691,26 @@ class FlushFilesTask(Task):
 
 
 @private
-@accepts(str, str, str)
+@accepts(str, str, str, str)
 @description('Downloads VM file')
 class DownloadFileTask(ProgressTask):
     @classmethod
     def early_describe(cls):
         return 'Downloading VM file'
 
-    def describe(self, url, sha256_hash, destination):
+    def describe(self, url, sha256_hash, datastore, destination):
         return TaskDescription('Downloading VM file {name}', name=url or '')
 
-    def verify(self, url, sha256_hash, destination):
-        return ['system-dataset']
+    def verify(self, url, sha256_hash, datastore, destination):
+        resources = ['system']
+        try:
+            resources = self.dispatcher.call_sync('vm.datastore.get_resources', datastore)
+        except RpcException:
+            pass
 
-    def run(self, url, sha256_hash, destination):
+        return resources
+
+    def run(self, url, sha256_hash, datastore, destination):
         done = 0
 
         @throttle(seconds=1)
@@ -1684,38 +1752,44 @@ class DownloadFileTask(ProgressTask):
 
 
 @private
-@accepts(str, str, str)
+@accepts(str, str, str, h.one_of(str, None))
 @description('Installs VM file')
 class InstallFileTask(ProgressTask):
     @classmethod
     def early_describe(cls):
         return 'Installing VM file'
 
-    def describe(self, name, res, destination):
+    def describe(self, datastore, source, destination, size):
         return TaskDescription(
-            'Installing VM file {name} in {destination}',
-            name=os.path.join(name, res) or '',
+            'Installing VM file from {name} in {destination}',
+            name=source or '',
             destination=destination or ''
         )
 
-    def verify(self, name, res, destination):
-        return ['system-dataset']
+    def verify(self, datastore, source, destination, size):
+        resources = ['system']
+        try:
+            resources = self.dispatcher.call_sync('vm.datastore.get_resources', datastore)
+        except RpcException:
+            pass
 
-    def run(self, name, res, destination):
+        return resources
+
+    def run(self, datastore, source, destination, size):
         self.set_progress(0, 'Installing file')
-        cache_dir = self.dispatcher.call_sync('system_dataset.request_directory', 'vm_image_cache')
-        files_path = os.path.join(cache_dir, name, res)
-        file_path = self.get_archive_path(files_path)
+        file_path = self.get_archive_path(source)
 
         if not file_path:
-            raise TaskException(errno.ENOENT, 'File {0} not found'.format(files_path))
+            raise TaskException(errno.ENOENT, 'Source directory {0} not found'.format(source))
 
         if file_path.endswith('tar.gz'):
-            shutil.unpack_archive(file_path, destination)
+            self.run_subtask_sync('vm.datastore.directory.create', datastore, destination)
+            destination_path = self.dispatcher.call_sync('vm.datastore.get_filesystem_path', datastore, destination)
+            shutil.unpack_archive(file_path, destination_path)
         else:
-            if os.path.isdir(destination):
-                destination = os.path.join(destination, res)
-            self.unpack_gzip(file_path, destination)
+            self.run_subtask_sync('vm.datastore.block_device.create', datastore, destination, size)
+            destination_path = self.dispatcher.call_sync('vm.datastore.get_filesystem_path', datastore, destination)
+            self.unpack_gzip(file_path, destination_path)
 
         self.set_progress(100, 'Finished')
 
@@ -1933,10 +2007,6 @@ def fetch_templates(dispatcher):
 
 def collect_debug(dispatcher):
     yield AttachDirectory('vm-templates', dispatcher.call_sync('system_dataset.request_directory', 'vm_templates'))
-    yield AttachCommandOutput(
-        'vm-images',
-        ['ls', '-LRl', dispatcher.call_sync('system_dataset.request_directory', 'vm_image_cache')]
-    )
     yield AttachData('vm-query', dumps(list(dispatcher.call_sync('vm.query')), indent=4))
     yield AttachData('vm-config', dumps(dispatcher.call_sync('vm.config.get_config'), indent=4))
     yield AttachData('vm-templates-query', dumps(list(dispatcher.call_sync('vm.template.query')), indent=4))
