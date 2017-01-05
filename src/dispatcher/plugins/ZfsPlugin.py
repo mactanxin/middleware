@@ -1220,6 +1220,34 @@ class ZfsSendTask(ZfsBaseTask):
 
 
 @private
+@description('Sends ZFS replication stream')
+class ZfsResumeSendTask(ZfsBaseTask):
+    @classmethod
+    def early_describe(cls):
+        return 'Sending resumed ZFS replication stream'
+
+    def describe(self, name, token, fd):
+        return TaskDescription(
+            'Sending resumed ZFS replication stream from {name}',
+            name=name
+        )
+
+    def run(self, name, token, fd):
+        try:
+            zfs = get_zfs()
+            obj = zfs.get_object(name)
+            obj.send_resume(self, fd.fd, token, flags={
+                libzfs.SendFlag.PROGRESS,
+                libzfs.SendFlag.PROPS
+            })
+        except libzfs.ZFSException as err:
+            raise TaskException(zfs_error_to_errno(err.code), str(err))
+        finally:
+            os.close(fd.fd)
+
+
+
+@private
 @description('Receives ZFS replication stream')
 class ZfsReceiveTask(Task):
     @classmethod
@@ -1846,6 +1874,7 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('zfs.clone', ZfsCloneTask)
     plugin.register_task_handler('zfs.rollback', ZfsRollbackTask)
     plugin.register_task_handler('zfs.send', ZfsSendTask)
+    plugin.register_task_handler('zfs.send_resume', ZfsResumeSendTask)
     plugin.register_task_handler('zfs.receive', ZfsReceiveTask)
 
     # Register debug hook
