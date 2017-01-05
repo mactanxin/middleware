@@ -432,6 +432,9 @@ def _metadata():
 
 
 def _init(dispatcher, plugin):
+    def on_snapshot_change(args):
+        pass
+
     plugin.register_provider('vm.datastore.volume', VolumeDatastoreProvider)
     plugin.register_task_handler('vm.datastore.volume.directory.create', VolumeDirectoryCreateTask)
     plugin.register_task_handler('vm.datastore.volume.directory.delete', VolumeDirectoryDeleteTask)
@@ -449,3 +452,4 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('vm.datastore.volume.block_device.snapshot.delete', VolumeSnapshotDeleteTask)
     plugin.register_task_handler('vm.datastore.volume.block_device.snapshot.rollback', VolumeSnapshotRollbackTask)
 
+    plugin.register_event_handler('volume.snapshot.changed', on_snapshot_change)
