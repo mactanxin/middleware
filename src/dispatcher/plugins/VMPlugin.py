@@ -1663,7 +1663,7 @@ class DeleteFilesTask(Task):
         return TaskDescription('Deleting cached VM {name} files', name=name)
 
     def verify(self, name):
-        return ['system-dataset']
+        return ['system']
 
     def run(self, name):
         cache_dir = self.dispatcher.call_sync('system_dataset.request_directory', 'vm_image_cache')
@@ -1681,7 +1681,7 @@ class FlushFilesTask(Task):
         return TaskDescription('Deleting VM files cache')
 
     def verify(self):
-        return ['system-dataset']
+        return ['system']
 
     def run(self):
         cache_dir = self.dispatcher.call_sync('system_dataset.request_directory', 'vm_image_cache')
