@@ -52,7 +52,6 @@ from freenas.dispatcher.rpc import SchemaHelper as h, description, accepts, retu
 from freenas.utils import first_or_default, normalize, deep_update, process_template, in_directory, sha256, query as q
 from utils import save_config, load_config, delete_config
 from freenas.utils.decorators import throttle
-from freenas.utils.copytree import copytree
 from debug import AttachData, AttachDirectory
 
 
