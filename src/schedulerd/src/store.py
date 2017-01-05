@@ -105,8 +105,11 @@ class FreeNASJobStore(BaseJobStore):
         schedule.pop('coalesce', None)
         next_run_time = None
 
-        if job_state['next_run_time']:
-            next_run_time = max(job_state['next_run_time'], int(time.time()))
+        if job_state['next_run_time'] == 1:
+            # This is hacky. We need to subtract more than value of misfire_grace_time
+            # so that the job will be missed right after loading it for the first time
+            # after doing fresh install instead of being executed.
+            next_run_time = int(time.time() - 1200)
 
         job = Job(
             id=job_state['id'],
@@ -127,7 +130,7 @@ class FreeNASJobStore(BaseJobStore):
 
         job.coalesce = True
         job.max_instances = 1
-        job.misfire_grace_time = 3600
+        job.misfire_grace_time = 600
         job._jobstore_alias = self._alias
         return job
 
