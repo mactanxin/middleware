@@ -217,35 +217,33 @@ class DockerImagesProvider(Provider):
 
             with self.update_collection_lock:
                 try:
-                    repos = hub.get_repositories(c)
+                    for i in hub.get_repositories(c):
+                        presets = None
+                        icon = None
+                        repo_name = '{0}/{1}'.format(i['user'], i['name'])
+
+                        if i['is_automated']:
+                            # Fetch dockerfile
+                            try:
+                                parser.content = hub.get_dockerfile(repo_name)
+                                presets = self.dispatcher.call_sync('containerd.docker.labels_to_presets', parser.labels)
+                            except:
+                                pass
+
+                        item = {
+                            'name': repo_name,
+                            'description': i['description'],
+                            'star_count': i['star_count'],
+                            'pull_count': i['pull_count'],
+                            'icon': icon,
+                            'presets': presets,
+                            'version': '0' if not presets else presets.get('version', '0')
+                        }
+                        items.append(item)
                 except TimeoutError as e:
                     raise RpcException(errno.ETIMEDOUT, e)
                 except ConnectionError as e:
                     raise RpcException(errno.ECONNABORTED, e)
-
-                for i in repos:
-                    presets = None
-                    icon = None
-                    repo_name = '{0}/{1}'.format(i['user'], i['name'])
-
-                    if i['is_automated']:
-                        # Fetch dockerfile
-                        try:
-                            parser.content = hub.get_dockerfile(repo_name)
-                            presets = self.dispatcher.call_sync('containerd.docker.labels_to_presets', parser.labels)
-                        except:
-                            pass
-
-                    item = {
-                        'name': repo_name,
-                        'description': i['description'],
-                        'star_count': i['star_count'],
-                        'pull_count': i['pull_count'],
-                        'icon': icon,
-                        'presets': presets,
-                        'version': '0' if not presets else presets.get('version', '0')
-                    }
-                    items.append(item)
 
                 collections.put(c, {
                     'update_time': datetime.now(),
