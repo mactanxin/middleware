@@ -87,7 +87,21 @@ class CreateSMBShareTask(Task):
             'vfs_objects': [],
             'hosts_allow': None,
             'hosts_deny': None,
-            'extra_parameters': {}
+            'extra_parameters': {},
+            'full_audit_prefix': '%u|%I|%m|%S',
+            'full_audit_priority': 'notice',
+            'full_audit_failure': 'connect',
+            'full_audit_success': 'open mkdir unlink rmdir rename',
+            'case_sensitive': 'auto',
+            'allocation_roundup_size': 1048576,
+            'ea_support': False,
+            'store_dos_attributes': False,
+            'map_archive': True,
+            'map_hidden': False,
+            'map_readonly': True,
+            'map_system': False,
+            'fruit_metadata': 'stream'
+
         })
 
         id = self.datastore.insert('shares', share)
@@ -263,6 +277,17 @@ def convert_share(dispatcher, ret, path, enabled, share):
     ret['nfs4:acedup'] = 'merge'
     ret['nfs4:chown'] = 'true'
     ret['zfsacl:acesort'] = 'dontcare'
+    ret['case sensitive'] = share['case_sensitive']
+    ret['allocation roundup size'] = str(share['allocation_roundup_size'])
+    ret['ea support'] = yesno(share.get('ea_support', False))
+    ret['store dos attributes'] = yesno(share.get('store dos attributes', False))
+    ret['map archive'] = yesno(share.get('map_archive', False))
+    ret['map hidden'] = yesno(share.get('map_hidden', False))
+    ret['map readonly'] = yesno(share.get('map_readonly', False))
+    ret['map system'] = yesno(share.get('map_system', False))
+
+    if 'fruit' in vfs_objects:
+        ret['fruit:metadata'] = share['fruit_metadata']
 
     if share.get('hosts_allow'):
         ret['hosts allow'] = ','.join(share['hosts_allow'])
@@ -278,6 +303,12 @@ def convert_share(dispatcher, ret, path, enabled, share):
         ret['recycle:directory_mode'] = '0777'
         ret['recycle:subdir_mode'] = '0700'
         vfs_objects.append('recycle')
+
+    if 'full_audit' in vfs_objects:
+        ret['full_audit:prefix'] = share['full_audit_prefix']
+        ret['full_audit:priority'] = share['full_audit_priority']
+        ret['full_audit:failure'] = share['full_audit_failure']
+        ret['full_audit:success'] = share['full_audit_success']
 
     if share.get('previous_versions'):
         try:
@@ -321,6 +352,19 @@ def _init(dispatcher, plugin):
             'recyclebin': {'type': 'boolean'},
             'show_hidden_files': {'type': 'boolean'},
             'previous_versions': {'type': 'boolean'},
+            'full_audit_prefix': {'type': 'string'},
+            'full_audit_priority': {'type': 'string'},
+            'full_audit_failure': {'type': 'string'},
+            'full_audit_success': {'type': 'string'},
+            'case_sensitive': {'type': 'string', 'enum': ['auto', 'yes', 'no']},
+            'allocation_roundup_size': {'type': 'integer'},
+            'ea_support': {'type': 'boolean'},
+            'store_dos_attributes': {'type': 'boolean'},
+            'map_archive': {'type': 'boolean'},
+            'map_hidden': {'type': 'boolean'},
+            'map_readonly': {'type': 'boolean'},
+            'map_system': {'type': 'boolean'},
+            'fruit_metadata': {'type': 'string', 'enum': ['stream', 'netatalk']},
             'vfs_objects': {
                 'type': 'array',
                 'items': {'type': 'string'}
