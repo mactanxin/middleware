@@ -313,7 +313,11 @@ class VMTemplateProvider(Provider):
             fetch_lock.release()
 
         templates_dir = self.dispatcher.call_sync('system_dataset.request_directory', 'vm_templates')
-        cache_dir = self.dispatcher.call_sync('system_dataset.request_directory', 'vm_image_cache')
+        datastores = self.dispatcher.call_sync('vm.datastore.query', [], {'select': 'id'})
+        cache_dirs = []
+        for d in datastores:
+            cache_dirs.append((d, self.dispatcher.call_sync('vm.datastore.get_filesystem_path', d, CACHE_ROOT)))
+
         templates = []
         for root, dirs, files in os.walk(templates_dir):
             if 'template.json' in files:
@@ -330,8 +334,11 @@ class VMTemplateProvider(Provider):
                         if template['template']['source'] == 'ipfs':
                             with open(os.path.join(root, 'hash')) as ipfs_hash:
                                 template['template']['hash'] = ipfs_hash.read()
-                        if os.path.isdir(os.path.join(cache_dir, template['template']['name'])):
-                            template['template']['cached'] = True
+
+                        template['template']['cached_on'] = []
+                        for d, c in cache_dirs:
+                            if os.path.isdir(os.path.join(c, template['template']['name'])):
+                                template['template']['cached_on'].append(d)
                         total_fetch_size = 0
                         for file in template['template']['fetch']:
                             total_fetch_size += file.get('size', 0)
