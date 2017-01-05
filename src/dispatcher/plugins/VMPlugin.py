@@ -98,10 +98,10 @@ class VMProvider(Provider):
             return self.dispatcher.call_sync(
                 'vm.datastore.get_filesystem_path',
                 vm['target'],
-                os.path.join(VM_ROOT, vm['name'])
+                get_vm_path(vm['name'])
             )
         else:
-            return os.path.join(VM_ROOT, vm['name'])
+            return get_vm_path(vm['name'])
 
     @private
     @accepts(str, str, bool)
@@ -401,7 +401,7 @@ class VMBaseTask(ProgressTask):
         self.vm_root_dir = None
 
     def init_root_dir(self, vm):
-        self.vm_root_dir = os.path.join(VM_ROOT, vm['name'])
+        self.vm_root_dir = get_vm_path(vm['name'])
 
         if not self.dispatcher.call_sync('vm.datastore.directory_exists', vm['target'], VM_ROOT):
             # Create VM root
@@ -496,7 +496,7 @@ class VMBaseTask(ProgressTask):
         if 'id' in vm:
             reserved_storage = self.dispatcher.call_sync('vm.get_reserved_storage', vm['id'])
             if res['type'] in ['VOLUME', 'DISK']:
-                new_path = os.path.join('vm', vm['name'], res['name'])
+                new_path = os.path.join(VM_ROOT, vm['name'], res['name'])
                 if new_path in reserved_storage:
                     raise TaskException(
                         errno.EEXIST,
@@ -512,7 +512,7 @@ class VMBaseTask(ProgressTask):
             normalize(res['properties'], {'resolution': '1024x768'})
 
         if res['type'] == 'DISK':
-            vm_root_dir = os.path.join(VM_ROOT, vm['name'])
+            vm_root_dir = get_vm_path(vm['name'])
             dev_path = os.path.join(vm_root_dir, res['name'])
             properties = res['properties']
             datastore = vm['target']
@@ -578,7 +578,7 @@ class VMBaseTask(ProgressTask):
 
         if res['type'] == 'VOLUME':
             properties = res['properties']
-            vm_root_dir = os.path.join('vm', vm['name'])
+            vm_root_dir = get_vm_path(vm['name'])
 
             normalize(res['properties'], {
                 'type': 'VT9P',
@@ -611,7 +611,7 @@ class VMBaseTask(ProgressTask):
             progress_cb(100, 'Creating {0}'.format(res['type'].lower()))
 
     def update_device(self, vm, old_res, new_res):
-        vm_root_dir = os.path.join(VM_ROOT, vm['name'])
+        vm_root_dir = get_vm_path(vm['name'])
         old_properties = old_res['properties']
         new_properties = new_res['properties']
 
@@ -787,7 +787,7 @@ class VMCreateTask(VMBaseTask):
             self.dispatcher.call_sync(
                 'vm.datastore.get_filesystem_path',
                 vm['target'],
-                os.path.join('vm', vm['name'])
+                get_vm_path(vm['name'])
             ),
             'vm-{0}'.format(vm['name']),
             vm
@@ -797,7 +797,7 @@ class VMCreateTask(VMBaseTask):
         return self.id
 
     def rollback(self, vm):
-        vm_root_dir = os.path.join('vm', vm['name'])
+        vm_root_dir = get_vm_path(vm['name'])
 
         if self.dispatcher.call_sync('vm.datastore.directory_exists', vm['target'], vm_root_dir):
             self.join_subtasks(self.run_subtask('vm.datastore.directory.delete', vm['target'], vm_root_dir))
@@ -840,7 +840,7 @@ class VMImportTask(VMBaseTask):
                 self.dispatcher.call_sync(
                     'vm.datastore.get_filesystem_path',
                     datastore,
-                    os.path.join('vm', name)
+                    get_vm_path(name)
                 ),
                 'vm-{0}'.format(name)
             )
@@ -960,7 +960,7 @@ class VMUpdateTask(VMBaseTask):
                 self.dispatcher.call_sync(
                     'vm.datastore.get_filesystem_path',
                     vm['target'],
-                    os.path.join('vm', vm['name'])
+                    get_vm_path(vm['name'])
                 ),
                 'vm-{0}'.format(vm['name'])
             )
@@ -972,8 +972,8 @@ class VMUpdateTask(VMBaseTask):
             raise TaskException(errno.EINVAL, 'Datastore {0} not found'.format(vm['target']))
 
         if 'name' in updated_params:
-            vm_root_dir = os.path.join(VM_ROOT, vm['name'])
-            new_vm_root_dir = os.path.join(VM_ROOT, updated_params['name'])
+            vm_root_dir = get_vm_path(vm['name'])
+            new_vm_root_dir = get_vm_path(updated_params['name'])
             self.run_subtask_sync('vm.datastore.directory.rename', vm['target'], vm_root_dir, new_vm_root_dir)
 
         old_vm = copy.deepcopy(vm)
@@ -1021,7 +1021,7 @@ class VMUpdateTask(VMBaseTask):
             self.dispatcher.call_sync(
                 'vm.datastore.get_filesystem_path',
                 vm['target'],
-                os.path.join('vm', vm['name'])
+                get_vm_path(vm['name'])
             ),
             'vm-{0}'.format(vm['name']),
             vm
@@ -1052,7 +1052,7 @@ class VMDeleteTask(Task):
                 self.dispatcher.call_sync(
                     'vm.datastore.get_filesystem_path',
                     vm['target'],
-                    os.path.join('vm', vm['name'])
+                    get_vm_path(vm['name'])
                 ),
                 'vm-{0}'.format(vm['name'])
             )
@@ -1976,7 +1976,7 @@ class VMTemplateDeleteTask(ProgressTask):
 
 
 def get_vm_path(name):
-    return os.path.join('vm', name)
+    return os.path.join(VM_ROOT, name)
 
 
 def get_readme(path):
