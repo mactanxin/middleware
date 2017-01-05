@@ -673,19 +673,22 @@ class VirtualMachine(object):
             self.vmtools_thread = gevent.spawn(self.vmtools_worker)
             self.output_thread = gevent.spawn(self.output_worker)
 
-            while True:
-                pid, status = self.waitpid()
-                if os.WIFSTOPPED(status):
-                    self.set_state(VirtualMachineState.PAUSED)
-                    continue
+            self.bhyve_process.wait()
 
-                if os.WIFCONTINUED(status):
-                    self.set_state(VirtualMachineState.RUNNING)
-                    continue
-
-                if os.WIFEXITED(status):
-                    self.logger.info('bhyve process exited with code {0}'.format(os.WEXITSTATUS(status)))
-                    break
+            # not yet - broken in gevent
+            # while True:
+            #    pid, status = self.waitpid()
+            #    if os.WIFSTOPPED(status):
+            #        self.set_state(VirtualMachineState.PAUSED)
+            #        continue
+            #
+            #    if os.WIFCONTINUED(status):
+            #        self.set_state(VirtualMachineState.RUNNING)
+            #        continue
+            #
+            #    if os.WIFEXITED(status):
+            #        self.logger.info('bhyve process exited with code {0}'.format(os.WEXITSTATUS(status)))
+            #        break
 
             with contextlib.suppress(OSError):
                 os.unlink(self.vmtools_socket)
@@ -707,7 +710,7 @@ class VirtualMachine(object):
             self.context.docker_hosts.pop(self.id, None)
 
     def waitpid(self):
-        return threadpool.apply(os.waitpid, args=(self.bhyve_process.pid, os.WUNTRACED | os.WCONTINUED))
+        return os.waitpid(self.bhyve_process.pid, os.WUNTRACED | os.WCONTINUED)
 
     def output_worker(self):
         for line in self.bhyve_process.stdout:
