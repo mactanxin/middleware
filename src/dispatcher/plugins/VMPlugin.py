@@ -472,7 +472,7 @@ class VMBaseTask(ProgressTask):
                     if f.get('dest'):
                         source = os.path.join(CACHE_ROOT, vm['template']['name'], f['name'], f['name'])
                         source_type = self.dispatcher.call_sync('vm.datastore.get_path_type', datastore, source)
-                        if cloning_supported and f['dest'] != '.':
+                        if cloning_supported and f['dest'] != '.' and source_type != 'FILE':
                             self.run_subtask_sync(
                                 'vm.datastore.{0}.clone'.format(source_type.lower()),
                                 datastore,
