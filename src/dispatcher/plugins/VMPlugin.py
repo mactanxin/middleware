@@ -150,7 +150,7 @@ class VMProvider(Provider):
 
         if device['type'] == 'VOLUME':
             if device['properties'].get('auto'):
-                return return_path(vm['target'], device['name'])
+                return return_path(vm['target'], os.path.join(VM_ROOT, vm['name'], device['name']))
 
             if local:
                 return device['properties']['destination']
