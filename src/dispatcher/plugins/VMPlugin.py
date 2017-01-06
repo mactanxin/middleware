@@ -1794,7 +1794,9 @@ class InstallFileTask(ProgressTask):
             destination_path = self.dispatcher.call_sync('vm.datastore.get_filesystem_path', datastore, destination)
             shutil.unpack_archive(file_path, destination_path)
         else:
-            self.run_subtask_sync('vm.datastore.block_device.create', datastore, destination, size)
+            if size:
+                self.run_subtask_sync('vm.datastore.block_device.create', datastore, destination, size)
+
             destination_path = self.dispatcher.call_sync('vm.datastore.get_filesystem_path', datastore, destination)
             self.unpack_gzip(file_path, destination_path)
 
