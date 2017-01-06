@@ -187,7 +187,7 @@ class VMProvider(Provider):
 
     @private
     @accepts(str)
-    @returns(str, h.array(str))
+    @returns(h.tuple(str, h.array(str)))
     def get_reserved_storage(self, id):
         vm_snapshots = self.dispatcher.call_sync('vm.snapshot.query', [('parent.id', '=', id)])
 
@@ -201,7 +201,7 @@ class VMProvider(Provider):
 
     @private
     @accepts(str)
-    @returns(str, h.array(str))
+    @returns(h.tuple(str, h.array(str)))
     def get_dependent_storage(self, id):
         vm = self.dispatcher.call_sync('vm.query', [('id', '=', id)], {'single': True})
         if not vm:
@@ -279,7 +279,7 @@ class VMSnapshotProvider(Provider):
 
     @private
     @accepts(str)
-    @returns(str, h.array(str))
+    @returns(h.tuple(str, h.array(str)))
     def get_dependent_storage(self, id):
         snapshot = self.dispatcher.call_sync('vm.snapshot.query', [('id', '=', id)], {'single': True})
         if not snapshot:
