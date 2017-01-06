@@ -1605,9 +1605,9 @@ class CacheFilesTask(ProgressTask):
             res_name = res['name']
             destination = os.path.join(CACHE_ROOT, name, res_name)
             sha256 = res['sha256']
+            root_dir_path = self.dispatcher.call_sync('vm.datastore.get_filesystem_path', datastore, destination)
 
             if self.dispatcher.call_sync('vm.datastore.directory_exists', datastore, destination):
-                root_dir_path = self.dispatcher.call_sync('vm.datastore.get_filesystem_path', datastore, destination)
                 sha256_path = os.path.join(root_dir_path, 'sha256')
                 if os.path.exists(sha256_path):
                     with open(sha256_path) as sha256_file:
@@ -1647,11 +1647,7 @@ class CacheFilesTask(ProgressTask):
                 step_progress = (100 * weight) / 2
                 shutil.copyfile(
                     os.path.join(download_dir, 'sha256'),
-                    self.dispatcher.call_sync(
-                        'vm.datastore.get_filesystem_path',
-                        datastore,
-                        os.path.join(destination, 'sha256')
-                    )
+                    os.path.join(root_dir_path, 'sha256')
                 )
                 self.run_subtask_sync(
                     'vm.file.install',
