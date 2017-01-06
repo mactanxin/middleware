@@ -1323,6 +1323,21 @@ def update_disk_cache(dispatcher, path):
             })
 
     persist_disk(dispatcher, disk)
+    # post this persist disk check to see if the 'smart' value in the databse
+    # (enabled or disabled) matches the actual disk's smart_enabled value and
+    # if not then make it so
+    ds_disk = dispatcher.datastore.get_by_id('disks', disk['id'])
+    if ds_disk['smart'] != disk['smart_info']['smart_enabled']:
+        device_smart_handle = Device(disk['gdisk_name'], abridged=True)
+        toggle_result = device_smart_handle.smart_toggle('on' if ds_disk['smart'] else 'off')
+        if not toggle_result[0]:
+            logger.debug(
+                "Tried to toggle {0}".format(path) +
+                " SMART enabled to: {0} and failed with error: {1}".format(
+                    ds_disk['smart'],
+                    toggle_result[1]
+                )
+            )
 
 
 def generate_disk_cache(dispatcher, path):
