@@ -86,7 +86,7 @@ class DatastoreProvider(Provider):
         return self.dispatcher.call_sync(
             'vm.datastore.{0}.directory_exists'.format(driver),
             datastore_id,
-            datastore_path
+            normpath(datastore_path)
         )
 
     @private
@@ -121,7 +121,7 @@ class DatastoreProvider(Provider):
         return self.dispatcher.call_sync(
             'vm.datastore.{0}.get_snapshots'.format(driver),
             datastore_id,
-            path
+            normpath(path)
         )
 
     @private
@@ -132,7 +132,7 @@ class DatastoreProvider(Provider):
         return self.dispatcher.call_sync(
             'vm.datastore.{0}.snapshot_exists'.format(driver),
             datastore_id,
-            path
+            normpath(path)
         )
 
     @private
@@ -140,7 +140,7 @@ class DatastoreProvider(Provider):
     @returns(h.ref('vm-datastore-path-type'))
     def get_path_type(self, id, path):
         driver = self.get_driver(id)
-        return self.dispatcher.call_sync('vm.datastore.{0}.get_path_type'.format(driver), id, path)
+        return self.dispatcher.call_sync('vm.datastore.{0}.get_path_type'.format(driver), id, normpath(path))
 
 
 class DatastoreBaseTask(ProgressTask):
@@ -341,8 +341,8 @@ class DirectoryCloneTask(DatastoreBaseTask):
         return self.run_subtask_sync_with_progress(
             'vm.datastore.{0}.directory.clone'.format(driver),
             id,
-            path,
-            new_path
+            normpath(path),
+            normpath(new_path)
         )
 
 
@@ -368,7 +368,7 @@ class DirectorySnapshotCreateTask(DatastoreBaseTask):
         return self.run_subtask_sync_with_progress(
             'vm.datastore.{0}.directory.snapshot.create'.format(driver),
             id,
-            path
+            normpath(path)
         )
 
 
@@ -390,7 +390,7 @@ class DirectorySnapshotDeleteTask(DatastoreBaseTask):
         return self.run_subtask_sync_with_progress(
             'vm.datastore.{0}.directory.snapshot.delete'.format(driver),
             id,
-            path
+            normpath(path)
         )
 
 
@@ -416,7 +416,7 @@ class DirectorySnapshotRollbackTask(DatastoreBaseTask):
         return self.run_subtask_sync_with_progress(
             'vm.datastore.{0}.directory.snapshot.rollback'.format(driver),
             id,
-            path
+            normpath(path)
         )
 
 
@@ -529,8 +529,8 @@ class BlockDeviceCloneTask(DatastoreBaseTask):
         return self.run_subtask_sync_with_progress(
             'vm.datastore.{0}.block_device.clone'.format(driver),
             id,
-            path,
-            new_path
+            normpath(path),
+            normpath(new_path)
         )
 
 
@@ -556,7 +556,7 @@ class BlockDeviceSnapshotCreateTask(DatastoreBaseTask):
         return self.run_subtask_sync_with_progress(
             'vm.datastore.{0}.block_device.snapshot.create'.format(driver),
             id,
-            path
+            normpath(path)
         )
 
 
@@ -578,7 +578,7 @@ class BlockDeviceSnapshotDeleteTask(DatastoreBaseTask):
         return self.run_subtask_sync_with_progress(
             'vm.datastore.{0}.block_device.snapshot.delete'.format(driver),
             id,
-            path
+            normpath(path)
         )
 
 
@@ -604,7 +604,7 @@ class BlockDeviceSnapshotRollbackTask(DatastoreBaseTask):
         return self.run_subtask_sync_with_progress(
             'vm.datastore.{0}.block_device.snapshot.rollback'.format(driver),
             id,
-            path
+            normpath(path)
         )
 
 
