@@ -525,7 +525,7 @@ class DiskConfigureTask(Task):
             if not disk_status['smart_info']['smart_capable']:
                 raise TaskException(errno.EINVAL, 'Disk is not SMART capable')
 
-            device_smart_handle = Device(disk_status['gdisk_name'], abridged=True)
+            device_smart_handle = Device(disk_status['gdisk_name'])
             if updated_fields['smart'] != device_smart_handle.smart_enabled:
                 toggle_result = device_smart_handle.smart_toggle(
                     'on' if updated_fields['smart'] else 'off'
@@ -1328,7 +1328,7 @@ def update_disk_cache(dispatcher, path):
     # if not then make it so
     ds_disk = dispatcher.datastore.get_by_id('disks', disk['id'])
     if ds_disk['smart'] != disk['smart_info']['smart_enabled']:
-        device_smart_handle = Device(disk['gdisk_name'], abridged=True)
+        device_smart_handle = Device(disk['gdisk_name'])
         toggle_result = device_smart_handle.smart_toggle('on' if ds_disk['smart'] else 'off')
         if not toggle_result[0]:
             logger.debug(
