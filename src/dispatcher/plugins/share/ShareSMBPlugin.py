@@ -100,7 +100,7 @@ class CreateSMBShareTask(Task):
             'map_hidden': False,
             'map_readonly': True,
             'map_system': False,
-            'fruit_metadata': 'stream'
+            'fruit_metadata': 'STREAM'
 
         })
 
@@ -287,7 +287,7 @@ def convert_share(dispatcher, ret, path, enabled, share):
     ret['map system'] = yesno(share['map_system'])
 
     if 'fruit' in vfs_objects:
-        ret['fruit:metadata'] = share['fruit_metadata']
+        ret['fruit:metadata'] = share['fruit_metadata'].lower()
 
     if share.get('hosts_allow'):
         ret['hosts allow'] = ','.join(share['hosts_allow'])
@@ -364,7 +364,7 @@ def _init(dispatcher, plugin):
             'map_hidden': {'type': 'boolean'},
             'map_readonly': {'type': 'boolean'},
             'map_system': {'type': 'boolean'},
-            'fruit_metadata': {'type': 'string', 'enum': ['stream', 'netatalk']},
+            'fruit_metadata': {'type': 'string', 'enum': ['STREAM', 'NETATALK']},
             'vfs_objects': {
                 'type': 'array',
                 'items': {'type': 'string'}
