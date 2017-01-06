@@ -737,6 +737,7 @@ class VMCreateTask(VMBaseTask):
             self.join_subtasks(self.run_subtask(
                 'vm.cache.update',
                 vm['template']['name'],
+                vm['target'],
                 progress_callback=lambda p, m, e: self.chunk_progress(0, 50, '', p, m, e)
             ))
         else:
