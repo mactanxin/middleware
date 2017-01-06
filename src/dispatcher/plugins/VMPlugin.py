@@ -1611,7 +1611,7 @@ class CacheFilesTask(ProgressTask):
             destination = os.path.join(CACHE_ROOT, name, res_name)
             sha256 = res['sha256']
 
-            if not self.dispatcher.call_sync('vm.datastore.directory_exists', datastore, destination):
+            if self.dispatcher.call_sync('vm.datastore.directory_exists', datastore, destination):
                 root_dir_path = self.dispatcher.call_sync('vm.datastore.get_filesystem_path', datastore, destination)
                 sha256_path = os.path.join(root_dir_path, 'sha256')
                 if os.path.exists(sha256_path):
