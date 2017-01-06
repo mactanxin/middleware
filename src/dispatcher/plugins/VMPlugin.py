@@ -1645,6 +1645,14 @@ class CacheFilesTask(ProgressTask):
                     progress_callback=collect_progress
                 )
                 step_progress = (100 * weight) / 2
+                shutil.copyfile(
+                    os.path.join(download_dir, 'sha256'),
+                    self.dispatcher.call_sync(
+                        'vm.datastore.get_filesystem_path',
+                        datastore,
+                        os.path.join(destination, 'sha256')
+                    )
+                )
                 self.run_subtask_sync(
                     'vm.file.install',
                     datastore,
