@@ -1618,8 +1618,10 @@ class CacheFilesTask(ProgressTask):
                     with open(sha256_path) as sha256_file:
                         if sha256_file.read() == sha256:
                             continue
-            else:
-                self.run_subtask_sync('vm.datastore.directory.create', datastore, destination)
+
+                self.run_subtask_sync('vm.datastore.directory.delete', datastore, destination)
+                
+            self.run_subtask_sync('vm.datastore.directory.create', datastore, destination)
 
             device = first_or_default(
                 lambda o: q.get(o, 'properties.source') == res_name,
