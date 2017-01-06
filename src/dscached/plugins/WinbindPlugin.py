@@ -242,7 +242,7 @@ class WinbindPlugin(DirectoryServicePlugin):
                                 if not du:
                                     continue
 
-                                self.domain_users_guid = uuid.UUID(bytes=du['attributes']['objectGUID'][0])
+                                self.domain_users_guid = uuid.UUID(du['attributes']['objectGUID'][0])
                                 self.user_dn = join_dn('CN=Users', self.base_dn)
                                 self.group_dn = join_dn(dn, self.base_dn)
                                 logger.debug('Group DN is {0}'.format(self.group_dn))
@@ -344,11 +344,11 @@ class WinbindPlugin(DirectoryServicePlugin):
 
             for r in self.search(self.group_dn, qstr):
                 r = dict(r['attributes'])
-                guid = uuid.UUID(bytes=get(r, 'objectGUID.0'))
+                guid = uuid.UUID(get(r, 'objectGUID.0'))
                 groups.append(str(guid))
 
         return {
-            'id': str(uuid.UUID(bytes=get(entry, 'objectGUID.0'))),
+            'id': str(uuid.UUID(get(entry, 'objectGUID.0'))),
             'sid': str(usersid),
             'uid': wbu.passwd.pw_uid,
             'builtin': False,
@@ -391,11 +391,11 @@ class WinbindPlugin(DirectoryServicePlugin):
 
             for r in self.search(self.group_dn, qstr):
                 r = dict(r['attributes'])
-                guid = uuid.UUID(bytes=get(r, 'objectGUID.0'))
+                guid = uuid.UUID(get(r, 'objectGUID.0'))
                 parents.append(str(guid))
 
         return {
-            'id': str(uuid.UUID(bytes=get(entry, 'objectGUID.0'))),
+            'id': str(uuid.UUID(get(entry, 'objectGUID.0'))),
             'sid': str(groupsid),
             'gid': wbg.group.gr_gid,
             'builtin': False,
