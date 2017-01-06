@@ -1620,8 +1620,17 @@ class CacheFilesTask(ProgressTask):
                         if sha256_file.read() == sha256:
                             continue
 
-                self.run_subtask_sync('vm.datastore.directory.delete', datastore, destination)
-                
+                idx = 0
+                while self.dispatcher.call_sync('vm.datastore.directory_exists', datastore, f'{destination}_old{idx}'):
+                    idx += 1
+
+                self.run_subtask_sync(
+                    'vm.datastore.directory.rename',
+                    datastore,
+                    destination,
+                    f'{destination}_old{idx}'
+                )
+
             self.run_subtask_sync('vm.datastore.directory.create', datastore, destination)
 
             device = first_or_default(
