@@ -1375,7 +1375,7 @@ class DockerService(RpcService):
                     result['volumes'].append({
                         'description': vol.get('descr'),
                         'container_path': vol['name'],
-                        'readonly': vol.get('readonly', False)
+                        'readonly': truefalse_to_bool(vol.get('readonly'))
                     })
 
         if labels.get('org.freenas.static-volumes'):
@@ -1388,7 +1388,11 @@ class DockerService(RpcService):
                     if any(v not in vol for v in ('container_path', 'host_path')):
                         continue
 
-                    result['volumes'].append(vol)
+                    result['static_volumes'].append({
+                        'container_path': vol.get('container_path'),
+                        'host_path': vol.get('host_path'),
+                        'readonly': truefalse_to_bool(vol.get('readonly'))
+                    })
 
         if labels.get('org.freenas.settings'):
             try:
