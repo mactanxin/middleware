@@ -296,7 +296,17 @@ class VolumeCloneTask(ProgressTask):
                 [('id', '~', '^{0}@vm-clone-'.format(dataset))],
                 {'count': True}
             )
-            snapshot_id = '{0}@vm-clone-{1}'.format(dataset, snap_cnt)
+            while True:
+                snapshot_id = '{0}@vm-clone-{1}'.format(dataset, snap_cnt)
+                snap_exists = self.dispatcher.call_sync(
+                    'volume.snapshot.query',
+                    [('id', '=', snapshot_id)],
+                    {'count': True}
+                )
+                if not snap_exists:
+                    break
+
+                snap_cnt += 1
 
             self.run_subtask_sync_with_progress(
                 'volume.snapshot.create',
