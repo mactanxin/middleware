@@ -529,7 +529,18 @@ class WinbindPlugin(DirectoryServicePlugin):
                 subprocess.call(['/usr/local/bin/net', 'ads', 'leave'])
                 raise RuntimeError(err.output.decode('utf-8'))
 
-            self.dc = self.wbc.ping_dc(self.realm)
+            # Retry few times in case samba haven't finished restarting yet
+            for _ in range(5):
+                try:
+                    self.dc = self.wbc.ping_dc(self.realm)
+                    break
+                except wbclient.WinbindException as err:
+                    if err.code == wbclient.WinbindErrorCode.WINBIND_NOT_AVAILABLE:
+                        time.sleep(1)
+                        continue
+
+                    raise
+
             self.domain_info = self.wbc.get_domain_info(self.realm)
             self.domain_name = self.wbc.interface.netbios_domain
 
