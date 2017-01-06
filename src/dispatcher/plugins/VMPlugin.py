@@ -1641,7 +1641,7 @@ class CacheFilesTask(ProgressTask):
                     download_dir,
                     progress_callback=collect_progress
                 )
-                step_progress = weight / 2
+                step_progress = (100 * weight) / 2
                 self.run_subtask_sync(
                     'vm.file.install',
                     datastore,
