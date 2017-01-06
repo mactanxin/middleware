@@ -21,7 +21,7 @@ EXTRACT_ONLY=
 NO_BUILD=	yes
 MAKE_JOBS_UNSAFE= yes
 WRKSRC=		/usr/migrate93_src
-WRKSRC_django= 	/usr/django_src
+WRKSRC_django= 	/usr/django1611_src
 
 checksum fetch:
 	${ECHO_CMD} ${.TARGET} not needed because building direct
