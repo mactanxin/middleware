@@ -103,9 +103,9 @@ class FreeNASJobStore(BaseJobStore):
     def _reconstitute_job(self, job_state):
         schedule = job_state['schedule']
         schedule.pop('coalesce', None)
-        next_run_time = None
+        next_run_time = job_state['next_run_time']
 
-        if job_state['next_run_time'] == 1:
+        if next_run_time == 1:
             # This is hacky. We need to subtract more than value of misfire_grace_time
             # so that the job will be missed right after loading it for the first time
             # after doing fresh install instead of being executed.
