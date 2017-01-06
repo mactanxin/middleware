@@ -1623,7 +1623,7 @@ class CacheFilesTask(ProgressTask):
 
             device = first_or_default(
                 lambda o: q.get(o, 'properties.source') == res_name,
-                template['template']['devices'],
+                template['devices'],
                 {}
             )
             size = q.get(device, 'properties.size')
