@@ -1759,7 +1759,7 @@ class DownloadFileTask(ProgressTask):
 
 
 @private
-@accepts(str, str, str, h.one_of(str, None))
+@accepts(str, str, str, h.one_of(int, None))
 @description('Installs VM file')
 class InstallFileTask(ProgressTask):
     @classmethod
