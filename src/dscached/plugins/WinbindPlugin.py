@@ -36,6 +36,7 @@ import logging
 import subprocess
 import errno
 import sid
+import time
 import contextlib
 from threading import Thread, Condition
 from datetime import datetime
@@ -242,7 +243,7 @@ class WinbindPlugin(DirectoryServicePlugin):
                                 if not du:
                                     continue
 
-                                self.domain_users_guid = uuid.UUID(du['attributes']['objectGUID'][0])
+                                self.domain_users_guid = uuid.UUID(du['attributes']['objectGUID'])
                                 self.user_dn = join_dn('CN=Users', self.base_dn)
                                 self.group_dn = join_dn(dn, self.base_dn)
                                 logger.debug('Group DN is {0}'.format(self.group_dn))
@@ -252,6 +253,7 @@ class WinbindPlugin(DirectoryServicePlugin):
                                 raise RuntimeError('Failed to fetch Domain Users')
 
                         except BaseException as err:
+                            logger.debug('Failure details', exc_info=True)
                             self.directory.put_status(errno.ENXIO, '{0} <{1}>'.format(str(err), type(err).__name__))
                             self.directory.put_state(DirectoryState.FAILURE)
                         else:
@@ -327,8 +329,8 @@ class WinbindPlugin(DirectoryServicePlugin):
             # not a user
             return
 
-        username = get(entry, 'sAMAccountName.0')
-        usersid = sid.sid(get(entry, 'objectSid.0'), sid.SID_BINARY)
+        username = get(entry, 'sAMAccountName')
+        usersid = get(entry, 'objectSid')
         groups = []
         wbu = self.wbc.get_user(name='{0}\\{1}'.format(self.realm, username))
 
@@ -344,17 +346,17 @@ class WinbindPlugin(DirectoryServicePlugin):
 
             for r in self.search(self.group_dn, qstr):
                 r = dict(r['attributes'])
-                guid = uuid.UUID(get(r, 'objectGUID.0'))
+                guid = uuid.UUID(get(r, 'objectGUID'))
                 groups.append(str(guid))
 
         return {
-            'id': str(uuid.UUID(get(entry, 'objectGUID.0'))),
+            'id': str(uuid.UUID(get(entry, 'objectGUID'))),
             'sid': str(usersid),
             'uid': wbu.passwd.pw_uid,
             'builtin': False,
             'username': username,
             'aliases': [wbu.passwd.pw_name],
-            'full_name': get(entry, 'name.0'),
+            'full_name': get(entry, 'name'),
             'email': None,
             'locked': False,
             'sudo': False,
@@ -374,8 +376,8 @@ class WinbindPlugin(DirectoryServicePlugin):
             # not a group
             return
 
-        groupname = get(entry, 'sAMAccountName.0')
-        groupsid = sid.sid(get(entry, 'objectSid.0'), sid.SID_BINARY)
+        groupname = get(entry, 'sAMAccountName')
+        groupsid = get(entry, 'objectSid')
         parents = []
         wbg = self.wbc.get_group(name='{0}\\{1}'.format(self.realm, groupname))
 
@@ -391,11 +393,11 @@ class WinbindPlugin(DirectoryServicePlugin):
 
             for r in self.search(self.group_dn, qstr):
                 r = dict(r['attributes'])
-                guid = uuid.UUID(get(r, 'objectGUID.0'))
+                guid = uuid.UUID(get(r, 'objectGUID'))
                 parents.append(str(guid))
 
         return {
-            'id': str(uuid.UUID(get(entry, 'objectGUID.0'))),
+            'id': str(uuid.UUID(get(entry, 'objectGUID'))),
             'sid': str(groupsid),
             'gid': wbg.group.gr_gid,
             'builtin': False,
@@ -545,6 +547,7 @@ class WinbindPlugin(DirectoryServicePlugin):
             self.domain_name = self.wbc.interface.netbios_domain
 
         except BaseException as err:
+            logger.debug('Failure details', exc_info=True)
             self.directory.put_status(errno.ENXIO, str(err))
             self.directory.put_state(DirectoryState.FAILURE)
             return False
