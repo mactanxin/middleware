@@ -593,14 +593,6 @@ class VMBaseTask(ProgressTask):
                                 ignore_errors=True
                             )
 
-                        self.join_subtasks(self.run_subtask(
-                            'vm.file.install',
-                            vm['template']['name'],
-                            properties['source'],
-                            self.dispatcher.call_sync('vm.datastore.get_filesystem_path', vm['target'], dir_path),
-                            progress_callback=progress_cb
-                        ))
-
         if progress_cb:
             progress_cb(100, 'Creating {0}'.format(res['type'].lower()))
 
