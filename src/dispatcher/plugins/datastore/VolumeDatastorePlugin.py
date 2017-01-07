@@ -454,7 +454,7 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('vm.datastore.volume.directory.snapshot.delete', VolumeSnapshotDeleteTask)
     plugin.register_task_handler('vm.datastore.volume.directory.snapshot.rollback', VolumeSnapshotRollbackTask)
     plugin.register_task_handler('vm.datastore.volume.block_device.create', VolumeBlockDeviceCreateTask)
-    plugin.register_task_handler('vm.datastore.volume.block_device.delete', VolumeBlockDeviceCreateTask)
+    plugin.register_task_handler('vm.datastore.volume.block_device.delete', VolumeBlockDeviceDeleteTask)
     plugin.register_task_handler('vm.datastore.volume.block_device.rename', VolumeBlockDeviceRenameTask)
     plugin.register_task_handler('vm.datastore.volume.block_device.resize', VolumeBlockDeviceResizeTask)
     plugin.register_task_handler('vm.datastore.volume.block_device.clone', VolumeCloneTask)
