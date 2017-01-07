@@ -1223,11 +1223,11 @@ class VMRebootTask(Task):
 
 
 class VMSnapshotBaseTask(Task):
-    def run_snapshot_task(self, task, datastore, snapshot_id, devices):
+    def run_snapshot_task(self, task, id, datastore, snapshot_id, devices):
         subtasks = []
         for d in devices:
             if d['type'] in ('DISK', 'VOLUME'):
-                path = self.dispatcher.call_sync('vm.get_device_path', datastore, d['name'], False)
+                path = self.dispatcher.call_sync('vm.get_device_path', id, d['name'], False)
                 if path:
                     subtasks.append(self.run_subtask(
                         'vm.datastore.{0}.snapshot.{1}'.format(convert_device_type(d), task),
@@ -1272,6 +1272,7 @@ class VMSnapshotRollbackTask(VMSnapshotBaseTask):
 
         self.run_snapshot_task(
             'rollback',
+            vm['id'],
             snapshot['parent']['target'],
             snapshot_id,
             snapshot['parent']['devices']
@@ -1333,7 +1334,7 @@ class VMSnapshotCreateTask(VMSnapshotBaseTask):
             'parent': vm
         }
 
-        self.run_snapshot_task('create', vm['target'], snapshot_id, vm['devices'])
+        self.run_snapshot_task('create', vm['id'], vm['target'], snapshot_id, vm['devices'])
 
         self.datastore.insert('vm.snapshots', snapshot)
         self.dispatcher.dispatch_event('vm.snapshot.changed', {
@@ -1410,7 +1411,7 @@ class VMSnapshotDeleteTask(VMSnapshotBaseTask):
                 if not self.dispatcher.call_sync('vm.datastore.snapshot_exists', datastore, snap_path):
                     devices.remove(d)
 
-        self.run_snapshot_task('delete', snapshot['parent']['target'], id, devices)
+        self.run_snapshot_task('delete', vm_id, snapshot['parent']['target'], id, devices)
 
         datastore, new_reserved_storage = self.dispatcher.call_sync('vm.get_reserved_storage', vm_id)
 
