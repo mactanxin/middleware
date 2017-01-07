@@ -1414,8 +1414,11 @@ class VMSnapshotDeleteTask(VMSnapshotBaseTask):
         self.run_snapshot_task('delete', vm_id, snapshot['parent']['target'], id, devices)
 
         _, new_reserved_storage = self.dispatcher.call_sync('vm.get_reserved_storage', vm_id)
+        _, dependent_storage = self.dispatcher.call_sync('vm.get_dependent_storage', vm_id)
 
-        released_storage = [d for d in reserved_storage if d not in new_reserved_storage]
+        required_storage = list(set(new_reserved_storage + dependent_storage))
+
+        released_storage = [d for d in reserved_storage if d not in required_storage]
         subtasks = []
         for path in released_storage:
             path_type = self.dispatcher.call_sync('vm.datastore.get_path_type', datastore, path)
