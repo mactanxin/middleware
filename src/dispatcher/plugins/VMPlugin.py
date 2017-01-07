@@ -214,7 +214,7 @@ class VMProvider(Provider):
         dependent_storage = [root_dir]
         for d in devices:
             if d['type'] in ('DISK', 'VOLUME'):
-                dependent_storage.append(os.path.join(root_dir, d))
+                dependent_storage.append(os.path.join(root_dir, d['name']))
 
         return vm['target'], dependent_storage
 
@@ -292,7 +292,7 @@ class VMSnapshotProvider(Provider):
         dependent_storage = [root_dir]
         for d in devices:
             if d['type'] in ('DISK', 'VOLUME'):
-                dependent_storage.append(os.path.join(root_dir, d))
+                dependent_storage.append(os.path.join(root_dir, d['name']))
 
         return snapshot['parent']['target'], dependent_storage
 
