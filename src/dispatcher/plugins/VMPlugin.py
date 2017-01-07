@@ -573,6 +573,7 @@ class VMBaseTask(ProgressTask):
         if res['type'] == 'VOLUME':
             properties = res['properties']
             vm_root_dir = get_vm_path(vm['name'])
+            datastore = vm['target']
 
             normalize(res['properties'], {
                 'type': 'VT9P',
@@ -582,16 +583,42 @@ class VMBaseTask(ProgressTask):
             if properties['type'] == 'VT9P':
                 if properties.get('auto'):
                     dir_path = os.path.join(vm_root_dir, res['name'])
-                    dir_exists = self.dispatcher.call_sync('vm.datastore.directory_exists', vm['target'], dir_path)
-                    if not dir_exists:
-                        self.join_subtasks(self.run_subtask('vm.datastore.directory.create', vm['target'], dir_path))
+                    dir_exists = self.dispatcher.call_sync('vm.datastore.directory_exists', datastore, dir_path)
+                    if not dir_exists and not properties.get('source'):
+                        self.join_subtasks(self.run_subtask('vm.datastore.directory.create', datastore, dir_path))
 
                     if properties.get('source'):
+                        cloning_supported = self.dispatcher.call_sync(
+                            'vm.datastore.query',
+                            [('id', '=', datastore)],
+                            {'single': True, 'select': 'capabilities.clones'}
+                        )
+                        source = os.path.join(CACHE_ROOT, vm['template']['name'], res['name'], res['name'])
                         if dir_exists:
                             shutil.rmtree(
-                                self.dispatcher.call_sync('vm.datastore.get_filesystem_path', vm['target'], dir_path),
+                                self.dispatcher.call_sync('vm.datastore.get_filesystem_path', datastore, dir_path),
                                 ignore_errors=True
                             )
+                        else:
+                            if cloning_supported:
+                                self.run_subtask_sync(
+                                    'vm.datastore.directory.clone',
+                                    datastore,
+                                    source,
+                                    dir_path
+                                )
+                                return
+                            else:
+                                self.run_subtask_sync(
+                                    'vm.datastore.directory.create',
+                                    datastore,
+                                    dir_path
+                                )
+
+                        copytree(
+                            self.dispatcher.call_sync('vm.datastore.get_filesystem_path', datastore, source),
+                            self.dispatcher.call_sync('vm.datastore.get_filesystem_path', datastore, dir_path),
+                        )
 
         if progress_cb:
             progress_cb(100, 'Creating {0}'.format(res['type'].lower()))
