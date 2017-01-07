@@ -25,10 +25,19 @@
 #
 #####################################################################
 
+import sys
 import curses
 from bsd import sysctl
 from threading import Condition
 from freenas.serviced import subscribe
+
+
+CRITICAL_JOBS = [
+    'org.freebsd.devd',
+    'org.freenas.datastore',
+    'org.freenas.dispatcher',
+    'org.freenas.etcd'
+]
 
 
 class VerboseFrontend(object):
@@ -86,6 +95,7 @@ class Main(object):
     def __init__(self):
         self.cv = Condition()
         self.exiting = False
+        self.failed_job = None
         self.msg = 'Loading...'
         with open('/etc/version', 'r') as f:
             self.version = f.read().strip()
@@ -104,6 +114,11 @@ class Main(object):
 
             if name == 'serviced.job.status':
                 self.msg = '{0}: {1}'.format(args['Label'], args['Message'])
+                self.cv.notify_all()
+
+            if name == 'serviced.job.error' and args['Label'] in CRITICAL_JOBS:
+                self.exiting = True
+                self.failed_job = args['Label']
                 self.cv.notify_all()
 
     def select_frontend(self):
@@ -128,6 +143,10 @@ class Main(object):
         finally:
             frontend.cleanup()
 
+        if self.failed_job:
+            print('Critical system job {0} failed to start.')
+            print('Dropping into single user mode')
+            sys.exit(1)
 
 if __name__ == '__main__':
     m = Main()
