@@ -157,6 +157,8 @@ def configure_params(smb, ad=False):
             conf['interfaces'] = ' '.join(['127.0.0.1'] + smb['bind_addresses'])
 
         conf['server string'] = smb['description']
+        conf['server max protocol'] = smb['max_protocol']
+        conf['server min protocol'] = smb['min_protocol']
         conf['encrypt passwords'] = 'yes'
         conf['dns proxy'] = 'no'
         conf['strict locking'] = 'no'
