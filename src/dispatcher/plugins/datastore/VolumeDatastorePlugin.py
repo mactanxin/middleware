@@ -342,7 +342,7 @@ class VolumeSnapshotCreateTask(ProgressTask):
         if not self.dispatcher.call_sync('volume.dataset.query', [('id', '=', source_ds)], {'count': True}):
             raise TaskException(errno.ENOENT, 'Dataset {0} not found'.format(source_ds))
 
-        metadata = {'org.freenas:vm_snapshot': {'value': str(vm_snap_id)}}
+        metadata = {'org.freenas:vm_snapshot': str(vm_snap_id)}
         snap_cnt = self.dispatcher.call_sync(
             'volume.snapshot.query',
             [('dataset', '=', source_ds), ('metadata', 'contains', 'org.freenas:vm_snapshot')],
