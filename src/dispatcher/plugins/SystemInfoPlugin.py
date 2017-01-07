@@ -615,6 +615,7 @@ def collect_debug(dispatcher):
     yield AttachCommandOutput('dmesg', ['/sbin/dmesg', '-a'])
     yield AttachCommandOutput('procstat', ['/usr/bin/procstat', '-akk'])
     yield AttachCommandOutput('vmstat', ['/usr/bin/vmstat', '-i'])
+    yield AttachCommandOutput('dmidecode', ['/usr/local/sbin/dmidecode'])
     yield AttachData('version', dispatcher.call_sync('system.info.version'))
 
 
