@@ -2712,11 +2712,19 @@ class SnapshotCloneTask(Task):
         return ['zfs:{0}'.format(ds)]
 
     def run(self, name, new_name):
-        self.join_subtasks(self.run_subtask(
+        self.run_subtask_sync(
             'zfs.clone',
             name,
             new_name
-        ))
+        )
+
+        type = self.dispatcher.call_sync(
+            'volume.dataset.query',
+            [('id', '=', new_name)],
+            {'select': 'type', 'single': True}
+        )
+        if type == 'FILESYSTEM':
+            self.run_subtask_sync('zfs.mount', new_name)
 
 
 @description("Returns filesystem to the specified snapshot state")
