@@ -109,9 +109,17 @@ class CreateSMBShareTask(Task):
 
         try:
             smb_conf = smbconf.SambaConfig('registry')
-            smb_share = smbconf.SambaShare()
-            convert_share(self.dispatcher, smb_share, path, share['enabled'], share['properties'])
-            smb_conf.shares[share['name']] = smb_share
+            smb_conf.transaction_start()
+            try:
+                smb_share = smbconf.SambaShare()
+                convert_share(self.dispatcher, smb_share, path, share['enabled'], share['properties'])
+                smb_conf.shares[share['name']] = smb_share
+            except BaseException as err:
+                smb_conf.transaction_cancel()
+                raise TaskException(errno.EBUSY, 'Failed to update samba configuration: {0}', err)
+            else:
+                smb_conf.transaction_commit()
+
             reload_samba()
         except smbconf.SambaConfigException:
             raise TaskException(errno.EFAULT, 'Cannot access samba registry')
@@ -149,14 +157,22 @@ class UpdateSMBShareTask(Task):
 
         try:
             smb_conf = smbconf.SambaConfig('registry')
-            if oldname != newname:
-                del smb_conf.shares[oldname]
-                smb_share = smbconf.SambaShare()
-                smb_conf.shares[newname] = smb_share
+            smb_conf.transaction_start()
+            try:
+                if oldname != newname:
+                    del smb_conf.shares[oldname]
+                    smb_share = smbconf.SambaShare()
+                    smb_conf.shares[newname] = smb_share
 
-            smb_share = smb_conf.shares[newname]
-            convert_share(self.dispatcher, smb_share, path, share['enabled'], share['properties'])
-            smb_share.save()
+                smb_share = smb_conf.shares[newname]
+                convert_share(self.dispatcher, smb_share, path, share['enabled'], share['properties'])
+                smb_share.save()
+            except BaseException as err:
+                smb_conf.transaction_cancel()
+                raise TaskException(errno.EBUSY, 'Failed to update samba configuration: {0}', err)
+            else:
+                smb_conf.transaction_commit()
+
             reload_samba()
 
             if not share['enabled']:
@@ -191,7 +207,14 @@ class DeleteSMBShareTask(Task):
 
         try:
             smb_conf = smbconf.SambaConfig('registry')
-            del smb_conf.shares[share['name']]
+            smb_conf.transaction_start()
+            try:
+                del smb_conf.shares[share['name']]
+            except BaseException as err:
+                smb_conf.transaction_cancel()
+                raise TaskException(errno.EBUSY, 'Failed to update samba configuration: {0}', err)
+            else:
+                smb_conf.transaction_commit()
 
             reload_samba()
             drop_share_connections(share['name'])
@@ -269,7 +292,7 @@ def convert_share(dispatcher, ret, path, enabled, share):
     ret['available'] = yesno(enabled)
     ret['guest ok'] = yesno(share['guest_ok'])
     ret['guest only'] = yesno(share['guest_only'])
-    ret['read only'] = yesno(['read_only'])
+    ret['read only'] = yesno(share['read_only'])
     ret['browseable'] = yesno(share['browseable'])
     ret['hide dot files'] = yesno(not share['show_hidden_files'])
     ret['printable'] = 'no'
@@ -394,10 +417,17 @@ def _init(dispatcher, plugin):
 
     # Sync samba registry with our database
     smb_conf = smbconf.SambaConfig('registry')
-    smb_conf.shares.clear()
+    smb_conf.transaction_start()
+    try:
+        smb_conf.shares.clear()
 
-    for s in dispatcher.datastore.query_stream('shares', ('type', '=', 'smb')):
-        smb_share = smbconf.SambaShare()
-        path = dispatcher.call_sync('share.translate_path', s['id'])
-        convert_share(dispatcher, smb_share, path, s['enabled'], s.get('properties', {}))
-        smb_conf.shares[s['name']] = smb_share
+        for s in dispatcher.datastore.query_stream('shares', ('type', '=', 'smb')):
+            smb_share = smbconf.SambaShare()
+            path = dispatcher.call_sync('share.translate_path', s['id'])
+            convert_share(dispatcher, smb_share, path, s['enabled'], s.get('properties', {}))
+            smb_conf.shares[s['name']] = smb_share
+    except BaseException as err:
+        logger.error('Failed to update samba registry: {0}'.format(err))
+        smb_conf.transaction_cancel()
+    else:
+        smb_conf.transaction_commit()
