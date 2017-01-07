@@ -1,5 +1,0 @@
-{
-	"Label": "org.freenas.middleware.datastore",
-	"Program": "/usr/local/sbin/dsinit",
-	"RunAtLoad": true
-}
