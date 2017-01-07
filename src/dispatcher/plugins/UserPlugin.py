@@ -574,7 +574,10 @@ class UserUpdateTask(Task):
                 {'single': True}
             )
             homedir_mount_path = os.path.join('/', *(updated_fields['home'].split(os.path.sep)[:-1]))
-            user_gid = self.datastore.get_by_id('groups', user['group'])['gid']
+
+
+            user_gid = self.datastore.get_by_id('groups', user['group'])
+            user_gid = user_gid['gid'] if user_gid else 0
 
             if user['home'] != updated_fields['home']:
 
