@@ -29,25 +29,22 @@
 # If console is marked "insecure", then init will ask for the root password
 # when going to single-user mode.
 <%
-    import subprocess
+    import os
+    import contextlib
+    from bsd import sysctl
+    from freenas.utils import first_or_default
 
     adv = dispatcher.call_sync('system.advanced.get_config')
     serial = 'on' if adv.get('serial_console') else 'off'
-    try:
+
+    with contextlib.suppress(OSError):
         os.unlink('/dev/sercons')
-    except:
-        pass
+
     if serial == 'on':
-        proc = subprocess.Popen(
-            "conscontrol | grep Configured | cut -f 2 -d \  | tr , \\\\n | grep -vE 'ttyv[0-9]+' |head -n 1",
-            shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        sercons = proc.communicate()[0].decode('utf8').strip(' ').strip('\n')
-        if not sercons:
-            sercons = 'ttyu0'
-        try:
-            os.symlink(sercons, '/dev/sercons')
-        except:
-            pass
+        configured, _ = sysctl.sysctlbyname('kern.console').split('/')
+        sercons = first_or_default(lambda p: p.startswith('ttyu'), configured.split(','))
+        with contextlib.suppress(OSError):
+            os.symlink(sercons or 'ttyu0', '/dev/sercons')
 %>\
 console	none				unknown	off secure
 #
