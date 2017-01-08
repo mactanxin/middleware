@@ -551,7 +551,7 @@ class ConfigurationService(RpcService):
 
         # Now the static routes...
         old_routes = set(static_routes)
-        new_routes = set([convert_route(e) for e in self.datastore.query('network.routes')])
+        new_routes = set(convert_route(e) for e in self.datastore.query('network.routes'))
 
         for i in old_routes - new_routes:
             self.logger.info('Removing static route to {0}'.format(describe_route(i)))
@@ -694,7 +694,7 @@ class ConfigurationService(RpcService):
                         iface.remove_address(i)
 
                     self.logger.info('Trying to acquire DHCP lease on interface {0}...'.format(name))
-                    if not self.context.configure_dhcp(name):
+                    if not self.context.configure_dhcp(name, True, INITIAL_DHCP_TIMEOUT):
                         yield errno.ENETUNREACH, 'Failed to configure interface {0} using DHCP'.format(name)
             else:
                 if name in self.context.dhcp_clients:
