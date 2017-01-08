@@ -1225,15 +1225,24 @@ class VMRebootTask(Task):
 class VMSnapshotBaseTask(Task):
     def run_snapshot_task(self, task, id, datastore, snapshot_id, devices):
         subtasks = []
+        disk_paths = []
+
+        vm_root_path = self.dispatcher.call_sync('vm.get_vm_root', id, False)
+
         for d in devices:
-            if d['type'] in ('DISK', 'VOLUME'):
-                path = self.dispatcher.call_sync('vm.get_device_path', id, d['name'], False)
-                if path:
-                    subtasks.append(self.run_subtask(
-                        'vm.datastore.{0}.snapshot.{1}'.format(convert_device_type(d), task),
-                        datastore,
-                        f'{path}@{snapshot_id}'
-                    ))
+            if d['type'] == 'DISK':
+                disk_paths.append(self.dispatcher.call_sync('vm.get_device_path', id, d['name'], False))
+
+        for p in self.dispatcher.call_sync('vm.datastore.list_dirs', datastore, vm_root_path):
+            type = 'directory'
+            if p in disk_paths:
+                type = 'block_device'
+
+            subtasks.append(self.run_subtask(
+                'vm.datastore.{0}.snapshot.{1}'.format(type, task),
+                datastore,
+                f'{p}@{snapshot_id}'
+            ))
 
         self.join_subtasks(*subtasks)
 
