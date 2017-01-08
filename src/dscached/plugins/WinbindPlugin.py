@@ -441,7 +441,7 @@ class WinbindPlugin(DirectoryServicePlugin):
             logger.debug('getpwuuid: not joined')
             return
 
-        guid = ldap3.utils.conv.escape_bytes(uuid.UUID(id).bytes)
+        guid = ldap3.utils.conv.escape_bytes(uuid.UUID(id).bytes_le)
         return self.convert_user(self.search_one(self.user_dn, '(objectGUID={0})'.format(guid)))
 
     def getpwnam(self, name):
@@ -487,7 +487,7 @@ class WinbindPlugin(DirectoryServicePlugin):
             logger.debug('getgruuid: not joined')
             return
 
-        guid = ldap3.utils.conv.escape_bytes(uuid.UUID(id).bytes)
+        guid = ldap3.utils.conv.escape_bytes(uuid.UUID(id).bytes_le)
         return self.convert_group(self.search_one(self.group_dn, '(objectGUID={0})'.format(guid)))
 
     def getgrgid(self, gid):
