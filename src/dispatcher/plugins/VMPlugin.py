@@ -1222,6 +1222,58 @@ class VMRebootTask(Task):
             raise TaskException(err.code, err.message)
 
 
+@accepts(str, str)
+@returns(str)
+@description('Clones a VM')
+class VMCloneTask(Task):
+    @classmethod
+    def early_describe(cls):
+        return 'Cloning a VM'
+
+    def describe(self, id, new_name):
+        vm = self.datastore.get_by_id('vms', id)
+        return TaskDescription(
+            'Cloning the VM {name} to {new_name}',
+            name=vm.get('name', '') if vm else '',
+            new_name=new_name
+        )
+
+    def verify(self, id, new_name):
+        return ['system']
+
+    def run(self, id, new_name):
+        vm = self.datastore.get_by_id('vms', id)
+        if not vm:
+            raise TaskException(errno.ENOENT, 'VM {0} does not exist'.format(id))
+
+        if self.datastore.exists('vms', ('name', '=', new_name)):
+            raise TaskException(errno.EEXIST, 'VM {0} already exists'.format(new_name))
+
+        state = self.dispatcher.call_sync('vm.query', [('id', '=', id)], {'select': 'status.state', 'single': True})
+        if state != 'STOPPED':
+            raise TaskException(errno.EACCES, 'Cannot clone a running VM')
+
+        snap_cnt = self.dispatcher.call_sync(
+            'vm.snapshot.query',
+            [('id', '=', id)],
+            {'count': True}
+        )
+        while True:
+            snap_name = 'vm-clone-{0}-{1}'.format(new_name, snap_cnt)
+            snap_exists = self.dispatcher.call_sync(
+                'vm.snapshot.query',
+                [('name', '=', snap_name)],
+                {'count': True}
+            )
+            if not snap_exists:
+                break
+
+            snap_cnt += 1
+
+        snap_id = self.run_subtask_sync('vm.snapshot.create', id, snap_name, '{0} -> {1}'.format(vm['name'], new_name))
+        return self.run_subtask_sync('vm.snapshot.clone', snap_id, new_name)
+
+
 class VMSnapshotBaseTask(Task):
     def run_snapshot_task(self, task, id, datastore, snapshot_id, devices, extra=None):
         subtasks = []
@@ -2482,6 +2534,7 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('vm.start', VMStartTask)
     plugin.register_task_handler('vm.stop', VMStopTask)
     plugin.register_task_handler('vm.reboot', VMRebootTask)
+    plugin.register_task_handler('vm.clone', VMCloneTask)
     plugin.register_task_handler('vm.snapshot.create', VMSnapshotCreateTask)
     plugin.register_task_handler('vm.snapshot.update', VMSnapshotUpdateTask)
     plugin.register_task_handler('vm.snapshot.delete', VMSnapshotDeleteTask)
