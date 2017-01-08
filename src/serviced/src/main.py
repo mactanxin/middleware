@@ -486,6 +486,10 @@ class JobService(RpcService):
         if wait:
             self.wait(name_or_id, (JobState.STOPPED, JobState.ERROR))
 
+    def restart(self, name_or_id):
+        self.stop(name_or_id, True)
+        self.start(name_or_id, True)
+
     def get(self, name_or_id):
         with self.context.lock:
             job = first_or_default(lambda j: j.label == name_or_id or j.id == name_or_id, self.context.jobs.values())
