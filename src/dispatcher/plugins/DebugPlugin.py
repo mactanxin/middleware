@@ -33,7 +33,7 @@ import logging
 from freenas.dispatcher.rpc import RpcException, SchemaHelper as h, description, accepts, returns, private
 from freenas.dispatcher.fd import FileDescriptor
 from lib.system import system, SubprocessException
-from debug import AttachCommandOutput
+from debug import AttachCommandOutput, AttachDirectory
 from task import (
     Provider, Task, ProgressTask, TaskWarning, TaskDescription, ValidationException, TaskException
 )
@@ -48,17 +48,17 @@ class RemoteDebugProvider(Provider):
 
 
 @private
-@accepts(FileDescriptor)
+@accepts(FileDescriptor, bool)
 @description('Collects debug information')
 class CollectDebugTask(ProgressTask):
     @classmethod
     def early_describe(cls):
         return 'Collecting debug data'
 
-    def describe(self, fd):
+    def describe(self, fd, include_cores=False):
         return TaskDescription('Collecting debug data')
 
-    def verify(self, fd):
+    def verify(self, fd, include_cores=False):
         return ['system']
 
     def process_hook(self, cmd, plugin, tar):
@@ -105,7 +105,7 @@ class CollectDebugTask(ProgressTask):
                     exc_info=True
                 )
 
-    def run(self, fd):
+    def run(self, fd, include_cores=False):
         try:
             with os.fdopen(fd.fd, 'wb') as f:
                 with tarfile.open(fileobj=f, mode='w:gz', dereference=True) as tar:
@@ -128,6 +128,17 @@ class CollectDebugTask(ProgressTask):
                             self.process_hook(hook, plugin, tar)
 
                         done += 1
+
+                    # If include_cores was set, attach stuff from /var/db/system/cores
+                    if include_cores:
+                        hook = {
+                            'type': 'AttachDirectory',
+                            'name': 'cores',
+                            'path': '/var/db/system/cores',
+                            'recursive': True
+                        }
+
+                        self.process_hook(hook, 'UserCores', tar)
 
         except BrokenPipeError as err:
             raise TaskException(errno.EPIPE, 'The download timed out') from err
