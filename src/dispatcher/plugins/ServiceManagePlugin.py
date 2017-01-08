@@ -184,8 +184,7 @@ class ServiceInfoProvider(Provider):
             plists = [launchd] if isinstance(launchd, dict) else launchd
 
             for i in plists:
-                self.dispatcher.call_sync('serviced.job.stop', i['Label'], True)
-                self.dispatcher.call_sync('serviced.job.start', i['Label'])
+                self.dispatcher.call_sync('serviced.job.restart', i['Label'])
 
             return
 
