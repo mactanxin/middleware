@@ -542,6 +542,8 @@ class WinbindPlugin(DirectoryServicePlugin):
                         continue
 
                     raise
+            else:
+                raise RuntimeError('Cannot contact winbindd, maximum number of retries exceeded')
 
             self.domain_info = self.wbc.get_domain_info(self.realm)
             self.domain_name = self.wbc.interface.netbios_domain
