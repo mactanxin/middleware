@@ -26,6 +26,7 @@
 #####################################################################
 
 import os
+import uuid
 import errno
 from task import ProgressTask, Provider, TaskDescription, TaskException
 from freenas.dispatcher.rpc import SchemaHelper as h, RpcException
@@ -91,6 +92,27 @@ class VolumeDatastoreProvider(Provider):
             [('dataset', '=', dataset), ('metadata.org\.freenas:vm_snapshot', '=', snap_id)],
             {'count': True}
         ))
+
+    @private
+    @accepts(str, str)
+    @returns(h.one_of(str, None))
+    def get_clone_source(self, datastore_id, path):
+        dataset = os.path.join(datastore_id, path)
+        origin = self.dispatcher.call_sync(
+            'volume.dataset.query',
+            [('id', '=', dataset)],
+            {'select': 'properties.origin.parsed', 'single': True}
+        )
+        if origin:
+            snap_id = self.dispatcher.call_sync(
+                'volume.snapshot.query',
+                [('id', '=', origin)],
+                {'select': 'metadata.org\.freenas:vm_snapshot', 'single': True}
+            )
+            if snap_id:
+                return f'{path}@{snap_id}'
+
+        return None
 
     @private
     @accepts(str, str)
@@ -308,11 +330,14 @@ class VolumeCloneTask(ProgressTask):
 
                 snap_cnt += 1
 
+            metadata = {'org.freenas:vm_snapshot': str(uuid.uuid4())}
+
             self.run_subtask_sync_with_progress(
                 'volume.snapshot.create',
                 {
                     'id': snapshot_id,
                     'replicable': False,
+                    'metadata': metadata
                 }
             )
 
