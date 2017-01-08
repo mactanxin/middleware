@@ -1278,6 +1278,14 @@ class VMSnapshotRollbackTask(VMSnapshotBaseTask):
         if not vm:
             raise TaskException(errno.ENOENT, 'Parent VM {0} does not exist'.format(snapshot['parent']['name']))
 
+        state = self.dispatcher.call_sync(
+            'vm.query',
+            [('id', '=', vm['id'])],
+            {'select': 'status.state', 'single': True}
+        )
+        if state != 'STOPPED':
+            raise TaskException(errno.EACCES, 'Cannot rollback a running VM')
+
         snapshot_id = snapshot['id']
 
         self.run_snapshot_task(
