@@ -2317,7 +2317,7 @@ class DatasetCreateTask(Task):
         props.update(exclude(
             dataset['properties'],
             'used', 'usedbydataset', 'usedbysnapshots', 'usedbychildren', 'logicalused', 'logicalreferenced',
-            'written', 'usedbyrefreservation', 'referenced', 'available', 'compressratio', 'refcompressratio'
+            'origin', 'written', 'usedbyrefreservation', 'referenced', 'available', 'compressratio', 'refcompressratio'
         ))
 
         props.update({
@@ -2473,7 +2473,7 @@ class DatasetConfigureTask(Task):
             props = exclude(
                 updated_params['properties'],
                 'used', 'usedbydataset', 'usedbysnapshots', 'usedbychildren', 'logicalused',
-                'logicalreferenced', 'written', 'usedbyrefreservation', 'referenced', 'available',
+                'logicalreferenced', 'origin', 'written', 'usedbyrefreservation', 'referenced', 'available',
                 'casesensitivity', 'compressratio', 'refcompressratio'
             )
             self.join_subtasks(self.run_subtask('zfs.update', ds['id'], props))
@@ -3044,6 +3044,10 @@ def register_property_schemas(plugin):
         'logicalreferenced': {
             'type': 'integer',
             'readOnly': True
+        },
+        'origin': {
+            'type': 'str',
+            'readOnly': True
         }
     }
 
@@ -3180,7 +3184,7 @@ def _init(dispatcher, plugin):
                 'casesensitivity', 'volsize', 'volblocksize', 'refcompressratio',
                 'numclones', 'compressratio', 'written', 'referenced',
                 'usedbyrefreservation', 'usedbysnapshots', 'usedbydataset',
-                'usedbychildren', 'logicalused', 'logicalreferenced', 'readonly'
+                'usedbychildren', 'logicalused', 'logicalreferenced', 'origin', 'readonly'
             ),
             'permissions_type': q.get(ds, 'properties.org\\.freenas:permissions_type.value'),
             'permissions': perms['permissions'] if perms else None,
