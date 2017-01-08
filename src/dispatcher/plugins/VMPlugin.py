@@ -1304,6 +1304,7 @@ class VMSnapshotRollbackTask(VMSnapshotBaseTask):
 
 
 @accepts(str, str, str)
+@returns(str)
 @description('Creates a snapshot of VM')
 class VMSnapshotCreateTask(VMSnapshotBaseTask):
     @classmethod
@@ -1359,6 +1360,8 @@ class VMSnapshotCreateTask(VMSnapshotBaseTask):
             'operation': 'create',
             'ids': [snapshot_id]
         })
+
+        return snapshot_id
 
 
 @accepts(str, h.ref('vm-snapshot'))
