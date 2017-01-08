@@ -153,6 +153,13 @@ class DatastoreProvider(Provider):
         driver = self.get_driver(id)
         return self.dispatcher.call_sync('vm.datastore.{0}.get_path_type'.format(driver), id, normpath(path))
 
+    @private
+    @accepts(str, str)
+    @returns(h.array(str))
+    def list_dirs(self, id, path):
+        driver = self.get_driver(id)
+        return self.dispatcher.call_sync('vm.datastore.{0}.list_dirs'.format(driver), id, normpath(path))
+
 
 class DatastoreBaseTask(ProgressTask):
     def __init__(self, dispatcher, datastore):

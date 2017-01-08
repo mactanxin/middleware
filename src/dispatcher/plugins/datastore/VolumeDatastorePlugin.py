@@ -138,6 +138,18 @@ class VolumeDatastoreProvider(Provider):
         else:
             raise RpcException(errno.ENOENT, 'Path {0} does not exist'.format(path))
 
+    @private
+    @accepts(str, str)
+    @returns(h.array(str))
+    def list_dirs(self, id, path):
+        dataset = os.path.join(id, path)
+        matching_datasets = self.dispatcher.call_sync(
+            'volume.dataset.query',
+            [('id', '~', f'^{dataset}')],
+            {'select': 'id'}
+        )
+        return ['/' + '/'.join(d.split('/')[1:]) for d in matching_datasets]
+
 
 @accepts(str, str)
 @description('Creates a dataset representing a VM datastore\'s directory')

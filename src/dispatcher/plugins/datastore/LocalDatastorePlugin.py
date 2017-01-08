@@ -103,6 +103,13 @@ class LocalDatastoreProvider(Provider):
 
         return 'BLOCK_DEVICE'
 
+    @private
+    @accepts(str, str)
+    @returns(h.array(str))
+    def list_dirs(self, id, path):
+        path = self.dispatcher.call_sync('vm.datastore.get_filesystem_path', id, path)
+        return [p[0] for p in os.walk(path)]
+
 
 @accepts(str, str)
 @description('Creates a directory on a local filesystem')

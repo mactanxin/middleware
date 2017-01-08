@@ -95,6 +95,12 @@ class NFSDatastoreProvider(Provider):
     def get_path_type(self, id, path):
         return self.dispatcher.call_sync('vm.datastore.local.get_path_type', id, path)
 
+    @private
+    @accepts(str, str)
+    @returns(h.array(str))
+    def list_dirs(self, id, path):
+        return self.dispatcher.call_sync('vm.datastore.local.list_dirs', id, path)
+
 
 @accepts(h.ref('vm-datastore'))
 @returns(str)
