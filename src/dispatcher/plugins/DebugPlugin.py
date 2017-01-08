@@ -33,7 +33,7 @@ import logging
 from freenas.dispatcher.rpc import RpcException, SchemaHelper as h, description, accepts, returns, private
 from freenas.dispatcher.fd import FileDescriptor
 from lib.system import system, SubprocessException
-from debug import AttachCommandOutput, AttachDirectory
+from debug import AttachCommandOutput
 from task import (
     Provider, Task, ProgressTask, TaskWarning, TaskDescription, ValidationException, TaskException
 )
