@@ -54,7 +54,7 @@ from freenas.utils.copytree import copytree
 from debug import AttachData, AttachDirectory, AttachCommandOutput
 
 
-VM_OUI = '00:a0:98'  # NetApp
+VM_OUI = '02:a0:98'  # NetApp
 VM_ROOT = '/vm'
 BLOCKSIZE = 65536
 
