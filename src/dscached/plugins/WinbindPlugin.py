@@ -525,11 +525,13 @@ class WinbindPlugin(DirectoryServicePlugin):
 
             try:
                 subprocess.check_output(['/usr/local/bin/net', 'ads', 'join', self.realm, '-k'])
-                self.context.client.call_sync('service.restart', 'smb')
             except subprocess.CalledProcessError as err:
                 # Undo possibly partially successful join
                 subprocess.call(['/usr/local/bin/net', 'ads', 'leave'])
                 raise RuntimeError(err.output.decode('utf-8'))
+
+            self.context.client.call_sync('serviced.job.restart', 'org.samba.winbindd')
+            logging.debug('Done restarting winbind')
 
             # Retry few times in case samba haven't finished restarting yet
             for _ in range(5):
