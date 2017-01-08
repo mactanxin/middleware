@@ -1596,6 +1596,63 @@ class VMSnapshotPublishTask(ProgressTask):
 
 
 @accepts(str, str)
+@returns(str)
+@description('Clones a snapshot creating a new VM')
+class VMSnapshotCloneTask(VMSnapshotBaseTask):
+    @classmethod
+    def early_describe(cls):
+        return 'Cloning a VM snapshot'
+
+    def describe(self, id, new_name):
+        snapshot = self.datastore.get_by_id('vm.snapshots', id)
+
+        return TaskDescription(
+            'Cloning the VM snapshot {name} to {new_name}',
+            name=snapshot.get('name') or '',
+            new_name=new_name or ''
+        )
+
+    def verify(self, id, new_name):
+        return ['system']
+
+    def run(self, id, new_name):
+        snapshot = self.datastore.get_by_id('vm.snapshots', id)
+        if not snapshot:
+            raise TaskException(errno.ENOENT, 'Snapshot {0} does not exist'.format(id))
+
+        vm = self.datastore.get_by_id('vms', snapshot['parent']['id'])
+        if not vm:
+            raise TaskException(errno.ENOENT, 'Parent VM {0} does not exist'.format(snapshot['parent']['name']))
+
+        if self.datastore.exists('vms', ('name', '=', new_name)):
+            raise TaskException(errno.EEXIST, 'VM {0} already exists'.format(new_name))
+
+        snapshot_id = snapshot['id']
+        vm_name = vm['name']
+
+        self.run_snapshot_task(
+            'clone',
+            vm['id'],
+            snapshot['parent']['target'],
+            snapshot_id,
+            snapshot['parent']['devices'],
+            extra=lambda p: (p.replace(vm_name, new_name, 1),)
+        )
+
+        new_vm = snapshot['parent']
+        new_vm['id'] = str(uuid.uuid4())
+        new_vm['name'] = new_name
+
+        self.datastore.insert('vms', new_vm)
+        self.dispatcher.dispatch_event('vm.changed', {
+            'operation': 'create',
+            'ids': [new_vm['id']]
+        })
+
+        return new_vm['id']
+
+
+@accepts(str, str)
 @description('Caches VM files')
 class CacheFilesTask(ProgressTask):
     @classmethod
@@ -2430,6 +2487,7 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('vm.snapshot.delete', VMSnapshotDeleteTask)
     plugin.register_task_handler('vm.snapshot.rollback', VMSnapshotRollbackTask)
     plugin.register_task_handler('vm.snapshot.publish', VMSnapshotPublishTask)
+    plugin.register_task_handler('vm.snapshot.clone', VMSnapshotCloneTask)
     plugin.register_task_handler('vm.immutable.set', VMSetImmutableTask)
     plugin.register_task_handler('vm.file.install', InstallFileTask)
     plugin.register_task_handler('vm.file.download', DownloadFileTask)
