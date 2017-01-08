@@ -1223,7 +1223,7 @@ class VMRebootTask(Task):
 
 
 class VMSnapshotBaseTask(Task):
-    def run_snapshot_task(self, task, id, datastore, snapshot_id, devices):
+    def run_snapshot_task(self, task, id, datastore, snapshot_id, devices, extra=None):
         subtasks = []
         disk_paths = []
 
@@ -1241,7 +1241,8 @@ class VMSnapshotBaseTask(Task):
             subtasks.append(self.run_subtask(
                 'vm.datastore.{0}.snapshot.{1}'.format(type, task),
                 datastore,
-                f'{p}@{snapshot_id}'
+                f'{p}@{snapshot_id}',
+                *(extra(p) if extra else [])
             ))
 
         self.join_subtasks(*subtasks)
