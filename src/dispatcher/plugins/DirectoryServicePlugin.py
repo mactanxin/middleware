@@ -134,7 +134,7 @@ class DirectoryServiceCreateTask(Task):
             smb = self.dispatcher.call_sync('service.query', [('name', '=', 'smb')], {"single": True})
             if not q.get(smb, 'config.enable'):
                 q.set(smb, 'config.enable', True)
-                self.join_subtasks(self.run_subtask('service.update', smb['id'], smb))
+                self.run_subtask_sync('service.update', smb['id'], smb)
 
         self.id = self.datastore.insert('directories', directory)
         self.dispatcher.call_sync('dscached.management.configure_directory', self.id)

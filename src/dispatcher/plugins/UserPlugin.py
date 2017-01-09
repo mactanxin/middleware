@@ -319,10 +319,10 @@ class UserCreateTask(Task):
 
         if user.get('group') is None:
             try:
-                result = self.join_subtasks(self.run_subtask('group.create', {
+                result = self.run_subtask_sync('group.create', {
                     'gid': uid,
                     'name': user['username']
-                }))
+                })
             except RpcException as err:
                 raise err
 
@@ -361,10 +361,10 @@ class UserCreateTask(Task):
                 )
 
                 homedir_dataset_id = os.path.join(parent_dataset['id'], user['home'].split(os.path.sep)[-1])
-                self.join_subtasks(self.run_subtask(
+                self.run_subtask_sync(
                     'volume.dataset.create',
                     {'id': homedir_dataset_id, 'type': 'FILESYSTEM', 'volume': parent_dataset['volume']}
-                ))
+                )
                 os.chmod(user['home'], 0o755)
 
             else:
@@ -398,7 +398,7 @@ class UserCreateTask(Task):
             self.dispatcher.call_sync('etcd.generation.generate_group', 'accounts')
 
         if self.created_group:
-            self.join_subtasks(self.run_subtask('group.delete', self.created_group))
+            self.run_subtask_sync('group.delete', self.created_group)
 
 
 @description("Deletes an user from the system")
@@ -613,10 +613,10 @@ class UserUpdateTask(Task):
                         updated_fields['home'].split(os.path.sep)[-1]
                     )
 
-                    self.join_subtasks(self.run_subtask(
+                    self.run_subtask_sync(
                         'volume.dataset.create',
                         {'id': homedir_dataset_id, 'type': 'FILESYSTEM', 'volume': parent_dataset['volume']}
-                    ))
+                    )
                     os.chmod(updated_fields['home'], 0o755)
 
                 else:

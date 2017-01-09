@@ -164,11 +164,11 @@ class SaveDebugTask(ProgressTask):
 
     def run(self, path):
         file = open(path, 'wb+')
-        self.join_subtasks(self.run_subtask(
+        self.run_subtask_sync(
             'debug.collect',
             FileDescriptor(file.fileno()),
             progress_callback=lambda p, m, e=None: self.chunk_progress(0, 100, '', p, m, e)
-        ))
+        )
 
 
 @description('Connects to the support server')

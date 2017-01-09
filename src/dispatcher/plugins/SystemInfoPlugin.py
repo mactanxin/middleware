@@ -276,7 +276,7 @@ class SystemGeneralConfigureTask(Task):
             new = props['timezone']
             old = self.configstore.get('system.timezone')
             if new != old:
-                count = self.join_subtasks(self.run_subtask('calendar_task.change_timezone', new))[0]
+                count = self.run_subtask_sync('calendar_task.change_timezone', new)[0]
                 self.add_warning(TaskWarning(
                     errno.ENXIO, "{0} calendar tasks rescheduled from timezone '{1}' to '{2}'".format(count, old, new)))
             self.configstore.set('system.timezone', new)

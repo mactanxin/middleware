@@ -151,7 +151,7 @@ class DCConfigureTask(ProgressTask):
             try:
                 self.dispatcher.call_sync('service.dc.check_dc_vm_availability')
             except RpcException:
-                dc['vm_id'], = self.join_subtasks(self.run_subtask('vm.create', {
+                dc['vm_id'], = self.run_subtask_sync('vm.create', {
                     'name': 'zentyal_domain_controller',
                     'template': {'name': 'zentyal-4.2'},
                     'target': node['volume'],
@@ -159,7 +159,7 @@ class DCConfigureTask(ProgressTask):
                     progress_callback=lambda p, m, e=None: self.chunk_progress(
                         5, 100, 'Creating Domain Controller virtual machine: ', p, m, e
                     )
-                ))
+                )
             finally:
                 vm_config = self.dispatcher.call_sync(
                     'vm.query', [('id', '=', dc['vm_id'] if dc.get('vm_id') else node['vm_id'])],
@@ -170,11 +170,11 @@ class DCConfigureTask(ProgressTask):
                 elif node['enable'] and not vm_config['autostart']:
                     vm_config['autostart'] = True
 
-                self.join_subtasks(self.run_subtask(
+                self.run_subtask_sync(
                     'vm.update',
                     dc['vm_id'] if dc.get('vm_id') else node['vm_id'],
                     {'config': vm_config}
-                ))
+                )
 
         try:
             node = ConfigNode('service.dc', self.configstore)

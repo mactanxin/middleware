@@ -573,7 +573,7 @@ class VolumeCreateTask(ProgressTask):
         self.set_progress(40)
 
         with self.dispatcher.get_lock('volumes'):
-            self.join_subtasks(self.run_subtask(
+            self.run_subtask_sync(
                 'zfs.pool.create',
                 name,
                 convert_topology_to_gptids(
@@ -584,18 +584,18 @@ class VolumeCreateTask(ProgressTask):
                     'mountpoint': mountpoint,
                     'fsopts': fsopts
                 }
-            ))
+            )
 
-            self.join_subtasks(self.run_subtask(
+            self.run_subtask_sync(
                 'zfs.update',
                 name,
                 {'org.freenas:permissions_type': {'value': 'PERM'}}
-            ))
+            )
 
             self.set_progress(60)
 
             if mount:
-                self.join_subtasks(self.run_subtask('zfs.mount', name))
+                self.run_subtask_sync('zfs.mount', name)
 
             self.set_progress(80)
 
@@ -711,7 +711,7 @@ class VolumeAutoCreateTask(ProgressTask):
             {'type': 'disk', 'path': disk_spec_to_path(self.dispatcher, i)} for i in log_disks or []
         ]
 
-        id, = self.join_subtasks(self.run_subtask(
+        id, = self.run_subtask_sync(
             'volume.create',
             {
                 'id': name,
@@ -729,7 +729,7 @@ class VolumeAutoCreateTask(ProgressTask):
             progress_callback=lambda p, m, e=None: self.chunk_progress(
                 0, 100, '', p, m, e
             )
-        ))
+        )
 
         return id
 
@@ -767,7 +767,7 @@ class VolumeDestroyTask(Task):
         with self.dispatcher.get_lock('volumes'):
             if config:
                 try:
-                    self.join_subtasks(self.run_subtask('zfs.umount', id))
+                    self.run_subtask_sync('zfs.umount', id)
                 except RpcException as err:
                     if err.code == errno.EBUSY:
                         # Find out what's holding unmount or destroy
@@ -788,7 +788,7 @@ class VolumeDestroyTask(Task):
                         pass
 
                 action = 'export' if vol['status'] in ('UNAVAIL', 'LOCKED') else 'destroy'
-                self.join_subtasks(self.run_subtask('zfs.pool.{0}'.format(action), id))
+                self.run_subtask_sync('zfs.pool.{0}'.format(action), id)
 
             try:
                 if vol.get('mountpoint'):
@@ -831,7 +831,7 @@ class ExportedVolumeDestroyTask(Task):
         return ['disk:{0}'.format(d) for d in disks]
 
     def run(self, id):
-        self.join_subtasks(self.run_subtask('zfs.pool.destroy_exported', id))
+        self.run_subtask_sync('zfs.pool.destroy_exported', id)
 
 
 @description("Updates configuration of existing volume")
@@ -873,16 +873,16 @@ class VolumeUpdateTask(ProgressTask):
             self.dispatcher.run_hook('volume.pre_rename', {'name': id, 'new_name': new_name})
 
             # Rename mountpoint
-            self.join_subtasks(self.run_subtask('zfs.update', id, {
+            self.run_subtask_sync('zfs.update', id, {
                 'mountpoint': {'value': '{0}/{1}'.format(VOLUMES_ROOT, new_name)}
-            }))
+            })
 
-            self.join_subtasks(self.run_subtask('zfs.pool.export', id))
-            self.join_subtasks(self.run_subtask('zfs.pool.import', volume['guid'], new_name))
+            self.run_subtask_sync('zfs.pool.export', id)
+            self.run_subtask_sync('zfs.pool.import', volume['guid'], new_name)
 
             # Configure newly imported volume
-            self.join_subtasks(self.run_subtask('zfs.update', new_name, {}))
-            self.join_subtasks(self.run_subtask('zfs.mount', new_name))
+            self.run_subtask_sync('zfs.update', new_name, {})
+            self.run_subtask_sync('zfs.mount', new_name)
 
             volume['id'] = new_name
             self.datastore.update('volumes', volume['id'], volume)
@@ -1012,7 +1012,7 @@ class VolumeUpdateTask(ProgressTask):
                     })
 
             for vdev in removed_vdevs:
-                self.join_subtasks(self.run_subtask('zfs.pool.detach', id, vdev))
+                self.run_subtask_sync('zfs.pool.detach', id, vdev)
 
             for vdev, group in iterate_vdevs(new_vdevs):
                 if vdev['type'] == 'disk':
@@ -1094,13 +1094,13 @@ class VolumeUpdateTask(ProgressTask):
             for vdev in updated_vdevs:
                 vdev['vdev']['path'] = get_disk_gptid(self.dispatcher, vdev['vdev']['path'])
 
-            self.join_subtasks(self.run_subtask(
+            self.run_subtask_sync(
                 'zfs.pool.extend',
                 id,
                 new_vdevs_gptids,
                 updated_vdevs,
                 progress_callback=self.set_progress
-            ))
+            )
 
             volume['topology'] = new_topology
             for vdev, _ in iterate_vdevs(volume['topology']):
@@ -1203,17 +1203,17 @@ class VolumeImportTask(Task):
                 attach_params = {'key': key, 'password': password}
                 for dname in disks:
                     disk_id = self.dispatcher.call_sync('disk.path_to_id', dname)
-                    self.join_subtasks(self.run_subtask('disk.geli.attach', disk_id, attach_params))
+                    self.run_subtask_sync('disk.geli.attach', disk_id, attach_params)
 
-            (new_name, guid), = self.join_subtasks(self.run_subtask('zfs.pool.import', id, new_name, params))
+            (new_name, guid), = self.run_subtask_sync('zfs.pool.import', id, new_name, params)
             mountpoint = os.path.join(VOLUMES_ROOT, new_name)
-            self.join_subtasks(self.run_subtask(
+            self.run_subtask_sync(
                 'zfs.update',
                 new_name,
                 {'mountpoint': {'value': mountpoint}}
-            ))
+            )
 
-            self.join_subtasks(self.run_subtask('zfs.mount', new_name, True))
+            self.run_subtask_sync('zfs.mount', new_name, True)
 
             new_topology = self.dispatcher.call_sync(
                 'zfs.pool.query',
@@ -1240,12 +1240,12 @@ class VolumeImportTask(Task):
                         used_slot = first_or_default(lambda s: s['path'] == dname, slots_state, {}).get('key_slot')
                         if used_slot != slot:
                             disk_id = self.dispatcher.call_sync('disk.path_to_id', dname)
-                            self.join_subtasks(self.run_subtask('disk.geli.ukey.set', disk_id, {
+                            self.run_subtask_sync('disk.geli.ukey.set', disk_id, {
                                 'key': key,
                                 'password': password,
                                 'slot': slot
-                            }))
-                            self.join_subtasks(self.run_subtask('disk.geli.ukey.del', disk_id, used_slot))
+                            })
+                            self.run_subtask_sync('disk.geli.ukey.del', disk_id, used_slot)
 
             for vdev, _ in iterate_vdevs(new_topology):
                 vdev['disk_id'] = self.dispatcher.call_sync(
@@ -1371,8 +1371,8 @@ class VolumeDetachTask(Task):
         vol = self.datastore.get_by_id('volumes', id)
         disks = self.dispatcher.call_sync('volume.get_volume_disks', id)
         self.datastore.delete('volumes', vol['id'])
-        self.join_subtasks(self.run_subtask('zfs.umount', id))
-        self.join_subtasks(self.run_subtask('zfs.pool.export', id))
+        self.run_subtask_sync('zfs.umount', id)
+        self.run_subtask_sync('zfs.pool.export', id)
 
         encryption = vol.get('encryption')
 
@@ -1424,7 +1424,7 @@ class VolumeUpgradeTask(Task):
         if not vol:
             raise TaskException(errno.ENOENT, 'Volume {0} not found'.format(id))
 
-        self.join_subtasks(self.run_subtask('zfs.pool.upgrade', id))
+        self.run_subtask_sync('zfs.pool.upgrade', id)
         self.dispatcher.dispatch_event('volume.changed', {
             'operation': 'update',
             'ids': [vol['id']]
@@ -1461,7 +1461,7 @@ class VolumeReplaceTask(ProgressTask):
             spare = True
         else:
             spare = False
-            self.join_subtasks(self.run_subtask('disk.format.gpt', disk['id'], 'freebsd-zfs', {'swapsize': 2048}))
+            self.run_subtask_sync('disk.format.gpt', disk['id'], 'freebsd-zfs', {'swapsize': 2048})
             disk = self.dispatcher.call_sync('disk.query', [('id', '=', disk['id'])], {'single': True})
 
         if vol.get('key_encrypted') or vol.get('password_encrypted'):
@@ -1477,25 +1477,25 @@ class VolumeReplaceTask(ProgressTask):
                         'Password provided for volume {0} is not valid'.format(id)
                     )
 
-            self.join_subtasks(self.run_subtask('disk.geli.init', disk['id'], {
+            self.run_subtask_sync('disk.geli.init', disk['id'], {
                 'key': encryption['key'],
                 'password': password
-            }))
+            })
 
             if encryption['slot'] != 0:
-                self.join_subtasks(self.run_subtask('disk.geli.ukey.set', disk['id'], {
+                self.run_subtask_sync('disk.geli.ukey.set', disk['id'], {
                     'key': encryption['key'],
                     'password': password,
                     'slot': 1
-                }))
+                })
 
-                self.join_subtasks(self.run_subtask('disk.geli.ukey.del', disk['id'], 0))
+                self.run_subtask_sync('disk.geli.ukey.del', disk['id'], 0)
 
             if vol.get('providers_presence', 'NONE') != 'NONE':
-                self.join_subtasks(self.run_subtask('disk.geli.attach', disk['id'], {
+                self.run_subtask_sync('disk.geli.attach', disk['id'], {
                     'key': encryption['key'],
                     'password': password
-                }))
+                })
 
         self.join_subtasks(
             self.run_subtask(
@@ -1509,7 +1509,7 @@ class VolumeReplaceTask(ProgressTask):
         )
 
         if spare:
-            self.join_subtasks(self.run_subtask('zfs.pool.detach', id, vdev))
+            self.run_subtask_sync('zfs.pool.detach', id, vdev)
 
         new_topology = self.dispatcher.call_sync(
             'volume.query',
@@ -1574,7 +1574,7 @@ class VolumeAutoReplaceTask(ProgressTask):
             if not disk or not disk['online']:
                 continue
 
-            self.join_subtasks(self.run_subtask('volume.vdev.replace', id, failed_vdev, disk['path']))
+            self.run_subtask_sync('volume.vdev.replace', id, failed_vdev, disk['path'])
             return
 
         # Now into global hot-sparing mode
@@ -1584,12 +1584,12 @@ class VolumeAutoReplaceTask(ProgressTask):
             matching_disks = sorted(empty_disks, key=lambda d: d['mediasize'])
             disk = first_or_default(lambda d: d['mediasize'] >= minsize, matching_disks)
             if disk:
-                self.join_subtasks(self.run_subtask('disk.format.gpt', disk['id'], 'freebsd-zfs', {'swapsize': 2048}))
-                self.join_subtasks(self.run_subtask(
+                self.run_subtask_sync('disk.format.gpt', disk['id'], 'freebsd-zfs', {'swapsize': 2048})
+                self.run_subtask_sync(
                     'volume.vdev.replace',
                     id, failed_vdev, disk['path'], password,
                     progress_callback=self.set_progress
-                ))
+                )
                 return
 
         raise TaskException(errno.EBUSY, 'No matching disk to be used as spare found')
@@ -1626,8 +1626,8 @@ class VolumeLockTask(Task):
         self.dispatcher.run_hook('volume.pre_detach', {'name': id})
 
         with self.dispatcher.get_lock('volumes'):
-            self.join_subtasks(self.run_subtask('zfs.umount', id))
-            self.join_subtasks(self.run_subtask('zfs.pool.export', id))
+            self.run_subtask_sync('zfs.umount', id)
+            self.run_subtask_sync('zfs.pool.export', id)
 
             subtasks = []
             for vdev, _ in iterate_vdevs(vol['topology']):
@@ -1702,12 +1702,12 @@ class VolumeAutoImportTask(Task):
                         item_type = config.get('type', 'VM')
                         if scope in ['all', 'shares'] and item_type in share_types:
                             try:
-                                self.join_subtasks(self.run_subtask(
+                                self.run_subtask_sync(
                                     'share.import',
                                     root,
                                     config.get('name', ''),
                                     item_type
-                                ))
+                                )
 
                                 imported['shares'].append(
                                     {
@@ -1729,11 +1729,11 @@ class VolumeAutoImportTask(Task):
                                 continue
                         elif scope in ['all', 'vms']:
                             try:
-                                self.join_subtasks(self.run_subtask(
+                                self.run_subtask_sync(
                                     'vm.import',
                                     config.get('name', ''),
                                     volume
-                                ))
+                                )
 
                                 imported['vms'].append(
                                     {
@@ -1767,10 +1767,10 @@ class VolumeAutoImportTask(Task):
             if scope in ['all', 'system']:
                 if self.dispatcher.call_sync('zfs.dataset.query', [('volume', '=', volume), ('name', '~', '.system')], {'single': True}):
                     try:
-                        self.join_subtasks(self.run_subtask(
+                        self.run_subtask_sync(
                             'system_dataset.import',
                             volume
-                        ))
+                        )
                         status = self.dispatcher.call_sync('system_dataset.status')
                         imported['system'].append(
                             {
@@ -1888,16 +1888,16 @@ class VolumeUnlockTask(Task):
                     ))
             self.join_subtasks(*subtasks)
 
-            self.join_subtasks(self.run_subtask('zfs.pool.import', vol['guid'], id, params))
+            self.run_subtask_sync('zfs.pool.import', vol['guid'], id, params)
 
             if vol['mountpoint']:
-                self.join_subtasks(self.run_subtask(
+                self.run_subtask_sync(
                     'zfs.update',
                     id,
                     {'mountpoint': {'value': vol['mountpoint']}}
-                ))
+                )
 
-            self.join_subtasks(self.run_subtask('zfs.mount', id))
+            self.run_subtask_sync('zfs.mount', id)
 
             self.dispatcher.dispatch_event('volume.changed', {
                 'operation': 'update',
@@ -2065,11 +2065,11 @@ class VolumeBackupKeysToFileTask(Task):
 
     def run(self, id, out_path=None):
         with open(out_path, 'wb') as out_file:
-            password, = self.join_subtasks(self.run_subtask(
+            password, = self.run_subtask_sync(
                 'volume.keys.backup',
                 id,
                 FileDescriptor(out_file.fileno())
-            ))
+            )
 
         return password
 
@@ -2155,12 +2155,12 @@ class VolumeRestoreKeysFromFileTask(Task):
 
     def run(self, id, in_path, password=None):
         with open(in_path, 'rb') as in_file:
-            self.join_subtasks(self.run_subtask(
+            self.run_subtask_sync(
                 'volume.keys.restore',
                 id,
                 FileDescriptor(in_file.fileno()),
                 password
-            ))
+            )
 
 
 @description("Scrubs the volume")
@@ -2188,10 +2188,10 @@ class VolumeScrubTask(ProgressTask):
         if not vol:
             raise TaskException(errno.ENOENT, 'Volume {0} not found'.format(id))
 
-        self.join_subtasks(self.run_subtask(
+        self.run_subtask_sync(
             'zfs.pool.scrub', id,
             progress_callback=self.set_progress
-        ))
+        )
 
 
 @description("Makes vdev in a volume offline")
@@ -2225,11 +2225,11 @@ class VolumeOfflineVdevTask(Task):
         if not vol:
             raise TaskException(errno.ENOENT, 'Volume {0} not found'.format(id))
 
-        self.join_subtasks(self.run_subtask(
+        self.run_subtask_sync(
             'zfs.pool.offline_disk',
             id,
             vdev_guid
-        ))
+        )
 
 
 @description("Makes vdev in a volume online")
@@ -2263,11 +2263,11 @@ class VolumeOnlineVdevTask(Task):
         if not vol:
             raise TaskException(errno.ENOENT, 'Volume {0} not found'.format(id))
 
-        self.join_subtasks(self.run_subtask(
+        self.run_subtask_sync(
             'zfs.pool.online_disk',
             id,
             vdev_guid
-        ))
+        )
 
 
 @description("Creates a dataset in an existing volume")
@@ -2324,23 +2324,23 @@ class DatasetCreateTask(Task):
             'org.freenas:uuid': {'value': str(uuid.uuid4())}
         })
 
-        self.join_subtasks(self.run_subtask(
+        self.run_subtask_sync(
             'zfs.create_dataset',
             dataset['id'],
             dataset['type'],
             props
-        ))
+        )
 
         if dataset['mounted'] and dataset['type'] == 'FILESYSTEM':
-            self.join_subtasks(self.run_subtask('zfs.mount', dataset['id']))
+            self.run_subtask_sync('zfs.mount', dataset['id'])
 
         if dataset['permissions_type'] == 'ACL':
             fs_path = self.dispatcher.call_sync('volume.get_dataset_path', dataset['id'])
-            self.join_subtasks(self.run_subtask('file.set_permissions', fs_path, {'acl': DEFAULT_ACLS}, True))
+            self.run_subtask_sync('file.set_permissions', fs_path, {'acl': DEFAULT_ACLS}, True)
 
         if dataset.get('permissions'):
             path = os.path.join(VOLUMES_ROOT, dataset['id'])
-            self.join_subtasks(self.run_subtask('file.set_permissions', path, dataset['permissions']))
+            self.run_subtask_sync('file.set_permissions', path, dataset['permissions'])
 
         wait_for_cache(self.dispatcher, 'volume.dataset', 'create', dataset['id'])
         return dataset['id']
@@ -2375,15 +2375,15 @@ class DatasetDeleteTask(Task):
 
         for i in deps:
             if i['type'] == 'FILESYSTEM':
-                self.join_subtasks(self.run_subtask('zfs.umount', i['id']))
+                self.run_subtask_sync('zfs.umount', i['id'])
 
-            self.join_subtasks(self.run_subtask('zfs.destroy', i['id']))
+            self.run_subtask_sync('zfs.destroy', i['id'])
 
         try:
             if ds['type'] == 'FILESYSTEM':
-                self.join_subtasks(self.run_subtask('zfs.umount', id))
+                self.run_subtask_sync('zfs.umount', id)
 
-            self.join_subtasks(self.run_subtask('zfs.destroy', id))
+            self.run_subtask_sync('zfs.destroy', id)
         except RpcException as err:
             if err.code == errno.EBUSY and ds['type'] == 'FILESYSTEM':
                 # Find out what's holding unmount or destroy
@@ -2434,10 +2434,10 @@ class DatasetConfigureTask(Task):
         )
 
     def switch_to_chmod(self, path):
-        self.join_subtasks(self.run_subtask('zfs.update', path, {
+        self.run_subtask_sync('zfs.update', path, {
             'aclmode': {'value': 'passthrough'},
             'org.freenas:permissions_type': {'value': 'PERM'}
-        }))
+        })
 
     def run(self, id, updated_params, reset_permissions=False):
         pool_name, _, ds = id.partition('/')
@@ -2451,7 +2451,7 @@ class DatasetConfigureTask(Task):
             raise TaskException(errno.ENOENT, 'Dataset {0} not found'.format(id))
 
         if 'id' in updated_params:
-            self.join_subtasks(self.run_subtask('zfs.rename', ds['id'], updated_params['id']))
+            self.run_subtask_sync('zfs.rename', ds['id'], updated_params['id'])
             ds['id'] = updated_params['id']
 
         if 'volsize' in updated_params:
@@ -2461,13 +2461,13 @@ class DatasetConfigureTask(Task):
             if updated_params['volsize'] < q.get(ds, 'properties.volsize.parsed'):
                 raise TaskException(errno.EBUSY, 'Cannot shrink a zvol')
 
-            self.join_subtasks(self.run_subtask('zfs.update', ds['id'], {
+            self.run_subtask_sync('zfs.update', ds['id'], {
                 'volsize': {'value': int(updated_params['volsize'])}
-            }))
+            })
 
         if 'metadata' in updated_params:
             props = {name: {'value': value} for name, value in updated_params['metadata'].items()}
-            self.join_subtasks(self.run_subtask('zfs.update', ds['id'], props))
+            self.run_subtask_sync('zfs.update', ds['id'], props)
 
         if 'properties' in updated_params:
             props = exclude(
@@ -2476,7 +2476,7 @@ class DatasetConfigureTask(Task):
                 'logicalreferenced', 'origin', 'written', 'usedbyrefreservation', 'referenced', 'available',
                 'casesensitivity', 'compressratio', 'refcompressratio'
             )
-            self.join_subtasks(self.run_subtask('zfs.update', ds['id'], props))
+            self.run_subtask_sync('zfs.update', ds['id'], props)
 
         if 'permissions_type' in updated_params:
             oldtyp = q.get(ds, 'properties.org\\.freenas:permissions_type.value')
@@ -2490,18 +2490,18 @@ class DatasetConfigureTask(Task):
 
         if 'permissions' in updated_params:
             fs_path = os.path.join(VOLUMES_ROOT, ds['id'])
-            self.join_subtasks(self.run_subtask(
+            self.run_subtask_sync(
                 'file.set_permissions',
                 fs_path,
                 updated_params['permissions'],
                 reset_permissions
-            ))
+            )
 
         if 'mounted' in updated_params:
             if updated_params['mounted']:
-                self.join_subtasks(self.run_subtask('zfs.mount', ds['id']))
+                self.run_subtask_sync('zfs.mount', ds['id'])
             else:
-                self.join_subtasks(self.run_subtask('zfs.umount', ds['id']))
+                self.run_subtask_sync('zfs.umount', ds['id'])
 
 
 @description("Mounts target readonly dataset")
@@ -2566,7 +2566,7 @@ class DatasetTemporaryUmountTask(Task):
         if not ds_ro[0]:
             raise TaskException(errno.EINVAL, 'Only readonly datasets can be unmounted')
 
-        self.join_subtasks(self.run_subtask('zfs.umount', id))
+        self.run_subtask_sync('zfs.umount', id)
 
 
 @description("Creates a snapshot")
@@ -2616,13 +2616,13 @@ class SnapshotCreateTask(Task):
             dataset = snapshot['dataset']
             snapshot['id'] = '@'.join([dataset, name])
 
-        self.join_subtasks(self.run_subtask(
+        self.run_subtask_sync(
             'zfs.create_snapshot',
             dataset,
             name,
             recursive,
             props
-        ))
+        )
 
         wait_for_cache(self.dispatcher, 'volume.snapshot', 'create', snapshot['id'])
         return snapshot['id']
@@ -2644,12 +2644,12 @@ class SnapshotDeleteTask(Task):
 
     def run(self, id, recursive=False):
         pool, ds, snap = split_snapshot_name(id)
-        self.join_subtasks(self.run_subtask(
+        self.run_subtask_sync(
             'zfs.delete_snapshot',
             ds,
             snap,
             recursive
-        ))
+        )
 
 
 @description("Updates configuration of specified snapshot")
@@ -2673,12 +2673,12 @@ class SnapshotConfigureTask(Task):
         params = {}
 
         if 'id' in updated_params:
-            self.join_subtasks(self.run_subtask('zfs.rename', id, updated_params['id']))
+            self.run_subtask_sync('zfs.rename', id, updated_params['id'])
             id = updated_params['id']
 
         if 'name' in updated_params:
             new_id = '{0}@{1}'.format(ds, updated_params['name'])
-            self.join_subtasks(self.run_subtask('zfs.rename', id, new_id))
+            self.run_subtask_sync('zfs.rename', id, new_id)
             id = new_id
 
         if 'metadata' in updated_params:
@@ -2694,7 +2694,7 @@ class SnapshotConfigureTask(Task):
         if 'hidden' in updated_params:
             params['org.freenas:hidden'] = {'value': 'yes' if updated_params['hidden'] else 'no'}
 
-        self.join_subtasks(self.run_subtask('zfs.update', id, params))
+        self.run_subtask_sync('zfs.update', id, params)
 
 
 @description("Cloning the specified snapshot into new name")
@@ -2742,11 +2742,11 @@ class SnapshotRollbackTask(Task):
         return ['zfs:{0}'.format(ds)]
 
     def run(self, name, force=False):
-        self.join_subtasks(self.run_subtask(
+        self.run_subtask_sync(
             'zfs.rollback',
             name,
             force
-        ))
+        )
 
 
 def disk_spec_to_path(dispatcher, ident):

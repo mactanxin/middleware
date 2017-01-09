@@ -365,7 +365,7 @@ class SystemDatasetConfigure(ProgressTask):
                 )
 
             try:
-                self.join_subtasks(self.run_subtask('service.manage', id, operation))
+                self.run_subtask_sync('service.manage', id, operation)
             except TaskException as err:
                 logger.warning('Failed to {0} {1} service: {2}'.format(operation, name, err))
 

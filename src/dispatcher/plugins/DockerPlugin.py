@@ -341,7 +341,7 @@ class DockerBaseTask(ProgressTask):
                 select='id'
             )
             if hostid:
-                self.join_subtasks(self.run_subtask('docker.config.update', {'default_host': hostid}))
+                self.run_subtask_sync('docker.config.update', {'default_host': hostid})
                 return hostid
 
             host_name = 'docker_host_' + str(self.dispatcher.call_sync(
@@ -359,14 +359,14 @@ class DockerBaseTask(ProgressTask):
                     'There are no healthy online pools available. Docker host could not be created.'
                 )
 
-            self.join_subtasks(self.run_subtask(
+            self.run_subtask_sync(
                 'vm.create', {
                     'name': host_name,
                     'template': {'name': 'boot2docker'},
                     'target': biggest_volume
                 },
                 progress_callback=progress_cb
-            ))
+            )
 
             hostid = self.dispatcher.call_sync(
                 'vm.query',
@@ -374,7 +374,7 @@ class DockerBaseTask(ProgressTask):
                 {'single': True, 'select': 'id'}
             )
 
-            self.join_subtasks(self.run_subtask('vm.start', hostid))
+            self.run_subtask_sync('vm.start', hostid)
 
         if progress_cb:
             progress_cb(100, 'Found default Docker host')
@@ -547,14 +547,14 @@ class DockerContainerCreateTask(DockerBaseTask):
             if ':' not in image:
                 image += ':latest'
 
-            self.join_subtasks(self.run_subtask(
+            self.run_subtask_sync(
                 'docker.image.pull',
                 image,
                 container['host'],
                 progress_callback=lambda p, m, e=None: self.chunk_progress(
                     30, 90, 'Pulling container {0} image:'.format(image), p, m, e
                 )
-            ))
+            )
 
         container['name'] = container['names'][0]
 
