@@ -298,18 +298,18 @@ class VirtualMachine(object):
                 }
 
                 driver = drivermap.get(i['properties'].get('mode', 'AHCI'))
-                path = self.context.client.call_sync('vm.get_disk_path', self.id, i['name'])
+                path = self.context.client.call_sync('vm.get_device_path', self.id, i['name'])
                 args += ['-s', '{0}:0,{1},{2}'.format(index, driver, path)]
                 index += 1
 
             if i['type'] == 'CDROM':
-                path = self.context.client.call_sync('vm.get_disk_path', self.id, i['name'])
+                path = self.context.client.call_sync('vm.get_device_path', self.id, i['name'])
                 args += ['-s', '{0}:0,ahci-cd,{1}'.format(index, path)]
                 index += 1
 
             if i['type'] == 'VOLUME':
                 if i['properties']['type'] == 'VT9P':
-                    path = self.context.client.call_sync('vm.get_volume_path', self.id, i['name'])
+                    path = self.context.client.call_sync('vm.get_device_path', self.id, i['name'])
                     args += ['-s', '{0}:0,virtio-9p,{1}={2}'.format(index, i['name'], path)]
                     index += 1
 
@@ -548,16 +548,11 @@ class VirtualMachine(object):
 
     def drop_invalid_devices(self):
         for i in list(self.devices):
-            if i['type'] in ('DISK', 'CDROM'):
-                path = self.context.client.call_sync('vm.get_disk_path', self.id, i['name'])
-            elif i['type'] == 'VOLUME' and i['properties']['type'] == 'VT9P':
-                path = self.context.client.call_sync('vm.get_volume_path', self.id, i['name'])
-            else:
-                continue
-
-            if not os.path.exists(path):
-                self.devices.remove(i)
-                yield i
+            if i['type'] in ('DISK', 'CDROM', 'VOLUME'):
+                path = self.context.client.call_sync('vm.get_device_path', self.id, i['name'])
+                if not os.path.exists(path):
+                    self.devices.remove(i)
+                    yield i
 
     def stop(self, force=False):
         self.logger.info('Stopping VM {0}'.format(self.name))
@@ -606,7 +601,7 @@ class VirtualMachine(object):
                     bootswitch = '-r'
 
                     for i in filter(lambda i: i['type'] in ('DISK', 'CDROM'), self.devices):
-                        path = self.context.client.call_sync('vm.get_disk_path', self.id, i['name'])
+                        path = self.context.client.call_sync('vm.get_device_path', self.id, i['name'])
 
                         if i['type'] == 'DISK':
                             name = 'hd{0}'.format(hdcounter)
@@ -640,7 +635,7 @@ class VirtualMachine(object):
                     )
 
             if self.config['bootloader'] == 'BHYVELOAD':
-                path = self.context.client.call_sync('vm.get_disk_path', self.id, self.config['boot_device'])
+                path = self.context.client.call_sync('vm.get_device_path', self.id, self.config['boot_device'])
                 self.bhyve_process = subprocess.Popen(
                     [
                         '/usr/sbin/bhyveload', '-c', self.nmdm[0], '-m', str(self.config['memsize']),

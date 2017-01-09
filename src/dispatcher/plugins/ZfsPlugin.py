@@ -1986,6 +1986,7 @@ def _init(dispatcher, plugin):
     plugin.register_event_handler('fs.zfs.dataset.deleted', on_dataset_delete)
     plugin.register_event_handler('fs.zfs.dataset.renamed', on_dataset_rename)
     plugin.register_event_handler('fs.zfs.dataset.setprop', on_dataset_setprop)
+    plugin.register_event_handler('fs.zfs.snapshot.cloned', on_dataset_create)
     plugin.register_event_handler('system.device.attached', on_device_attached)
     plugin.register_event_handler('system.fs.mounted', lambda a: on_vfs_mount_or_unmount('mount', a))
     plugin.register_event_handler('system.fs.unmounted', lambda a: on_vfs_mount_or_unmount('unmount', a))
