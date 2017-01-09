@@ -501,6 +501,14 @@ def _init(dispatcher, plugin):
     def on_snapshot_change(args):
         pass
 
+    plugin.register_schema_definition('vm-datastore-properties-volume', {
+        'type': 'object',
+        'additionalProperties': False,
+        'properties': {
+            '%type': {'enum': ['vm-datastore-volume']},
+        }
+    })
+
     plugin.register_provider('vm.datastore.volume', VolumeDatastoreProvider)
     plugin.register_task_handler('vm.datastore.volume.directory.create', VolumeDirectoryCreateTask)
     plugin.register_task_handler('vm.datastore.volume.directory.delete', VolumeDirectoryDeleteTask)
