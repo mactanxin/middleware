@@ -22,7 +22,6 @@ EXTRACT_ONLY=
 NO_BUILD=	yes
 MAKE_JOBS_UNSAFE= yes
 WRKSRC=		/usr/migrate93_src
-WRKSRC_django= 	/usr/django1611_src
 
 checksum fetch:
 	${ECHO_CMD} ${.TARGET} not needed because building direct
@@ -31,7 +30,7 @@ do-install:
 	${MKDIR} ${STAGEDIR}${PREFIX}/lib/migrate93
 	cd ${WRKSRC} && ${COPYTREE_SHARE} src ${STAGEDIR}${PREFIX}/lib/migrate93/
 	cd ${WRKSRC} && ${COPYTREE_SHARE} freenasUI ${STAGEDIR}${PREFIX}/lib/migrate93/
-	cd ${WRKSRC_django} && ${COPYTREE_SHARE} django ${STAGEDIR}${PREFIX}/lib/migrate93/
+	cd ${WRKSRC} && ${COPYTREE_SHARE} django ${STAGEDIR}${PREFIX}/lib/migrate93/
 	${INSTALL_SCRIPT} ${WRKSRC}/sbin/migrate93 ${STAGEDIR}${PREFIX}/sbin/
 	${PYTHON_CMD} -m compileall ${STAGEDIR}${PREFIX}/lib/migrate93
 	(cd ${STAGEDIR}${PREFIX}/lib/migrate93; ${FIND} . -type f \
