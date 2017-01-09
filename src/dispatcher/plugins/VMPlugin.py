@@ -1891,7 +1891,7 @@ class FlushFilesTask(Task):
 
     def run(self):
         for template in self.dispatcher.call_sync('vm.template.query'):
-            if template['cached_on']:
+            if template['template']['cached_on']:
                 self.run_subtask_sync('vm.cache.delete', template['name'])
 
 
