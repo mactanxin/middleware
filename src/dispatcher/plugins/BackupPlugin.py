@@ -96,7 +96,7 @@ class CreateBackupTask(Task):
             'properties': {}
         })
 
-        backup['properties'], = self.join_subtasks(self.run_subtask('backup.{0}.init'.format(backup['provider']), backup))
+        backup['properties'], = self.run_subtask_sync('backup.{0}.init'.format(backup['provider']), backup)
         id = self.datastore.insert('backup', backup)
         self.dispatcher.emit_event('backup.changed', {
             'operation': 'create',
@@ -187,7 +187,7 @@ class BackupQueryTask(ProgressTask):
 
             thr = threading.Thread(target=worker)
             thr.start()
-            self.join_subtasks(self.run_subtask('backup.{0}.get'.format(provider), props, path, FileDescriptor(wfd)))
+            self.run_subtask_sync('backup.{0}.get'.format(provider), props, path, FileDescriptor(wfd))
             thr.join(timeout=1)
 
         return result.decode('utf-8')
@@ -197,10 +197,10 @@ class BackupQueryTask(ProgressTask):
         if not backup:
             raise RpcException(errno.ENOENT, 'Backup {0} not found'.format(id))
 
-        dirlist, = self.join_subtasks(self.run_subtask(
+        dirlist, = self.run_subtask_sync(
             'backup.{0}.list'.format(backup['provider']),
             backup['properties']
-        ))
+        )
 
         if not any(e['name'] == MANIFEST_FILENAME for e in dirlist):
             raise TaskException(errno.ENOENT, 'No backup found at specified location')
@@ -289,7 +289,7 @@ class BackupSyncTask(ProgressTask):
         backup = self.datastore.get_by_id('backup', id)
 
         try:
-            manifest, = self.join_subtasks(self.run_subtask('backup.query', id))
+            manifest, = self.run_subtask_sync('backup.query', id)
             if manifest:
                 snapshots = manifest['snapshots']
         except RpcException as err:
@@ -297,25 +297,25 @@ class BackupSyncTask(ProgressTask):
                 raise
 
         if snapshot:
-            self.join_subtasks(self.run_subtask(
+            self.run_subtask_sync(
                 'volume.snapshot_dataset',
                 backup['dataset'],
                 True,
                 365 * 24 * 60 * 60,
                 'backup',
                 True
-            ))
+            )
 
         self.set_progress(0, 'Calculating send delta')
 
-        (actions, send_size), = self.join_subtasks(self.run_subtask(
+        (actions, send_size), = self.run_subtask_sync(
             'replication.calculate_delta',
             backup['dataset'],
             backup['dataset'],
             snapshots,
             True,
             True
-        ))
+        )
 
         if dry_run:
             return actions
@@ -359,7 +359,7 @@ class BackupRestoreTask(ProgressTask):
         if not backup:
             raise TaskException(errno.ENOENT, 'Backup {0} not found'.format(backup['id']))
 
-        manifest, = self.join_subtasks(self.run_subtask('backup.query', id))
+        manifest, = self.run_subtask_sync('backup.query', id)
         if not manifest:
             raise TaskException(errno.ENOENT, 'No valid backup found in specified location')
 
@@ -384,9 +384,9 @@ class BackupRestoreTask(ProgressTask):
                 self.set_progress(done / total * 100, 'Receiving {0} into {1}'.format(snap['name'], local_dataset))
 
                 if local_dataset != dataset and local_dataset not in created_datasets:
-                    self.join_subtasks(self.run_subtask(
+                    self.run_subtask_sync(
                         'zfs.create_dataset', local_dataset, 'FILESYSTEM'
-                    ))
+                    )
 
                     created_datasets.append(local_dataset)
 

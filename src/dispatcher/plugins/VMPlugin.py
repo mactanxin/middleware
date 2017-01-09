@@ -405,10 +405,10 @@ class VMBaseTask(ProgressTask):
 
         if not self.dispatcher.call_sync('vm.datastore.directory_exists', vm['target'], VM_ROOT):
             # Create VM root
-            self.join_subtasks(self.run_subtask('vm.datastore.directory.create', vm['target'], VM_ROOT))
+            self.run_subtask_sync('vm.datastore.directory.create', vm['target'], VM_ROOT)
 
         try:
-            self.join_subtasks(self.run_subtask('vm.datastore.directory.create', vm['target'], self.vm_root_dir))
+            self.run_subtask_sync('vm.datastore.directory.create', vm['target'], self.vm_root_dir)
         except RpcException:
             raise TaskException(
                 errno.EACCES,
@@ -543,12 +543,12 @@ class VMBaseTask(ProgressTask):
 
             else:
                 if properties['target_type'] == 'ZVOL':
-                    self.join_subtasks(self.run_subtask(
+                    self.run_subtask_sync(
                         'vm.datastore.block_device.create',
                         vm['target'],
                         dev_path,
                         properties['size']
-                    ))
+                    )
 
         if res['type'] == 'NIC':
             normalize(res['properties'], {
@@ -585,7 +585,7 @@ class VMBaseTask(ProgressTask):
                     dir_path = os.path.join(vm_root_dir, res['name'])
                     dir_exists = self.dispatcher.call_sync('vm.datastore.directory_exists', datastore, dir_path)
                     if not dir_exists and not properties.get('source'):
-                        self.join_subtasks(self.run_subtask('vm.datastore.directory.create', datastore, dir_path))
+                        self.run_subtask_sync('vm.datastore.directory.create', datastore, dir_path)
 
                     if properties.get('source'):
                         cloning_supported = self.dispatcher.call_sync(
@@ -673,11 +673,11 @@ class VMBaseTask(ProgressTask):
                     '{0} storage not deleted. There are VM snapshots related to {1} path.'.format(res['name'], path)
                 ))
             else:
-                self.join_subtasks(self.run_subtask(
+                self.run_subtask_sync(
                     'vm.datastore.directory.delete',
                     vm['target'],
                     path
-                ))
+                )
 
 
 @accepts(h.all_of(
@@ -725,7 +725,7 @@ class VMCreateTask(VMBaseTask):
                 )
                 if not template:
                     self.set_progress(5, 'Fetching VM template from IPFS')
-                    template_name = self.join_subtasks(self.run_subtask('vm.template.ipfs.fetch', template_name))[0]
+                    template_name = self.run_subtask_sync('vm.template.ipfs.fetch', template_name)[0]
 
             if not template:
                 template = self.dispatcher.call_sync(
@@ -747,12 +747,12 @@ class VMCreateTask(VMBaseTask):
             deep_update(template, result)
             vm = template
 
-            self.join_subtasks(self.run_subtask(
+            self.run_subtask_sync(
                 'vm.cache.update',
                 vm['template']['name'],
                 vm['target'],
                 progress_callback=lambda p, m, e: self.chunk_progress(0, 50, '', p, m, e)
-            ))
+            )
         else:
             normalize(vm, {
                 'config': {},
@@ -814,7 +814,7 @@ class VMCreateTask(VMBaseTask):
         vm_root_dir = get_vm_path(vm['name'])
 
         if self.dispatcher.call_sync('vm.datastore.directory_exists', vm['target'], vm_root_dir):
-            self.join_subtasks(self.run_subtask('vm.datastore.directory.delete', vm['target'], vm_root_dir))
+            self.run_subtask_sync('vm.datastore.directory.delete', vm['target'], vm_root_dir)
 
         if self.id:
             with self.dispatcher.get_lock('vms'):
@@ -1022,7 +1022,7 @@ class VMUpdateTask(VMBaseTask):
                     self.delete_device(old_vm, res)
 
         if not updated_params.get('enabled', True):
-            self.join_subtasks(self.run_subtask('vm.stop', id))
+            self.run_subtask_sync('vm.stop', id)
 
         self.datastore.update('vms', id, vm)
         self.dispatcher.dispatch_event('vm.changed', {
@@ -1083,7 +1083,7 @@ class VMDeleteTask(Task):
         self.join_subtasks(*subtasks)
 
         try:
-            self.join_subtasks(self.run_subtask('vm.stop', id, True))
+            self.run_subtask_sync('vm.stop', id, True)
         except RpcException:
             pass
 
@@ -1243,8 +1243,8 @@ class VMRebootTask(Task):
 
     def run(self, id, force=False):
         try:
-            self.join_subtasks(self.run_subtask('vm.stop', id, force))
-            self.join_subtasks(self.run_subtask('vm.start', id))
+            self.run_subtask_sync('vm.stop', id, force)
+            self.run_subtask_sync('vm.start', id)
         except RpcException as err:
             raise TaskException(err.code, err.message)
 
@@ -1608,7 +1608,7 @@ class VMSnapshotPublishTask(ProgressTask):
                 if not os.path.isdir(dest_path):
                     os.makedirs(dest_path)
 
-                self.join_subtasks(self.run_subtask('zfs.clone', dev_snapshot, publish_ds))
+                self.run_subtask_sync('zfs.clone', dev_snapshot, publish_ds)
 
                 dest_file = None
                 if d['type'] == 'DISK':
@@ -1621,18 +1621,18 @@ class VMSnapshotPublishTask(ProgressTask):
 
                 elif d['type'] == 'VOLUME':
                     dest_file = os.path.join(dest_path, d['name'] + '.tar.gz')
-                    self.join_subtasks(self.run_subtask('zfs.mount', publish_ds))
+                    self.run_subtask_sync('zfs.mount', publish_ds)
                     with tarfile.open(dest_file, 'w:gz') as tar_file:
                         tar_file.add(self.dispatcher.call_sync('volume.get_dataset_path', publish_ds))
                         tar_file.close()
-                    self.join_subtasks(self.run_subtask('zfs.umount', publish_ds))
+                    self.run_subtask_sync('zfs.umount', publish_ds)
 
                 if dest_file:
-                    self.join_subtasks(self.run_subtask('zfs.destroy', publish_ds))
+                    self.run_subtask_sync('zfs.destroy', publish_ds)
 
                     sha256_hash = sha256(dest_file, BLOCKSIZE)
 
-                    ipfs_hashes = self.join_subtasks(self.run_subtask('ipfs.add', dest_path, True))[0]
+                    ipfs_hashes = self.run_subtask_sync('ipfs.add', dest_path, True)[0]
                     ipfs_hash = self.get_path_hash(ipfs_hashes, dest_path)
 
                     with open(os.path.join(dest_path, 'sha256'), 'w') as f:
@@ -1651,11 +1651,11 @@ class VMSnapshotPublishTask(ProgressTask):
         if not os.path.isdir(template_path):
             os.makedirs(template_path)
 
-        self.join_subtasks(self.run_subtask('zfs.clone', snapshot_id, publish_ds))
-        self.join_subtasks(self.run_subtask('zfs.mount', publish_ds))
+        self.run_subtask_sync('zfs.clone', snapshot_id, publish_ds)
+        self.run_subtask_sync('zfs.mount', publish_ds)
         copytree(self.dispatcher.call_sync('volume.get_dataset_path', publish_ds), template_path)
-        self.join_subtasks(self.run_subtask('zfs.umount', publish_ds))
-        self.join_subtasks(self.run_subtask('zfs.destroy', publish_ds))
+        self.run_subtask_sync('zfs.umount', publish_ds)
+        self.run_subtask_sync('zfs.destroy', publish_ds)
 
         try:
             os.remove(os.path.join(template_path, '.config-vm-{0}.json'.format(parent['name'])))
@@ -1665,7 +1665,7 @@ class VMSnapshotPublishTask(ProgressTask):
         with open(os.path.join(template_path, 'template.json'), 'w') as f:
             f.write(dumps(template))
 
-        ipfs_hashes = self.join_subtasks(self.run_subtask('ipfs.add', template_path, True))[0]
+        ipfs_hashes = self.run_subtask_sync('ipfs.add', template_path, True)[0]
         ipfs_link = 'ipfs://' + self.get_path_hash(ipfs_hashes, template_path)
         self.set_progress(100, 'Upload finished - template link: {0}'.format(ipfs_link))
         with open(os.path.join(template_path, 'hash'), 'w') as hash_file:
@@ -1940,7 +1940,7 @@ class DownloadFileTask(ProgressTask):
         try:
             if url.startswith('http://ipfs.io/ipfs/'):
                 self.set_progress(50, 'Fetching file through IPFS')
-                self.join_subtasks(self.run_subtask('ipfs.get', url.split('/')[-1], destination))
+                self.run_subtask_sync('ipfs.get', url.split('/')[-1], destination)
             else:
                 try:
                     urllib.request.urlretrieve(url, file_path, progress_hook)
@@ -2141,7 +2141,7 @@ class VMIPFSTemplateFetchTask(ProgressTask):
 
         raw_hash = ipfs_hash.split('/')[-1]
 
-        self.join_subtasks(self.run_subtask('ipfs.get', raw_hash, ipfs_templates_dir))
+        self.run_subtask_sync('ipfs.get', raw_hash, ipfs_templates_dir)
 
         new_template_dir = os.path.join(ipfs_templates_dir, raw_hash)
         try:
@@ -2188,7 +2188,7 @@ class VMTemplateDeleteTask(ProgressTask):
         if not template_path:
             raise TaskException(errno.ENOENT, 'Selected template {0} does not exist'.format(name))
 
-        self.join_subtasks(self.run_subtask('vm.cache.delete', name))
+        self.run_subtask_sync('vm.cache.delete', name)
         shutil.rmtree(template_path)
 
 

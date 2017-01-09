@@ -929,16 +929,16 @@ class CheckFetchUpdateTask(ProgressTask):
     def run(self):
         result = False
         self.set_progress(0, 'Checking for new updates from update server')
-        self.join_subtasks(self.run_subtask(
+        self.run_subtask_sync(
             'update.check',
             progress_callback=lambda p, m='Checking for updates from update server', e=None: self.chunk_progress(0, 10, '', p, m, e)
-        ))
+        )
         if self.dispatcher.call_sync('update.is_update_available'):
             self.set_progress(10, 'New updates found. Downloading them now')
-            self.join_subtasks(self.run_subtask(
+            self.run_subtask_sync(
                 'update.download',
                 progress_callback=lambda p, m='New updates found. Downloading them now', e=None: self.chunk_progress(10, 100, '', p, m, e)
-            ))
+            )
             self.set_progress(100, 'Updates successfully Downloaded')
             result = True
         else:
@@ -961,17 +961,17 @@ class UpdateNowTask(ProgressTask):
 
     def run(self, reboot_post_install=False):
         self.set_progress(0, 'Checking for new updates')
-        self.join_subtasks(self.run_subtask(
+        self.run_subtask_sync(
             'update.checkfetch',
             progress_callback=lambda p, m='Checking for new updates', e=None: self.chunk_progress(0, 50, '', p, m, e)
-        ))
+        )
         if self.dispatcher.call_sync('update.is_update_available'):
             self.set_progress(50, 'Installing downloaded updates now')
-            self.join_subtasks(self.run_subtask(
+            self.run_subtask_sync(
                 'update.apply',
                 reboot_post_install,
                 progress_callback=lambda p, m='Installing downloaded updates now', e=None: self.chunk_progress(50, 100, '', p, m, e)
-            ))
+            )
             self.set_progress(100, 'Updates Installed successfully')
             result = True
         else:

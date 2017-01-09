@@ -80,9 +80,9 @@ class TestDownloadTask(Task):
 
         t = threading.Thread(target=feed)
         t.start()
-        url, = self.join_subtasks(self.run_subtask(
+        url, = self.run_subtask_sync(
             'file.prepare_url_download', FileDescriptor(rfd)
-        ))
+        )
         t.join(timeout=1)
 
         return url
@@ -187,7 +187,7 @@ class TestAbortTask(Task):
         return []
 
     def run(self):
-        self.join_subtasks(self.run_subtask('test.abort.subtask'))
+        self.run_subtask_sync('test.abort.subtask')
 
 
 class TestAbortSubtask(Task):

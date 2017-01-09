@@ -86,7 +86,7 @@ class ISCSITargetCreateTask(Task):
         if service_state['state'] != 'RUNNING':
             config = service_state['config']
             config['enable'] = True
-            self.join_subtasks(self.run_subtask('service.update', service_state['id'], {'config': config}))
+            self.run_subtask_sync('service.update', service_state['id'], {'config': config})
 
         id = self.datastore.insert('iscsi_initiator.targets', target)
         ctx = iscsi.ISCSIInitiator()

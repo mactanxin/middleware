@@ -333,7 +333,7 @@ class UpdateServiceConfigTask(Task):
                 new_err.propagate(err, [0], [1, 'config'])
                 raise new_err
 
-            result = self.join_subtasks(self.run_subtask(service_def['task'], updated_config))
+            result = self.run_subtask_sync(service_def['task'], updated_config)
             restart = result[0] == 'RESTART'
             reload = result[0] == 'RELOAD'
 
@@ -349,12 +349,12 @@ class UpdateServiceConfigTask(Task):
                 # Propagate to dependent services
                 for i in service_def.get('dependencies', []):
                     svc_dep = self.datastore.get_by_id('service_definitions', i)
-                    self.join_subtasks(self.run_subtask('service.update', i, {
+                    self.run_subtask_sync('service.update', i, {
                         'config': {
                             'type': 'service-{0}'.format(svc_dep['name']),
                             'enable': updated_config['enable']
                         }
-                    }))
+                    })
 
                 if service_def.get('auto_enable'):
                     # Consult state of services dependent on us

@@ -236,11 +236,11 @@ class ReplicationBaseTask(ProgressTask):
                     {'readonly': {'value': 'on' if readonly else 'off'}}
                 )
             else:
-                self.join_subtasks(self.run_subtask(
+                self.run_subtask_sync(
                     'zfs.update',
                     dataset['name'],
                     {'readonly': {'value': 'on' if readonly else 'off'}}
-                ))
+                )
 
     def set_datasets_mount(self, datasets, mount, recursive=False, client=None):
         caller = client or self.dispatcher
@@ -268,16 +268,16 @@ class ReplicationBaseTask(ProgressTask):
                 )
             else:
                 if mount and temp_mounted:
-                    self.join_subtasks(self.run_subtask(
+                    self.run_subtask_sync(
                         'zfs.umount',
                         dataset['name'],
                         recursive
-                    ))
-                self.join_subtasks(self.run_subtask(
+                    )
+                self.run_subtask_sync(
                     'zfs.{0}mount'.format('' if mount else 'u'),
                     dataset['name'],
                     recursive
-                ))
+                )
 
     def set_datasets_mount_ro(self, link, readonly, client=None):
         rpc_target = client or self.dispatcher
@@ -437,7 +437,7 @@ class ReplicationCreateTask(ReplicationBaseTask):
         id = self.datastore.insert('replication.links', link)
         self.dispatcher.call_sync('replication.link_cache_put', link)
         if is_master:
-            self.join_subtasks(self.run_subtask('replication.prepare_slave', link))
+            self.run_subtask_sync('replication.prepare_slave', link)
         if not remote_link:
             call_task_and_check_state(remote_client, 'replication.create', link)
         else:
@@ -585,7 +585,7 @@ class ReplicationDeleteTask(ReplicationBaseTask):
         if not self.datastore.exists('replication.links', ('name', '=', name)):
             raise TaskException(errno.ENOENT, 'Replication link {0} do not exist.'.format(name))
 
-        link = self.join_subtasks(self.run_subtask('replication.get_latest_link', name))[0]
+        link = self.run_subtask_sync('replication.get_latest_link', name)[0]
         is_master, remote = self.get_replication_state(link)
         remote_client = None
 
@@ -600,19 +600,19 @@ class ReplicationDeleteTask(ReplicationBaseTask):
         if not is_master:
             for service in ['shares', 'vms']:
                 for reserved_item in self.dispatcher.call_sync('replication.get_reserved_{0}'.format(service), name):
-                    self.join_subtasks(self.run_subtask(
+                    self.run_subtask_sync(
                         '{0}.export'.format(service),
                         reserved_item['id']
-                    ))
+                    )
 
             if scrub:
                 with self.dispatcher.get_lock('volumes'):
                     datasets = reversed(self.dispatcher.call_sync('replication.local_datasets_from_link', link))
                     for dataset in datasets:
                         if len(dataset['name'].split('/')) == 1:
-                            self.join_subtasks(self.run_subtask('volume.delete', dataset['name']))
+                            self.run_subtask_sync('volume.delete', dataset['name'])
                         else:
-                            self.join_subtasks(self.run_subtask('volume.dataset.delete', dataset['name']))
+                            self.run_subtask_sync('volume.dataset.delete', dataset['name'])
 
         self.datastore.delete('replication.links', link['id'])
         self.dispatcher.call_sync('replication.link_cache_remove', link['name'])
@@ -653,7 +653,7 @@ class ReplicationUpdateTask(ReplicationBaseTask):
         if not self.datastore.exists('replication.links', ('name', '=', name)):
             raise TaskException(errno.ENOENT, 'Replication link {0} do not exist.'.format(name))
 
-        link = self.join_subtasks(self.run_subtask('replication.get_latest_link', name))[0]
+        link = self.run_subtask_sync('replication.get_latest_link', name)[0]
 
         if 'status' in updated_fields and link['status'] != updated_fields['status']:
             raise TaskException(errno.EINVAL, 'Replication status is readonly')
@@ -723,8 +723,8 @@ class ReplicationUpdateTask(ReplicationBaseTask):
                     'New remote {0} is unreachable.'.format(new_remote)
                 )
             if remote_available:
-                self.join_subtasks(self.run_subtask('replication.delete', old_name))
-                self.join_subtasks(self.run_subtask('replication.create', link))
+                self.run_subtask_sync('replication.delete', old_name)
+                self.run_subtask_sync('replication.create', link)
             else:
                 raise TaskException(errno.EACCES, 'Remote {0} is unreachable.'.format(remote))
 
@@ -755,10 +755,10 @@ class ReplicationUpdateTask(ReplicationBaseTask):
         if not link['replicate_services']:
             for service in ['shares', 'vms']:
                 for reserved_item in self.dispatcher.call_sync('replication.get_reserved_{0}'.format(service), name):
-                    self.join_subtasks(self.run_subtask(
+                    self.run_subtask_sync(
                         '{0}.export'.format(service),
                         reserved_item['id']
-                    ))
+                    )
 
         if 'datasets' in updated_fields:
             self.set_datasets_mount_ro(
@@ -768,7 +768,7 @@ class ReplicationUpdateTask(ReplicationBaseTask):
             )
 
             try:
-                self.join_subtasks(self.run_subtask('replication.prepare_slave', link))
+                self.run_subtask_sync('replication.prepare_slave', link)
             except RpcException:
                 self.set_datasets_mount_ro(
                     original_link,
@@ -790,7 +790,7 @@ class ReplicationUpdateTask(ReplicationBaseTask):
                     'Link update at remote side failed: {0}'.format(e.message)
                 ))
 
-        self.join_subtasks(self.run_subtask('replication.update_link', link))
+        self.run_subtask_sync('replication.update_link', link)
 
         if remote_available and link['replicate_services']:
             try:
@@ -806,7 +806,7 @@ class ReplicationUpdateTask(ReplicationBaseTask):
                 ))
 
             if 'master' in updated_fields:
-                self.join_subtasks(self.run_subtask('replication.role_update', link['id']))
+                self.run_subtask_sync('replication.role_update', link['id'])
 
         self.dispatcher.dispatch_event('replication.changed', {
             'operation': 'update',
@@ -847,7 +847,7 @@ class ReplicationSyncTask(ReplicationBaseTask):
         message = ''
         speed = 0
         remote_client = None
-        link = self.join_subtasks(self.run_subtask('replication.get_latest_link', name))[0]
+        link = self.run_subtask_sync('replication.get_latest_link', name)[0]
         is_master, remote = self.get_replication_state(link)
         try:
             remote_client = get_freenas_peer_client(self, remote)
@@ -884,7 +884,7 @@ class ReplicationSyncTask(ReplicationBaseTask):
                             ))
 
                         datasets_pair = first_or_default(lambda d: d['master'] == dataset['name'], link['datasets'])
-                        result = self.join_subtasks(self.run_subtask(
+                        result = self.run_subtask_sync(
                             'replication.replicate_dataset',
                             datasets_pair['master'],
                             {
@@ -897,7 +897,7 @@ class ReplicationSyncTask(ReplicationBaseTask):
                             },
                             link['transport_options'],
                             progress_callback=lambda p, m, e=None: report_progress(p, m, e)
-                        ))
+                        )
 
                         total_size += result[0][1]
 
@@ -931,7 +931,7 @@ class ReplicationSyncTask(ReplicationBaseTask):
                 }
                 link['status'].append(status_dict)
                 link['update_date'] = str(datetime.utcnow())
-                self.join_subtasks(self.run_subtask('replication.update_link', link))
+                self.run_subtask_sync('replication.update_link', link)
                 self.dispatcher.dispatch_event('replication.changed', {
                     'operation': 'update',
                     'ids': [link['id']]
@@ -973,7 +973,7 @@ class ReplicationReserveServicesTask(ReplicationBaseTask):
             raise TaskException(errno.ENOENT, 'Replication link {0} do not exist.'.format(name))
 
         service_types = ['shares', 'vms']
-        link = self.join_subtasks(self.run_subtask('replication.get_latest_link', name))[0]
+        link = self.run_subtask_sync('replication.get_latest_link', name)[0]
         is_master, remote = self.get_replication_state(link)
         remote_client = get_freenas_peer_client(self, remote)
 
@@ -1065,7 +1065,7 @@ class SnapshotDatasetTask(Task):
 
             break
 
-        self.join_subtasks(self.run_subtask(
+        self.run_subtask_sync(
             'volume.snapshot.create',
             {
                 'dataset': dataset,
@@ -1074,7 +1074,7 @@ class SnapshotDatasetTask(Task):
                 'replicable': replicable
             },
             recursive
-        ))
+        )
 
 
 @private
@@ -1273,14 +1273,14 @@ class ReplicateDatasetTask(ProgressTask):
         peer = options.get('peer')
         nomount = options.get('nomount', False)
 
-        self.join_subtasks(self.run_subtask(
+        self.run_subtask_sync(
             'volume.snapshot_dataset',
             localds,
             True,
             lifetime,
             'repl',
             True
-        ))
+        )
 
         if peer:
             remote = self.dispatcher.call_sync(
@@ -1338,14 +1338,14 @@ class ReplicateDatasetTask(ProgressTask):
                 'uuid': q.get(i, 'properties.org\\.freenas:uuid.value')
             })
 
-        (actions, send_size), = self.join_subtasks(self.run_subtask(
+        (actions, send_size), = self.run_subtask_sync(
             'replication.calculate_delta',
             localds,
             remoteds,
             remote_data,
             recursive,
             followdelete
-        ))
+        )
 
         if dry_run:
             return actions, send_size
@@ -1501,7 +1501,7 @@ class ReplicationGetLatestLinkTask(ReplicationBaseTask):
                     'ids': [local_link['id']]
                 })
             elif local_update_date < remote_update_date:
-                self.join_subtasks(self.run_subtask('replication.update_link', remote_link))
+                self.run_subtask_sync('replication.update_link', remote_link)
                 latest_link = remote_link
                 self.dispatcher.dispatch_event('replication.changed', {
                     'operation': 'update',
@@ -1572,7 +1572,7 @@ class ReplicationRoleUpdateTask(ReplicationBaseTask):
         if not self.datastore.exists('replication.links', ('name', '=', name)):
             raise TaskException(errno.ENOENT, 'Replication link {0} do not exist.'.format(name))
 
-        link = self.join_subtasks(self.run_subtask('replication.get_latest_link', name))[0]
+        link = self.run_subtask_sync('replication.get_latest_link', name)[0]
         if not link['bidirectional']:
             return
 
@@ -1601,11 +1601,11 @@ class ReplicationRoleUpdateTask(ReplicationBaseTask):
                     timeout=300
                 )
                 for reserved_item in items:
-                    self.join_subtasks(self.run_subtask(
+                    self.run_subtask_sync(
                         '{0}.immutable.set'.format(service[:-1]),
                         reserved_item['id'],
                         action_type
-                    ))
+                    )
 
 
 @private
@@ -1659,7 +1659,7 @@ class ReplicationCleanHistoryTask(ReplicationBaseTask):
         _, remote = self.get_replication_state(link)
         remote_client = get_freenas_peer_client(self, remote)
 
-        self.join_subtasks(self.run_subtask('replication.update_link', link))
+        self.run_subtask_sync('replication.update_link', link)
         self.dispatcher.dispatch_event('replication.changed', {
             'operation': 'update',
             'ids': [link['id']]

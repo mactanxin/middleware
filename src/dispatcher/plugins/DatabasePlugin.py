@@ -90,7 +90,7 @@ class UploadDatabaseTask(ProgressTask):
         except DatastoreException as err:
             raise TaskException(errno.EFAULT, 'Cannot restore factory database: {0}'.format(str(err)))
 
-        self.join_subtasks(self.run_subtask('system.reboot', 1))
+        self.run_subtask_sync('system.reboot', 1)
 
 
 @description('Restores database config to it\'s defaults')
@@ -107,7 +107,7 @@ class RestoreFactoryConfigTask(ProgressTask):
 
     def run(self):
         with open(FACTORY_DB, 'r') as fd:
-            self.join_subtasks(self.run_subtask('database.restore', FileDescriptor(fd.fileno(), close=False)))
+            self.run_subtask_sync('database.restore', FileDescriptor(fd.fileno(), close=False))
 
 
 def _init(dispatcher, plugin):

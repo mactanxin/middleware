@@ -204,24 +204,24 @@ class BootAttachDisk(ProgressTask):
         disk_id = self.dispatcher.call_sync('disk.path_to_id', disk)
 
         # Format disk
-        self.join_subtasks(self.run_subtask('disk.format.boot', disk_id))
+        self.run_subtask_sync('disk.format.boot', disk_id)
         self.set_progress(30)
 
         # Attach disk to the pool
         boot_pool_name = self.configstore.get('system.boot_pool_name')
-        self.join_subtasks(self.run_subtask('zfs.pool.extend', boot_pool_name, None, [{
+        self.run_subtask_sync('zfs.pool.extend', boot_pool_name, None, [{
             'target_guid': guid,
             'vdev': {
                 'type': 'disk',
                 'path': os.path.join('/dev', disk + 'p2')
             }
-        }]))
+        }])
 
         self.set_progress(80)
 
         # Install grub
         disk_id = self.dispatcher.call_sync('disk.path_to_id', disk)
-        self.join_subtasks(self.run_subtask('disk.install_bootloader', disk_id))
+        self.run_subtask_sync('disk.install_bootloader', disk_id)
         self.set_progress(100)
 
 
@@ -249,7 +249,7 @@ class BootDetachDisk(Task):
         if not vdev:
             raise TaskException(errno.ENOENT, 'Disk {0} not found in the boot pool'.format(disk))
 
-        self.join_subtasks(self.run_subtask('zfs.pool.detach', boot_pool_name, vdev['guid']))
+        self.run_subtask_sync('zfs.pool.detach', boot_pool_name, vdev['guid'])
 
 
 @description("Scrubs the boot pool")
@@ -270,10 +270,10 @@ class BootPoolScrubTask(ProgressTask):
 
     def run(self):
         boot_pool_id = self.dispatcher.call_sync('boot.pool.get_config')['id']
-        self.join_subtasks(self.run_subtask(
+        self.run_subtask_sync(
             'zfs.pool.scrub', boot_pool_id,
             progress_callback=self.set_progress
-        ))
+        )
 
 
 def collect_debug(dispatcher):
