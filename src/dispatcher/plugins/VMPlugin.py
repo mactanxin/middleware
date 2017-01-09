@@ -2228,6 +2228,7 @@ def _init(dispatcher, plugin):
             'enabled': {'type': 'boolean'},
             'immutable': {'type': 'boolean'},
             'target': {'type': 'string'},
+            'parent': {'type': ['string', 'null']},
             'template': {
                 'type': ['object', 'null'],
                 'properties': {
