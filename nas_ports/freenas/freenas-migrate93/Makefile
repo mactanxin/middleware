@@ -30,7 +30,7 @@ do-install:
 	${MKDIR} ${STAGEDIR}${PREFIX}/lib/migrate93
 	cd ${WRKSRC} && ${COPYTREE_SHARE} src ${STAGEDIR}${PREFIX}/lib/migrate93/
 	cd ${WRKSRC} && ${COPYTREE_SHARE} freenasUI ${STAGEDIR}${PREFIX}/lib/migrate93/
-	cd ${WRKSRC} && ${COPYTREE_SHARE} django ${STAGEDIR}${PREFIX}/lib/migrate93/
+	cd ${WRKSRC}/django1611 && ${COPYTREE_SHARE} django ${STAGEDIR}${PREFIX}/lib/migrate93/
 	${INSTALL_SCRIPT} ${WRKSRC}/sbin/migrate93 ${STAGEDIR}${PREFIX}/sbin/
 	${PYTHON_CMD} -m compileall ${STAGEDIR}${PREFIX}/lib/migrate93
 	(cd ${STAGEDIR}${PREFIX}/lib/migrate93; ${FIND} . -type f \
