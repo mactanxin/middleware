@@ -45,7 +45,7 @@ from event import sync
 from cache import EventCacheStore
 from lib.system import SubprocessException
 from lib.freebsd import fstyp
-from lib.zfs import compare_vdevs, iterate_vdevs, vdev_by_guid, split_snapshot_name, get_resources
+from lib.zfs import compare_vdevs, iterate_vdevs, vdev_by_guid, split_snapshot_name, get_disks, get_resources
 from task import (
     Provider, Task, ProgressTask, TaskException, TaskWarning, VerifyException, query,
     TaskDescription
@@ -2758,14 +2758,6 @@ def disk_spec_to_path(dispatcher, ident):
         ],
         {'single': True, 'select': 'path'}
     )
-
-
-def get_disks(topology, predicate=None):
-    for vdev, gname in iterate_vdevs(topology):
-        if predicate and not predicate(vdev):
-            continue
-
-        yield vdev['path'], gname
 
 
 def get_disk_gptid(dispatcher, disk):

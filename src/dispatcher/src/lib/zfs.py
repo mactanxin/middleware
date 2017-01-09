@@ -66,10 +66,24 @@ def vdev_by_guid(topology, guid):
             return vd
 
 
+def vdev_by_path(topology, path):
+    for vd, _ in iterate_vdevs(topology):
+        if vd['path'] == path:
+            return vd
+
+
 def split_snapshot_name(name):
     ds, _, snap = name.partition('@')
     pool = ds.split('/', 1)[0]
     return pool, ds, snap
+
+
+def get_disks(topology, predicate=None):
+    for vdev, gname in iterate_vdevs(topology):
+        if predicate and not predicate(vdev):
+            continue
+
+        yield vdev['path'], gname
 
 
 def get_resources(topology):
