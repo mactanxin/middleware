@@ -1850,9 +1850,26 @@ class DeleteFilesTask(Task):
         return ['system']
 
     def run(self, name):
-        cache_dir = self.dispatcher.call_sync('system_dataset.request_directory', 'vm_image_cache')
-        images_dir = os.path.join(cache_dir, name)
-        shutil.rmtree(images_dir)
+        template_dir = os.path.join(CACHE_ROOT, name)
+        for datastore in self.dispatcher.call_sync('vm.datastore.query', [], {'select': 'id'}):
+            clones = []
+            if self.dispatcher.call_sync('vm.datastore.directory_exists', datastore, template_dir):
+                for dir in self.dispatcher.call_sync('vm.datastore.list_dirs', datastore, template_dir):
+                    for snapshot in self.dispatcher.call_sync('vm.datastore.get_snapshots', datastore, dir):
+                        clones = list(self.dispatcher.call_sync(
+                            'vm.datastore.get_snapshot_clones', datastore, snapshot
+                        ))
+                        if clones:
+                            self.add_warning(TaskWarning(
+                                errno.EACCES,
+                                'Cannot delete template {0} cache on {1}. Template has clones'.format(name, datastore)
+                            ))
+                            break
+
+                    if clones:
+                        break
+
+            self.run_subtask_sync('vm.datastore.directory.delete', datastore, template_dir)
 
 
 @description('Deletes all of cached VM files')
@@ -1868,8 +1885,9 @@ class FlushFilesTask(Task):
         return ['system']
 
     def run(self):
-        cache_dir = self.dispatcher.call_sync('system_dataset.request_directory', 'vm_image_cache')
-        shutil.rmtree(cache_dir)
+        for template in self.dispatcher.call_sync('vm.template.query'):
+            if template['cached_on']:
+                self.run_subtask_sync('vm.cache.delete', template['name'])
 
 
 @private
