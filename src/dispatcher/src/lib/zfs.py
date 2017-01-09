@@ -86,5 +86,12 @@ def get_disks(topology, predicate=None):
         yield vdev['path'], gname
 
 
+def get_disk_ids(topology):
+    for vdev, _ in iterate_vdevs(topology):
+        id = vdev.get('disk_id')
+        if id:
+            yield id
+
+
 def get_resources(topology):
     return ['disk:{0}'.format(d) for d, _ in get_disks(topology, lambda v: v.get('status') != 'UNAVAIL')]

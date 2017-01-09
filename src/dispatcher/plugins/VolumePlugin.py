@@ -45,7 +45,8 @@ from event import sync
 from cache import EventCacheStore
 from lib.system import SubprocessException
 from lib.freebsd import fstyp
-from lib.zfs import compare_vdevs, iterate_vdevs, vdev_by_guid, split_snapshot_name, get_disks, get_resources
+from lib.zfs import compare_vdevs, iterate_vdevs, vdev_by_guid, split_snapshot_name, get_disks, get_disk_ids
+from lib.zfs import get_resources
 from task import (
     Provider, Task, ProgressTask, TaskException, TaskWarning, VerifyException, query,
     TaskDescription
@@ -136,6 +137,7 @@ class VolumeProvider(Provider):
                     'description': None,
                     'mountpoint': None,
                     'upgraded': None,
+                    'disks': list(get_disk_ids(topology)),
                     'topology': topology,
                     'root_vdev': config['root_vdev'],
                     'status': 'LOCKED' if encrypted and config['status'] == 'UNAVAIL' else config['status'],
@@ -953,7 +955,7 @@ class VolumeUpdateTask(ProgressTask):
             for group, vdevs in list(updated_params['topology'].items()):
                 for vdev in vdevs:
                     if 'guid' not in vdev:
-                        if encryption['hashed_password'] is not None:
+                        if encryption['hashjked_password'] is not None:
                             if not is_password(
                                 password,
                                 encryption.get('salt', ''),
@@ -3289,6 +3291,10 @@ def _init(dispatcher, plugin):
                 'enum': ['zfs']
             },
             'rname': {'type': 'string'},
+            'disks': {
+                'type': 'array',
+                'items': {'$type': 'string'}
+            },
             'topology': {'$ref': 'zfs-topology'},
             'scan': {'$ref': 'zfs-scan'},
             'mountpoint': {
