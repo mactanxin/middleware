@@ -877,17 +877,14 @@
                 "name": "tftpd"
             },
             "b9d11e23-ecfb-46c2-a0c9-4a0d94eaafc1": {
-                "rcng": {
-                    "rc-scripts": [
-                        "nut_upsmon",
-                        "nut_upslog"
-                    ]
+                "launchd": {
+                    "Label": "org.freenas.tftpd",
+                    "RunAtLoad": true,
+                    "Requires": ["networking", "logging", "etc"],
+                    "SupportsCheckin": true,
+                    "Program": "/usr/local/libexec/dispatcher/ups_wrapper"
                 },
                 "builtin": false,
-                "start_rpc": "service.ups.service_start",
-                "stop_rpc": "service.ups.service_stop",
-                "restart_rpc": "service.ups.service_restart",
-                "status_rpc": "service.ups.service_status",
                 "task": "service.ups.update",
                 "get_config_rpc": "service.ups.get_config",
                 "name": "ups"

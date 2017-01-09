@@ -1,0 +1,99 @@
+#!/usr/local/bin/python3
+#
+# Copyright (c) 2016 iXsystems, Inc.
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+# 1. Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+# 2. Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in the
+#    documentation and/or other materials provided with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+# OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+# HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+# LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+# OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+# SUCH DAMAGE.
+#
+
+import os
+import sys
+import subprocess
+import signal
+from datastore import get_datastore
+from datastore.config import ConfigStore, ConfigNode
+from freenas.serviced import checkin, ServicedException
+
+
+ds = get_datastore()
+cs = ConfigStore(ds)
+ups = ConfigNode('service.ups', cs).__getstate__()
+
+
+def start_process(label):
+    args = get_arguments(label)
+    print('Starting {0}'.format(args))
+    return subprocess.Popen(args)
+
+
+def get_arguments(label):
+    if label == 'org.freebsd.upsdrv':
+        return \
+            ['/usr/local/sbin/upsdrvctl', 'start']
+
+    if label == 'org.freebsd.upsd':
+        return \
+            ['/usr/local/sbin/upsd']
+
+    if label == 'org.freebsd.upsmon':
+        return \
+            ['/usr/local/sbin/upsmon', 'localhost']
+
+
+
+if ups['mode'] == 'MASTER':
+
+    procs = [
+        start_process('org.freebsd.upsdrv'),
+        start_process('org.freebsd.upsd'),
+        start_process('org.freebsd.upsmon')
+    ]
+
+else:
+
+    procs = [
+        start_process('org.freebsd.upsmon')
+    ]
+
+try:
+    signal.signal(signal.SIGHUP, signal.SIG_DFL)
+    checkin()
+    while True:
+        sig = signal.sigwait([signal.SIGTERM, signal.SIGINT, signal.SIGHUP])
+        if sig == signal.SIGHUP:
+            print('Reloading configuration')
+            for p in procs:
+                os.kill(p.pid, signal.SIGHUP)
+
+            continue
+        break
+except ServicedException:
+    print("Failed to check-in")
+finally:
+    for p in reversed(procs):
+        print('Terminating {0}'.format(p.args[0]))
+        p.terminate()
+        p.wait()
+
+    sys.exit(0)
+
+
