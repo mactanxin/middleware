@@ -1061,6 +1061,10 @@ class VMDeleteTask(Task):
             raise TaskException(errno.ENOENT, 'VM {0} not found'.format(id))
 
         vm = self.datastore.get_by_id('vms', id)
+
+        if self.datastore.exists('vms', ('parent', '=', id)):
+            raise TaskException(errno.EACCES, 'Cannot delete VM {0}. VM has clones'.format(vm['id']))
+
         try:
             delete_config(
                 self.dispatcher.call_sync(
