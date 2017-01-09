@@ -116,6 +116,24 @@ class VolumeDatastoreProvider(Provider):
 
     @private
     @accepts(str, str)
+    @returns(h.array(str))
+    def get_snapshot_clones(self, datastore_id, path):
+        raw_dataset, snap_id = path.split('@', 1)
+        dataset = os.path.join(datastore_id, raw_dataset)
+        snapshot_id = self.dispatcher.call_sync(
+            'volume.snapshot.query',
+            [('dataset', '=', dataset), ('metadata.org\.freenas:vm_snapshot', '=', snap_id)],
+            {'single': True, 'select': 'id'}
+        )
+        datasets = self.dispatcher.call_sync(
+            'volume.dataset.query',
+            [('properties.origin.parsed', '=', snapshot_id)],
+            {'select': 'id'}
+        )
+        return ['/' + '/'.join(d.split('/')[1:]) for d in datasets]
+
+    @private
+    @accepts(str, str)
     @returns(h.ref('vm-datastore-path-type'))
     def get_path_type(self, id, path):
         zfs_path = os.path.join(id, path)

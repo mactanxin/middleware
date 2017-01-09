@@ -92,6 +92,12 @@ class LocalDatastoreProvider(Provider):
 
     @private
     @accepts(str, str)
+    @returns(h.array(str))
+    def get_snapshot_clones(self, datastore_id, path):
+        return []
+
+    @private
+    @accepts(str, str)
     @returns(h.ref('vm-datastore-path-type'))
     def get_path_type(self, id, path):
         path = self.dispatcher.call_sync('vm.datastore.get_filesystem_path', id, path)
