@@ -104,13 +104,14 @@ class VolumeDatastoreProvider(Provider):
             {'select': 'properties.origin.parsed', 'single': True}
         )
         if origin:
-            snap_id = self.dispatcher.call_sync(
+            dataset, snap_id = self.dispatcher.call_sync(
                 'volume.snapshot.query',
                 [('id', '=', origin)],
-                {'select': 'metadata.org\.freenas:vm_snapshot', 'single': True}
+                {'select': ('dataset', 'metadata.org\.freenas:vm_snapshot'), 'single': True}
             )
             if snap_id:
-                return f'{path}@{snap_id}'
+                dataset = '/'.join(dataset.split('/')[1:])
+                return f'/{dataset}@{snap_id}'
 
         return None
 
