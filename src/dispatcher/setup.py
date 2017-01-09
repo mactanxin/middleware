@@ -48,7 +48,8 @@ files = [
     "src/utils.py",
     "src/lib/freebsd.py",
     "src/lib/geom.py",
-    "src/lib/system.py"
+    "src/lib/system.py",
+    "src/lib/zfs.py",
 ]
 
 

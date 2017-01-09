@@ -32,7 +32,6 @@ import gevent
 import logging
 import tempfile
 import shutil
-import itertools
 import base64
 import copy
 import bsd
@@ -46,6 +45,7 @@ from event import sync
 from cache import EventCacheStore
 from lib.system import SubprocessException
 from lib.freebsd import fstyp
+from lib.zfs import compare_vdevs, iterate_vdevs, vdev_by_guid, split_snapshot_name, get_resources
 from task import (
     Provider, Task, ProgressTask, TaskException, TaskWarning, VerifyException, query,
     TaskDescription
@@ -2749,44 +2749,6 @@ class SnapshotRollbackTask(Task):
         ))
 
 
-def compare_vdevs(vd1, vd2):
-    if vd1 is None or vd2 is None:
-        return False
-
-    if vd1['guid'] != vd2['guid']:
-        return False
-
-    if vd1['type'] != vd2['type']:
-        return False
-
-    if vd1.get('path') != vd2.get('path'):
-        return False
-
-    for c1, c2 in itertools.zip_longest(vd1.get('children', []), vd2.get('children', [])):
-        if not compare_vdevs(c1, c2):
-            return False
-
-    return True
-
-
-def iterate_vdevs(topology):
-    for name, grp in list(topology.items()):
-        for vdev in grp:
-            if vdev['type'] == 'disk':
-                yield vdev, name
-                continue
-
-            if 'children' in vdev:
-                for child in vdev['children']:
-                    yield child, name
-
-
-def vdev_by_guid(topology, guid):
-    for vd, _ in iterate_vdevs(topology):
-        if vd['guid'] == guid:
-            return vd
-
-
 def disk_spec_to_path(dispatcher, ident):
     return dispatcher.call_sync(
         'disk.query',
@@ -2806,10 +2768,6 @@ def get_disks(topology, predicate=None):
         yield vdev['path'], gname
 
 
-def get_resources(topology):
-    return ['disk:{0}'.format(d) for d, _ in get_disks(topology, lambda v: v.get('status') != 'UNAVAIL')]
-
-
 def get_disk_gptid(dispatcher, disk):
     id = dispatcher.call_sync('disk.path_to_id', disk)
     config = dispatcher.call_sync('disk.get_disk_config_by_id', id)
@@ -2822,12 +2780,6 @@ def convert_topology_to_gptids(dispatcher, topology):
         vdev['path'] = get_disk_gptid(dispatcher, vdev['path'])
 
     return topology
-
-
-def split_snapshot_name(name):
-    ds, _, snap = name.partition('@')
-    pool = ds.split('/', 1)[0]
-    return pool, ds, snap
 
 
 def get_digest(password, salt=None):
