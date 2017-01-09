@@ -44,6 +44,7 @@ from freenas.dispatcher.rpc import SchemaHelper as h
 from freenas.dispatcher.jsonenc import dumps
 from resources import Resource
 from debug import AttachData, AttachCommandOutput
+from lib.zfs import iterate_vdevs, vdev_by_guid, vdev_by_path
 from freenas.utils.trace_logger import TRACE
 from freenas.utils import first_or_default, query as q
 from utils import is_child
@@ -90,7 +91,7 @@ class ZpoolProvider(Provider):
         if not pool:
             raise RpcException(errno.ENOENT, 'Pool {0} not found'.format(name))
 
-        return [v['path'] for v in iterate_vdevs(pool['groups'])]
+        return [v['path'] for v, _ in iterate_vdevs(pool['groups'])]
 
     @accepts(str)
     @returns(h.object())
@@ -148,13 +149,13 @@ class ZpoolProvider(Provider):
     @returns(h.ref('zfs-vdev'))
     def vdev_by_guid(self, name, guid):
         pool = pools.get(name)
-        return first_or_default(lambda v: v['guid'] == guid, iterate_vdevs(pool['groups']))
+        return vdev_by_guid(pool['groups'], guid)
 
     @accepts(str, str)
     @returns(h.ref('zfs-vdev'))
     def vdev_by_path(self, name, path):
         pool = pools.get(name)
-        return first_or_default(lambda v: v['path'] == path, iterate_vdevs(pool['groups']))
+        return vdev_by_path(pool['groups'], path)
 
     @accepts(str)
     def ensure_resilvered(self, name):
@@ -1313,24 +1314,6 @@ def pool_exists(pool):
         return False
 
 
-def iterate_vdevs(topology):
-    for grp in topology.values():
-        for vdev in grp:
-            if vdev['type'] == 'disk':
-                yield vdev
-                continue
-
-            if 'children' in vdev:
-                for child in vdev['children']:
-                    yield child
-
-
-def vdev_by_guid(topology, guid):
-    for vd in iterate_vdevs(topology):
-        if vd['guid'] == guid:
-            return vd
-
-
 def get_disk_names(dispatcher, pool):
     ret = []
     for x in pool.disks:
@@ -1351,7 +1334,7 @@ def sync_zpool_cache(dispatcher, pool, guid=None):
         zfspool = dispatcher.threaded(lambda: zfs.get(pool).__getstate__(False))
 
         if oldpool:
-            for vd in iterate_vdevs(zfspool['groups']):
+            for vd, _ in iterate_vdevs(zfspool['groups']):
                 oldvd = vdev_by_guid(oldpool['groups'], vd['guid'])
                 if not oldvd:
                     continue
@@ -1644,7 +1627,7 @@ def _init(dispatcher, plugin):
             if volume and (volume.get('key_encrypted') or volume.get('password_encrypted')):
                 continue
 
-            for vd in iterate_vdevs(p['groups']):
+            for vd, _ in iterate_vdevs(p['groups']):
                 if args['path'] == vd['path']:
                     logger.info('Device {0} that was part of the pool {1} got reconnected'.format(
                         args['path'],
