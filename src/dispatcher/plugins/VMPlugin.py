@@ -1062,8 +1062,12 @@ class VMDeleteTask(Task):
 
         vm = self.datastore.get_by_id('vms', id)
 
-        if self.datastore.exists('vms', ('parent', '=', id)):
-            raise TaskException(errno.EACCES, 'Cannot delete VM {0}. VM has clones'.format(vm['name']))
+        clones = list(self.datastore.exists('vms', ('parent', '=', id), select='name'))
+        if clones:
+            raise TaskException(
+                errno.EACCES,
+                'Cannot delete VM {0}. VM has clones: '.format(vm['name']) + ' '.join(clones)
+            )
 
         try:
             delete_config(
