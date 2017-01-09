@@ -1280,6 +1280,9 @@ class VMCloneTask(Task):
         if state != 'STOPPED':
             raise TaskException(errno.EACCES, 'Cannot clone a running VM')
 
+        if q.get(vm, 'config.docker_host'):
+            raise TaskException(errno.EINVAL, 'Docker hosts cannot be cloned')
+
         snap_cnt = self.dispatcher.call_sync(
             'vm.snapshot.query',
             [('id', '=', id)],
@@ -1705,6 +1708,9 @@ class VMSnapshotCloneTask(VMSnapshotBaseTask):
 
         if self.datastore.exists('vms', ('name', '=', new_name)):
             raise TaskException(errno.EEXIST, 'VM {0} already exists'.format(new_name))
+
+        if q.get(vm, 'config.docker_host'):
+            raise TaskException(errno.EINVAL, 'Docker hosts cannot be cloned')
 
         snapshot_id = snapshot['id']
         vm_name = vm['name']
