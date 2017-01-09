@@ -1089,31 +1089,32 @@ class VMDeleteTask(Task):
 
         vm_root_path = self.dispatcher.call_sync('vm.get_vm_root', id, False)
         datastore = vm['target']
-        subtasks = []
 
-        for snap in self.datastore.query('vm.snapshots', ('parent.id', '=', id), select=id):
-            subtasks.append(self.run_subtask('vm.snapshot.delete', snap))
-
-        self.join_subtasks(*subtasks)
-
-        subtasks = []
+        snap_sources = []
         for dir in self.dispatcher.call_sync('vm.datastore.list_dirs', datastore, vm_root_path):
             source = self.dispatcher.call_sync('vm.datastore.get_clone_source', datastore, dir)
             if source:
-                path, _ = source.split('@', 1)
+                path, snap_id = source.split('@', 1)
+                if self.datastore.query('vm.snapshots', ('id', '=', snap_id)):
+                    continue
+
                 type = 'directory'
                 if self.dispatcher.call_sync('vm.datastore.get_path_type', datastore, path) == 'BLOCK_DEVICE':
                     type = 'block_device'
 
-                subtasks.append(self.run_subtask('vm.datastore.{0}.snapshot.delete'.format(type), datastore, source))
-
-        self.join_subtasks(*subtasks)
+                snap_sources.append((type, source))
 
         try:
             self.run_subtask_sync('vm.datastore.directory.delete', vm['target'], get_vm_path(vm['name']))
         except RpcException as err:
             if err.code != errno.ENOENT:
                 raise err
+
+        subtasks = []
+        for type, source in snap_sources:
+            subtasks.append(self.run_subtask('vm.datastore.{0}.snapshot.delete'.format(type), datastore, source))
+
+        self.join_subtasks(*subtasks)
 
         with self.dispatcher.get_lock('vms'):
             self.dispatcher.run_hook('vm.pre_destroy', {'name': id})
