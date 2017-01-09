@@ -1317,7 +1317,7 @@ class VMSnapshotBaseTask(Task):
                 type = 'block_device'
 
             subtasks.append(self.run_subtask(
-                'vm.datastore.{0}.snapshot.{1}'.format(type, task),
+                'vm.datastore.{0}{1}.{2}'.format(type, '' if task == 'clone' else '.snapshot', task),
                 datastore,
                 f'{p}@{snapshot_id}',
                 *(extra(p) if extra else [])
