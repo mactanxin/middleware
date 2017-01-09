@@ -1100,7 +1100,12 @@ class VMDeleteTask(Task):
         for dir in self.dispatcher.call_sync('vm.datastore.list_dirs', datastore, vm_root_path):
             source = self.dispatcher.call_sync('vm.datastore.get_clone_source', datastore, dir)
             if source:
-                subtasks.append(self.run_subtask('vm.datastore.snapshot.delete', datastore, source))
+                path, _ = source.split('@', 1)
+                type = 'directory'
+                if self.dispatcher.call_sync('vm.datastore.get_path_type', datastore, path) == 'BLOCK_DEVICE':
+                    type = 'block_device'
+
+                subtasks.append(self.run_subtask('vm.datastore.{0}.snapshot.delete'.format(type), datastore, source))
 
         self.join_subtasks(*subtasks)
 
