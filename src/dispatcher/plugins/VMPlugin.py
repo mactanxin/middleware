@@ -1066,7 +1066,7 @@ class VMDeleteTask(Task):
         if clones:
             raise TaskException(
                 errno.EACCES,
-                'Cannot delete VM {0}. VM has clones: '.format(vm['name']) + ' '.join(clones)
+                'Cannot delete VM {0}. VM has clones: '.format(vm['name']) + ', '.join(clones)
             )
 
         try:
