@@ -1694,6 +1694,7 @@ class VMSnapshotCloneTask(VMSnapshotBaseTask):
         new_vm = snapshot['parent']
         new_vm['id'] = str(uuid.uuid4())
         new_vm['name'] = new_name
+        new_vm['parent'] = vm['id']
 
         self.datastore.insert('vms', new_vm)
         self.dispatcher.dispatch_event('vm.changed', {
