@@ -10,6 +10,7 @@ MAINTAINER=	dev@ixsystems.com
 COMMENT=	Tool to upgrade from 9.3 databases
 
 RUN_DEPENDS=	python>0:${PORTSDIR}/lang/python \
+		${PYTHON_PKGNAMEPREFIX}pycrypto>0:${PORTSDIR}/security/py-pycrypto \
 		${PYTHON_PKGNAMEPREFIX}south>0:${PORTSDIR}/databases/py-south \
 		${PYTHON_PKGNAMEPREFIX}bsd>0:${PORTSDIR}/freenas/py-bsd \
 		${PYTHON_PKGNAMEPREFIX}lxml>0:${PORTSDIR}/devel/py-lxml
