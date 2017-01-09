@@ -1062,8 +1062,12 @@ class VMDeleteTask(Task):
 
         vm = self.datastore.get_by_id('vms', id)
 
-        if self.datastore.exists('vms', ('parent', '=', id)):
-            raise TaskException(errno.EACCES, 'Cannot delete VM {0}. VM has clones'.format(vm['name']))
+        clones = list(self.datastore.exists('vms', ('parent', '=', id), select='name'))
+        if clones:
+            raise TaskException(
+                errno.EACCES,
+                'Cannot delete VM {0}. VM has clones: '.format(vm['name']) + ' '.join(clones)
+            )
 
         try:
             delete_config(
@@ -1404,8 +1408,6 @@ class VMSnapshotCreateTask(VMSnapshotBaseTask):
         vm = self.datastore.get_by_id('vms', id)
         if not vm:
             raise TaskException(errno.ENOENT, 'VM {0} does not exist'.format(id))
-        if vm['parent']:
-            raise TaskException(errno.EACCES, 'Cannot create a snapshot of another snapshot')
 
         state = self.dispatcher.call_sync('vm.query', [('id', '=', id)], {'select': 'status.state', 'single': True})
         if state != 'STOPPED':
