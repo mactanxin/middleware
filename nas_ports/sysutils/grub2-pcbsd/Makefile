@@ -3,11 +3,8 @@
 
 PORTNAME=	grub2-pcbsd
 PORTVERSION=	2.02q
-PORTREVISION=	13
+PORTREVISION=	${REVISION}
 CATEGORIES=	sysutils
-MASTER_SITES=	http://www.pcbsd.org/~kris/software/ \
-		ftp://ftp.pcbsd.org/pub/software/
-DISTNAME=	grub-2.02_8
 
 MAINTAINER=	kmoore@FreeBSD.org
 COMMENT=	Multiboot boot loader
@@ -18,7 +15,7 @@ BUILD_DEPENDS=	${LOCALBASE}/bin/flex:${PORTSDIR}/textproc/flex \
 		${LOCALBASE}/bin/bash:${PORTSDIR}/shells/bash \
 		help2man:${PORTSDIR}/misc/help2man
 
-WRKSRC=		${WRKDIR}/grub-2.02
+WRKSRC=		/usr/grub2_pcbsd_src
 CONFLICTS=	grub-0* grub2-2*
 SSP_UNSAFE=	yes
 ACLOCAL_ARGS=	-Im4
@@ -27,6 +24,7 @@ USES=		autoreconf bison cpe gettext gmake makeinfo python tar:xz
 ONLY_FOR_ARCHS=	i386 amd64
 INFO=		grub grub-dev
 MAKE_JOBS_UNSAFE=	yes
+EXTRACT_ONLY=
 
 CPE_PRODUCT=	grub
 CPE_VENDOR=	gnu
@@ -72,6 +70,9 @@ FUSE=		"@comment "
 .endif
 
 PLIST_SUB+=	FUSE=${FUSE}
+
+checksum fetch:
+	${ECHO_CMD} ${.TARGET} not needed because building direct
 
 post-patch:
 	@${TOUCH} -t 200001010000 ${WRKSRC}/Makefile.util.def
