@@ -1087,6 +1087,23 @@ class VMDeleteTask(Task):
         except RpcException:
             pass
 
+        vm_root_path = self.dispatcher.call_sync('vm.get_vm_root', id, False)
+        datastore = vm['target']
+        subtasks = []
+
+        for snap in self.datastore.query('vm.snapshots', ('parent.id', '=', id), select=id):
+            subtasks.append(self.run_subtask('vm.snapshot.delete', snap))
+
+        self.join_subtasks(*subtasks)
+
+        subtasks = []
+        for dir in self.dispatcher.call_sync('vm.datastore.list_dirs', datastore, vm_root_path):
+            source = self.dispatcher.call_sync('vm.datastore.get_clone_source', datastore, dir)
+            if source:
+                subtasks.append(self.run_subtask('vm.datastore.snapshot.delete', datastore, source))
+
+        self.join_subtasks(*subtasks)
+
         try:
             self.run_subtask_sync('vm.datastore.directory.delete', vm['target'], get_vm_path(vm['name']))
         except RpcException as err:
