@@ -266,7 +266,7 @@ class CreateShareTask(Task):
             'ids': ids
         })
 
-        new_share = self.datastore.get_by_id('shares', ids[0])
+        new_share = self.datastore.get_by_id('shares', ids)
         path = self.dispatcher.call_sync('share.get_directory_path', new_share['id'])
         try:
             save_config(
