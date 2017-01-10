@@ -1163,6 +1163,7 @@ class CalculateReplicationDeltaTask(Task):
                     localfs,
                     remotefs,
                     resume=True,
+                    incremental=False,
                     token=remote_ds.get('resume_token'),
                     snapshot=token_info['toname']
                 ))
