@@ -504,7 +504,10 @@ class DockerContainerCreateTask(DockerBaseTask):
             'autostart': False,
             'command': [],
             'environment': [],
-            'interactive': False
+            'interactive': False,
+            'privileged': False,
+            'capabilities_add': [],
+            'capabilities_drop': [],
         })
 
         if not container.get('host'):
