@@ -1216,17 +1216,17 @@ class ZfsResumeSendTask(ZfsBaseTask):
     def early_describe(cls):
         return 'Sending resumed ZFS replication stream'
 
-    def describe(self, name, token, fd):
+    def describe(self, token, fd):
+        token_info = self.dispatcher.call_sync('zfs.dataset.describe_resume_token', token)
         return TaskDescription(
             'Sending resumed ZFS replication stream from {name}',
-            name=name
+            name=token_info['toname'] if token_info else 'unknown'
         )
 
-    def run(self, name, token, fd):
+    def run(self, token, fd):
         try:
             zfs = get_zfs()
-            obj = zfs.get_object(name)
-            obj.send_resume(self, fd.fd, token, flags={
+            zfs.send_resume(self, fd.fd, token, flags={
                 libzfs.SendFlag.PROGRESS,
                 libzfs.SendFlag.PROPS
             })
