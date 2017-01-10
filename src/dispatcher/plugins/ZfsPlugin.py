@@ -246,6 +246,7 @@ class ZfsDatasetProvider(Provider):
         zfs = get_zfs()
         return zfs.describe_resume_token(token)
 
+
 @description('Provides information about ZFS snapshots')
 class ZfsSnapshotProvider(Provider):
     @query('zfs-snapshot')
