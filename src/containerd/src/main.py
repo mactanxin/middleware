@@ -99,10 +99,13 @@ def normalize_docker_labels(labels):
     normalize(labels, {
         'org.freenas.autostart': "false",
         'org.freenas.bridged': "false",
+        'org.freenas.capabilities-add': [],
+        'org.freenas.capabilities-drop': [],
         'org.freenas.dhcp': "false",
         'org.freenas.expose-ports-at-host': "false",
         'org.freenas.interactive': "false",
         'org.freenas.port-mappings': "",
+        'org.freenas.privileged': "false",
         'org.freenas.settings': [],
         'org.freenas.static-volumes': [],
         'org.freenas.upgradeable': "false",
@@ -1343,6 +1346,7 @@ class DockerService(RpcService):
             'web_ui_path': labels.get('org.freenas.web-ui-path'),
             'web_ui_port': labels.get('org.freenas.web-ui-port'),
             'web_ui_protocol': labels.get('org.freenas.web-ui-protocol'),
+            'privileged': truefalse_to_bool(labels.get('org.freenas.privileged')),
         }
 
         if labels.get('org.freenas.port-mappings'):
@@ -1356,6 +1360,18 @@ class DockerService(RpcService):
                     'host_port': int(m.group(2)),
                     'protocol': m.group(3).upper()
                 })
+
+        if labels.get('org.freenas.capabilities-add'):
+            try:
+                result['capabilities_add'] = loads(labels['org.freenas.capabilities-add'])
+            except ValueError:
+                pass
+
+        if labels.get('org.freenas.capabilities-drop'):
+            try:
+                result['capabilities_drop'] = loads(labels['org.freenas.capabilities-drop'])
+            except ValueError:
+                pass
 
         if labels.get('org.freenas.volumes'):
             try:
@@ -1436,6 +1452,7 @@ class DockerService(RpcService):
                 external = q.get(details, 'NetworkSettings.Networks.external')
                 labels = q.get(details, 'Config.Labels')
                 environment = q.get(details, 'Config.Env')
+                host_config = q.get(details, 'HostConfig')
                 names = list(normalize_names(container['Names']))
                 bridge_address = external['IPAddress'] if external else None
                 presets = self.labels_to_presets(labels)
@@ -1480,7 +1497,10 @@ class DockerService(RpcService):
                     },
                     'web_ui_url': web_ui_url,
                     'settings': settings,
-                    'version': presets.get('version')
+                    'version': presets.get('version'),
+                    'capabilities_add': host_config['CapAdd'] or [],
+                    'capabilities_drop': host_config['CapDrop'] or [],
+                    'privileged': host_config.get('Privileged', False),
                 })
                 result.append(obj)
 
