@@ -157,23 +157,6 @@ class ZpoolProvider(Provider):
         pool = pools.get(name)
         return vdev_by_path(pool['groups'], path)
 
-    @accepts(str)
-    def ensure_resilvered(self, name):
-        try:
-            zfs = get_zfs()
-            pool = zfs.get(name)
-
-            self.dispatcher.test_or_wait_for_event(
-                'fs.zfs.resilver.finished',
-                lambda args: args['guid'] == str(pool.guid),
-                lambda:
-                    pool.scrub.state == libzfs.ScanState.SCANNING and
-                    pool.scrub.function == libzfs.ScanFunction.RESILVER
-                )
-
-        except libzfs.ZFSException as err:
-            raise RpcException(zfs_error_to_errno(err.code), str(err))
-
 
 @description('Provides information about ZFS datasets')
 class ZfsDatasetProvider(Provider):
@@ -257,6 +240,11 @@ class ZfsDatasetProvider(Provider):
         except libzfs.ZFSException as err:
             raise RpcException(zfs_error_to_errno(err.code), str(err))
 
+    @accepts(str)
+    @returns(h.ref('zfs-resume-token'))
+    def describe_resume_token(self, token):
+        zfs = get_zfs()
+        return zfs.describe_resume_token(token)
 
 @description('Provides information about ZFS snapshots')
 class ZfsSnapshotProvider(Provider):
@@ -1816,6 +1804,15 @@ def _init(dispatcher, plugin):
     plugin.register_schema_definition('zfs-pool-status', {
         'type': 'string',
         'enum': ['ONLINE', 'OFFLINE', 'DEGRADED', 'FAULTED', 'REMOVED', 'UNAVAIL']
+    })
+
+    plugin.register_schema_definition('zfs-resume-token', {
+        'fromguid': {'type': 'integer'},
+        'object': {'type': 'integer'},
+        'offset': {'type': 'integer'},
+        'bytes': {'type': 'integer'},
+        'toguid': {'type': 'integer'},
+        'toname': {'type': 'string'}
     })
 
     # Register Providers
