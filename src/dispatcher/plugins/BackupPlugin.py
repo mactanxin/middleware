@@ -96,7 +96,7 @@ class CreateBackupTask(Task):
             'properties': {}
         })
 
-        backup['properties'], = self.run_subtask_sync('backup.{0}.init'.format(backup['provider']), backup)
+        backup['properties'] = self.run_subtask_sync('backup.{0}.init'.format(backup['provider']), backup)
         id = self.datastore.insert('backup', backup)
         self.dispatcher.emit_event('backup.changed', {
             'operation': 'create',
@@ -197,7 +197,7 @@ class BackupQueryTask(ProgressTask):
         if not backup:
             raise RpcException(errno.ENOENT, 'Backup {0} not found'.format(id))
 
-        dirlist, = self.run_subtask_sync(
+        dirlist = self.run_subtask_sync(
             'backup.{0}.list'.format(backup['provider']),
             backup['properties']
         )
@@ -289,7 +289,7 @@ class BackupSyncTask(ProgressTask):
         backup = self.datastore.get_by_id('backup', id)
 
         try:
-            manifest, = self.run_subtask_sync('backup.query', id)
+            manifest = self.run_subtask_sync('backup.query', id)
             if manifest:
                 snapshots = manifest['snapshots']
         except RpcException as err:
@@ -308,7 +308,7 @@ class BackupSyncTask(ProgressTask):
 
         self.set_progress(0, 'Calculating send delta')
 
-        (actions, send_size), = self.run_subtask_sync(
+        actions, send_size = self.run_subtask_sync(
             'replication.calculate_delta',
             backup['dataset'],
             backup['dataset'],
@@ -359,7 +359,7 @@ class BackupRestoreTask(ProgressTask):
         if not backup:
             raise TaskException(errno.ENOENT, 'Backup {0} not found'.format(backup['id']))
 
-        manifest, = self.run_subtask_sync('backup.query', id)
+        manifest = self.run_subtask_sync('backup.query', id)
         if not manifest:
             raise TaskException(errno.ENOENT, 'No valid backup found in specified location')
 

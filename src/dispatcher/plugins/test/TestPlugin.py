@@ -80,7 +80,7 @@ class TestDownloadTask(Task):
 
         t = threading.Thread(target=feed)
         t.start()
-        url, = self.run_subtask_sync(
+        url = self.run_subtask_sync(
             'file.prepare_url_download', FileDescriptor(rfd)
         )
         t.join(timeout=1)

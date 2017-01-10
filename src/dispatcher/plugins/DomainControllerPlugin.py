@@ -151,7 +151,7 @@ class DCConfigureTask(ProgressTask):
             try:
                 self.dispatcher.call_sync('service.dc.check_dc_vm_availability')
             except RpcException:
-                dc['vm_id'], = self.run_subtask_sync('vm.create', {
+                dc['vm_id'] = self.run_subtask_sync('vm.create', {
                     'name': 'zentyal_domain_controller',
                     'template': {'name': 'zentyal-4.2'},
                     'target': node['volume'],

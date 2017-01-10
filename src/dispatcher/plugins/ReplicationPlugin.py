@@ -585,7 +585,7 @@ class ReplicationDeleteTask(ReplicationBaseTask):
         if not self.datastore.exists('replication.links', ('name', '=', name)):
             raise TaskException(errno.ENOENT, 'Replication link {0} do not exist.'.format(name))
 
-        link = self.run_subtask_sync('replication.get_latest_link', name)[0]
+        link = self.run_subtask_sync('replication.get_latest_link', name)
         is_master, remote = self.get_replication_state(link)
         remote_client = None
 
@@ -653,7 +653,7 @@ class ReplicationUpdateTask(ReplicationBaseTask):
         if not self.datastore.exists('replication.links', ('name', '=', name)):
             raise TaskException(errno.ENOENT, 'Replication link {0} do not exist.'.format(name))
 
-        link = self.run_subtask_sync('replication.get_latest_link', name)[0]
+        link = self.run_subtask_sync('replication.get_latest_link', name)
 
         if 'status' in updated_fields and link['status'] != updated_fields['status']:
             raise TaskException(errno.EINVAL, 'Replication status is readonly')
@@ -847,7 +847,7 @@ class ReplicationSyncTask(ReplicationBaseTask):
         message = ''
         speed = 0
         remote_client = None
-        link = self.run_subtask_sync('replication.get_latest_link', name)[0]
+        link = self.run_subtask_sync('replication.get_latest_link', name)
         is_master, remote = self.get_replication_state(link)
         try:
             remote_client = get_freenas_peer_client(self, remote)
@@ -899,7 +899,7 @@ class ReplicationSyncTask(ReplicationBaseTask):
                             progress_callback=lambda p, m, e=None: report_progress(p, m, e)
                         )
 
-                        total_size += result[0][1]
+                        total_size += result[1]
 
                     if link['replicate_services']:
                         call_task_and_check_state(remote_client, 'replication.reserve_services', name)
@@ -973,7 +973,7 @@ class ReplicationReserveServicesTask(ReplicationBaseTask):
             raise TaskException(errno.ENOENT, 'Replication link {0} do not exist.'.format(name))
 
         service_types = ['shares', 'vms']
-        link = self.run_subtask_sync('replication.get_latest_link', name)[0]
+        link = self.run_subtask_sync('replication.get_latest_link', name)
         is_master, remote = self.get_replication_state(link)
         remote_client = get_freenas_peer_client(self, remote)
 
@@ -1338,7 +1338,7 @@ class ReplicateDatasetTask(ProgressTask):
                 'uuid': q.get(i, 'properties.org\\.freenas:uuid.value')
             })
 
-        (actions, send_size), = self.run_subtask_sync(
+        actions, send_size = self.run_subtask_sync(
             'replication.calculate_delta',
             localds,
             remoteds,
@@ -1572,7 +1572,7 @@ class ReplicationRoleUpdateTask(ReplicationBaseTask):
         if not self.datastore.exists('replication.links', ('name', '=', name)):
             raise TaskException(errno.ENOENT, 'Replication link {0} do not exist.'.format(name))
 
-        link = self.run_subtask_sync('replication.get_latest_link', name)[0]
+        link = self.run_subtask_sync('replication.get_latest_link', name)
         if not link['bidirectional']:
             return
 

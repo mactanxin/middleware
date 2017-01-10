@@ -334,8 +334,8 @@ class UpdateServiceConfigTask(Task):
                 raise new_err
 
             result = self.run_subtask_sync(service_def['task'], updated_config)
-            restart = result[0] == 'RESTART'
-            reload = result[0] == 'RELOAD'
+            restart = result == 'RESTART'
+            reload = result == 'RELOAD'
 
             if updated_config.get('enable') is not None:
                 node['enable'] = updated_config['enable']
