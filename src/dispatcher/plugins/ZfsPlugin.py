@@ -1211,10 +1211,15 @@ class ZfsSendTask(ZfsBaseTask):
 
 @private
 @description('Sends ZFS replication stream')
-class ZfsResumeSendTask(ZfsBaseTask):
+class ZfsResumeSendTask(Task):
     @classmethod
     def early_describe(cls):
         return 'Sending resumed ZFS replication stream'
+
+    def verify(self, token, fd):
+        token_info = self.dispatcher.call_sync('zfs.dataset.describe_resume_token', token)
+        ds, _, _ = token_info['toname'].partition('@')
+        return ['zfs:{0}'.format(ds)]
 
     def describe(self, token, fd):
         token_info = self.dispatcher.call_sync('zfs.dataset.describe_resume_token', token)
@@ -1226,7 +1231,7 @@ class ZfsResumeSendTask(ZfsBaseTask):
     def run(self, token, fd):
         try:
             zfs = get_zfs()
-            zfs.send_resume(self, fd.fd, token, flags={
+            zfs.send_resume(fd.fd, token, flags={
                 libzfs.SendFlag.PROGRESS,
                 libzfs.SendFlag.PROPS
             })
@@ -1234,7 +1239,6 @@ class ZfsResumeSendTask(ZfsBaseTask):
             raise TaskException(zfs_error_to_errno(err.code), str(err))
         finally:
             os.close(fd.fd)
-
 
 
 @private
