@@ -1844,7 +1844,16 @@ def _init(dispatcher, plugin):
                 'items': {'$ref': 'docker-volume'}
             },
             'bridge': {'$ref': 'docker-container-bridge'},
-            'parent_directory': {'type': 'string'}
+            'parent_directory': {'type': 'string'},
+            'capabilities_add': {
+                'type': 'array',
+                'items': {'type': 'string'}
+            },
+            'capabilities_drop': {
+                'type': 'array',
+                'items': {'type': 'string'}
+            },
+            'privileged': {'type': 'boolean'},
         }
     })
 
