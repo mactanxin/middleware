@@ -351,7 +351,7 @@ class FreeNASPeerCreateTask(Task):
                     })
                     raise
 
-                return created_ids[0]
+                return created_ids
         finally:
             remote_client.disconnect()
 

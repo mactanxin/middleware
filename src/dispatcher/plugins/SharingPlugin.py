@@ -263,7 +263,7 @@ class CreateShareTask(Task):
         ids = self.run_subtask_sync('share.{0}.create'.format(share['type']), share)
         self.dispatcher.dispatch_event('share.changed', {
             'operation': 'create',
-            'ids': ids
+            'ids': [ids]
         })
 
         new_share = self.datastore.get_by_id('shares', ids)
@@ -452,7 +452,7 @@ class ImportShareTask(Task):
 
         self.dispatcher.dispatch_event('share.changed', {
             'operation': 'create',
-            'ids': ids
+            'ids': [ids]
         })
 
         return ids[0]

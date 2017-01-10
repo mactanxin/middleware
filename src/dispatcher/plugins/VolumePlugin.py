@@ -713,7 +713,7 @@ class VolumeAutoCreateTask(ProgressTask):
             {'type': 'disk', 'path': disk_spec_to_path(self.dispatcher, i)} for i in log_disks or []
         ]
 
-        id, = self.run_subtask_sync(
+        id = self.run_subtask_sync(
             'volume.create',
             {
                 'id': name,
@@ -1207,7 +1207,7 @@ class VolumeImportTask(Task):
                     disk_id = self.dispatcher.call_sync('disk.path_to_id', dname)
                     self.run_subtask_sync('disk.geli.attach', disk_id, attach_params)
 
-            (new_name, guid), = self.run_subtask_sync('zfs.pool.import', id, new_name, params)
+            new_name, guid = self.run_subtask_sync('zfs.pool.import', id, new_name, params)
             mountpoint = os.path.join(VOLUMES_ROOT, new_name)
             self.run_subtask_sync(
                 'zfs.update',
@@ -2067,7 +2067,7 @@ class VolumeBackupKeysToFileTask(Task):
 
     def run(self, id, out_path=None):
         with open(out_path, 'wb') as out_file:
-            password, = self.run_subtask_sync(
+            password = self.run_subtask_sync(
                 'volume.keys.backup',
                 id,
                 FileDescriptor(out_file.fileno())

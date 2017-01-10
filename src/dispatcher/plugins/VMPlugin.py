@@ -725,7 +725,7 @@ class VMCreateTask(VMBaseTask):
                 )
                 if not template:
                     self.set_progress(5, 'Fetching VM template from IPFS')
-                    template_name = self.run_subtask_sync('vm.template.ipfs.fetch', template_name)[0]
+                    template_name = self.run_subtask_sync('vm.template.ipfs.fetch', template_name)
 
             if not template:
                 template = self.dispatcher.call_sync(
@@ -1634,7 +1634,7 @@ class VMSnapshotPublishTask(ProgressTask):
 
                     sha256_hash = sha256(dest_file, BLOCKSIZE)
 
-                    ipfs_hashes = self.run_subtask_sync('ipfs.add', dest_path, True)[0]
+                    ipfs_hashes = self.run_subtask_sync('ipfs.add', dest_path, True)
                     ipfs_hash = self.get_path_hash(ipfs_hashes, dest_path)
 
                     with open(os.path.join(dest_path, 'sha256'), 'w') as f:
@@ -1667,7 +1667,7 @@ class VMSnapshotPublishTask(ProgressTask):
         with open(os.path.join(template_path, 'template.json'), 'w') as f:
             f.write(dumps(template))
 
-        ipfs_hashes = self.run_subtask_sync('ipfs.add', template_path, True)[0]
+        ipfs_hashes = self.run_subtask_sync('ipfs.add', template_path, True)
         ipfs_link = 'ipfs://' + self.get_path_hash(ipfs_hashes, template_path)
         self.set_progress(100, 'Upload finished - template link: {0}'.format(ipfs_link))
         with open(os.path.join(template_path, 'hash'), 'w') as hash_file:

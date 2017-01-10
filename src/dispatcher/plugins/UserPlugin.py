@@ -326,8 +326,8 @@ class UserCreateTask(Task):
             except RpcException as err:
                 raise err
 
-            user['group'] = result[0]
-            self.created_group = result[0]
+            user['group'] = result
+            self.created_group = result
 
         try:
             id = self.datastore.insert('users', user)

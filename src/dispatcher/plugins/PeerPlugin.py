@@ -99,7 +99,7 @@ class PeerCreateTask(Task):
 
         self.dispatcher.dispatch_event('peer.changed', {
             'operation': 'create',
-            'ids': [ids[0]]
+            'ids': [ids]
         })
 
 
