@@ -1554,6 +1554,9 @@ def _init(dispatcher, plugin):
     @sync
     def on_dataset_setprop(args):
         with dispatcher.get_lock('zfs-cache'):
+            if args['ds'].endswith('/%recv'):
+                args['ds'] = args['ds'][:-6]
+
             if args['action'] == 'set':
                 logger.log(TRACE, '{0} {1} property {2} set to: {3}'.format(
                     'Snapshot' if '@' in args['ds'] else 'Dataset',
