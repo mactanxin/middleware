@@ -1625,6 +1625,24 @@ class DockerService(RpcService):
                 )
             })
 
+        caps_add = container.get('capabilities_add', [])
+        caps_add.append('NET_ADMIN') if 'NET_ADMIN' not in caps_add else None
+        caps_drop = container.get('capabilities_drop', [])
+
+        host_config= host.connection.create_host_config(
+            port_bindings=port_bindings,
+            binds={
+                i['host_path'].replace('/mnt', '/host'): {
+                    'bind': i['container_path'],
+                    'mode': 'ro' if i['readonly'] else 'rw'
+                } for i in container['volumes']
+                },
+            privileged=container['privileged'],
+            cap_add=caps_add,
+            cap_drop=caps_drop,
+            network_mode='external' if bridge_enabled else 'default'
+        )
+
         create_args = {
             'name': container['name'],
             'image': container['image'],
@@ -1632,17 +1650,7 @@ class DockerService(RpcService):
             'volumes': [i['container_path'] for i in container['volumes']],
             'labels': labels,
             'networking_config': networking_config,
-            'host_config': host.connection.create_host_config(
-                cap_add=['NET_ADMIN'],
-                port_bindings=port_bindings,
-                binds={
-                    i['host_path'].replace('/mnt', '/host'): {
-                        'bind': i['container_path'],
-                        'mode': 'ro' if i['readonly'] else 'rw'
-                    } for i in container['volumes']
-                },
-                network_mode='external' if bridge_enabled else 'default'
-            )
+            'host_config': host_config,
         }
 
         if container.get('command'):
