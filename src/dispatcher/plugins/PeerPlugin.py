@@ -91,7 +91,7 @@ class PeerCreateTask(Task):
             'health_check_interval': 60
         })
 
-        ids = self.run_subtask_sync(
+        id = self.run_subtask_sync(
             'peer.{0}.create'.format(peer.get('type')),
             peer,
             initial_credentials
@@ -99,7 +99,7 @@ class PeerCreateTask(Task):
 
         self.dispatcher.dispatch_event('peer.changed', {
             'operation': 'create',
-            'ids': [ids]
+            'ids': [id]
         })
 
 
