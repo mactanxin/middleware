@@ -260,13 +260,13 @@ class CreateShareTask(Task):
         if share.get('permissions') and share['target_type'] not in ('ZVOL', 'FILE'):
             self.run_subtask_sync('file.set_permissions', path, share.pop('permissions'))
 
-        ids = self.run_subtask_sync('share.{0}.create'.format(share['type']), share)
+        id = self.run_subtask_sync('share.{0}.create'.format(share['type']), share)
         self.dispatcher.dispatch_event('share.changed', {
             'operation': 'create',
-            'ids': [ids]
+            'ids': [id]
         })
 
-        new_share = self.datastore.get_by_id('shares', ids)
+        new_share = self.datastore.get_by_id('shares', id)
         path = self.dispatcher.call_sync('share.get_directory_path', new_share['id'])
         try:
             save_config(
@@ -289,7 +289,7 @@ class CreateShareTask(Task):
                                  "Please enable the {0} service.".format(share['type'])
                 ))
 
-        return ids[0]
+        return id
 
 
 @description("Updates existing share")
@@ -448,14 +448,14 @@ class ImportShareTask(Task):
                 share['type']
             ))
 
-        ids = self.run_subtask_sync('share.{0}.import'.format(share['type']), share)
+        id = self.run_subtask_sync('share.{0}.import'.format(share['type']), share)
 
         self.dispatcher.dispatch_event('share.changed', {
             'operation': 'create',
-            'ids': [ids]
+            'ids': [id]
         })
 
-        return ids[0]
+        return id
 
 
 @description("Sets share immutable")
