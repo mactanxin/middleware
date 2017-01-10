@@ -1445,7 +1445,7 @@ def _init(dispatcher, plugin):
 
                     dispatcher.dispatch_event('docker.host.changed', {
                         'operation': 'update',
-                        'ids': id
+                        'ids': [id]
                     })
 
     def on_image_event(args):
