@@ -243,7 +243,7 @@ class BackupSyncTask(ProgressTask):
                 'name': snapname,
                 'anchor': action.get('anchor'),
                 'incremental': action['incremental'],
-                'created_at': datetime.fromtimestamp(int(q.get(snap, 'properties.creation.rawvalue'))),
+                'created_at': int(q.get(snap, 'properties.creation.rawvalue')),
                 'uuid': q.get(snap, 'properties.org\\.freenas:uuid.value'),
                 'txg': int(txg) if txg else None,
                 'filename': filename
@@ -446,7 +446,7 @@ def _init(dispatcher, plugin):
                         'name': {'type': 'string'},
                         'anchor': {'type': ['string', 'null']},
                         'incremental': {'type': 'boolean'},
-                        'created_at': {'type': 'string'},
+                        'created_at': {'type': 'datetime'},
                         'uuid': {'type': 'string'},
                         'compression': {'$ref': 'backup-compression-type'},
                         'filename': {'type': 'string'}

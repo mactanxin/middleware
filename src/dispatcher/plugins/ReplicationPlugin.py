@@ -1112,9 +1112,9 @@ class CalculateReplicationDeltaTask(Task):
             return {
                 'name': snap['name'],
                 'snapshot_name': snap['snapshot_name'],
-                'created_at': q.get(snap, 'properties.creation.parsed'),
+                'created_at': int(q.get(snap, 'properties.creation.rawvalue')),
                 'txg': int(q.get(snap, 'properties.createtxg.rawvalue')),
-                'uuid': q.get(snap, 'properties.org\\.freenas:uuid')
+                'uuid': q.get(snap, 'properties.org\\.freenas:uuid.value')
             }
 
         def extend_with_snapshot_name(snap):
@@ -1147,17 +1147,35 @@ class CalculateReplicationDeltaTask(Task):
                 ('name', '~', '^{0}@'.format(remotefs))
             )
 
+            remote_ds = first_or_default(lambda s: s['name'] == remotefs, snapshots_list)
             snapshots = local_snapshots[:]
             found = None
 
-            if remote_snapshots:
-                # Find out the last common snapshot.
-                pairs = list(match_snapshots(local_snapshots, remote_snapshots))
-                if pairs:
-                    pairs.sort(key=lambda p: p[0]['created_at'], reverse=True)
-                    found, _ = first_or_default(None, pairs)
+            if remote_ds and remote_ds.get('resume_token'):
+                # There's unfinished replication
+                token_info = self.dispatcher.call_sync(
+                    'zfs.dataset.describe_resume_token',
+                    remote_ds.get('resume_token')
+                )
 
-                logger.info('found = {0}'.format(found))
+                actions.append(ReplicationAction(
+                    ReplicationActionType.SEND_STREAM,
+                    localfs,
+                    remotefs,
+                    resume=True,
+                    token=remote_ds.get('resume_token'),
+                    snapshot=token_info['toname']
+                ))
+
+                found = first_or_default(lambda s: s['name'] == token_info['toname'], local_snapshots)
+
+            if remote_snapshots or found:
+                # Find out the last common snapshot.
+                if not found:
+                    pairs = list(match_snapshots(local_snapshots, remote_snapshots))
+                    if pairs:
+                        pairs.sort(key=lambda p: p[0]['created_at'], reverse=True)
+                        found, _ = first_or_default(None, pairs)
 
                 if found:
                     if followdelete:
@@ -1216,7 +1234,7 @@ class CalculateReplicationDeltaTask(Task):
                     ))
 
         for rds in remote_datasets:
-            remotefs = rds
+            remotefs = rds['name']
             localfs = remotefs.replace(remoteds, localds, 1)
 
             if localfs not in datasets:
@@ -1230,7 +1248,9 @@ class CalculateReplicationDeltaTask(Task):
 
         for action in actions:
             if action.type == ReplicationActionType.SEND_STREAM:
-                logger.warning('localfs={0}, snapshot={1}, anchor={2}'.format(action.localfs, action.snapshot, getattr(action, 'anchor', None)))
+                if getattr(action, 'resume', False):
+                    continue
+
                 size = self.dispatcher.call_sync(
                     'zfs.dataset.estimate_send_size',
                     action.localfs,
@@ -1319,13 +1339,11 @@ class ReplicateDatasetTask(ProgressTask):
         remote_data = []
 
         for i in remote_datasets:
-            if not is_replicated(i):
-                continue
-
             remote_data.append({
                 'name': i['name'],
-                'created_at': datetime.fromtimestamp(int(q.get(i, 'properties.creation.rawvalue'))),
-                'uuid': q.get(i, 'properties.org\\.freenas:uuid.value')
+                'created_at': int(q.get(i, 'properties.creation.rawvalue')),
+                'uuid': q.get(i, 'properties.org\\.freenas:uuid.value'),
+                'resume_token': q.get(i, 'properties.receive_resume_token.value')
             })
 
         for i in remote_snapshots:
@@ -1334,8 +1352,9 @@ class ReplicateDatasetTask(ProgressTask):
 
             remote_data.append({
                 'name': i['name'],
-                'created_at': datetime.fromtimestamp(int(q.get(i, 'properties.creation.rawvalue'))),
-                'uuid': q.get(i, 'properties.org\\.freenas:uuid.value')
+                'created_at': int(q.get(i, 'properties.creation.rawvalue')),
+                'uuid': q.get(i, 'properties.org\\.freenas:uuid.value'),
+                'resume_token': None
             })
 
         actions, send_size = self.run_subtask_sync(
@@ -1388,14 +1407,23 @@ class ReplicateDatasetTask(ProgressTask):
                 self.rd_fd, self.wr_fd = os.pipe()
                 fromsnap = action['anchor'] if 'anchor' in action else None
 
-                self.join_subtasks(
-                    self.run_subtask(
+                if action.get('resume'):
+                    send_task = self.run_subtask(
+                        'zfs.send_resume',
+                        action['token'],
+                        FileDescriptor(self.wr_fd)
+                    )
+                else:
+                    send_task = self.run_subtask(
                         'zfs.send',
                         action['localfs'],
                         fromsnap,
                         action['snapshot'],
                         FileDescriptor(self.wr_fd)
-                    ),
+                    )
+
+                self.join_subtasks(
+                    send_task,
                     self.run_subtask(
                         'replication.transport.send',
                         FileDescriptor(self.rd_fd),
