@@ -10,5 +10,6 @@ etc/rc.d/dispatcher
 sbin/dispatcherd
 sbin/dispatcherctl
 sbin/sdsinit
+sbin/debdump
 libexec/taskworker
 etc/middleware.conf
