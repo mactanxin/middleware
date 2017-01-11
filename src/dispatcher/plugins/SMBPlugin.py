@@ -213,7 +213,7 @@ def configure_params(smb, ad=False):
             conf['server role'] = 'auto'
             conf['workgroup'] = smb['workgroup']
     except BaseException as err:
-        logger.error('Failed to update samba registry: {0}'.format(err))
+        logger.error('Failed to update samba registry: {0}'.format(err), exc_info=True)
         conf.transaction_cancel()
     else:
         conf.transaction_commit()
