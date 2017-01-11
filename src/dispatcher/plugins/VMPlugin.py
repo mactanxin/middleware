@@ -1062,7 +1062,7 @@ class VMDeleteTask(Task):
 
         vm = self.datastore.get_by_id('vms', id)
 
-        clones = list(self.datastore.exists('vms', ('parent', '=', id), select='name'))
+        clones = self.datastore.query('vms', ('parent', '=', id), select='name')
         if clones:
             raise TaskException(
                 errno.EACCES,
