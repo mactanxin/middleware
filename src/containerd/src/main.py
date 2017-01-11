@@ -1335,6 +1335,8 @@ class DockerService(RpcService):
                 'dhcp': truefalse_to_bool(labels.get('org.freenas.dhcp')),
                 'address': None
             },
+            'capabilities_add': [],
+            'capabilities_drop': [],
             'expose_ports': truefalse_to_bool(labels.get('org.freenas.expose-ports-at-host')),
             'interactive': truefalse_to_bool(labels.get('org.freenas.interactive')),
             'ports': [],
