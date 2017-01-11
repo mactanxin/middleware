@@ -1456,7 +1456,8 @@ class DockerService(RpcService):
                 environment = q.get(details, 'Config.Env')
                 host_config = q.get(details, 'HostConfig')
                 names = list(normalize_names(container['Names']))
-                bridge_address = external['IPAddress'] if external else None
+                bridge_ipaddress = external['IPAddress'] if external else None
+                bridge_macaddress = external['MacAddress'] if external else None
                 presets = self.labels_to_presets(labels)
                 settings = []
                 web_ui_url = None
@@ -1470,7 +1471,7 @@ class DockerService(RpcService):
                     if presets.get('web_ui_protocol'):
                         web_ui_url = '{0}://{1}:{2}/{3}'.format(
                             presets['web_ui_protocol'],
-                            bridge_address or socket.gethostname(),
+                            bridge_ipaddress or socket.gethostname(),
                             presets['web_ui_port'],
                             presets['web_ui_path']
                     )
@@ -1495,7 +1496,8 @@ class DockerService(RpcService):
                     'bridge': {
                         'enable': external is not None,
                         'dhcp': truefalse_to_bool(labels.get('org.freenas.dhcp')),
-                        'address': bridge_address
+                        'address': bridge_ipaddress,
+                        'macaddress': bridge_macaddress,
                     },
                     'web_ui_url': web_ui_url,
                     'settings': settings,
