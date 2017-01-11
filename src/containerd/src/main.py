@@ -181,7 +181,7 @@ def get_interactive(details):
     return config.get('Tty') and config.get('OpenStdin')
 
 
-def get_dhcp_lease(context, container_name, dockerhost_id):
+def get_dhcp_lease(context, container_name, dockerhost_id, macaddr=None):
     dockerhost_name = context.get_docker_host(dockerhost_id).vm.name
     interfaces = context.client.call_sync('containerd.management.get_netif_mappings', dockerhost_id)
     interface = [i.get('target') for i in interfaces if i.get('mode') == 'BRIDGED']
@@ -198,7 +198,7 @@ def get_dhcp_lease(context, container_name, dockerhost_id):
             'multiple BRIDGED interfaces found on docker host : {0}'.format(dockerhost_name)
         )
     c = dhcp.Client(interface[0], dockerhost_name+'.'+container_name)
-    c.hwaddr = context.client.call_sync('vm.generate_mac')
+    c.hwaddr = macaddr if macaddr else context.client.call_sync('vm.generate_mac')
     c.start()
     lease = c.wait_for_bind(timeout=30).__getstate__()
     if c.state == dhcp.State.BOUND:
@@ -1613,13 +1613,12 @@ class DockerService(RpcService):
                 )
 
         if bridge_enabled:
+            macaddr = q.get(container, 'bridge.macaddress', self.context.client.call_sync('vm.generate_mac'))
             if dhcp_enabled:
-                lease = get_dhcp_lease(self.context, container['name'], container['host'])
+                lease = get_dhcp_lease(self.context, container['name'], container['host'], macaddr)
                 ipv4 = lease['client_ip']
-                macaddr = lease['client_mac']
             else:
                 ipv4 = q.get(container, 'bridge.address')
-                macaddr = self.context.client.call_sync('vm.generate_mac')
 
             networking_config = host.connection.create_networking_config({
                 'external': host.connection.create_endpoint_config(
