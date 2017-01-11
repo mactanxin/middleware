@@ -1882,6 +1882,16 @@ def _init(dispatcher, plugin):
             'driver': {'type': ['string', 'null']},
             'subnet': {'type': ['string', 'null']},
             'gateway': {'type': ['string', 'null']},
+            'containers': {
+                'type': 'array',
+                'items': {
+                    'type': 'object',
+                    'additionalProperties': False,
+                    'properties': {
+                        'id': {'type': 'string'}
+                    }
+                }
+            }
         }
     })
 
