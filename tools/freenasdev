@@ -31,21 +31,21 @@ myrsyncnodel() {
 }
 
 freenasrsync_ws4py() {
-	myrsyncnodel ${REPO_PARENT_PATH}/WebSocket-for-Python/ws4py "root@${1}":/usr/local/lib/python3.4/site-packages/
+	myrsyncnodel ${REPO_PARENT_PATH}/WebSocket-for-Python/ws4py "root@${1}":/usr/local/lib/python3.6/site-packages/
 }
 
 freenasrsync_smart() {
-	myrsyncnodel ${REPO_PARENT_PATH}/py-SMART/pySMART "root@${1}:/usr/local/lib/python3.4/site-packages/"
+	myrsyncnodel ${REPO_PARENT_PATH}/py-SMART/pySMART "root@${1}:/usr/local/lib/python3.6/site-packages/"
 }
 
 freenasrsync_cli() {
-	myrsync ${REPO_PARENT_PATH}/cli/freenas/cli/ "root@${1}":/usr/local/lib/python3.4/site-packages/freenas/cli/
+	myrsync ${REPO_PARENT_PATH}/cli/freenas/cli/ "root@${1}":/usr/local/lib/python3.6/site-packages/freenas/cli/
 	myrsyncnodel ${REPO_PARENT_PATH}/cli/tools/ "root@${1}":/usr/local/bin/
 	ssh root@${1} '/bin/chmod +x /usr/local/bin/cli /usr/local/bin/logincli'
 }
 
 freenasrsync_utils() {
-	myrsync ${REPO_PARENT_PATH}/py-freenas-utils/freenas/utils/ "root@${1}":/usr/local/lib/python3.4/site-packages/freenas/utils/
+	myrsync ${REPO_PARENT_PATH}/py-freenas-utils/freenas/utils/ "root@${1}":/usr/local/lib/python3.6/site-packages/freenas/utils/
 }
 
 freenasrsync_update() {
@@ -56,7 +56,7 @@ freenasrsync_update() {
 
 freenasrsync_client() {
 	# python dispatcher client stuff
-	myrsync ${REPO_PARENT_PATH}/dispatcher-client/python/freenas/dispatcher/ "root@${1}":/usr/local/lib/python3.4/site-packages/freenas/dispatcher/
+	myrsync ${REPO_PARENT_PATH}/dispatcher-client/python/freenas/dispatcher/ "root@${1}":/usr/local/lib/python3.6/site-packages/freenas/dispatcher/
 
 	# javascript dispatcher client stuff
 	if [[ "${2}" == "js" ]];
@@ -117,7 +117,7 @@ freenasrsync_etcd() {
 freenasrsync_datastore() {
 	myrsync ${REPO_PARENT_PATH}/middleware/src/datastore/drivers/ "root@${1}":/usr/local/lib/datastore/drivers/
 	myrsync ${REPO_PARENT_PATH}/middleware/src/datastore/share/ "root@${1}":/usr/local/share/datastore/
-	myrsync ${REPO_PARENT_PATH}/middleware/src/datastore/datastore/ "root@${1}":/usr/local/lib/python3.4/site-packages/datastore/
+	myrsync ${REPO_PARENT_PATH}/middleware/src/datastore/datastore/ "root@${1}":/usr/local/lib/python3.6/site-packages/datastore/
 	myrsyncnodel ${REPO_PARENT_PATH}/middleware/src/datastore/sbin/ "root@${1}":/usr/local/sbin/
 	myrsyncnodel ${REPO_PARENT_PATH}/middleware/src/datastore/etc/ "root@${1}":/usr/local/etc/
 
