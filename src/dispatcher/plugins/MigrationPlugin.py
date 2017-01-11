@@ -26,6 +26,7 @@
 #####################################################################
 
 import os
+import sys
 import logging
 from freenas.dispatcher.rpc import (
     RpcException,
@@ -43,6 +44,12 @@ from task import (
 )
 
 logger = logging.getLogger('MigrationPlugin')
+sys.path.append('/usr/local/lib')
+FREENAS93_DATABASE_PATH = '/data/freenas-v1.db'
+
+# We need to set this env var before any migrate93 based imports
+os.environ['93_DATABASE_PATH'] = FREENAS93_DATABASE_PATH
+from migrate93.src.utils import run_syncdb
 
 
 @description("Master top level migration task for 9.x to 10.x")
@@ -75,10 +82,11 @@ def _init(dispatcher, plugin):
 
     def start_migration(args):
         logger.debug("Starting migration from 9.x database to 10")
-        # TODO: PLace migrate93 syncdb call here
         dispatcher.call_task_sync('migration.mastermigrate')
 
-    if os.path.exists("/data/freenas-v1.db"):
+    if os.path.exists(FREENAS93_DATABASE_PATH):
+        # bring the 9.x database up to date with the latest 9.x version
+        run_syncdb()
         plugin.register_event_handler('service.ready', start_migration)
 
     plugin.register_task_handler('migration.mastermigrate', MasterMigrateTask)
