@@ -498,9 +498,18 @@ class JobService(RpcService):
 
         return job.__getstate__()
 
-    def get_by_pid(self, pid):
+    def get_by_pid(self, pid, fuzzy=False):
         with self.context.lock:
-            job = first_or_default(lambda j: j.pid == pid, self.context.jobs.values())
+            def match(j):
+                return j.pid == pid
+
+            def fuzzy_match(j):
+                if j.parent and j.parent.pid == pid:
+                    return True
+
+                return j.pid == pid
+
+            job = first_or_default(fuzzy_match if fuzzy else match, self.context.jobs.values())
             if not job:
                 raise RpcException(errno.ENOENT, 'Job {0} not found'.format(name_or_id))
 
