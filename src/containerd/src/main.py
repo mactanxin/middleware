@@ -99,10 +99,13 @@ def normalize_docker_labels(labels):
     normalize(labels, {
         'org.freenas.autostart': "false",
         'org.freenas.bridged': "false",
+        'org.freenas.capabilities-add': [],
+        'org.freenas.capabilities-drop': [],
         'org.freenas.dhcp': "false",
         'org.freenas.expose-ports-at-host': "false",
         'org.freenas.interactive': "false",
         'org.freenas.port-mappings': "",
+        'org.freenas.privileged': "false",
         'org.freenas.settings': [],
         'org.freenas.static-volumes': [],
         'org.freenas.upgradeable': "false",
@@ -1332,6 +1335,8 @@ class DockerService(RpcService):
                 'dhcp': truefalse_to_bool(labels.get('org.freenas.dhcp')),
                 'address': None
             },
+            'capabilities_add': [],
+            'capabilities_drop': [],
             'expose_ports': truefalse_to_bool(labels.get('org.freenas.expose-ports-at-host')),
             'interactive': truefalse_to_bool(labels.get('org.freenas.interactive')),
             'ports': [],
@@ -1343,6 +1348,7 @@ class DockerService(RpcService):
             'web_ui_path': labels.get('org.freenas.web-ui-path'),
             'web_ui_port': labels.get('org.freenas.web-ui-port'),
             'web_ui_protocol': labels.get('org.freenas.web-ui-protocol'),
+            'privileged': truefalse_to_bool(labels.get('org.freenas.privileged')),
         }
 
         if labels.get('org.freenas.port-mappings'):
@@ -1356,6 +1362,18 @@ class DockerService(RpcService):
                     'host_port': int(m.group(2)),
                     'protocol': m.group(3).upper()
                 })
+
+        if labels.get('org.freenas.capabilities-add'):
+            try:
+                result['capabilities_add'] = loads(labels['org.freenas.capabilities-add'])
+            except ValueError:
+                pass
+
+        if labels.get('org.freenas.capabilities-drop'):
+            try:
+                result['capabilities_drop'] = loads(labels['org.freenas.capabilities-drop'])
+            except ValueError:
+                pass
 
         if labels.get('org.freenas.volumes'):
             try:
@@ -1436,6 +1454,7 @@ class DockerService(RpcService):
                 external = q.get(details, 'NetworkSettings.Networks.external')
                 labels = q.get(details, 'Config.Labels')
                 environment = q.get(details, 'Config.Env')
+                host_config = q.get(details, 'HostConfig')
                 names = list(normalize_names(container['Names']))
                 bridge_address = external['IPAddress'] if external else None
                 presets = self.labels_to_presets(labels)
@@ -1480,7 +1499,10 @@ class DockerService(RpcService):
                     },
                     'web_ui_url': web_ui_url,
                     'settings': settings,
-                    'version': presets.get('version')
+                    'version': presets.get('version'),
+                    'capabilities_add': host_config['CapAdd'] or [],
+                    'capabilities_drop': host_config['CapDrop'] or [],
+                    'privileged': host_config.get('Privileged', False),
                 })
                 result.append(obj)
 
@@ -1605,6 +1627,24 @@ class DockerService(RpcService):
                 )
             })
 
+        caps_add = container.get('capabilities_add', [])
+        caps_add.append('NET_ADMIN') if 'NET_ADMIN' not in caps_add else None
+        caps_drop = container.get('capabilities_drop', [])
+
+        host_config= host.connection.create_host_config(
+            port_bindings=port_bindings,
+            binds={
+                i['host_path'].replace('/mnt', '/host'): {
+                    'bind': i['container_path'],
+                    'mode': 'ro' if i['readonly'] else 'rw'
+                } for i in container['volumes']
+                },
+            privileged=container['privileged'],
+            cap_add=caps_add,
+            cap_drop=caps_drop,
+            network_mode='external' if bridge_enabled else 'default'
+        )
+
         create_args = {
             'name': container['name'],
             'image': container['image'],
@@ -1612,17 +1652,7 @@ class DockerService(RpcService):
             'volumes': [i['container_path'] for i in container['volumes']],
             'labels': labels,
             'networking_config': networking_config,
-            'host_config': host.connection.create_host_config(
-                cap_add=['NET_ADMIN'],
-                port_bindings=port_bindings,
-                binds={
-                    i['host_path'].replace('/mnt', '/host'): {
-                        'bind': i['container_path'],
-                        'mode': 'ro' if i['readonly'] else 'rw'
-                    } for i in container['volumes']
-                },
-                network_mode='external' if bridge_enabled else 'default'
-            )
+            'host_config': host_config,
         }
 
         if container.get('command'):

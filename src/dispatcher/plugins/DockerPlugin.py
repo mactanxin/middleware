@@ -504,7 +504,10 @@ class DockerContainerCreateTask(DockerBaseTask):
             'autostart': False,
             'command': [],
             'environment': [],
-            'interactive': False
+            'interactive': False,
+            'privileged': False,
+            'capabilities_add': [],
+            'capabilities_drop': [],
         })
 
         if not container.get('host'):
@@ -1844,7 +1847,16 @@ def _init(dispatcher, plugin):
                 'items': {'$ref': 'docker-volume'}
             },
             'bridge': {'$ref': 'docker-container-bridge'},
-            'parent_directory': {'type': 'string'}
+            'parent_directory': {'type': 'string'},
+            'capabilities_add': {
+                'type': 'array',
+                'items': {'type': 'string'}
+            },
+            'capabilities_drop': {
+                'type': 'array',
+                'items': {'type': 'string'}
+            },
+            'privileged': {'type': 'boolean'},
         }
     })
 
