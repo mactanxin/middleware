@@ -30,8 +30,9 @@ import errno
 import logging
 import signal
 from task import Task, Provider, TaskException, TaskDescription, ValidationException, query
-from debug import AttachFile, AttachCommandOutput
+from debug import AttachFile, AttachData, AttachCommandOutput
 from resources import Resource
+from freenas.dispatcher.jsonenc import dumps
 from freenas.dispatcher.rpc import RpcException, description, accepts, private, returns, generator
 from freenas.dispatcher.rpc import SchemaHelper as h
 from datastore.config import ConfigNode
@@ -472,6 +473,7 @@ def get_status(dispatcher, datastore, service):
 def collect_debug(dispatcher):
     yield AttachFile('rc.conf', '/etc/rc.conf')
     yield AttachCommandOutput('servicectl-list', ['/usr/local/sbin/servicectl', 'list'])
+    yield AttachData('service-query', dumps(list(dispatcher.call_sync('service.query')), indent=4))
 
 
 def _init(dispatcher, plugin):
