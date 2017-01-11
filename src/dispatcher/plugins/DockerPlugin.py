@@ -1884,13 +1884,7 @@ def _init(dispatcher, plugin):
             'gateway': {'type': ['string', 'null']},
             'containers': {
                 'type': 'array',
-                'items': {
-                    'type': 'object',
-                    'additionalProperties': False,
-                    'properties': {
-                        'id': {'type': 'string'}
-                    }
-                }
+                'items': {'type': 'string'}
             }
         }
     })
