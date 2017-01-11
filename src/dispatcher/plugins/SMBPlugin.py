@@ -339,8 +339,8 @@ def _init(dispatcher, plugin):
     })
 
     plugin.register_schema_definition('service-smb-minprotocol', {
-        'type': ['string', 'null'],
-        'enum': [None] + PROTOCOLS
+        'type': 'string',
+        'enum': PROTOCOLS
     })
 
     plugin.register_schema_definition('service-smb-maxprotocol', {
