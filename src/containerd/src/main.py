@@ -1518,7 +1518,7 @@ class DockerService(RpcService):
             for network in host.connection.networks():
                 details = host.connection.inspect_network(network['Id'])
                 config = q.get(details, 'IPAM.Config.0')
-                containers = [{'id': id} for id in details.get('Containers', {}).keys()]
+                containers = list(details.get('Containers', {}).keys())
 
                 result.append({
                     'id': details['Id'],
