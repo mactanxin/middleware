@@ -100,14 +100,14 @@ serviced_get_job_by_label(const char *label)
 }
 
 struct serviced_job *
-serviced_get_job_by_pid(pid_t pid)
+serviced_get_job_by_pid(pid_t pid, bool fuzzy)
 {
 	struct serviced_job *result;
 	json_t *job;
 	int ret;
 
-	ret = call_serviced("serviced.job.get_by_pid", json_pack("[i]", pid),
-	    &job);
+	ret = call_serviced("serviced.job.get_by_pid",
+	    json_pack("[ib]", pid, fuzzy), &job);
 	if (ret != 0) {
 		json_decref(job);
 		return (NULL);

@@ -40,5 +40,5 @@ struct serviced_job
 
 int serviced_checkin(void);
 struct serviced_job *serviced_get_job_by_label(const char *label);
-struct serviced_job *serviced_get_job_by_pid(pid_t pid);
+struct serviced_job *serviced_get_job_by_pid(pid_t pid, bool fuzzy);
 void serviced_job_free(struct serviced_job *job);
