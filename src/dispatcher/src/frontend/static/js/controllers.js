@@ -263,6 +263,7 @@ function EventsController($scope, $location, $routeParams, $route, $rootScope) {
     };
     sock.onLogin = function() {
         sock.subscribe("*.changed");
+        sock.subscribe("migration.status");
         console.log("getting system events, plz wait");
         var item_list = [];
         sock.onEvent = function(name, args) {
