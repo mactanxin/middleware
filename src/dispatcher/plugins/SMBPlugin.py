@@ -322,8 +322,10 @@ def _init(dispatcher, plugin):
 
     plugin.register_schema_definition('service-smb-doscharset', {
         'type': 'string',
-        'enum': ['CP437', 'CP850', 'CP852', 'CP866', 'CP932', 'CP949',
-                 'CP950', 'CP1029', 'CP1251', 'ASCII']
+        'enum': [
+            'CP437', 'CP850', 'CP852', 'CP866', 'CP932', 'CP949',
+            'CP950', 'CP1029', 'CP1251', 'ASCII'
+        ]
     })
 
     plugin.register_schema_definition('service-smb-unixcharset', {
