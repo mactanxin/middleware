@@ -1810,7 +1810,10 @@ def _init(dispatcher, plugin):
         'type': 'object',
         'properties': {
             'created_at': {'type': 'datetime'},
-            'status': {'type': {'enum': ['RUNNING', 'STOPPED', 'FAILED']}},
+            'status': {
+                'type': 'string',
+                'enum': ['RUNNING', 'STOPPED', 'FAILED']
+            },
             'progress': {'type': 'number'},
             'speed': {'type': 'string'}
         },
