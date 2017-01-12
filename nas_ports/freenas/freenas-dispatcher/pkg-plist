@@ -4,6 +4,7 @@ libexec/dispatcher/ladvd_wrapper
 libexec/dispatcher/nfsd_wrapper
 libexec/dispatcher/vmtoolsd_wrapper
 libexec/dispatcher/tftpd_wrapper
+libexec/dispatcher/ups_wrapper
 etc/serviced.d/org.freebsd.devd.json
 etc/serviced.d/org.freenas.dispatcher.json
 etc/rc.d/dispatcher
