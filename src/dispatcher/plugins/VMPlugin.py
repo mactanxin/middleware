@@ -1571,7 +1571,7 @@ class VMSnapshotPublishTask(ProgressTask):
 
         snapshot_id = self.dispatcher.call_sync(
             'zfs.snapshot.query',
-            [('properties.org\.freenas:vm_snapshot.rawvalue', '=', id)],
+            [('properties.org\\.freenas:vm_snapshot.rawvalue', '=', id)],
             {'single': True, 'select': 'id'}
         )
 
