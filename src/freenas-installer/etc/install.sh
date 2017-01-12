@@ -475,7 +475,7 @@ partition_disk() {
 	zpool set feature@lz4_compress=enabled freenas-boot
 	zfs set compress=lz4 freenas-boot
 	zfs create -o canmount=off freenas-boot/ROOT
-	zfs create -o mountpoint=legacy freenas-boot/ROOT/${BENAME}
+	zfs create -o mountpoint=legacy -o sync=disabled freenas-boot/ROOT/${BENAME}
 	zfs create -o mountpoint=legacy freenas-boot/grub
 
 	return 0
@@ -1025,8 +1025,9 @@ menu_install()
     mkdir /tmp/data/dev
     mount -t devfs devfs /tmp/data/dev
     # Tell it to look in /.mount for the packages.
+    start_time=$(date +%s)
     /usr/local/bin/freenas-install -P /.mount/${OS}/Packages -M /.mount/${OS}-MANIFEST /tmp/data
-    
+    zfs inherit sync freenas-boot/ROOT/${BENAME}
     rm -f /tmp/data/conf/default/etc/fstab /tmp/data/conf/base/etc/fstab
     echo "freenas-boot/grub     /boot/grub      zfs     rw,noatime      1       0" > /tmp/data/etc/fstab
     if is_truenas; then
@@ -1086,6 +1087,7 @@ menu_install()
     
     install_grub /tmp/data ${_realdisks}
     
+    end_time=$(date +%s)
     if [ -d /tmp/data_preserved ]; then
 	# For 9.x, create upgrade sentinel files
 	if [ ! -e /tmp/data/usr/local/sbin/dsinit ]; then
@@ -1127,7 +1129,7 @@ menu_install()
 
     trap - EXIT
 
-    _msg="The $AVATAR_PROJECT $_action on ${_realdisks} succeeded!\n"
+    _msg="The $AVATAR_PROJECT $_action on ${_realdisks} succeeded in $(expr $end_time - $start_time) seconds!\n"
     _dlv=`/sbin/sysctl -n vfs.nfs.diskless_valid 2> /dev/null`
     if [ ${_dlv:=0} -ne 0 ]; then
         _msg="${_msg}Please reboot, and change BIOS boot order to *not* boot over network."

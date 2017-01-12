@@ -37,6 +37,7 @@ from freenas.dispatcher.rpc import RpcException, description, accepts, returns, 
 from freenas.dispatcher.rpc import SchemaHelper as h
 from task import Provider, Task, TaskException, VerifyException, query, TaskDescription
 from freenas.utils import query as q
+from freenas.dispatcher.fd import FileDescriptor
 
 from OpenSSL import crypto
 
@@ -490,6 +491,37 @@ class CertificateImportTask(Task):
         return pkey
 
 
+@accepts(str, FileDescriptor, FileDescriptor)
+@description("Exports certificate and private key")
+class CertificateExportTask(Task):
+    @classmethod
+    def early_describe(cls):
+        return "Exporting certificate and private key"
+
+    def describe(self, id, certfd, keyfd):
+        cert = self.datastore.get_by_id('crypto.certificates', id)
+        return TaskDescription("Exporting certificate {name} and private key", name=cert.get('name', '') if cert else '')
+
+    def verify(self, id, certfd, keyfd):
+        return ['system']
+
+    def run(self, id, certfd, keyfd):
+        if not self.datastore.exists('crypto.certificates', ('id', '=', id)):
+            raise TaskException(errno.ENOENT, 'Certificate ID {0} does not exist'.format(id))
+
+        cert, key = self.dispatcher.call_sync(
+            'crypto.certificate.query',
+            [('id', '=', id)],
+            {'select': ['certificate', 'privatekey'], 'single': True}
+        )
+
+        with os.fdopen(certfd.fd, 'wb') as cert_file:
+            cert_file.write(cert.encode('utf-8'))
+
+        with os.fdopen(keyfd.fd, 'wb') as key_file:
+            key_file.write(key.encode('utf-8'))
+
+
 @accepts(str, h.all_of(
     h.ref('crypto-certificate'),
     h.forbidden('certificate_path', 'privatekey_path'),
@@ -672,6 +704,7 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('crypto.certificate.create', CertificateCreateTask)
     plugin.register_task_handler('crypto.certificate.update', CertificateUpdateTask)
     plugin.register_task_handler('crypto.certificate.import', CertificateImportTask)
+    plugin.register_task_handler('crypto.certificate.export', CertificateExportTask)
     plugin.register_task_handler('crypto.certificate.delete', CertificateDeleteTask)
 
     plugin.register_hook('crypto.pre_delete')

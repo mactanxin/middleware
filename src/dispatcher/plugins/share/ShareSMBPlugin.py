@@ -427,7 +427,7 @@ def _init(dispatcher, plugin):
             convert_share(dispatcher, smb_share, path, s['enabled'], s.get('properties', {}))
             smb_conf.shares[s['name']] = smb_share
     except BaseException as err:
-        logger.error('Failed to update samba registry: {0}'.format(err))
+        logger.error('Failed to update samba registry: {0}'.format(err), exc_info=True)
         smb_conf.transaction_cancel()
     else:
         smb_conf.transaction_commit()

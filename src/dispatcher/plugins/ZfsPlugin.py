@@ -157,23 +157,6 @@ class ZpoolProvider(Provider):
         pool = pools.get(name)
         return vdev_by_path(pool['groups'], path)
 
-    @accepts(str)
-    def ensure_resilvered(self, name):
-        try:
-            zfs = get_zfs()
-            pool = zfs.get(name)
-
-            self.dispatcher.test_or_wait_for_event(
-                'fs.zfs.resilver.finished',
-                lambda args: args['guid'] == str(pool.guid),
-                lambda:
-                    pool.scrub.state == libzfs.ScanState.SCANNING and
-                    pool.scrub.function == libzfs.ScanFunction.RESILVER
-                )
-
-        except libzfs.ZFSException as err:
-            raise RpcException(zfs_error_to_errno(err.code), str(err))
-
 
 @description('Provides information about ZFS datasets')
 class ZfsDatasetProvider(Provider):
@@ -256,6 +239,12 @@ class ZfsDatasetProvider(Provider):
             return ds.get_send_space()
         except libzfs.ZFSException as err:
             raise RpcException(zfs_error_to_errno(err.code), str(err))
+
+    @accepts(str)
+    @returns(h.ref('zfs-resume-token'))
+    def describe_resume_token(self, token):
+        zfs = get_zfs()
+        return zfs.describe_resume_token(token)
 
 
 @description('Provides information about ZFS snapshots')
@@ -1222,22 +1211,27 @@ class ZfsSendTask(ZfsBaseTask):
 
 @private
 @description('Sends ZFS replication stream')
-class ZfsResumeSendTask(ZfsBaseTask):
+class ZfsResumeSendTask(Task):
     @classmethod
     def early_describe(cls):
         return 'Sending resumed ZFS replication stream'
 
-    def describe(self, name, token, fd):
+    def verify(self, token, fd):
+        token_info = self.dispatcher.call_sync('zfs.dataset.describe_resume_token', token)
+        ds, _, _ = token_info['toname'].partition('@')
+        return ['zfs:{0}'.format(ds)]
+
+    def describe(self, token, fd):
+        token_info = self.dispatcher.call_sync('zfs.dataset.describe_resume_token', token)
         return TaskDescription(
             'Sending resumed ZFS replication stream from {name}',
-            name=name
+            name=token_info['toname'] if token_info else 'unknown'
         )
 
-    def run(self, name, token, fd):
+    def run(self, token, fd):
         try:
             zfs = get_zfs()
-            obj = zfs.get_object(name)
-            obj.send_resume(self, fd.fd, token, flags={
+            zfs.send_resume(fd.fd, token, flags={
                 libzfs.SendFlag.PROGRESS,
                 libzfs.SendFlag.PROPS
             })
@@ -1245,7 +1239,6 @@ class ZfsResumeSendTask(ZfsBaseTask):
             raise TaskException(zfs_error_to_errno(err.code), str(err))
         finally:
             os.close(fd.fd)
-
 
 
 @private
@@ -1561,6 +1554,9 @@ def _init(dispatcher, plugin):
     @sync
     def on_dataset_setprop(args):
         with dispatcher.get_lock('zfs-cache'):
+            if args['ds'].endswith('/%recv'):
+                args['ds'] = args['ds'][:-6]
+
             if args['action'] == 'set':
                 logger.log(TRACE, '{0} {1} property {2} set to: {3}'.format(
                     'Snapshot' if '@' in args['ds'] else 'Dataset',
@@ -1816,6 +1812,15 @@ def _init(dispatcher, plugin):
     plugin.register_schema_definition('zfs-pool-status', {
         'type': 'string',
         'enum': ['ONLINE', 'OFFLINE', 'DEGRADED', 'FAULTED', 'REMOVED', 'UNAVAIL']
+    })
+
+    plugin.register_schema_definition('zfs-resume-token', {
+        'fromguid': {'type': 'integer'},
+        'object': {'type': 'integer'},
+        'offset': {'type': 'integer'},
+        'bytes': {'type': 'integer'},
+        'toguid': {'type': 'integer'},
+        'toname': {'type': 'string'}
     })
 
     # Register Providers

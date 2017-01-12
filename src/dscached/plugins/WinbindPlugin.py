@@ -122,7 +122,7 @@ class WinbindPlugin(DirectoryServicePlugin):
 
     @property
     def ldap_addresses(self):
-        records = get_srv_records('ldap', 'tcp', self.parameters['realm'], self.parameters.get('dc_address'))
+        records = get_srv_records('ldap', 'tcp', self.parameters['realm'])
         return [str(i) for i in records]
 
     @staticmethod
@@ -148,7 +148,9 @@ class WinbindPlugin(DirectoryServicePlugin):
                 return False
 
             # Check if we can fetch domain SID
-            if subprocess.call(['/usr/local/bin/net', 'getdomainsid']) != 0:
+            try:
+                subprocess.check_output(['/usr/local/bin/net', 'getdomainsid'])
+            except subprocess.CalledProcessError:
                 logger.debug('Cannot fetch domain SID')
                 return False
 
@@ -212,12 +214,10 @@ class WinbindPlugin(DirectoryServicePlugin):
                             logger.debug('Initializing LDAP connection')
                             logger.debug('LDAP server addresses: {0}'.format(', '.join(self.ldap_addresses)))
                             ldap_addresses = self.ldap_addresses
-                            sasl_credentials = None
 
                             if self.parameters.get('dc_address'):
                                 logger.debug('Using manually configured DC address')
-                                sasl_credentials = (self.ldap_addresses[0][:-1],)
-                                ldap_addresses = get_a_records(self.ldap_addresses[0], self.parameters['dc_address'])
+                                ldap_addresses = [self.parameters.get('dc_address')]
 
                             self.ldap_servers = [ldap3.Server(i) for i in ldap_addresses]
                             self.ldap = ldap3.Connection(
@@ -225,7 +225,7 @@ class WinbindPlugin(DirectoryServicePlugin):
                                 client_strategy='ASYNC',
                                 authentication=ldap3.SASL,
                                 sasl_mechanism='GSSAPI',
-                                sasl_credentials=sasl_credentials
+                                sasl_credentials=None
                             )
 
                             if not self.ldap.bind():

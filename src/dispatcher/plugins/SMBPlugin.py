@@ -213,7 +213,7 @@ def configure_params(smb, ad=False):
             conf['server role'] = 'auto'
             conf['workgroup'] = smb['workgroup']
     except BaseException as err:
-        logger.error('Failed to update samba registry: {0}'.format(err))
+        logger.error('Failed to update samba registry: {0}'.format(err), exc_info=True)
         conf.transaction_cancel()
     else:
         conf.transaction_commit()
@@ -322,8 +322,10 @@ def _init(dispatcher, plugin):
 
     plugin.register_schema_definition('service-smb-doscharset', {
         'type': 'string',
-        'enum': ['CP437', 'CP850', 'CP852', 'CP866', 'CP932', 'CP949',
-                 'CP950', 'CP1029', 'CP1251', 'ASCII']
+        'enum': [
+            'CP437', 'CP850', 'CP852', 'CP866', 'CP932', 'CP949',
+            'CP950', 'CP1029', 'CP1251', 'ASCII'
+        ]
     })
 
     plugin.register_schema_definition('service-smb-unixcharset', {
@@ -337,8 +339,8 @@ def _init(dispatcher, plugin):
     })
 
     plugin.register_schema_definition('service-smb-minprotocol', {
-        'type': ['string', 'null'],
-        'enum': [None] + PROTOCOLS
+        'type': 'string',
+        'enum': PROTOCOLS
     })
 
     plugin.register_schema_definition('service-smb-maxprotocol', {

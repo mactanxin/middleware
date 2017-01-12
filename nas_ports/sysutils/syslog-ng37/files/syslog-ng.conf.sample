@@ -1,5 +1,5 @@
 @version:3.7
-@module serviced
+@include "scl.conf"
 
 #
 # This sample configuration file is essentially equilivent to the stock
@@ -11,22 +11,13 @@
 #
 # options
 #
-options {
-    chain_hostnames(off);
-    flush_lines(0);
-    threaded(yes);
-};
+options { chain_hostnames(off); flush_lines(0); threaded(yes); };
 
 #
 # sources
 #
-source src {
-    unix-dgram("/var/run/log");
-    unix-dgram("/var/run/logpriv" perm(0600));
-    udp(localport(1031));
-    internal();
-    file("/dev/klog" follow-freq(0) program-override("kernel") flags(no-parse));
-};
+source src { system();
+	     udp(); internal(); };
 
 #
 # destinations
@@ -49,27 +40,6 @@ destination ppp { file("/var/log/ppp.log"); };
 destination console { file("/dev/console"); };
 destination allusers { usertty("*"); };
 #destination loghost { udp("loghost" port(514)); };
-
-destination mongodb {
-    mongodb(
-        servers("127.0.0.1:27018"),
-        database("freenas"),
-        collection("syslog"),
-        value-pairs(
-            pair("_id", "$(uuid)"),
-            pair("program" "$PROGRAM"),
-            pair("host" "$HOST"),
-            pair("pid" int("$PID")),
-            pair("label", "$(pid-to-label $PID)"),
-            pair("seqnum" int64("$SEQNUM")),
-            pair("message" "$MESSAGE"),
-            pair("date" datetime("$UNIXTIME")),
-            pair("created_at" datetime("$UNIXTIME")),
-            pair("priority" "$PRIORITY"),
-            pair("facility" "$FACILITY")
-        )
-   );
-};
 
 #
 # log facility filters
@@ -119,10 +89,10 @@ filter f_slip { program("startslip"); };
 #
 # *.err;kern.warning;auth.notice;mail.crit		/dev/console
 #
-#log { source(src); filter(f_err); destination(console); };
-#log { source(src); filter(f_kern); filter(f_warning); destination(console); };
-#log { source(src); filter(f_auth); filter(f_notice); destination(console); };
-#log { source(src); filter(f_mail); filter(f_crit); destination(console); };
+log { source(src); filter(f_err); destination(console); };
+log { source(src); filter(f_kern); filter(f_warning); destination(console); };
+log { source(src); filter(f_auth); filter(f_notice); destination(console); };
+log { source(src); filter(f_mail); filter(f_crit); destination(console); };
 
 #
 # *.notice;authpriv.none;kern.debug;lpr.info;mail.crit;news.err	/var/log/messages
@@ -156,7 +126,7 @@ log { source(src); filter(f_lpr); filter(f_info); destination(lpd-errs); };
 #
 # ftp.info						/var/log/xferlog
 #
-log { source(src); filter(f_ftp); destination(xferlog); };
+log { source(src); filter(f_ftp); filter(f_info); destination(xferlog); };
 
 #
 # cron.*						/var/log/cron
@@ -184,7 +154,7 @@ log { source(src); filter(f_emerg); destination(allusers); };
 # touch /var/log/all.log and chmod it to mode 600 before it will work
 # *.*							/var/log/all.log
 #
-log { source(src); filter(f_info); destination(mongodb); };
+#log { source(src); destination(all); };
 
 #
 # uncomment this to enable logging to a remote loghost named loghost
@@ -203,17 +173,13 @@ log { source(src); filter(f_info); destination(mongodb); };
 #log { source(src); filter(f_news); filter(f_notice); destination(newsnotice); };
 
 #
+# !startslip
+# *.*							/var/log/slip.log
+#
+log { source(src); filter(f_slip); destination(slip); };
+
+#
 # !ppp
 # *.*							/var/log/ppp.log
 #
 log { source(src); filter(f_ppp); destination(ppp); };
-
-%if config.get('system.syslog_server'):
-    <%
-        server = config.get('system.syslog_server').split(':')
-        host = server[0]
-        port = server[1] if len(server) == 2 else '514'
-    %>
-    destination loghost { udp("${host}" port(${port}) localport(514)); };
-    log { source(src); destination(loghost); };
-%endif

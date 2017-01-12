@@ -502,7 +502,10 @@ class DockerContainerCreateTask(DockerBaseTask):
             'autostart': False,
             'command': [],
             'environment': [],
-            'interactive': False
+            'interactive': False,
+            'privileged': False,
+            'capabilities_add': [],
+            'capabilities_drop': [],
         })
 
         if not container.get('host'):
@@ -1611,7 +1614,7 @@ def _init(dispatcher, plugin):
 
                     dispatcher.dispatch_event('docker.host.changed', {
                         'operation': 'update',
-                        'ids': id
+                        'ids': [id]
                     })
 
     def on_image_event(args):
@@ -2015,7 +2018,16 @@ def _init(dispatcher, plugin):
                 'items': {'$ref': 'docker-volume'}
             },
             'bridge': {'$ref': 'docker-container-bridge'},
-            'parent_directory': {'type': 'string'}
+            'parent_directory': {'type': 'string'},
+            'capabilities_add': {
+                'type': 'array',
+                'items': {'type': 'string'}
+            },
+            'capabilities_drop': {
+                'type': 'array',
+                'items': {'type': 'string'}
+            },
+            'privileged': {'type': 'boolean'},
         }
     })
 
@@ -2025,7 +2037,8 @@ def _init(dispatcher, plugin):
         'properties': {
             'enable': {'type': 'boolean'},
             'dhcp': {'type': 'boolean'},
-            'address': {'type': ['string', 'null']}
+            'address': {'type': ['string', 'null']},
+            'macaddress': {'type': ['string', 'null']}
         }
     })
 
@@ -2042,6 +2055,10 @@ def _init(dispatcher, plugin):
             'driver': {'type': ['string', 'null']},
             'subnet': {'type': ['string', 'null']},
             'gateway': {'type': ['string', 'null']},
+            'containers': {
+                'type': 'array',
+                'items': {'type': 'string'}
+            }
         }
     })
 

@@ -592,12 +592,6 @@
                     "file:pam.d/sudo"
                 ],
                 "name": "pam"
-            },
-            "72c5b60b-d2bb-11e6-895f-0cc47a53d4b0": {
-                "dependencies": [
-                    "file:update.conf"
-                ],
-                "name": "update"
             }
         },
         "metadata": {
