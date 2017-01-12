@@ -5,6 +5,7 @@ etc/syslog-ng.conf.dist
 bin/pdbtool
 bin/loggen
 bin/update-patterndb
+include/syslog-ng/config.h
 include/syslog-ng/ivykis/iv_avl.h
 include/syslog-ng/ivykis/iv_event.h
 include/syslog-ng/ivykis/iv_event_raw.h
