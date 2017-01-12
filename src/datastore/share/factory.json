@@ -872,7 +872,7 @@
             },
             "b9d11e23-ecfb-46c2-a0c9-4a0d94eaafc1": {
                 "launchd": {
-                    "Label": "org.freenas.tftpd",
+                    "Label": "org.freenas.ups",
                     "RunAtLoad": true,
                     "Requires": ["networking", "logging", "etc"],
                     "SupportsCheckin": true,
