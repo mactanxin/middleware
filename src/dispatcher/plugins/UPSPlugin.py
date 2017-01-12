@@ -61,7 +61,7 @@ class UPSProvider(Provider):
     @accepts()
     @returns(h.array(h.array(str)))
     def drivers(self):
-        driver_list = '/usr/local/libexec/nut/driver.list'
+        driver_list = '/etc/local/nut/driver.list'
         if not os.path.exists(driver_list):
             return []
         drivers = []
