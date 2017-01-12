@@ -1739,6 +1739,29 @@ class DockerService(RpcService):
         except BaseException as err:
             raise RpcException(errno.EFAULT, 'Failed to disconnect container from network: {0}'.format(str(err)))
 
+    def commit_image(self, container_id, new_name):
+        host = self.context.docker_host_by_container_id(container_id)
+
+        if '/' not in new_name:
+            new_name = f'freenas/{new_name}'
+
+        if ':' not in new_name:
+            new_name = f'{new_name}:latest'
+
+        repo, tag = new_name.split(':', 1)
+
+        try:
+            image = host.connection.commit(
+                container=container_id,
+                repository=repo,
+                tag=tag
+            )
+        except BaseException as err:
+            raise RpcException(errno.EFAULT, str(err))
+
+        image_details = first_or_default(lambda i: i['Id'] == image['Id'], host.connection.images(), {})
+        return image_details['RepoTags'][0] or image['Id']
+
 
 class ServerResource(Resource):
     def __init__(self, apps=None, context=None):
