@@ -1,2 +1,3 @@
 /usr/local/lib/libserviced.so
 /usr/local/lib/libserviced.so.1
+/usr/local/include/serviced.h

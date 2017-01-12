@@ -50,7 +50,7 @@ call_serviced(const char *method, json_t *args, json_t **result)
 		*result = json_null();
 		dispatcher_close(conn);
 		errno = rpc_err;
-		return (0);
+		return (-1);
 	}
 
 	if (err != RPC_CALL_DONE) {

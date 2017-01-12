@@ -14,3 +14,4 @@ target_link_libraries(libserviced /usr/local/lib/libdispatcherclient.so)
 target_link_libraries(libserviced ${CMAKE_THREAD_LIBS_INIT})
 
 install(TARGETS libserviced LIBRARY DESTINATION lib)
+install(FILES serviced.h DESTINATION include)
