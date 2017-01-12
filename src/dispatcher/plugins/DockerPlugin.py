@@ -856,7 +856,7 @@ class DockerContainerCommitTask(DockerBaseTask):
         if not self.datastore.exists('docker.containers', ('id', '=', id)):
             raise TaskException(errno.ENOENT, 'Docker container {0} does not exist'.format(id))
 
-        if self.datastore.exists('docker.image.query', ('names.0', '=', name)):
+        if self.dispatcher.call_sync('docker.image.query', [('names.0', '=', name)], {'count': True}):
             raise TaskException(errno.EEXIST, 'Docker image {0} already exists'.format(name))
 
         if not tag:
