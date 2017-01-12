@@ -813,7 +813,7 @@ class DockerContainerCloneTask(DockerBaseTask):
 
         container = self.dispatcher.call_sync('docker.container.query', [('id', '=', id)], {'single': True})
 
-        self.set_progress(0, 'Committing a new image {0} from the container {1}'.format(
+        self.set_progress(30, 'Committing a new image {0} from the container {1}'.format(
             new_name,
             q.get(container, 'names.0')
         ))
