@@ -30,7 +30,6 @@ import errno
 import gevent
 import dockerfile_parse
 import dockerhub
-import socket
 import logging
 import requests
 from gevent.lock import RLock
@@ -281,7 +280,6 @@ class DockerImagesProvider(Provider):
             return hub.get_repository(repo_name).get('full_description')
         except ValueError:
             return None
-
 
 
 @description('Provides information about cached Docker container collections')
@@ -579,6 +577,63 @@ class DockerContainerCreateTask(DockerBaseTask):
         self.set_progress(100, 'Finished')
 
 
+@description('Updates a Docker container')
+@accepts(str, h.ref('docker-container'))
+class DockerContainerUpdateTask(DockerBaseTask):
+    @classmethod
+    def early_describe(cls):
+        return 'Updating a Docker container'
+
+    def describe(self, id, updated_fields):
+        container = self.datastore.get_by_id('docker.containers', id)
+        return TaskDescription('Updating Docker container {name}', name=q.get(container, 'names.0', ''))
+
+    def verify(self, id, updated_fields):
+        container = self.datastore.get_by_id('docker.containers', id) or {}
+        host = self.datastore.get_by_id('vms', container.get('host')) or {}
+        hostname = host.get('name')
+
+        for v in updated_fields.get('volumes', []):
+            if v.get('source') and v['source'] != 'HOST' and v['host_path'].startswith('/mnt'):
+                raise VerifyException(
+                    errno.EINVAL,
+                    '{0} is living inside /mnt, but its source is a {1} path'.format(
+                        v['host_path'], v['source'].lower()
+                    )
+                )
+
+        if 'running' in updated_fields:
+            raise VerifyException(errno.EINVAL, 'Running parameter cannot be set')
+
+        if 'web_ui_url' in updated_fields:
+            raise VerifyException(errno.EINVAL, 'Web UI URL cannot be set')
+
+        if hostname:
+            return ['docker:{0}'.format(hostname)]
+        else:
+            return ['docker']
+
+    def run(self, id, updated_fields):
+        if not self.datastore.exists('docker.containers', ('id', '=', id)):
+            raise TaskException(errno.ENOENT, 'Docker container {0} does not exist'.format(id))
+
+        container = self.dispatcher.call_sync('docker.container.query', [('id', '=', id)], {'single': True})
+
+        container.update(updated_fields)
+
+        self.set_progress(0, 'Deleting old container')
+        self.run_subtask_sync(
+            'docker.container.delete',
+            id,
+            progress_callback=lambda p, m, e: self.chunk_progress(0, 50, 'Deleting the old container:', p, m, e)
+        )
+        self.run_subtask_sync(
+            'docker.container.create',
+            container,
+            progress_callback=lambda p, m, e: self.chunk_progress(50, 100, 'Recreating the container', p, m, e)
+        )
+
+
 @description('Deletes a Docker container')
 @accepts(str)
 class DockerContainerDeleteTask(DockerBaseTask):
@@ -718,6 +773,117 @@ class DockerContainerStopTask(Task):
             lambda: self.dispatcher.call_sync('containerd.docker.stop', id),
             600
         )
+
+@description('Clones a Docker container')
+@accepts(str, str)
+@returns(str)
+class DockerContainerCloneTask(DockerBaseTask):
+    @classmethod
+    def early_describe(cls):
+        return 'Cloning a Docker container'
+
+    def describe(self, id, new_name):
+        container = self.datastore.get_by_id('docker.containers', id)
+        return TaskDescription(
+            'Cloning Docker container {name} to {new_name}',
+            name=q.get(container, 'names.0', ''),
+            new_name=new_name
+        )
+
+    def verify(self, id, new_name):
+        container = self.datastore.get_by_id('docker.containers', id) or {}
+        host = self.datastore.get_by_id('vms', container.get('host')) or {}
+        hostname = host.get('name')
+
+        if hostname:
+            return ['docker:{0}'.format(hostname)]
+        else:
+            return ['docker']
+
+    def run(self, id, new_name):
+        if not self.datastore.exists('docker.containers', ('id', '=', id)):
+            raise TaskException(errno.ENOENT, 'Docker container {0} does not exist'.format(id))
+
+        if self.datastore.exists('docker.containers', ('names.0', '=', new_name)):
+            raise TaskException(errno.EEXIST, 'Docker container {0} already exists'.format(new_name))
+
+        container = self.dispatcher.call_sync('docker.container.query', [('id', '=', id)], {'single': True})
+
+        self.set_progress(0, 'Committing a new image {0} from the container {1}'.format(
+            new_name,
+            q.get(container, 'names.0')
+        ))
+
+        image_name = self.run_subtask_sync('docker.container.commit', id, new_name)
+
+        container.pop('id')
+        q.set(container, 'names.0', new_name)
+        container['image'] = image_name
+
+        return self.run_subtask_sync(
+            'docker.container.create',
+            container,
+            progress_callback=lambda p, m, e: self.chunk_progress(50, 100, '', p, m, e)
+        )
+
+
+@description('Commits a new image from existing Docker container')
+@accepts(str, str, h.one_of(str, None))
+@returns(str)
+class DockerContainerCommitTask(DockerBaseTask):
+    @classmethod
+    def early_describe(cls):
+        return 'Committing a Docker image'
+
+    def describe(self, id, name, tag=None):
+        return TaskDescription('Committing the Docker image {name}', name=name)
+
+    def verify(self, id, name, tag=None):
+        container = self.datastore.get_by_id('docker.containers', id) or {}
+        host = self.datastore.get_by_id('vms', container.get('host')) or {}
+        hostname = host.get('name')
+
+        if hostname:
+            return ['docker:{0}'.format(hostname)]
+        else:
+            return ['docker']
+
+    def run(self, id, name, tag=None):
+        if not self.datastore.exists('docker.containers', ('id', '=', id)):
+            raise TaskException(errno.ENOENT, 'Docker container {0} does not exist'.format(id))
+
+        if self.datastore.exists('docker.image.query', ('names.0', '=', name)):
+            raise TaskException(errno.EEXIST, 'Docker image {0} already exists'.format(name))
+
+        if not tag:
+            tag = 'latest'
+
+        name = f'{name}:{tag}'
+
+        if '/' not in name:
+            name = f'freenas/{name}'
+
+        def match_fn(args):
+            if args['operation'] == 'create':
+                return bool(self.dispatcher.call_sync(
+                    'docker.image.query',
+                    [('names.0', '=', name)],
+                    {'count': True}
+                ))
+            else:
+                return False
+
+        def call_and_get_name():
+            nonlocal name
+            name = self.dispatcher.call_sync('containerd.docker.commit_image', id, name)
+
+        self.dispatcher.exec_and_wait_for_event(
+            'docker.image.changed',
+            match_fn,
+            call_and_get_name
+        )
+
+        return name
 
 
 @description('Creates a Docker network')
@@ -1667,9 +1833,12 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('docker.config.update', DockerUpdateTask)
 
     plugin.register_task_handler('docker.container.create', DockerContainerCreateTask)
+    plugin.register_task_handler('docker.container.update', DockerContainerUpdateTask)
     plugin.register_task_handler('docker.container.delete', DockerContainerDeleteTask)
     plugin.register_task_handler('docker.container.start', DockerContainerStartTask)
     plugin.register_task_handler('docker.container.stop', DockerContainerStopTask)
+    plugin.register_task_handler('docker.container.clone', DockerContainerCloneTask)
+    plugin.register_task_handler('docker.container.commit', DockerContainerCommitTask)
 
     plugin.register_task_handler('docker.network.create', DockerNetworkCreateTask)
     plugin.register_task_handler('docker.network.delete', DockerNetworkDeleteTask)
@@ -1781,8 +1950,10 @@ def _init(dispatcher, plugin):
             'id': {'type': 'string'},
             'names': {
                 'type': 'array',
-                'items': {'type': 'string',
-                          'pattern': docker_names_pattern}
+                'items': {
+                    'type': 'string',
+                    'pattern': docker_names_pattern
+                }
             },
             'command': {
                 'type': 'array',
@@ -1863,8 +2034,10 @@ def _init(dispatcher, plugin):
         'additionalProperties': False,
         'properties': {
             'id': {'type': 'string'},
-            'name': {'type': 'string',
-                     'pattern': docker_names_pattern},
+            'name': {
+                'type': 'string',
+                'pattern': docker_names_pattern
+            },
             'host': {'type': ['string', 'null']},
             'driver': {'type': ['string', 'null']},
             'subnet': {'type': ['string', 'null']},
