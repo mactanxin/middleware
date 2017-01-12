@@ -455,11 +455,12 @@ class UpdateProvider(Provider):
     @accepts()
     @returns(h.ref('update'))
     def get_config(self):
+        configuration = Configuration.Configuration()
         return {
             'train': self.dispatcher.configstore.get('update.train'),
-            'internal': self.dispatcher.configstore.get('update.internal'),
             'check_auto': self.dispatcher.configstore.get('update.check_auto'),
-            'update_server': Configuration.Configuration().UpdateServerURL(),
+            'internal': configuration.UpdateServerName() == 'internal',
+            'update_server': configuration.UpdateServerURL(),
         }
 
     @private
@@ -581,8 +582,8 @@ class UpdateConfigureTask(Task):
             self.configstore.set('update.check_auto', props['check_auto'])
 
         if 'internal' in props:
-            self.configstore.set('update.internal', props['internal'])
-            self.dispatcher.call_sync('etcd.generation.generate_group', 'update')
+            conf = Configuration.Configuration()
+            conf.SetUpdateServer('internal' if props['internal'] else 'default')
 
         self.dispatcher.dispatch_event('update.changed', {'operation': 'update'})
 
