@@ -777,6 +777,7 @@ class DockerContainerStopTask(Task):
             600
         )
 
+
 @description('Clones a Docker container')
 @accepts(str, str)
 @returns(str)
