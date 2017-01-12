@@ -2992,7 +2992,7 @@ def register_property_schemas(plugin):
             'readOnly': True
         },
         'origin': {
-            'type': 'str',
+            'type': 'string',
             'readOnly': True
         }
     }
