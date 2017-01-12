@@ -955,7 +955,7 @@ class VolumeUpdateTask(ProgressTask):
             for group, vdevs in list(updated_params['topology'].items()):
                 for vdev in vdevs:
                     if 'guid' not in vdev:
-                        if encryption['hashjked_password'] is not None:
+                        if encryption['hashed_password'] is not None:
                             if not is_password(
                                 password,
                                 encryption.get('salt', ''),
