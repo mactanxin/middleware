@@ -76,7 +76,7 @@ class VolumeDatastoreProvider(Provider):
         snapshots = self.dispatcher.call_sync(
             'volume.snapshot.query',
             [('dataset', '=', dataset), ('metadata', 'contains', 'org.freenas:vm_snapshot')],
-            {'select': 'metadata.org\.freenas:vm_snapshot'}
+            {'select': 'metadata.org\\.freenas:vm_snapshot'}
         )
         for snap_id in snapshots:
             yield '{0}@{1}'.format(path, snap_id)
@@ -89,7 +89,7 @@ class VolumeDatastoreProvider(Provider):
         dataset = os.path.join(datastore_id, raw_dataset)
         return bool(self.dispatcher.call_sync(
             'volume.snapshot.query',
-            [('dataset', '=', dataset), ('metadata.org\.freenas:vm_snapshot', '=', snap_id)],
+            [('dataset', '=', dataset), ('metadata.org\\.freenas:vm_snapshot', '=', snap_id)],
             {'count': True}
         ))
 
@@ -107,7 +107,7 @@ class VolumeDatastoreProvider(Provider):
             dataset, snap_id = self.dispatcher.call_sync(
                 'volume.snapshot.query',
                 [('id', '=', origin)],
-                {'select': ('dataset', 'metadata.org\.freenas:vm_snapshot'), 'single': True}
+                {'select': ('dataset', 'metadata.org\\.freenas:vm_snapshot'), 'single': True}
             )
             if snap_id:
                 dataset = '/'.join(dataset.split('/')[1:])
@@ -123,7 +123,7 @@ class VolumeDatastoreProvider(Provider):
         dataset = os.path.join(datastore_id, raw_dataset)
         snapshot_id = self.dispatcher.call_sync(
             'volume.snapshot.query',
-            [('dataset', '=', dataset), ('metadata.org\.freenas:vm_snapshot', '=', snap_id)],
+            [('dataset', '=', dataset), ('metadata.org\\.freenas:vm_snapshot', '=', snap_id)],
             {'single': True, 'select': 'id'}
         )
         datasets = self.dispatcher.call_sync(
@@ -335,7 +335,7 @@ class VolumeCloneTask(ProgressTask):
             dataset, vm_snap_id = full_path.split('@', 1)
             snapshot_id = self.dispatcher.call_sync(
                 'volume.snapshot.query',
-                [('dataset', '=', dataset), ('metadata.org\.freenas:vm_snapshot', '=', vm_snap_id)],
+                [('dataset', '=', dataset), ('metadata.org\\.freenas:vm_snapshot', '=', vm_snap_id)],
                 {'single': True, 'select': 'id'}
             )
 
@@ -445,7 +445,7 @@ class VolumeSnapshotDeleteTask(ProgressTask):
         dataset, vm_snap_id = full_path.split('@', 1)
         snapshot_id = self.dispatcher.call_sync(
             'volume.snapshot.query',
-            [('dataset', '=', dataset), ('metadata.org\.freenas:vm_snapshot', '=', vm_snap_id)],
+            [('dataset', '=', dataset), ('metadata.org\\.freenas:vm_snapshot', '=', vm_snap_id)],
             {'single': True, 'select': 'id'}
         )
 
@@ -478,7 +478,7 @@ class VolumeSnapshotRollbackTask(ProgressTask):
         dataset, vm_snap_id = full_path.split('@', 1)
         snapshot_id = self.dispatcher.call_sync(
             'volume.snapshot.query',
-            [('dataset', '=', dataset), ('metadata.org\.freenas:vm_snapshot', '=', vm_snap_id)],
+            [('dataset', '=', dataset), ('metadata.org\\.freenas:vm_snapshot', '=', vm_snap_id)],
             {'single': True, 'select': 'id'}
         )
 
