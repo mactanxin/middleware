@@ -1579,7 +1579,7 @@ def _depends():
 def _init(dispatcher, plugin):
     def on_device_attached(args):
         path = args['path']
-        if re.match(r'^/dev/(da|ada|vtbd|nvd|multipath/mpath)[0-9]+$', path):
+        if re.match(r'^/dev/(da|ada|vtbd|nvd|mfid|multipath/mpath)[0-9]+$', path):
             if not dispatcher.resource_exists('disk:{0}'.format(path)):
                 dispatcher.register_resource(Resource('disk:{0}'.format(path)))
 
@@ -1597,7 +1597,7 @@ def _init(dispatcher, plugin):
 
     def on_device_detached(args):
         path = args['path']
-        if re.match(r'^/dev/(da|ada|vtbd|nvd)[0-9]+$', path):
+        if re.match(r'^/dev/(da|ada|vtbd|nvd|mfid)[0-9]+$', path):
             logger.info("Disk %s detached", path)
             disk = get_disk_by_path(path)
             purge_disk_cache(dispatcher, path)
@@ -1608,13 +1608,13 @@ def _init(dispatcher, plugin):
                     'id': disk['id']
                 })
 
-        if re.match(r'^/dev/(da|ada|vtbd|nvd|multipath/mpath)[0-9]+$', path):
+        if re.match(r'^/dev/(da|ada|vtbd|nvd|mfid|multipath/mpath)[0-9]+$', path):
             dispatcher.unregister_resource('disk:{0}'.format(path))
 
     def on_device_mediachange(args):
         # Regenerate caches
         path = args['path']
-        if re.match(r'^/dev/(da|ada|vtbd|nvd|multipath/mpath)[0-9]+$', path):
+        if re.match(r'^/dev/(da|ada|vtbd|nvd|mfid|multipath/mpath)[0-9]+$', path):
             with dispatcher.get_lock('diskcache:{0}'.format(path)):
                 logger.info('Updating disk cache for device %s', args['path'])
                 update_disk_cache(dispatcher, args['path'])
