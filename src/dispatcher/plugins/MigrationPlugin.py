@@ -63,9 +63,16 @@ class MasterMigrateTask(ProgressTask):
         return TaskDescription("Migration of FreeNAS 9.x settings to 10")
 
     def run(self):
-        # for now just emmiting this dummy event to let the dispatcher
-        # carry on with sending out 'ready' event, later on this will
-        # be incorporated more properly
+        logger.debug("Starting migration from 9.x database to 10")
+        self.dispatcher.dispatch_event(
+            'migration.status',
+            {
+                'apps_migrated': [],
+                'status': 'STARTED'
+            }
+        )
+        # bring the 9.x database up to date with the latest 9.x version
+        run_syncdb()
         self.dispatcher.dispatch_event(
             'migration.status',
             {
@@ -106,10 +113,6 @@ def _depends():
 
 def _init(dispatcher, plugin):
 
-    def start_migration(args):
-        logger.debug("Starting migration from 9.x database to 10")
-        dispatcher.call_task_sync('migration.mastermigrate')
-
     plugin.register_schema_definition('migration-status', {
         'type': 'object',
         'properties': {
@@ -128,16 +131,7 @@ def _init(dispatcher, plugin):
     plugin.register_event_type('migration.status')
 
     if os.path.exists(FREENAS93_DATABASE_PATH):
-        dispatcher.dispatch_event(
-            'migration.status',
-            {
-                'apps_migrated': [],
-                'status': 'STARTED'
-            }
-        )
-        # bring the 9.x database up to date with the latest 9.x version
-        run_syncdb()
-        plugin.register_event_handler('service.ready', start_migration)
+        dispatcher.call_task_sync('migration.mastermigrate')
     else:
         dispatcher.dispatch_event(
             'migration.status',
