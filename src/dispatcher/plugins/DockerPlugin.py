@@ -349,7 +349,7 @@ class DockerBaseTask(ProgressTask):
             biggest_volume = self.dispatcher.call_sync(
                 'volume.query',
                 [('status', '=', 'ONLINE')],
-                {'sort': ['properties.size.parsed'], 'single': True, 'select': 'id'}
+                {'sort': ['-properties.size.parsed'], 'single': True, 'select': 'id'}
             )
             if not biggest_volume:
                 raise TaskException(
