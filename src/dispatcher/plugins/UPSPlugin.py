@@ -47,7 +47,9 @@ nut_signal_descriptions = {
     'COMMOK': 'Communications established with the UPS',
     'COMMBAD': 'Communications lost to the UPS',
     'REPLBATT': 'The UPS battery is bad and needs to be replaced',
-    'NOCOMM': 'A UPS is unavailable (can’t be contacted for monitoring)'
+    'NOCOMM': 'A UPS is unavailable (can’t be contacted for monitoring)',
+    'SHUTDOWN': 'The local system is going to be shut down',
+    'FSD': 'The UPS is in the "forced shutdown" mode'
 }
 
 @description('Provides info about UPS service configuration')
