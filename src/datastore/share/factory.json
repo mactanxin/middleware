@@ -610,6 +610,7 @@
                 "launchd": {
                     "RunAtLoad": true,
                     "Label": "net.sourceforge.netatalk.netatalk",
+                    "Requires": ["logging", "etc"],
                     "ProgramArguments": [
                         "/usr/local/sbin/netatalk",
                         "-d"
