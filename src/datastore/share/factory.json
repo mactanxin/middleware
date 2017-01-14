@@ -579,19 +579,6 @@
                     "file:krb5.conf"
                 ],
                 "name": "kerberos"
-            },
-            "48b48d67-7efc-11e5-bbec-005056826348": {
-                "dependencies": [
-                    "file:pam.d/ftp",
-                    "file:pam.d/ftpd",
-                    "file:pam.d/login",
-                    "file:pam.d/netatalk",
-                    "file:pam.d/samba",
-                    "file:pam.d/sshd",
-                    "file:pam.d/su",
-                    "file:pam.d/sudo"
-                ],
-                "name": "pam"
             }
         },
         "metadata": {
