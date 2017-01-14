@@ -629,7 +629,7 @@
                             "--configfile=/usr/local/etc/smb4.conf"
                         ]
                     },
-                                        {
+                    {
                         "RunAtLoad": true,
                         "Label": "org.samba.winbindd",
                         "Requires": ["logging"],
