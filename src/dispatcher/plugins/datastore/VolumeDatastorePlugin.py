@@ -501,6 +501,12 @@ def _init(dispatcher, plugin):
     def on_snapshot_change(args):
         pass
 
+    def on_volume_change(args):
+        dispatcher.dispatch_event('vm.datastore.changed', {
+            'operation': args['operation'],
+            'ids': args['ids']
+        })
+
     plugin.register_schema_definition('vm-datastore-properties-volume', {
         'type': 'object',
         'additionalProperties': False,
@@ -526,4 +532,5 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('vm.datastore.volume.block_device.snapshot.delete', VolumeSnapshotDeleteTask)
     plugin.register_task_handler('vm.datastore.volume.block_device.snapshot.rollback', VolumeSnapshotRollbackTask)
 
+    plugin.register_event_handler('volume.changed', on_volume_change)
     plugin.register_event_handler('volume.snapshot.changed', on_snapshot_change)
