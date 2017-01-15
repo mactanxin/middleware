@@ -440,6 +440,9 @@ class AccountService(RpcService):
             try:
                 result = d.instance.getpwent(filter, params)
                 for user in result:
+                    if not user:
+                        continue
+
                     resolve_primary_group(self.context, user)
                     yield fix_passwords(annotate(user, d, 'username'))
                     if single:
@@ -622,6 +625,9 @@ class GroupService(RpcService):
             try:
                 result = d.instance.getgrent(filter, params)
                 for group in result:
+                    if not group:
+                        continue
+
                     yield annotate(group, d, 'name')
                     if single:
                         return

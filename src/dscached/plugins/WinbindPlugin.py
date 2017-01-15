@@ -264,7 +264,7 @@ class WinbindPlugin(DirectoryServicePlugin):
                         self.directory.put_state(DirectoryState.DISABLED)
 
     def configure_smb(self, enable):
-        workgroup = self.parameters['realm'].split('.')[0]
+        workgroup = self.parameters['realm'].split('.')[0].upper()
         cfg = smbconf.SambaConfig('registry')
         params = {
             'server role': 'member server',
@@ -332,7 +332,10 @@ class WinbindPlugin(DirectoryServicePlugin):
         username = get(entry, 'sAMAccountName')
         usersid = get(entry, 'objectSid')
         groups = []
-        wbu = self.wbc.get_user(name='{0}\\{1}'.format(self.realm, username))
+        try:
+            wbu = self.wbc.get_user(name='{0}\\{1}'.format(self.realm, username))
+        except:
+            return
 
         if not wbu:
             logging.warning('User {0} found in LDAP, but not in winbindd.'.format(username))
@@ -379,7 +382,10 @@ class WinbindPlugin(DirectoryServicePlugin):
         groupname = get(entry, 'sAMAccountName')
         groupsid = get(entry, 'objectSid')
         parents = []
-        wbg = self.wbc.get_group(name='{0}\\{1}'.format(self.realm, groupname))
+        try:
+            wbg = self.wbc.get_group(name='{0}\\{1}'.format(self.realm, groupname))
+        except:
+            return
 
         if not wbg:
             logging.warning('Group {0} found in LDAP, but not in winbindd.'.format(groupname))
@@ -421,8 +427,6 @@ class WinbindPlugin(DirectoryServicePlugin):
 
     def getpwuid(self, uid):
         logger.debug('getpwuid(uid={0})'.format(uid))
-        if not (self.uid_min <= uid <= self.uid_max):
-            return
 
         if not self.is_joined():
             logger.debug('getpwuid: not joined')
@@ -521,7 +525,6 @@ class WinbindPlugin(DirectoryServicePlugin):
 
         try:
             self.configure_smb(True)
-            obtain_or_renew_ticket(self.principal, self.parameters['password'])
 
             try:
                 subprocess.check_output(['/usr/local/bin/net', 'ads', 'join', self.realm, '-k'])
@@ -561,6 +564,7 @@ class WinbindPlugin(DirectoryServicePlugin):
 
     def leave(self):
         logger.info('Leaving domain')
+        subprocess.call(['/usr/local/bin/net', 'cache', 'flush'])
         subprocess.call(['/usr/local/bin/net', 'ads', 'leave'])
         self.configure_smb(False)
         self.dc = None
