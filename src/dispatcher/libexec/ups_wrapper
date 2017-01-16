@@ -29,6 +29,7 @@ import os
 import sys
 import subprocess
 import signal
+from bsd import setproctitle
 from datastore import get_datastore
 from datastore.config import ConfigStore, ConfigNode
 from freenas.serviced import checkin, ServicedException
@@ -38,43 +39,27 @@ ds = get_datastore()
 cs = ConfigStore(ds)
 ups = ConfigNode('service.ups', cs).__getstate__()
 
+procs = []
 
-def start_process(label):
-    args = get_arguments(label)
-    print('Starting {0}'.format(args))
-    return subprocess.Popen(args)
-
-
-def get_arguments(label):
-    if label == 'org.freebsd.upsdrv':
-        return \
-            ['/usr/local/sbin/upsdrvctl', 'start']
-
-    if label == 'org.freebsd.upsd':
-        return \
-            ['/usr/local/sbin/upsd']
-
-    if label == 'org.freebsd.upsmon':
-        return \
-            ['/usr/local/sbin/upsmon', 'localhost']
-
-
+def start_process(command):
+    print('Starting {0}'.format(command))
+    return subprocess.Popen(command)
 
 if ups['mode'] == 'MASTER':
+    ups_drv = start_process(['/usr/local/sbin/upsdrvctl', 'start'])
+    if ups_drv.wait() != 0:
+        print('Starting UPS drivers failed')
+        sys.exit(1)
 
-    procs = [
-        start_process('org.freebsd.upsdrv'),
-        start_process('org.freebsd.upsd'),
-        start_process('org.freebsd.upsmon')
-    ]
+    procs.append(start_process(['/usr/local/sbin/upsd', '-D']))
+    procs.append(start_process(['/usr/local/sbin/upsmon', '-p', '-D', 'localhost']))
 
 else:
+    procs.append(start_process(['/usr/local/sbin/upsmon', '-p', '-D', 'localhost']))
 
-    procs = [
-        start_process('org.freebsd.upsmon')
-    ]
 
 try:
+    setproctitle('ups master process')
     signal.signal(signal.SIGHUP, signal.SIG_DFL)
     checkin()
     while True:
@@ -94,6 +79,10 @@ finally:
         p.terminate()
         p.wait()
 
+    if ups['mode'] == 'MASTER':
+        ups_drv = start_process(['/usr/local/sbin/upsdrvctl', 'stop'])
+        if ups_drv.wait() != 0:
+            print('Stopping UPS drivers failed')
+
+
     sys.exit(0)
-
-
