@@ -112,7 +112,7 @@ class EntitySubscriberEventSource(EventSource):
                 keys = set(ids.keys() if isinstance(ids, dict) else ids)
                 entities = list(self.dispatcher.call_sync('{0}.query'.format(service), [('id', 'in', list(keys))]))
             except BaseException as e:
-                self.logger.warn('Cannot fetch changed entities from service {0}: {1}'.format(service, str(e)))
+                self.logger.warning('Cannot fetch changed entities from service {0}: {1}'.format(service, str(e)))
                 return
 
         self.dispatcher.dispatch_event('entity-subscriber.{0}.changed'.format(service), {

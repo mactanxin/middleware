@@ -56,7 +56,7 @@ import urllib.parse
 import requests
 import contextlib
 import dhcp.client as dhcp
-from docker.errors import NotFound
+from docker.errors import NotFound, APIError
 from datetime import datetime
 from bsd import kld, sysctl, setproctitle
 from threading import Condition
@@ -1479,6 +1479,7 @@ class DockerService(RpcService):
                 obj.update({
                     'id': container['Id'],
                     'image': container['Image'],
+                    'image_id': container['ImageID'],
                     'name': names[0],
                     'names': names,
                     'command': container['Command'] if isinstance(container['Command'], list) else [container['Command']],
@@ -1565,10 +1566,10 @@ class DockerService(RpcService):
         for line in host.connection.pull(name, stream=True):
             yield json.loads(line.decode('utf-8'))
 
-    def delete_image(self, name, host):
+    def delete_image(self, id, host):
         host = self.context.get_docker_host(host)
         try:
-            host.connection.remove_image(image=name, force=True)
+            host.connection.remove_image(image=id, force=True)
         except BaseException as err:
             raise RpcException(errno.EFAULT, 'Failed to remove image: {0}'.format(str(err)))
 
@@ -1708,12 +1709,15 @@ class DockerService(RpcService):
             host.connection.start(container=id)
         except BaseException as err:
             raise RpcException(errno.EFAULT, 'Failed to start container: {0}'.format(str(err)))
-        exec = host.connection.exec_create(
-            container=id,
-            cmd=command,
-            tty=True,
-            stdin=True
-        )
+        try:
+            exec = host.connection.exec_create(
+                container=id,
+                cmd=command,
+                tty=True,
+                stdin=True
+            )
+        except docker.errors.APIError:
+            raise RpcException(errno.EINVAL, 'Cannot create exec. Container closed immediately after start')
         return exec['Id']
 
     def delete_container(self, id):
