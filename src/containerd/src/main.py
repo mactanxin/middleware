@@ -56,7 +56,7 @@ import urllib.parse
 import requests
 import contextlib
 import dhcp.client as dhcp
-from docker.errors import NotFound
+from docker.errors import NotFound, APIError
 from datetime import datetime
 from bsd import kld, sysctl, setproctitle
 from threading import Condition
@@ -1709,12 +1709,15 @@ class DockerService(RpcService):
             host.connection.start(container=id)
         except BaseException as err:
             raise RpcException(errno.EFAULT, 'Failed to start container: {0}'.format(str(err)))
-        exec = host.connection.exec_create(
-            container=id,
-            cmd=command,
-            tty=True,
-            stdin=True
-        )
+        try:
+            exec = host.connection.exec_create(
+                container=id,
+                cmd=command,
+                tty=True,
+                stdin=True
+            )
+        except docker.errors.APIError:
+            raise RpcException(errno.EINVAL, 'Cannot create exec. Container closed immediately after start')
         return exec['Id']
 
     def delete_container(self, id):
