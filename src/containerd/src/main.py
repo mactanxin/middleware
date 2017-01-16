@@ -1479,6 +1479,7 @@ class DockerService(RpcService):
                 obj.update({
                     'id': container['Id'],
                     'image': container['Image'],
+                    'image_id': container['ImageID'],
                     'name': names[0],
                     'names': names,
                     'command': container['Command'] if isinstance(container['Command'], list) else [container['Command']],
