@@ -1241,10 +1241,11 @@ class DockerImageDeleteTask(DockerBaseTask):
     def early_describe(cls):
         return 'Deleting docker image'
 
-    def describe(self, name, hostid=None):
-        return TaskDescription('Deleting docker image {name}', name=name)
+    def describe(self, id, hostid=None):
+        name = self.dispatcher.call_sync('docker.image.query', [('id', '=', id)], {'single': True, 'select': 'names.0'})
+        return TaskDescription('Deleting docker image {name}', name=name or '')
 
-    def verify(self, name, hostid=None):
+    def verify(self, id, hostid=None):
         host = self.datastore.get_by_id('vms', hostid) or {}
         hostname = host.get('name')
 
@@ -1253,44 +1254,63 @@ class DockerImageDeleteTask(DockerBaseTask):
         else:
             return ['docker']
 
-    def run(self, name, hostid=None):
+    def run(self, id, hostid=None):
+        name = self.dispatcher.call_sync('docker.image.query', [('id', '=', id)], {'single': True, 'select': 'names.0'})
+        if not name:
+            raise TaskException(errno.ENOENT, f'Docker container image {id} does not exist')
+        
         if hostid:
             hosts = [hostid]
         else:
-            hosts = self.dispatcher.call_sync(
+            hosts = list(self.dispatcher.call_sync(
                 'docker.image.query',
-                [('names.0', '=', name)],
+                [('id', '=', id)],
                 {'select': 'hosts', 'single': True}
-            )
+            ))
+
+        related = self.dispatcher.call_sync(
+            'docker.container.query',
+            [('host', 'in', hosts), ('image_id', '=', id)],
+            {'select': ('host', 'names.0')}
+        )
+        names_in_use = []
+        for h, n in related:
+            if h in hosts:
+                hosts.remove(h)
+            names_in_use.append(n)
+
+        if names_in_use:
+            self.add_warning(TaskWarning(
+                errno.EACCES,
+                f'There are containers using {name} image on selected Docker hosts - delete them first: ' +
+                ', '.join(names_in_use)
+            ))
 
         def delete_image():
-            for id in hosts:
+            for h_id in hosts:
                 try:
-                    self.check_host_state(id)
+                    self.check_host_state(h_id)
                 except TaskException:
                     continue
 
                 try:
-                    self.dispatcher.call_sync('containerd.docker.delete_image', name, id)
+                    self.dispatcher.call_sync('containerd.docker.delete_image', id, h_id)
                 except RpcException as err:
                     raise TaskException(errno.EACCES, 'Failed to remove image {0}: {1}'.format(name, err))
 
         def match_fn(args):
             if args['operation'] == 'delete':
-                return not self.dispatcher.call_sync(
-                    'docker.image.query',
-                    [('names', 'contains', name)],
-                    {'single': True}
-                )
+                return id in args['ids']
             else:
                 return False
 
-        self.dispatcher.exec_and_wait_for_event(
-            'docker.image.changed',
-            match_fn,
-            lambda: delete_image(),
-            600
-        )
+        if hosts:
+            self.dispatcher.exec_and_wait_for_event(
+                'docker.image.changed',
+                match_fn,
+                lambda: delete_image(),
+                600
+            )
 
 
 @description('Removes all previously cached container images')
@@ -1308,7 +1328,7 @@ class DockerImageFlushTask(DockerBaseTask):
     def run(self):
         subtasks = []
         self.set_progress(0, 'Deleting docker images')
-        for image in self.dispatcher.call_sync('docker.image.query', [], {'select': 'names.0'}):
+        for image in self.dispatcher.call_sync('docker.image.query', [], {'select': 'id'}):
             subtasks.append(self.run_subtask('docker.image.delete', image))
 
         subtasks_cnt = len(subtasks)
@@ -1970,6 +1990,7 @@ def _init(dispatcher, plugin):
                 'items': {'type': 'string'}
             },
             'image': {'type': 'string'},
+            'image_id': {'type': 'string'},
             'host': {'type': ['string', 'null']},
             'hostname': {'type': ['string', 'null']},
             'memory_limit': {'type': ['integer', 'null']},
