@@ -423,7 +423,7 @@ class MongodbDatastore(object):
 
             try:
                 db = self._get_db(collection)
-                db.insert(obj)
+                db.insert_one(obj)
             except pymongo.errors.DuplicateKeyError:
                 if autopkey and retries > 0:
                     retries -= 1
@@ -461,7 +461,7 @@ class MongodbDatastore(object):
                 obj['created_at'] = t
 
         db = self._get_db(collection)
-        db.update({'_id': pkey}, obj, upsert=upsert)
+        db.replace_one({'_id': pkey}, obj, upsert=upsert)
 
     def upsert(self, collection, pkey, obj, config=False):
         return self.update(collection, pkey, obj, upsert=True, config=config)
@@ -469,7 +469,7 @@ class MongodbDatastore(object):
     @auto_retry
     def delete(self, collection, pkey):
         db = self._get_db(collection)
-        db.remove(pkey)
+        db.delete_one({'_id': pkey})
 
     def lock(self, data=True, log=False):
         if data:
