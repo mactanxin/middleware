@@ -4,7 +4,6 @@
 
     adv_config = dispatcher.call_sync('system.advanced.get_config')
     gen_config = dispatcher.call_sync('system.general.get_config')
-    ups_config = dispatcher.call_sync('service.ups.get_config')
 
     hwmodel = sysctl.sysctlbyname("hw.model")
 
@@ -110,16 +109,6 @@ rpc_lockd_flags="${nfs_ips}\
 rpcbind_flags="${nfs_ips}"
 % endif
 
-% if ups_config['mode'] == 'MASTER' and ups_config['enable']:
-nut_enable="YES"
-nut_upslog_ups="${ups_config['identifier']}"
-% elif ups_config['mode'] == 'SLAVE' and ups_config['enable']:
-nut_upslog_ups="${ups_config['identifier']}@${ups_config['remote_host']}:${ups_config['remote_port']}"
-% endif
-% if ups_config['enable']:
-nut_upslog_enable="YES"
-nut_upsmon_enable="YES"
-% endif
 
 % if gen_config['console_keymap']:
 keymap="${gen_config['console_keymap']}"
