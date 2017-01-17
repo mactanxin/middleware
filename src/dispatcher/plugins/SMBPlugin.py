@@ -108,6 +108,10 @@ class SMBConfigureTask(Task):
         if workgroup.lower() in [i.lower() for i in netbiosname]:
             raise TaskException(errno.EINVAL, 'NetBIOS and Workgroup must be unique')
 
+        if smb.get('guest_user'):
+            if not self.dispatcher.call_sync('user.query', [('username', '=', smb['guest_user'])], {'single': True}):
+                raise TaskException(errno.EINVAL, 'User: {0} does not exist'.format(smb['guest_user']))
+
         try:
             action = 'NONE'
             node = ConfigNode('service.smb', self.configstore)
