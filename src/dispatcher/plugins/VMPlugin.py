@@ -129,12 +129,8 @@ class VMProvider(Provider):
             target_type = q.get(device, 'properties.target_type')
             target_path = q.get(device, 'properties.target_path')
 
-            if target_type == 'DISK':
-                return self.dispatcher.call_sync(
-                    'disk.query',
-                    [('id', '=', target_path)],
-                    {'single': True, 'select': 'path'}
-                )
+            if target_type in ('DISK', 'FILE'):
+                return target_path
 
             return return_path(vm['target'], os.path.join(VM_ROOT, vm['name'], target_path))
 
@@ -513,14 +509,16 @@ class VMBaseTask(ProgressTask):
 
         if res['type'] == 'DISK':
             vm_root_dir = get_vm_path(vm['name'])
-            dev_path = os.path.join(vm_root_dir, res['name'])
             properties = res['properties']
             datastore = vm['target']
             normalize(properties, {
                 'mode': 'AHCI',
                 'target_type': 'ZVOL',
-                'target_path': res['name']
+                'target_path': res['name'],
+                'size': 0
             })
+            properties['target_path'] = os.path.join(vm_root_dir, properties['target_path'])
+
             cloning_supported = self.dispatcher.call_sync(
                 'vm.datastore.query',
                 [('id', '=', datastore)],
@@ -533,12 +531,16 @@ class VMBaseTask(ProgressTask):
                         'vm.datastore.block_device.clone',
                         datastore,
                         source,
-                        dev_path
+                        properties['target_path']
                     )
                 else:
                     copytree(
                         self.dispatcher.call_sync('vm.datastore.get_filesystem_path', datastore, source),
-                        self.dispatcher.call_sync('vm.datastore.get_filesystem_path', datastore, dev_path),
+                        self.dispatcher.call_sync(
+                            'vm.datastore.get_filesystem_path',
+                            datastore,
+                            properties['target_path']
+                        )
                     )
 
             else:
@@ -546,7 +548,7 @@ class VMBaseTask(ProgressTask):
                     self.run_subtask_sync(
                         'vm.datastore.block_device.create',
                         vm['target'],
-                        dev_path,
+                        properties['target_path'],
                         properties['size']
                     )
 
@@ -628,24 +630,67 @@ class VMBaseTask(ProgressTask):
         old_properties = old_res['properties']
         new_properties = new_res['properties']
 
-        if new_res['type'] in ['DISK', 'VOLUME']:
+        if new_res['type'] == 'VOLUME':
             if old_res['name'] != new_res['name']:
-                if not (new_res['type'] == 'VOLUME' and not new_properties['auto']):
+                if old_properties['auto'] and new_properties['auto']:
                     self.run_subtask_sync('vm.datastore.directory.rename',
                         vm['target'],
                         os.path.join(vm_root_dir, old_res['name']),
                         os.path.join(vm_root_dir, new_res['name'])
                     )
 
-        if new_res['type'] == 'DISK':
-            if old_properties['size'] != new_properties['size']:
-                path = os.path.join(vm_root_dir, new_res['name'])
+            if not old_properties['auto'] and new_properties['auto']:
                 self.run_subtask_sync(
-                    'vm.datastore.block_device.resize',
+                    'vm.datastore.directory.create',
                     vm['target'],
-                    path,
-                    new_properties['size']
+                    os.path.join(vm_root_dir, new_res['name'])
                 )
+
+            if old_properties['auto'] and not new_properties['auto']:
+                new_properties['destination'] = None
+
+        if new_res['type'] == 'DISK':
+            if old_properties['target_type'] == 'ZVOL':
+                if new_properties['target_type'] == 'ZVOL':
+                    if old_properties['size'] != new_properties['size']:
+                        self.run_subtask_sync(
+                            'vm.datastore.block_device.resize',
+                            vm['target'],
+                            old_properties['target_path'],
+                            new_properties['size']
+                        )
+
+                    if old_properties['target_path'] != new_properties['target_path']:
+                        new_properties['target_path'] = os.path.join(vm_root_dir, new_properties['target_path'])
+                        self.run_subtask_sync(
+                            'vm.datastore.block_device.rename',
+                            vm['target'],
+                            old_properties['target_path'],
+                            new_properties['target_path']
+                        )
+
+            elif old_properties['target_type'] in ('DISK', 'FILE'):
+                if new_properties['target_type'] == 'ZVOL':
+                    new_properties['target_path'] = os.path.join(vm_root_dir, new_properties['target_path'])
+                    target_exists = self.dispatcher.call_sync(
+                        'vm.datastore.directory_exists',
+                        vm['target'],
+                        new_properties['target_path']
+                    )
+                    if not target_exists:
+                        self.run_subtask_sync(
+                            'vm.datastore.block_device.create',
+                            vm['target'],
+                            new_properties['target_path'],
+                            new_properties['size']
+                        )
+                    else:
+                        self.run_subtask_sync(
+                            'vm.datastore.block_device.resize',
+                            vm['target'],
+                            new_properties['target_path'],
+                            new_properties['size']
+                        )
 
         if new_res['type'] == 'NIC':
             brigde = new_properties.get('bridge', 'default')
@@ -1167,6 +1212,9 @@ class VMStartTask(Task):
 
     def verify(self, id):
         vm = self.datastore.get_by_id('vms', id)
+        if not vm:
+            raise TaskException(errno.ENOENT, f'VM {id} does not exist')
+
         config = vm.get('config')
         if not config or not config.get('bootloader'):
             raise VerifyException(errno.ENXIO, 'Please specify a bootloader for this vm.')
@@ -2404,8 +2452,7 @@ def _init(dispatcher, plugin):
             'target_type': {'$ref': 'vm-device-disk-target-type'},
             'target_path': {'type': 'string'},
             'source': {'type': 'string'}
-        },
-        'required': ['size']
+        }
     })
 
     plugin.register_schema_definition('vm-device-disk-mode', {
