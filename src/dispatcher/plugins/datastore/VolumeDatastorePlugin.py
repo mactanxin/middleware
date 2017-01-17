@@ -288,7 +288,7 @@ class VolumeBlockDeviceRenameTask(ProgressTask):
         return self.dispatcher.call_sync('vm.datastore.volume.get_resources', id)
 
     def run(self, id, old_path, new_path):
-        return self.run_subtask_sync_with_progress('volume.dataset.delete', os.path.join(id, old_path), {
+        return self.run_subtask_sync_with_progress('volume.dataset.update', os.path.join(id, old_path), {
             'id': os.path.join(id, new_path)
         })
 
