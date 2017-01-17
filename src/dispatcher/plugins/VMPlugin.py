@@ -2391,7 +2391,7 @@ def _init(dispatcher, plugin):
 
     plugin.register_schema_definition('vm-device-disk-target-type', {
         'type': 'string',
-        'enum': ['ZVOL', 'DISK']
+        'enum': ['ZVOL', 'FILE', 'DISK']
     })
 
     plugin.register_schema_definition('vm-device-disk', {
