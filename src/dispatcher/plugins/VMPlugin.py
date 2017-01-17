@@ -129,7 +129,7 @@ class VMProvider(Provider):
             target_type = q.get(device, 'properties.target_type')
             target_path = q.get(device, 'properties.target_path')
 
-            if target_type == 'DISK':
+            if target_type in ('DISK', 'FILE'):
                 return target_path
 
             return return_path(vm['target'], os.path.join(VM_ROOT, vm['name'], target_path))
@@ -668,10 +668,8 @@ class VMBaseTask(ProgressTask):
                             old_properties['target_path'],
                             new_properties['target_path']
                         )
-                else:
-                    new_properties['size'] = 0
 
-            elif old_properties['target_type'] == 'DISK':
+            elif old_properties['target_type'] in ('DISK', 'FILE'):
                 if new_properties['target_type'] == 'ZVOL':
                     new_properties['target_path'] = os.path.join(vm_root_dir, new_properties['target_path'])
                     target_exists = self.dispatcher.call_sync(
@@ -693,8 +691,6 @@ class VMBaseTask(ProgressTask):
                             new_properties['target_path'],
                             new_properties['size']
                         )
-                else:
-                    new_properties['size'] = 0
 
         if new_res['type'] == 'NIC':
             brigde = new_properties.get('bridge', 'default')
