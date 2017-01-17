@@ -1468,14 +1468,6 @@ class DockerService(RpcService):
                             'value': find_env(environment, i['id'])
                         })
 
-                    if presets.get('web_ui_protocol'):
-                        web_ui_url = '{0}://{1}:{2}/{3}'.format(
-                            presets['web_ui_protocol'],
-                            bridge_ipaddress or socket.gethostname(),
-                            presets['web_ui_port'],
-                            presets['web_ui_path']
-                    )
-
                 obj.update({
                     'id': container['Id'],
                     'image': container['Image'],
@@ -1507,6 +1499,22 @@ class DockerService(RpcService):
                     'capabilities_drop': host_config['CapDrop'] or [],
                     'privileged': host_config.get('Privileged', False),
                 })
+                if presets and presets.get('web_ui_protocol'):
+                    port = int(presets['web_ui_port'])
+                    port_configuration = first_or_default(
+                        lambda o: o['host_port'] == port and o['protocol'] == 'TCP',
+                        obj['ports']
+                    )
+
+                    if port_configuration and q.get(obj, 'bridge.enable'):
+                        port = port_configuration['container_port']
+
+                    obj['web_ui_url'] = '{0}://{1}:{2}/{3}'.format(
+                        presets['web_ui_protocol'],
+                        bridge_ipaddress or socket.gethostname(),
+                        port,
+                        presets['web_ui_path']
+                    )
                 result.append(obj)
 
         return q.query(result, *(filter or []), stream=True, **(params or {}))
