@@ -915,6 +915,7 @@
                     "Program": "/usr/local/libexec/dispatcher/ladvd_wrapper"
                 },
                 "builtin": false,
+                "task": "service.lldp.update",
                 "name": "lldp"
             },
             "9137a2bd-c45f-4b6e-ad4e-45d2fd858cac": {
@@ -948,6 +949,7 @@
             "dc7b38aa-e04a-48ea-96d0-89aac2b5112d": {
                 "builtin": false,
                 "name": "iscsi",
+                "task": "service.iscsi.update",
                 "dependencies": [
                     "793867c5-bf29-4464-b7f1-7b77a9e2b97c"
                 ]

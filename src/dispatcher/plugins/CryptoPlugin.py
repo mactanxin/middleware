@@ -30,71 +30,18 @@ import os
 import re
 import time
 import datetime
+import tarfile
+import io
 from pathlib import Path
 from pytz import UTC
 from datastore import DatastoreException
 from freenas.dispatcher.rpc import RpcException, description, accepts, returns, generator
 from freenas.dispatcher.rpc import SchemaHelper as h
 from task import Provider, Task, TaskException, VerifyException, query, TaskDescription
-from freenas.utils import query as q
+from freenas.utils import query as q, COUNTRY_CODES
 from freenas.dispatcher.fd import FileDescriptor
 
 from OpenSSL import crypto
-
-
-COUNTRY_CODES = {
-    "AFGHANISTAN": "AF", "ALAND ISLANDS": "AX", "ALBANIA": "AL", "ALGERIA": "DZ", "AMERICAN SAMOA": "AS",
-    "ANDORRA": "AD", "ANGOLA": "AO", "ANGUILLA": "AI", "ANTARCTICA": "AQ", "ANTIGUA AND BARBUDA": "AG",
-    "ARGENTINA": "AR", "ARMENIA": "AM", "ARUBA": "AW", "AUSTRALIA": "AU", "AUSTRIA": "AT", "AZERBAIJAN": "AZ",
-    "BAHAMAS": "BS", "BAHRAIN": "BH", "BANGLADESH": "BD", "BARBADOS": "BB", "BELARUS": "BY", "BELGIUM": "BE",
-    "BELIZE": "BZ", "BENIN": "BJ", "BERMUDA": "BM", "BHUTAN": "BT", "BOLIVIA, PLURINATIONAL STATE OF": "BO",
-    "BOSNIA AND HERZEGOVINA": "BA", "BOTSWANA": "BW", "BOUVET ISLAND": "BV", "BRAZIL": "BR",
-    "BRITISH INDIAN OCEAN TERRITORY": "IO", "BRUNEI DARUSSALAM": "BN", "BULGARIA": "BG", "BURKINA FASO": "BF",
-    "BURUNDI": "BI", "CAMBODIA": "KH", "CAMEROON": "CM", "CANADA": "CA", "CAPE VERDE": "CV", "CAYMAN ISLANDS": "KY",
-    "CENTRAL AFRICAN REPUBLIC": "CF", "CHAD": "TD", "CHILE": "CL", "CHINA": "CN", "CHRISTMAS ISLAND": "CX",
-    "COCOS (KEELING) ISLANDS": "CC", "COLOMBIA": "CO", "COMOROS": "KM", "CONGO": "CG",
-    "CONGO, THE DEMOCRATIC REPUBLIC OF THE": "CD", "COOK ISLANDS": "CK", "COSTA RICA": "CR", "COTE D'IVOIRE": "CI",
-    "CROATIA": "HR", "CUBA": "CU", "CYPRUS": "CY", "CZECH REPUBLIC": "CZ", "DENMARK": "DK", "DJIBOUTI": "DJ",
-    "DOMINICA": "DM", "DOMINICAN REPUBLIC": "DO", "ECUADOR": "EC", "EGYPT": "EG", "EL SALVADOR": "SV",
-    "EQUATORIAL GUINEA": "GQ", "ERITREA": "ER", "ESTONIA": "EE", "ETHIOPIA": "ET", "FALKLAND ISLANDS (MALVINAS)": "FK",
-    "FAROE ISLANDS": "FO", "FIJI": "FJ", "FINLAND": "FI", "FRANCE": "FR", "FRENCH GUIANA": "GF",
-    "FRENCH POLYNESIA": "PF", "FRENCH SOUTHERN TERRITORIES": "TF", "GABON": "GA", "GAMBIA": "GM", "GEORGIA": "GE",
-    "GERMANY": "DE", "GHANA": "GH", "GIBRALTAR": "GI", "GREECE": "GR", "GREENLAND": "GL", "GRENADA": "GD",
-    "GUADELOUPE": "GP", "GUAM": "GU", "GUATEMALA": "GT", "GUERNSEY": "GG", "GUINEA": "GN", "GUINEA-BISSAU": "GW",
-    "GUYANA": "GY", "HAITI": "HT", "HEARD ISLAND AND MCDONALD ISLANDS": "HM", "HOLY SEE (VATICAN CITY STATE)": "VA",
-    "HONDURAS": "HN", "HONG KONG": "HK", "HUNGARY": "HU", "ICELAND": "IS", "INDIA": "IN", "INDONESIA": "ID",
-    "IRAN, ISLAMIC REPUBLIC OF": "IR", "IRAQ": "IQ", "IRELAND": "IE", "ISLE OF MAN": "IM", "ISRAEL": "IL",
-    "ITALY": "IT", "JAMAICA": "JM", "JAPAN": "JP", "JERSEY": "JE", "JORDAN": "JO", "KAZAKHSTAN": "KZ", "KENYA": "KE",
-    "KIRIBATI": "KI", "KOREA, DEMOCRATIC PEOPLE'S REPUBLIC OF": "KP", "KOREA, REPUBLIC OF": "KR", "KUWAIT": "KW",
-    "KYRGYZSTAN": "KG", "LAO PEOPLE'S DEMOCRATIC REPUBLIC": "LA", "LATVIA": "LV", "LEBANON": "LB", "LESOTHO": "LS",
-    "LIBERIA": "LR", "LIBYAN ARAB JAMAHIRIYA": "LY", "LIECHTENSTEIN": "LI", "LITHUANIA": "LT", "LUXEMBOURG": "LU",
-    "MACAO": "MO", "MACEDONIA, THE FORMER YUGOSLAV REPUBLIC OF": "MK", "MADAGASCAR": "MG", "MALAWI": "MW",
-    "MALAYSIA": "MY", "MALDIVES": "MV", "MALI": "ML", "MALTA": "MT", "MARSHALL ISLANDS": "MH", "MARTINIQUE": "MQ",
-    "MAURITANIA": "MR", "MAURITIUS": "MU", "MAYOTTE": "YT", "MEXICO": "MX", "MICRONESIA, FEDERATED STATES OF": "FM",
-    "MOLDOVA, REPUBLIC OF": "MD", "MONACO": "MC", "MONGOLIA": "MN", "MONTENEGRO": "ME", "MONTSERRAT": "MS",
-    "MOROCCO": "MA", "MOZAMBIQUE": "MZ", "MYANMAR": "MM", "NAMIBIA": "NA", "NAURU": "NR", "NEPAL": "NP",
-    "NETHERLANDS": "NL", "NETHERLANDS ANTILLES": "AN", "NEW CALEDONIA": "NC", "NEW ZEALAND": "NZ", "NICARAGUA": "NI",
-    "NIGER": "NE", "NIGERIA": "NG", "NIUE": "NU", "NORFOLK ISLAND": "NF", "NORTHERN MARIANA ISLANDS": "MP",
-    "NORWAY": "NO", "OMAN": "OM", "PAKISTAN": "PK", "PALAU": "PW", "PALESTINIAN TERRITORY, OCCUPIED": "PS",
-    "PANAMA": "PA", "PAPUA NEW GUINEA": "PG", "PARAGUAY": "PY", "PERU": "PE", "PHILIPPINES": "PH", "PITCAIRN": "PN",
-    "POLAND": "PL", "PORTUGAL": "PT", "PUERTO RICO": "PR", "QATAR": "QA", "REUNION": "RE", "ROMANIA": "RO",
-    "RUSSIAN FEDERATION": "RU", "RWANDA": "RW", "SAINT BARTHELEMY": "BL",
-    "SAINT HELENA, ASCENSION AND TRISTAN DA CUNHA": "SH", "SAINT KITTS AND NEVIS": "KN", "SAINT LUCIA": "LC",
-    "SAINT MARTIN": "MF", "SAINT PIERRE AND MIQUELON": "PM", "SAINT VINCENT AND THE GRENADINES": "VC", "SAMOA": "WS",
-    "SAN MARINO": "SM", "SAO TOME AND PRINCIPE": "ST", "SAUDI ARABIA": "SA", "SENEGAL": "SN", "SERBIA": "RS",
-    "SEYCHELLES": "SC", "SIERRA LEONE": "SL", "SINGAPORE": "SG", "SLOVAKIA": "SK", "SLOVENIA": "SI",
-    "SOLOMON ISLANDS": "SB", "SOMALIA": "SO", "SOUTH AFRICA": "ZA",
-    "SOUTH GEORGIA AND THE SOUTH SANDWICH ISLANDS": "GS", "SPAIN": "ES", "SRI LANKA": "LK", "SUDAN": "SD",
-    "SURINAME": "SR", "SVALBARD AND JAN MAYEN": "SJ", "SWAZILAND": "SZ", "SWEDEN": "SE", "SWITZERLAND": "CH",
-    "SYRIAN ARAB REPUBLIC": "SY", "TAIWAN, PROVINCE OF CHINA": "TW", "TAJIKISTAN": "TJ",
-    "TANZANIA, UNITED REPUBLIC OF": "TZ", "THAILAND": "TH", "TIMOR-LESTE": "TL", "TOGO": "TG", "TOKELAU": "TK",
-    "TONGA": "TO", "TRINIDAD AND TOBAGO": "TT", "TUNISIA": "TN", "TURKEY": "TR", "TURKMENISTAN": "TM",
-    "TURKS AND CAICOS ISLANDS": "TC", "TUVALU": "TV", "UGANDA": "UG", "UKRAINE": "UA", "UNITED ARAB EMIRATES": "AE",
-    "UNITED KINGDOM": "GB", "UNITED STATES": "US", "UNITED STATES MINOR OUTLYING ISLANDS": "UM", "URUGUAY": "UY",
-    "UZBEKISTAN": "UZ", "VANUATU": "VU", "VENEZUELA, BOLIVARIAN REPUBLIC OF": "VE", "VIET NAM": "VN",
-    "VIRGIN ISLANDS, BRITISH": "VG", "VIRGIN ISLANDS, U.S.": "VI", "WALLIS AND FUTUNA": "WF", "WESTERN SAHARA": "EH",
-    "YEMEN": "YE", "ZAMBIA": "ZM", "ZIMBABWE": "ZW"
-}
 
 
 def export_privatekey(buf, passphrase=None):
@@ -491,35 +438,41 @@ class CertificateImportTask(Task):
         return pkey
 
 
-@accepts(str, FileDescriptor, FileDescriptor)
+@accepts(str, FileDescriptor)
 @description("Exports certificate and private key")
 class CertificateExportTask(Task):
     @classmethod
     def early_describe(cls):
-        return "Exporting certificate and private key"
+        return "Exporting certificate and private key pair bundled as a tar file"
 
-    def describe(self, id, certfd, keyfd):
+    def describe(self, id, cert_pair_fd):
         cert = self.datastore.get_by_id('crypto.certificates', id)
-        return TaskDescription("Exporting certificate {name} and private key", name=cert.get('name', '') if cert else '')
+        return TaskDescription(
+            "Exporting certificate {name} and private key pair bundled as a tar file",
+            name=cert.get('name', '') if cert else ''
+        )
 
-    def verify(self, id, certfd, keyfd):
+    def verify(self, id, cert_pair_fd):
         return ['system']
 
-    def run(self, id, certfd, keyfd):
+    def run(self, id, cert_pair_fd):
         if not self.datastore.exists('crypto.certificates', ('id', '=', id)):
             raise TaskException(errno.ENOENT, 'Certificate ID {0} does not exist'.format(id))
 
-        cert, key = self.dispatcher.call_sync(
+        name, cert, key = self.dispatcher.call_sync(
             'crypto.certificate.query',
             [('id', '=', id)],
-            {'select': ['certificate', 'privatekey'], 'single': True}
+            {'select': ['name', 'certificate', 'privatekey'], 'single': True}
         )
 
-        with os.fdopen(certfd.fd, 'wb') as cert_file:
-            cert_file.write(cert.encode('utf-8'))
-
-        with os.fdopen(keyfd.fd, 'wb') as key_file:
-            key_file.write(key.encode('utf-8'))
+        with os.fdopen(cert_pair_fd.fd, mode='wb') as f:
+            with tarfile.open(fileobj=f, mode='w|gz') as tf:
+                cert_info = tarfile.TarInfo(name='{0}.crt'.format(name))
+                cert_info.size = len(cert)
+                key_info = tarfile.TarInfo(name='{0}.key'.format(name))
+                key_info.size = len(key)
+                tf.addfile(cert_info, io.BytesIO(cert.encode('utf-8')))
+                tf.addfile(key_info, io.BytesIO(key.encode('utf-8')))
 
 
 @accepts(str, h.all_of(

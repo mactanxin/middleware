@@ -32,6 +32,7 @@ import pwd
 from fcntl import flock, LOCK_EX, LOCK_NB, LOCK_UN
 from gevent import subprocess
 from tempfile import TemporaryFile
+from utils import is_port_open
 
 from datastore import DatastoreException
 from datastore.config import ConfigNode
@@ -74,14 +75,16 @@ class RsyncdConfigureTask(Task):
         return TaskDescription('Configuring Rsyncd service')
 
     def verify(self, rsyncd):
-        errors = []
-
-        if errors:
-            raise ValidationException(errors)
+        if rsyncd.get('port') and rsyncd['port'] > 65535:
+            raise ValidationException(errno.EINVAL, 'Port number cannot be greater than 65535')
 
         return ['system']
 
     def run(self, rsyncd):
+
+        if rsyncd.get('port') and is_port_open(rsyncd['port']):
+            raise TaskException(errno.EINVAL, 'Provided port is already in use')
+
         try:
             node = ConfigNode('service.rsyncd', self.configstore)
             node.update(rsyncd)
@@ -456,7 +459,7 @@ def _init(dispatcher, plugin):
                 'minimum': 1,
                 'maximum': 65535
             },
-            'auxiliary': {'type': 'string'},
+            'auxiliary': {'type': ['string', 'null']},
         },
         'additionalProperties': False,
     })
