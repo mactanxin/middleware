@@ -28,6 +28,7 @@
 import os
 import bsd
 import errno
+import contextlib
 from lib.system import system
 from task import Task, TaskDescription, Provider
 from freenas.dispatcher.rpc import SchemaHelper as h
@@ -192,7 +193,8 @@ def mount(name, properties):
 
 
 def umount(name):
-    bsd.unmount(os.path.join('/nfs', name))
+    with contextlib.suppress(OSError):
+        bsd.unmount(os.path.join('/nfs', name))
 
 
 def _depends():
