@@ -30,7 +30,7 @@ import pwd
 import datetime
 import logging
 import smbconf
-from task import Task, Provider, TaskException, TaskDescription
+from task import Task, Provider, TaskException, TaskDescription, VerifyException
 from freenas.dispatcher.rpc import RpcException, description, accepts, private
 from freenas.dispatcher.rpc import SchemaHelper as h
 from freenas.utils import normalize
@@ -73,6 +73,9 @@ class CreateSMBShareTask(Task):
         return TaskDescription("Creating SMB share {name}", name=share.get('name', '') if share else '')
 
     def verify(self, share):
+        if share['properties'].get('guest_only') and not share['properties'].get('guest_ok'):
+            raise VerifyException(errno.EINVAL, 'guest_only works only with guest_ok enabled')
+
         return ['service:smb']
 
     def run(self, share):
@@ -145,6 +148,12 @@ class UpdateSMBShareTask(Task):
         return TaskDescription("Updating SMB share {name}", name=share.get('name', id) if share else id)
 
     def verify(self, id, updated_fields):
+        share = self.datastore.get_by_id('shares', id)
+        share.update(updated_fields)
+
+        if share['properties'].get('guest_only') and not share['properties'].get('guest_ok'):
+            raise VerifyException(errno.EINVAL, 'guest_only works only with guest_ok enabled')
+
         return ['service:smb']
 
     def run(self, id, updated_fields):
