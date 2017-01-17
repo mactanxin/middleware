@@ -30,6 +30,8 @@ import os
 import re
 import time
 import datetime
+import tarfile
+import io
 from pathlib import Path
 from pytz import UTC
 from datastore import DatastoreException
@@ -491,35 +493,41 @@ class CertificateImportTask(Task):
         return pkey
 
 
-@accepts(str, FileDescriptor, FileDescriptor)
+@accepts(str, FileDescriptor)
 @description("Exports certificate and private key")
 class CertificateExportTask(Task):
     @classmethod
     def early_describe(cls):
-        return "Exporting certificate and private key"
+        return "Exporting certificate and private key pair bundled as a tar file"
 
-    def describe(self, id, certfd, keyfd):
+    def describe(self, id, cert_pair_fd):
         cert = self.datastore.get_by_id('crypto.certificates', id)
-        return TaskDescription("Exporting certificate {name} and private key", name=cert.get('name', '') if cert else '')
+        return TaskDescription(
+            "Exporting certificate {name} and private key pair bundled as a tar file",
+            name=cert.get('name', '') if cert else ''
+        )
 
-    def verify(self, id, certfd, keyfd):
+    def verify(self, id, cert_pair_fd):
         return ['system']
 
-    def run(self, id, certfd, keyfd):
+    def run(self, id, cert_pair_fd):
         if not self.datastore.exists('crypto.certificates', ('id', '=', id)):
             raise TaskException(errno.ENOENT, 'Certificate ID {0} does not exist'.format(id))
 
-        cert, key = self.dispatcher.call_sync(
+        name, cert, key = self.dispatcher.call_sync(
             'crypto.certificate.query',
             [('id', '=', id)],
-            {'select': ['certificate', 'privatekey'], 'single': True}
+            {'select': ['name', 'certificate', 'privatekey'], 'single': True}
         )
 
-        with os.fdopen(certfd.fd, 'wb') as cert_file:
-            cert_file.write(cert.encode('utf-8'))
-
-        with os.fdopen(keyfd.fd, 'wb') as key_file:
-            key_file.write(key.encode('utf-8'))
+        with os.fdopen(cert_pair_fd.fd, mode='wb') as f:
+            with tarfile.open(fileobj=f, mode='w|gz') as tf:
+                cert_info = tarfile.TarInfo(name='{0}.crt'.format(name))
+                cert_info.size = len(cert)
+                key_info = tarfile.TarInfo(name='{0}.key'.format(name))
+                key_info.size = len(key)
+                tf.addfile(cert_info, io.BytesIO(cert.encode('utf-8')))
+                tf.addfile(key_info, io.BytesIO(key.encode('utf-8')))
 
 
 @accepts(str, h.all_of(
