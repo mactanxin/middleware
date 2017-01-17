@@ -243,7 +243,7 @@ class CreateShareTask(Task):
                     })
 
         elif share['target_type'] == 'DIRECTORY':
-            pool_mountpoints = tuple(self.dispatcher.call_sync('volume.dataset.query', [], {'select': 'mountpoint'}))
+            pool_mountpoints = tuple(self.dispatcher.call_sync('volume.query', [], {'select': 'mountpoint'}))
             if not share['target_path'].startswith(pool_mountpoints):
                 raise TaskException(errno.EINVAL, "Provided directory has to reside within user defined ZFS pool")
 
@@ -336,7 +336,7 @@ class UpdateShareTask(Task):
         permissions = updated_fields.pop('permissions', None)
         share_path = self.dispatcher.call_sync('share.expand_path', path_after_update, type_after_update)
 
-        pool_mountpoints = tuple(self.dispatcher.call_sync('volume.dataset.query', [], {'select': 'mountpoint'}))
+        pool_mountpoints = tuple(self.dispatcher.call_sync('volume.query', [], {'select': 'mountpoint'}))
         if not path_after_update.startswith(pool_mountpoints):
             raise TaskException(errno.EINVAL, "Provided directory has to reside within user defined ZFS pool")
 
