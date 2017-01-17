@@ -1269,7 +1269,7 @@ class VMStopTask(Task):
         return TaskDescription('Stopping VM {name}', name=vm.get('name', '') if vm else '')
 
     def verify(self, id, force=False):
-        return ['system']
+        return []
 
     def run(self, id, force=False):
         try:
@@ -1295,7 +1295,7 @@ class VMRebootTask(Task):
         return TaskDescription('Rebooting VM {name}', name=vm.get('name', '') if vm else '')
 
     def verify(self, id, force=False):
-        return ['system']
+        return []
 
     def run(self, id, force=False):
         try:
@@ -2443,7 +2443,7 @@ def _init(dispatcher, plugin):
 
     plugin.register_schema_definition('vm-device-disk-target-type', {
         'type': 'string',
-        'enum': ['ZVOL', 'DISK']
+        'enum': ['ZVOL', 'FILE', 'DISK']
     })
 
     plugin.register_schema_definition('vm-device-disk', {

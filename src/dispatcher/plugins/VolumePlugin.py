@@ -3085,6 +3085,7 @@ def _init(dispatcher, plugin):
         perms = None
         last_replicated_at = None
         last_replicated_by = None
+        local_mountpoint = q.get(ds, 'properties.mountpoint.source') != 'INHERITED'
 
         if ds['pool'] == boot_pool['id']:
             return None
@@ -3101,6 +3102,9 @@ def _init(dispatcher, plugin):
                 if mnt.source == ds['name'] and mnt.dest != q.get(ds, 'properties.mountpoint.parsed'):
                     temp_mountpoint = mnt.dest
                     break
+
+        if ds['mountpoint'] not in (None, '/var/db/system') and ds['name'] != ds['pool'] and local_mountpoint:
+            dispatcher.call_task_sync('zfs.update', ds['name'], {'mountpoint': {'source': 'INHERITED'}})
 
         prop = q.get(ds, 'properties.org\\.freenas:last_replicated_at')
         if prop and prop['source'] == 'LOCAL':
