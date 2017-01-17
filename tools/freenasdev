@@ -126,9 +126,12 @@ freenasrsync_datastore() {
 }
 
 freenasrsync_migrate93() {
-	myrsync ${REPO_PARENT_PATH}/middleware/src/migrate93/ "root@${1}":/usr/local/lib/migrate93/ --exclude sbin
-	myrsyncnodel ${REPO_PARENT_PATH}/middleware/src/migrate93/sbin/ "root@${1}":/usr/local/sbin/
+	myrsyncnodel ${REPO_PARENT_PATH}/migrate93/ "root@${1}":/usr/local/lib/migrate93/ --exclude sbin
+	myrsyncnodel ${REPO_PARENT_PATH}/migrate93/sbin/ "root@${1}":/usr/local/sbin/
 
+	# rsync the dispatcher plugins and such too since the MigrationPlugin lives in there
+	myrsync ${REPO_PARENT_PATH}/middleware/src/dispatcher/ "root@${1}":/usr/local/lib/dispatcher/ --exclude-from="${REPO_PARENT_PATH}/middleware/tools/dispatcher_rsync_exclude_list.txt"
+	myrsyncnodel ${REPO_PARENT_PATH}/middleware/src/dispatcher/src/frontend/static/ "root@${1}":/usr/local/lib/dispatcher/src/frontend/static/
 	# Fix perms, set executable bits, and such
 	ssh root@${1} '/bin/chmod 555 /usr/local/sbin/migrate93'
 }
