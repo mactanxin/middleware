@@ -933,7 +933,12 @@ class DockerNetworkCreateTask(DockerBaseTask):
             'driver': 'bridge',
             'subnet': None,
             'gateway': None,
+            'containers': []
         })
+
+        for id in network.get('containers'):
+            if not self.dispatcher.call_sync('docker.container.query', [('id', '=', id)], {'count': True}):
+                raise TaskException(errno.EEXIST, 'Docker container {0} does not exist'.format(id))
 
         if not network.get('host'):
             network['host'] = self.get_default_host(
@@ -957,6 +962,14 @@ class DockerNetworkCreateTask(DockerBaseTask):
             match_fn,
             lambda: self.dispatcher.call_sync('containerd.docker.create_network', network)
         )
+
+        if network.get('containers'):
+            netid = self.dispatcher.call_sync(
+                'docker.network.query',
+                [('name', '=', network.get('name'))],
+                {'select': 'id', 'single': True}
+            )
+            self.run_subtask_sync('docker.network.connect', network.get('containers'), netid)
 
 
 @description('Deletes a Docker network')
