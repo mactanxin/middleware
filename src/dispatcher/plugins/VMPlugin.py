@@ -1076,15 +1076,18 @@ class VMUpdateTask(VMBaseTask):
         })
 
         vm = self.datastore.get_by_id('vms', id)
-        save_config(
-            self.dispatcher.call_sync(
-                'vm.datastore.get_filesystem_path',
-                vm['target'],
-                get_vm_path(vm['name'])
-            ),
-            'vm-{0}'.format(vm['name']),
-            vm
-        )
+        try:
+            save_config(
+                self.dispatcher.call_sync(
+                    'vm.datastore.get_filesystem_path',
+                    vm['target'],
+                    get_vm_path(vm['name'])
+                ),
+                'vm-{0}'.format(vm['name']),
+                vm
+            )
+        except OSError:
+            pass
 
 
 @accepts(str)
