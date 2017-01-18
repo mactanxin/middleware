@@ -53,7 +53,7 @@ from functools import reduce
 
 
 DEFAULT_CONFIGFILE = '/usr/local/etc/middleware.conf'
-INITIAL_DHCP_TIMEOUT = 30
+INITIAL_DHCP_TIMEOUT = 180
 
 
 def cidr_to_netmask(cidr):
