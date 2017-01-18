@@ -27,14 +27,12 @@
 
 import errno
 import gevent
-import hashlib
 import logging
 import os
-import signal
 import sys
 import re
-import tempfile
 import tarfile
+import shutil
 from freenas.utils import human_readable_bytes
 from resources import Resource
 from cache import CacheStore
@@ -717,88 +715,82 @@ class DownloadUpdateTask(ProgressTask):
         self.set_progress(100)
 
 
-@description("Apply a manual update file")
-@accepts(str, str)
+@description("Apply a manual update using specified tarfile")
+@accepts(str, h.one_of(bool, None))
 class UpdateManualTask(ProgressTask):
     @classmethod
     def early_describe(cls):
-        return 'Updating from a file'
+        return 'Updating via the provided update tarfile'
 
-    def describe(self, path, sha256):
-        return TaskDescription("Updating from a file ({name})".format(name=path))
+    def describe(self, path, reboot_post_install=False):
+        return TaskDescription("Updating from tarfile ({name})".format(name=path))
 
-    def verify(self, path, sha256):
+    def verify(self, path, reboot_post_install=False):
 
         if not os.path.exists(path):
             raise VerifyException(errno.EEXIST, 'File does not exist')
 
+        if not tarfile.is_tarfile(path):
+            raise VerifyException(errno.EEXIST, 'File does not exist')
+
         return ['root']
 
-    def run(self, path, sha256):
-        self.message = 'Applying update...'
-        self.set_progress(0)
+    def run(self, path, reboot_post_install=False):
+        self.set_progress(0, 'Extracting update from tarfile...')
 
-        filehash = hashlib.sha256()
-        with open(path, 'rb') as f:
-            while True:
-                read = f.read(65536)
-                if not read:
-                    break
-                filehash.update(read)
-
-        if filehash.hexdigest() != sha256:
-            raise TaskException(errno.EINVAL, 'SHA 256 hash does not match file')
-
-        os.chdir(os.path.dirname(path))
-
-        size = os.stat(path).st_size
-        temperr = tempfile.NamedTemporaryFile()
-
-        proc = subprocess.Popen(
-            ["/usr/bin/tar", "-xSJpf", path],
-            stdout=subprocess.PIPE,
-            stderr=temperr,
-            close_fds=False)
-        RE_TAR = re.compile(r"^In: (\d+)", re.M | re.S)
-        while True:
-            if proc.poll() is not None:
-                break
+        cache_dir = self.dispatcher.call_sync('update.update_cache_getter', 'cache_dir')
+        if cache_dir is None:
             try:
-                os.kill(proc.pid, signal.SIGINFO)
-            except:
-                break
-            gevent.sleep(1)
-            with open(temperr.name, 'r') as f:
-                line = f.read()
-            reg = RE_TAR.findall(line)
-            if reg:
-                current = float(reg[-1])
-                percent = ((current / size) * 100)
-                self.set_progress(percent / 3)
-        temperr.close()
-        proc.communicate()
-        if proc.returncode != 0:
-            raise TaskException(errno.EINVAL, 'Image is invalid, make sure to use .txz file')
+                cache_dir = self.dispatcher.call_sync(
+                    'system_dataset.request_directory', 'update'
+                )
+            except RpcException:
+                cache_dir = '/var/tmp/update'
+        # Frozen tarball.  We'll extract it into the cache directory, and
+        # then add a couple of things to make it pass sanity, and then apply it.
+        # For now we just copy the code above.
+        # First, remove the cache directory
+        # Hrm, could overstep a locked file.
+        shutil.rmtree(cache_dir, ignore_errors=True)
+        try:
+            os.makedirs(cache_dir)
+        except BaseException as e:
+            raise TaskException(
+                errno.EPERM,
+                "Unable to create cache directory {0}: {1}".format(cache_dir, str(e))
+            )
 
         try:
-            subprocess.check_output(
-                ['bin/install_worker.sh', 'pre-install'], stderr=subprocess.STDOUT,
+            with tarfile.open(path) as tf:
+                files = tf.getmembers()
+                for f in files:
+                    if f.name in ("./", ".", "./."):
+                        continue
+                    if not f.name.startswith("./"):
+                        continue
+                    if len(f.name.split("/")) != 2:
+                        continue
+                    tf.extract(f.name, path=cache_dir)
+        except BaseException as e:
+            raise TaskException(
+                errno.EIO,
+                "Unable to extract frozen update {0}: {1}".format(path, str(e))
             )
-        except subprocess.CalledProcessError as cpe:
-            raise TaskException(errno.EINVAL, (
-                'The firmware does not meet the pre-install criteria: {0}'.format(cpe.output)))
 
-        try:
-            subprocess.check_output(
-                ['bin/install_worker.sh', 'install'], stderr=subprocess.STDOUT,
-            )
-        except subprocess.CalledProcessError as cpe:
-            raise TaskException(errno.EFAULT, 'The update failed: {0}'.format(cpe.output))
+        config = Configuration.SystemConfiguration()
+        # Exciting!  Now we need to have a SEQUENCE file, or it will fail verification.
+        with open(os.path.join(cache_dir, "SEQUENCE"), "w") as s:
+            s.write(config.SystemManifest().Sequence())
+        # And now the SERVER file
+        with open(os.path.join(cache_dir, "SERVER"), "w") as s:
+            s.write(config.UpdateServerName())
 
-        # FIXME: New world order
-        open('/data/need-update').close()
-
-        self.set_progress(100)
+        # Now we can go for the update apply task
+        self.run_subtask_sync(
+            'update.apply',
+            reboot_post_install,
+            progress_callback=lambda p, m='Installing updates from extracted tarfile', e=None: self.chunk_progress(0, 100, '', p, m, e)
+        )
 
 
 @accepts(bool)
@@ -818,8 +810,7 @@ class UpdateApplyTask(ProgressTask):
         self.set_progress(progress, message)
 
     def run(self, reboot_post_install=False):
-        self.message = 'Applying Updates...'
-        self.set_progress(0)
+        self.set_progress(0, 'Applying Updates...')
         handler = UpdateHandler(self.dispatcher, update_progress=self.update_progress)
         cache_dir = self.dispatcher.call_sync('update.update_cache_getter', 'cache_dir')
         if cache_dir is None:
