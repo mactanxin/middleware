@@ -218,6 +218,10 @@ class RoutingSocketEventSource(threading.Thread):
 
             if type(message) is netif.InterfaceInfoMessage:
                 ifname = message.interface
+                if ifname not in self.mtu_cache:
+                    # Interface info sent before announce - ignore
+                    continue
+
                 if self.mtu_cache[ifname] != message.mtu:
                     self.client.emit_event('network.interface.mtu_changed', {
                         'interface': ifname,
