@@ -39,7 +39,6 @@ from cache import CacheStore
 from freenas.dispatcher.rpc import (
     RpcException, description, accepts, returns, private, SchemaHelper as h
 )
-from gevent import subprocess
 from task import (
     Provider, Task, ProgressTask, TaskException, TaskDescription,
     VerifyException, TaskWarning
