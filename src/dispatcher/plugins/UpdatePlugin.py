@@ -32,7 +32,6 @@ import logging
 import os
 import signal
 import sys
-import random
 import re
 import tempfile
 from freenas.utils import human_readable_bytes
