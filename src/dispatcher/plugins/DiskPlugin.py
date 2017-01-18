@@ -42,7 +42,7 @@ from xml.etree import ElementTree
 from bsd import geom, getswapinfo
 from resources import Resource
 from datetime import datetime, timedelta
-from freenas.utils import first_or_default, query as q
+from freenas.utils import first_or_default, remove_non_printable, query as q
 from cam import CamDevice, CamEnclosure, EnclosureStatus, ElementStatus
 from cache import CacheStore
 from lib.geom import confxml
@@ -525,7 +525,7 @@ class DiskConfigureTask(Task):
             if not disk_status['smart_info']['smart_capable']:
                 raise TaskException(errno.EINVAL, 'Disk is not SMART capable')
 
-            device_smart_handle = Device(disk_status['gdisk_name'], abridged=True)
+            device_smart_handle = Device(disk_status['gdisk_name'])
             if updated_fields['smart'] != device_smart_handle.smart_enabled:
                 toggle_result = device_smart_handle.smart_toggle(
                     'on' if updated_fields['smart'] else 'off'
@@ -1017,7 +1017,13 @@ def device_to_identifier(name, serial=None):
     if not gdisk:
         return None
 
+    if serial:
+        serial = remove_non_printable(serial)
+
     if 'lunid' in gdisk.provider.config:
+        if serial:
+            return "lunid+serial:{0}_{1}".format(gdisk.provider.config['lunid'], serial)
+
         return "lunid:{0}".format(gdisk.provider.config['lunid'])
 
     if serial:
@@ -1048,8 +1054,8 @@ def get_disk_by_path(path):
     return None
 
 
-def get_disk_by_lunid(lunid):
-    return first_or_default(lambda d: d['lunid'] == lunid, diskinfo_cache.validvalues())
+def get_disk_by_lunid_and_serial(lunid, serial):
+    return first_or_default(lambda d: d['lunid'] == lunid and d['serial'] == serial, diskinfo_cache.validvalues())
 
 
 def clean_multipaths(dispatcher):
@@ -1317,6 +1323,21 @@ def update_disk_cache(dispatcher, path):
             })
 
     persist_disk(dispatcher, disk)
+    # post this persist disk check to see if the 'smart' value in the databse
+    # (enabled or disabled) matches the actual disk's smart_enabled value and
+    # if not then make it so
+    ds_disk = dispatcher.datastore.get_by_id('disks', disk['id'])
+    if ds_disk['smart'] != disk['smart_info']['smart_enabled']:
+        device_smart_handle = Device(disk['gdisk_name'])
+        toggle_result = device_smart_handle.smart_toggle('on' if ds_disk['smart'] else 'off')
+        if not toggle_result[0]:
+            logger.debug(
+                "Tried to toggle {0}".format(path) +
+                " SMART enabled to: {0} and failed with error: {1}".format(
+                    ds_disk['smart'],
+                    toggle_result[1]
+                )
+            )
 
 
 def generate_disk_cache(dispatcher, path):
@@ -1352,7 +1373,7 @@ def generate_disk_cache(dispatcher, path):
         lunid = gdisk.provider.config.get('lunid')
         if lunid:
             # Check if device could be part of multipath configuration
-            d = get_disk_by_lunid(lunid)
+            d = get_disk_by_lunid_and_serial(lunid, serial)
             if (d and d['path'] != path) or (ds_disk and ds_disk['is_multipath']):
                 multipath_info = attach_to_multipath(dispatcher, d, ds_disk, path)
 
@@ -1558,7 +1579,7 @@ def _depends():
 def _init(dispatcher, plugin):
     def on_device_attached(args):
         path = args['path']
-        if re.match(r'^/dev/(da|ada|vtbd|nvd|multipath/mpath)[0-9]+$', path):
+        if re.match(r'^/dev/(da|ada|vtbd|nvd|mfid|multipath/mpath)[0-9]+$', path):
             if not dispatcher.resource_exists('disk:{0}'.format(path)):
                 dispatcher.register_resource(Resource('disk:{0}'.format(path)))
 
@@ -1576,7 +1597,7 @@ def _init(dispatcher, plugin):
 
     def on_device_detached(args):
         path = args['path']
-        if re.match(r'^/dev/(da|ada|vtbd|nvd)[0-9]+$', path):
+        if re.match(r'^/dev/(da|ada|vtbd|nvd|mfid)[0-9]+$', path):
             logger.info("Disk %s detached", path)
             disk = get_disk_by_path(path)
             purge_disk_cache(dispatcher, path)
@@ -1587,13 +1608,13 @@ def _init(dispatcher, plugin):
                     'id': disk['id']
                 })
 
-        if re.match(r'^/dev/(da|ada|vtbd|nvd|multipath/mpath)[0-9]+$', path):
+        if re.match(r'^/dev/(da|ada|vtbd|nvd|mfid|multipath/mpath)[0-9]+$', path):
             dispatcher.unregister_resource('disk:{0}'.format(path))
 
     def on_device_mediachange(args):
         # Regenerate caches
         path = args['path']
-        if re.match(r'^/dev/(da|ada|vtbd|nvd|multipath/mpath)[0-9]+$', path):
+        if re.match(r'^/dev/(da|ada|vtbd|nvd|mfid|multipath/mpath)[0-9]+$', path):
             with dispatcher.get_lock('diskcache:{0}'.format(path)):
                 logger.info('Updating disk cache for device %s', args['path'])
                 update_disk_cache(dispatcher, args['path'])

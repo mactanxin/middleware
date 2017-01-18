@@ -116,6 +116,9 @@ class TaskProxyService(RpcService):
     def __init__(self, context):
         self.context = context
 
+    def update_env(self, env):
+        os.environ.update(env)
+
     def get_status(self):
         self.context.running.wait()
         return self.context.instance.get_status()

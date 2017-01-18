@@ -37,19 +37,19 @@ import logging
 from cache import CacheStore
 from resources import Resource
 from paramiko import SSHException
-from datetime import datetime
+from datetime import datetime, timedelta
 from dateutil.parser import parse as parse_datetime
 from task import Provider, Task, ProgressTask, VerifyException, TaskException, TaskWarning, query, TaskDescription
 from freenas.dispatcher.rpc import RpcException, SchemaHelper as h, description, accepts, returns, private, generator
 from freenas.dispatcher.fd import FileDescriptor
 from utils import get_freenas_peer_client, call_task_and_check_state
-from freenas.utils import first_or_default, query as q, normalize
+from freenas.utils import first_or_default, query as q, normalize, human_readable_bytes
+from freenas.utils.decorators import throttle
 
 logger = logging.getLogger(__name__)
 
-
-status_cache = CacheStore()
-link_cache = CacheStore()
+link_cache = None
+current_state_cache = None
 
 
 class ReplicationActionType(enum.Enum):
@@ -78,30 +78,38 @@ class ReplicationLinkProvider(Provider):
     @query('Replication')
     @generator
     def query(self, filter=None, params=None):
-        def extend(obj):
-            if status_cache.is_valid(obj['name']):
-                obj['status'] = status_cache.get(obj['name'])
-            return obj
+        def extend():
+            now = datetime.now()
 
-        links = link_cache.query()
+            for link in link_cache.query(stream=True):
 
-        links = list(map(extend, links))
-        return q.query(links, *(filter or []), stream=True, **(params or {}))
+                state = current_state_cache.get(link['id'])
+                if not state or (datetime.now() - state['created_at']) > timedelta(minutes=1):
+                    self.dispatcher.call_sync('replication.remove_status', link['id'])
+                    status = 'STOPPED'
+                    if len(link['status']) and link['status'][-1]['status'] == 'FAILED':
+                        status = 'FAILED'
+
+                    link['current_state'] = {
+                        'created_at': now,
+                        'status': status,
+                        'progress': 0,
+                        'speed': '0B/s'
+                    }
+                else:
+                    link['current_state'] = state
+
+                yield link
+
+        return q.query(extend(), *(filter or []), stream=True, **(params or {}))
 
     @private
     def sync_query(self, filter=None, params=None):
-        def extend(obj):
-            if status_cache.is_valid(obj['name']):
-                obj['status'] = status_cache.get(obj['name'])
-            return obj
+        def get_latest_links():
+            for link in self.datastore.query_stream('replication.links'):
+                yield self.dispatcher.call_task_sync('replication.get_latest_link', link['name'])
 
-        links = self.datastore.query_stream('replication.links')
-        latest_links = []
-        for link in links:
-            latest_links.append(self.dispatcher.call_task_sync('replication.get_latest_link', link['name']))
-
-        latest_links = list(map(extend, latest_links))
-        return q.query(latest_links, *(filter or []), **(params or {}))
+        return q.query(get_latest_links(), *(filter or []), **(params or {}))
 
     @private
     def local_query(self, filter=None, params=None):
@@ -148,21 +156,6 @@ class ReplicationLinkProvider(Provider):
         return is_master, remote
 
     @private
-    def put_status(self, name, status):
-        status_cache.put(name, status)
-        self.dispatcher.dispatch_event('replication.changed', {
-            'operation': 'update',
-            'ids': [name]
-        })
-
-    @private
-    def get_status(self, name):
-        if status_cache.is_valid(name):
-            return status_cache.get(name)
-        else:
-            return None
-
-    @private
     def link_cache_put(self, link):
         link_cache.put(link['name'], link)
 
@@ -171,9 +164,22 @@ class ReplicationLinkProvider(Provider):
         link_cache.remove(name)
 
     @private
-    def datasets_from_link(self, link):
+    def put_status(self, id, status):
+        current_state_cache.put(id, status)
+        self.dispatcher.emit_event('replication.changed', {
+            'operation': 'update',
+            'ids': [id]
+        })
+
+    @private
+    def remove_status(self, id):
+        current_state_cache.remove(id)
+
+    @private
+    def local_datasets_from_link(self, link):
+        is_master, _ = self.get_replication_state(link)
         datasets = []
-        for dataset in link['datasets']:
+        for dataset in iterate_datasets(link['datasets'], is_master, local=True):
             if link['recursive']:
                 try:
                     dependencies = self.dispatcher.call_sync(
@@ -213,7 +219,7 @@ class ReplicationLinkProvider(Provider):
         return get_services(self.dispatcher, 'vm', 'related', link_name)
 
 
-class ReplicationBaseTask(Task):
+class ReplicationBaseTask(ProgressTask):
     def get_replication_state(self, link):
         return self.dispatcher.call_sync(
             'replication.get_replication_state',
@@ -230,11 +236,11 @@ class ReplicationBaseTask(Task):
                     {'readonly': {'value': 'on' if readonly else 'off'}}
                 )
             else:
-                self.join_subtasks(self.run_subtask(
+                self.run_subtask_sync(
                     'zfs.update',
                     dataset['name'],
                     {'readonly': {'value': 'on' if readonly else 'off'}}
-                ))
+                )
 
     def set_datasets_mount(self, datasets, mount, recursive=False, client=None):
         caller = client or self.dispatcher
@@ -262,20 +268,22 @@ class ReplicationBaseTask(Task):
                 )
             else:
                 if mount and temp_mounted:
-                    self.join_subtasks(self.run_subtask(
+                    self.run_subtask_sync(
                         'zfs.umount',
                         dataset['name'],
                         recursive
-                    ))
-                self.join_subtasks(self.run_subtask(
+                    )
+                self.run_subtask_sync(
                     'zfs.{0}mount'.format('' if mount else 'u'),
                     dataset['name'],
                     recursive
-                ))
+                )
 
     def set_datasets_mount_ro(self, link, readonly, client=None):
-        all_datasets = self.dispatcher.call_sync('replication.datasets_from_link', link)
-        parent_datasets = self.get_parent_datasets(link)
+        rpc_target = client or self.dispatcher
+        all_datasets = rpc_target.call_sync('replication.local_datasets_from_link', link)
+
+        parent_datasets = self.get_parent_datasets(all_datasets, link)
         if readonly:
             self.set_datasets_mount(parent_datasets, False, link['recursive'], client)
             self.set_datasets_readonly(all_datasets, True, client)
@@ -293,7 +301,7 @@ class ReplicationBaseTask(Task):
 
     def check_datasets_valid(self, link):
         datasets = q.query(
-            self.dispatcher.call_sync('replication.datasets_from_link', link),
+            self.dispatcher.call_sync('replication.local_datasets_from_link', link),
             select='name'
         )
         is_master, remote = self.get_replication_state(link)
@@ -302,7 +310,7 @@ class ReplicationBaseTask(Task):
         for dataset in datasets:
             for l in links:
                 l_datasets = q.query(
-                    self.dispatcher.call_sync('replication.datasets_from_link', l),
+                    self.dispatcher.call_sync('replication.local_datasets_from_link', l),
                     select='name'
                 )
                 l_is_master, remote = self.get_replication_state(l)
@@ -328,12 +336,11 @@ class ReplicationBaseTask(Task):
                         )
         return True
 
-    def get_parent_datasets(self, link):
-        datasets_to_replicate = self.dispatcher.call_sync('replication.datasets_from_link', link)
+    def get_parent_datasets(self, datasets, link):
         if not link['recursive']:
-            return datasets_to_replicate
+            return datasets
 
-        datasets_names = q.query(datasets_to_replicate, select='name')
+        datasets_names = q.query(datasets, select='name')
         len_sorted_datasets = sorted(datasets_names, key=lambda item: (len(item), item))
 
         parent_datasets = []
@@ -345,7 +352,7 @@ class ReplicationBaseTask(Task):
 
         result = []
         for dataset in parent_datasets:
-            result.append(q.query(datasets_to_replicate, ('name', '=', dataset), single=True))
+            result.append(q.query(datasets, ('name', '=', dataset), single=True))
 
         return result
 
@@ -381,16 +388,19 @@ class ReplicationCreateTask(ReplicationBaseTask):
                     errno.EINVAL,
                     'Automatic recovery to master is available only when bi-directional replication is selected'
                 )
+        else:
+            for datasets_pair in link['datasets']:
+                if datasets_pair['master'] != datasets_pair['slave']:
+                    raise VerifyException(
+                        errno.EINVAL,
+                        'Source and target datasets have to have the same names for bidirectional replication'
+                    )
 
         return ['replication']
 
     def run(self, link):
         if self.datastore.exists('replication.links', ('name', '=', link['name'])):
             raise TaskException(errno.EEXIST, 'Replication link with name {0} already exists'.format(link['name']))
-
-        for dataset in link['datasets']:
-            if not self.dispatcher.call_sync('zfs.dataset.query', [('name', '=', dataset)], {'single': True}):
-                raise TaskException(errno.ENOENT, 'Dataset {0} does not exist'.format(dataset))
 
         normalize(
             link,
@@ -401,7 +411,8 @@ class ReplicationCreateTask(ReplicationBaseTask):
                 'recursive': False,
                 'transport_options': [],
                 'snapshot_lifetime': 365 * 24 * 60 * 60,
-                'followdelete': False
+                'followdelete': False,
+                'status': []
             }
         )
 
@@ -418,11 +429,15 @@ class ReplicationCreateTask(ReplicationBaseTask):
         is_master, remote = self.get_replication_state(link)
         remote_client = get_freenas_peer_client(self, remote)
 
+        for dataset in iterate_datasets(link['datasets'], is_master):
+            if not self.dispatcher.call_sync('zfs.dataset.query', [('name', '=', dataset)], {'count': True}):
+                raise TaskException(errno.ENOENT, 'Dataset {0} does not exist'.format(dataset))
+
         remote_link = remote_client.call_sync('replication.get_one_local', link['name'])
         id = self.datastore.insert('replication.links', link)
         self.dispatcher.call_sync('replication.link_cache_put', link)
         if is_master:
-            self.join_subtasks(self.run_subtask('replication.prepare_slave', link))
+            self.run_subtask_sync('replication.prepare_slave', link)
         if not remote_link:
             call_task_and_check_state(remote_client, 'replication.create', link)
         else:
@@ -442,10 +457,13 @@ class ReplicationCreateTask(ReplicationBaseTask):
             parents=get_replication_resources(self.dispatcher, link)
         )
         remote_client.disconnect()
+        return id
 
     def rollback(self, link):
-        if self.datastore.exists('replication.links', ('name', '=', link['name'])):
-            self.datastore.delete('replication.links', link['name'])
+        id = self.datastore.query('replication.links', ('name', '=', link['name']), single=True, select='id')
+        if id:
+            self.datastore.delete('replication.links', id)
+        self.dispatcher.call_sync('replication.link_cache_remove', link['name'])
 
 
 @private
@@ -468,10 +486,11 @@ class ReplicationPrepareSlaveTask(ReplicationBaseTask):
 
         if is_master:
             with self.dispatcher.get_lock('volumes'):
-                datasets_to_replicate = self.dispatcher.call_sync('replication.datasets_from_link', link)
+                datasets_to_replicate = self.dispatcher.call_sync('replication.local_datasets_from_link', link)
                 root = self.dispatcher.call_sync('volume.get_volumes_root')
 
                 for dataset in datasets_to_replicate:
+                    datasets_pair = first_or_default(lambda d: d['master'] == dataset['name'], link['datasets'])
                     if link['replicate_services']:
                         for share in self.dispatcher.call_sync('share.get_dependencies', os.path.join(root, dataset['name']), False, False):
                             remote_share = remote_client.call_sync(
@@ -499,80 +518,47 @@ class ReplicationPrepareSlaveTask(ReplicationBaseTask):
                                     'VM {0} already exists on {1}'.format(vms[0]['name'], remote)
                                 )
 
-                    sp_dataset = dataset['name'].split('/', 1)
-                    volume_name = sp_dataset[0]
-                    dataset_name = None
-                    if len(sp_dataset) == 2:
-                        dataset_name = sp_dataset[1]
+                    volume_name = dataset['name'].split('/', 1)[0]
 
                     vol = self.datastore.get_one('volumes', ('id', '=', volume_name))
                     if vol.get('encrypted'):
                         raise TaskException(
                             errno.EINVAL,
-                            'Encrypted volumes cannot be included in replication links: {0}'.format(volume_name)
+                            'Encrypted volumes cannot be source of replication: {0}'.format(volume_name)
                         )
 
-                    remote_volume = remote_client.call_sync(
-                        'volume.query',
-                        [('id', '=', volume_name)],
-                        {'single': True}
-                    )
-                    if remote_volume:
-                        if remote_volume.get('encrypted'):
-                            raise TaskException(
-                                errno.EINVAL,
-                                'Encrypted volumes cannot be included in replication links: {0}'.format(volume_name)
-                            )
+                    if datasets_pair:
+                        remote_volume_name = datasets_pair['slave'].split('/', 1)[0]
 
-                    remote_dataset = remote_client.call_sync(
-                        'zfs.dataset.query',
-                        [('name', '=', dataset['name'])],
-                        {'single': True}
-                    )
-
-                    if not remote_dataset:
-                        if not remote_volume:
+                        remote_volume = remote_client.call_sync(
+                            'volume.query',
+                            [('id', '=', remote_volume_name)],
+                            {'single': True}
+                        )
+                        if remote_volume:
+                            if remote_volume.get('encrypted'):
+                                raise TaskException(
+                                    errno.EINVAL,
+                                    'Encrypted volumes cannot be target of replication: {0}'.format(
+                                        remote_volume_name
+                                    )
+                                )
+                        else:
                             raise TaskException(
                                 errno.ENOENT,
-                                'Volume {0} not found at slave. Please create it first.'.format(volume_name)
+                                'Volume {0} not found at slave. Please create it first.'.format(remote_volume_name)
                             )
-                        if dataset_name:
-                            for idx, sub_dataset in enumerate(dataset_name.split('/')):
-                                sub_dataset_name = volume_name + '/' + '/'.join(dataset_name.split('/')[0:idx+1])
-                                remote_sub_dataset = remote_client.call_sync(
-                                    'zfs.dataset.query',
-                                    [('name', '=', sub_dataset_name)],
-                                    {'single': True}
-                                )
-                                if not remote_sub_dataset:
-                                    local_sub_dataset = self.dispatcher.call_sync(
-                                        'zfs.dataset.query',
-                                        [('name', '=', sub_dataset_name)],
-                                        {'single': True}
-                                    )
-                                    try:
-                                        dataset_properties = {
-                                            'id': local_sub_dataset['name'],
-                                            'volume': local_sub_dataset['pool']
-                                        }
-                                        if local_sub_dataset['mountpoint']:
-                                            dataset_properties['mountpoint'] = local_sub_dataset['mountpoint']
-                                        dataset_properties['mounted'] = False
-                                        call_task_and_check_state(
-                                            remote_client,
-                                            'volume.dataset.create',
-                                            dataset_properties
-                                        )
-                                    except RpcException as e:
-                                        raise TaskException(
-                                            e.code,
-                                            'Cannot create exact duplicate of {0} on {1}. Message: {2}'.format(
-                                                sub_dataset_name,
-                                                remote,
-                                                e.message
-                                            ),
-                                            stacktrace=e.stacktrace
-                                        )
+
+                        remote_dataset = remote_client.call_sync(
+                            'zfs.dataset.query',
+                            [('name', '=', datasets_pair['slave'])],
+                            {'single': True, 'count': True}
+                        )
+
+                        if not remote_dataset:
+                            raise TaskException(
+                                'Target dataset {0} not found on the target system'.format(datasets_pair['slave'])
+                            )
 
                 self.set_datasets_mount_ro(link, True, remote_client)
 
@@ -593,16 +579,13 @@ class ReplicationDeleteTask(ReplicationBaseTask):
         return TaskDescription("Deleting the replication link {name}", name=name)
 
     def verify(self, name, scrub=False):
-        if not self.datastore.exists('replication.links', ('name', '=', name)):
-            raise VerifyException(errno.ENOENT, 'Replication link {0} do not exist.'.format(name))
-
-        return ['replication:{0}'.format(name)]
+        return ['replication']
 
     def run(self, name, scrub=False):
         if not self.datastore.exists('replication.links', ('name', '=', name)):
             raise TaskException(errno.ENOENT, 'Replication link {0} do not exist.'.format(name))
 
-        link = self.join_subtasks(self.run_subtask('replication.get_latest_link', name))[0]
+        link = self.run_subtask_sync('replication.get_latest_link', name)
         is_master, remote = self.get_replication_state(link)
         remote_client = None
 
@@ -617,19 +600,19 @@ class ReplicationDeleteTask(ReplicationBaseTask):
         if not is_master:
             for service in ['shares', 'vms']:
                 for reserved_item in self.dispatcher.call_sync('replication.get_reserved_{0}'.format(service), name):
-                    self.join_subtasks(self.run_subtask(
+                    self.run_subtask_sync(
                         '{0}.export'.format(service),
                         reserved_item['id']
-                    ))
+                    )
 
             if scrub:
                 with self.dispatcher.get_lock('volumes'):
-                    datasets = reversed(self.dispatcher.call_sync('replication.datasets_from_link', link))
+                    datasets = reversed(self.dispatcher.call_sync('replication.local_datasets_from_link', link))
                     for dataset in datasets:
                         if len(dataset['name'].split('/')) == 1:
-                            self.join_subtasks(self.run_subtask('volume.delete', dataset['name']))
+                            self.run_subtask_sync('volume.delete', dataset['name'])
                         else:
-                            self.join_subtasks(self.run_subtask('volume.dataset.delete', dataset['name']))
+                            self.run_subtask_sync('volume.dataset.delete', dataset['name'])
 
         self.datastore.delete('replication.links', link['id'])
         self.dispatcher.call_sync('replication.link_cache_remove', link['name'])
@@ -670,7 +653,10 @@ class ReplicationUpdateTask(ReplicationBaseTask):
         if not self.datastore.exists('replication.links', ('name', '=', name)):
             raise TaskException(errno.ENOENT, 'Replication link {0} do not exist.'.format(name))
 
-        link = self.join_subtasks(self.run_subtask('replication.get_latest_link', name))[0]
+        link = self.run_subtask_sync('replication.get_latest_link', name)
+
+        if 'status' in updated_fields and link['status'] != updated_fields['status']:
+            raise TaskException(errno.EINVAL, 'Replication status is readonly')
 
         if 'initial_master' in updated_fields:
             if updated_fields['initial_master'] != link['initial_master']:
@@ -693,7 +679,7 @@ class ReplicationUpdateTask(ReplicationBaseTask):
         updated_fields['update_date'] = str(datetime.utcnow())
 
         if 'datasets' in updated_fields:
-            for dataset in updated_fields['datasets']:
+            for dataset in iterate_datasets(updated_fields['datasets'], is_master):
                 if not self.dispatcher.call_sync('zfs.dataset.query', [('name', '=', dataset)], {'single': True}):
                     raise TaskException(errno.ENOENT, 'Dataset {0} does not exist'.format(dataset))
 
@@ -704,6 +690,14 @@ class ReplicationUpdateTask(ReplicationBaseTask):
                 )
 
         link.update(updated_fields)
+
+        if link['bidirectional']:
+            for datasets_pair in link['datasets']:
+                if datasets_pair['master'] != datasets_pair['slave']:
+                    raise TaskException(
+                        errno.EINVAL,
+                        'Source and target datasets have to have the same names for bidirectional replication'
+                    )
 
         partners = (link['master'], link['slave'])
         if 'master' in updated_fields:
@@ -729,8 +723,8 @@ class ReplicationUpdateTask(ReplicationBaseTask):
                     'New remote {0} is unreachable.'.format(new_remote)
                 )
             if remote_available:
-                self.join_subtasks(self.run_subtask('replication.delete', old_name))
-                self.join_subtasks(self.run_subtask('replication.create', link))
+                self.run_subtask_sync('replication.delete', old_name)
+                self.run_subtask_sync('replication.create', link)
             else:
                 raise TaskException(errno.EACCES, 'Remote {0} is unreachable.'.format(remote))
 
@@ -761,10 +755,10 @@ class ReplicationUpdateTask(ReplicationBaseTask):
         if not link['replicate_services']:
             for service in ['shares', 'vms']:
                 for reserved_item in self.dispatcher.call_sync('replication.get_reserved_{0}'.format(service), name):
-                    self.join_subtasks(self.run_subtask(
+                    self.run_subtask_sync(
                         '{0}.export'.format(service),
                         reserved_item['id']
-                    ))
+                    )
 
         if 'datasets' in updated_fields:
             self.set_datasets_mount_ro(
@@ -774,7 +768,7 @@ class ReplicationUpdateTask(ReplicationBaseTask):
             )
 
             try:
-                self.join_subtasks(self.run_subtask('replication.prepare_slave', link))
+                self.run_subtask_sync('replication.prepare_slave', link)
             except RpcException:
                 self.set_datasets_mount_ro(
                     original_link,
@@ -796,7 +790,7 @@ class ReplicationUpdateTask(ReplicationBaseTask):
                     'Link update at remote side failed: {0}'.format(e.message)
                 ))
 
-        self.join_subtasks(self.run_subtask('replication.update_link', link))
+        self.run_subtask_sync('replication.update_link', link)
 
         if remote_available and link['replicate_services']:
             try:
@@ -812,7 +806,7 @@ class ReplicationUpdateTask(ReplicationBaseTask):
                 ))
 
             if 'master' in updated_fields:
-                self.join_subtasks(self.run_subtask('replication.role_update', link['id']))
+                self.run_subtask_sync('replication.role_update', link['id'])
 
         self.dispatcher.dispatch_event('replication.changed', {
             'operation': 'update',
@@ -847,35 +841,65 @@ class ReplicationSyncTask(ReplicationBaseTask):
             raise TaskException(errno.ENOENT, 'Replication link {0} do not exist.'.format(name))
 
         start_time = time.time()
+        started_at = datetime.utcnow().isoformat().split('.')[0]
         total_size = 0
         status = 'SUCCESS'
         message = ''
         speed = 0
         remote_client = None
+        link = self.run_subtask_sync('replication.get_latest_link', name)
+        is_master, remote = self.get_replication_state(link)
         try:
-            link = self.join_subtasks(self.run_subtask('replication.get_latest_link', name))[0]
-            is_master, remote = self.get_replication_state(link)
             remote_client = get_freenas_peer_client(self, remote)
             if is_master:
                 with self.dispatcher.get_lock('volumes'):
-                    parent_datasets = self.get_parent_datasets(link)
+                    all_datasets = self.dispatcher.call_sync('replication.local_datasets_from_link', link)
+                    parent_datasets = self.get_parent_datasets(all_datasets, link)
 
-                    for dataset in parent_datasets:
-                        result = self.join_subtasks(self.run_subtask(
+                    ds_count = len(parent_datasets)
+                    for idx, dataset in enumerate(parent_datasets):
+                        done = 0
+
+                        def report_progress(prgrs, msg, extra):
+                            @throttle(seconds=30)
+                            def update_status(p):
+                                speed = int(done / (time.time() - start_time))
+                                state = {
+                                    'created_at': datetime.now(),
+                                    'status': 'RUNNING',
+                                    'progress': p,
+                                    'speed': human_readable_bytes(speed, '/s')
+                                }
+
+                                self.dispatcher.call_sync('replication.put_status', link['id'], state)
+                                remote_client.call_sync('replication.put_status', link['id'], state)
+
+                            nonlocal done
+                            if extra:
+                                done += extra
+
+                            update_status(self.chunk_progress(
+                                int((idx / ds_count) * 100), int(((idx + 1) / ds_count) * 100),
+                                '', prgrs, msg, extra
+                            ))
+
+                        datasets_pair = first_or_default(lambda d: d['master'] == dataset['name'], link['datasets'])
+                        result = self.run_subtask_sync(
                             'replication.replicate_dataset',
-                            dataset['name'],
+                            datasets_pair['master'],
                             {
                                 'remote': remote,
-                                'remote_dataset': dataset['name'],
+                                'remote_dataset': datasets_pair['slave'],
                                 'recursive': link['recursive'],
                                 'nomount': True,
                                 'lifetime': link['snapshot_lifetime'],
                                 'followdelete': link['followdelete']
                             },
-                            link['transport_options']
-                        ))
+                            link['transport_options'],
+                            progress_callback=lambda p, m, e=None: report_progress(p, m, e)
+                        )
 
-                        total_size += result[0][1]
+                        total_size += result[1]
 
                     if link['replicate_services']:
                         call_task_and_check_state(remote_client, 'replication.reserve_services', name)
@@ -891,20 +915,40 @@ class ReplicationSyncTask(ReplicationBaseTask):
             message = e.message
             raise
         finally:
-            end_time = time.time()
-            if start_time != end_time:
-                speed = int(float(total_size) / float(end_time - start_time))
+            if is_master:
+                self.dispatcher.call_sync('replication.remove_status', link['id'])
+                end_time = time.time()
+                if start_time != end_time:
+                    speed = int(float(total_size) / float(end_time - start_time))
 
-            status_dict = {
-                'status': status,
-                'message': message,
-                'size': total_size,
-                'speed': speed
-            }
-            self.dispatcher.call_sync('replication.put_status', name, status_dict)
-            if remote_client:
-                remote_client.call_sync('replication.put_status', name, status_dict)
-                remote_client.disconnect()
+                status_dict = {
+                    'started_at': {'$date': started_at},
+                    'ended_at': {'$date': datetime.utcnow().isoformat().split('.')[0]},
+                    'status': status,
+                    'message': message,
+                    'size': total_size,
+                    'speed': speed
+                }
+                link['status'].append(status_dict)
+                link['update_date'] = str(datetime.utcnow())
+                self.run_subtask_sync('replication.update_link', link)
+                self.dispatcher.dispatch_event('replication.changed', {
+                    'operation': 'update',
+                    'ids': [link['id']]
+                })
+
+                if remote_client:
+                    remote_client.call_sync('replication.remove_status', link['id'])
+                    call_task_and_check_state(
+                        remote_client,
+                        'replication.update_link',
+                        self.remove_datastore_timestamps(link)
+                    )
+                    remote_client.emit_event('replication.changed', {
+                        'operation': 'update',
+                        'ids': [link['id']]
+                    })
+                    remote_client.disconnect()
 
 
 @private
@@ -929,7 +973,7 @@ class ReplicationReserveServicesTask(ReplicationBaseTask):
             raise TaskException(errno.ENOENT, 'Replication link {0} do not exist.'.format(name))
 
         service_types = ['shares', 'vms']
-        link = self.join_subtasks(self.run_subtask('replication.get_latest_link', name))[0]
+        link = self.run_subtask_sync('replication.get_latest_link', name)
         is_master, remote = self.get_replication_state(link)
         remote_client = get_freenas_peer_client(self, remote)
 
@@ -1021,7 +1065,7 @@ class SnapshotDatasetTask(Task):
 
             break
 
-        self.join_subtasks(self.run_subtask(
+        self.run_subtask_sync(
             'volume.snapshot.create',
             {
                 'dataset': dataset,
@@ -1030,7 +1074,7 @@ class SnapshotDatasetTask(Task):
                 'replicable': replicable
             },
             recursive
-        ))
+        )
 
 
 @private
@@ -1068,9 +1112,9 @@ class CalculateReplicationDeltaTask(Task):
             return {
                 'name': snap['name'],
                 'snapshot_name': snap['snapshot_name'],
-                'created_at': q.get(snap, 'properties.creation.parsed'),
+                'created_at': int(q.get(snap, 'properties.creation.rawvalue')),
                 'txg': int(q.get(snap, 'properties.createtxg.rawvalue')),
-                'uuid': q.get(snap, 'properties.org\\.freenas:uuid')
+                'uuid': q.get(snap, 'properties.org\\.freenas:uuid.value')
             }
 
         def extend_with_snapshot_name(snap):
@@ -1103,17 +1147,36 @@ class CalculateReplicationDeltaTask(Task):
                 ('name', '~', '^{0}@'.format(remotefs))
             )
 
+            remote_ds = first_or_default(lambda s: s['name'] == remotefs, snapshots_list)
             snapshots = local_snapshots[:]
             found = None
 
-            if remote_snapshots:
-                # Find out the last common snapshot.
-                pairs = list(match_snapshots(local_snapshots, remote_snapshots))
-                if pairs:
-                    pairs.sort(key=lambda p: p[0]['created_at'], reverse=True)
-                    found, _ = first_or_default(None, pairs)
+            if remote_ds and remote_ds.get('resume_token'):
+                # There's unfinished replication
+                token_info = self.dispatcher.call_sync(
+                    'zfs.dataset.describe_resume_token',
+                    remote_ds.get('resume_token')
+                )
 
-                logger.info('found = {0}'.format(found))
+                actions.append(ReplicationAction(
+                    ReplicationActionType.SEND_STREAM,
+                    localfs,
+                    remotefs,
+                    resume=True,
+                    incremental=False,
+                    token=remote_ds.get('resume_token'),
+                    snapshot=token_info['toname']
+                ))
+
+                found = first_or_default(lambda s: s['name'] == token_info['toname'], local_snapshots)
+
+            if remote_snapshots or found:
+                # Find out the last common snapshot.
+                if not found:
+                    pairs = list(match_snapshots(local_snapshots, remote_snapshots))
+                    if pairs:
+                        pairs.sort(key=lambda p: p[0]['created_at'], reverse=True)
+                        found, _ = first_or_default(None, pairs)
 
                 if found:
                     if followdelete:
@@ -1172,7 +1235,7 @@ class CalculateReplicationDeltaTask(Task):
                     ))
 
         for rds in remote_datasets:
-            remotefs = rds
+            remotefs = rds['name']
             localfs = remotefs.replace(remoteds, localds, 1)
 
             if localfs not in datasets:
@@ -1186,7 +1249,9 @@ class CalculateReplicationDeltaTask(Task):
 
         for action in actions:
             if action.type == ReplicationActionType.SEND_STREAM:
-                logger.warning('localfs={0}, snapshot={1}, anchor={2}'.format(action.localfs, action.snapshot, getattr(action, 'anchor', None)))
+                if getattr(action, 'resume', False):
+                    continue
+
                 size = self.dispatcher.call_sync(
                     'zfs.dataset.estimate_send_size',
                     action.localfs,
@@ -1229,14 +1294,14 @@ class ReplicateDatasetTask(ProgressTask):
         peer = options.get('peer')
         nomount = options.get('nomount', False)
 
-        self.join_subtasks(self.run_subtask(
+        self.run_subtask_sync(
             'volume.snapshot_dataset',
             localds,
             True,
             lifetime,
             'repl',
             True
-        ))
+        )
 
         if peer:
             remote = self.dispatcher.call_sync(
@@ -1275,13 +1340,11 @@ class ReplicateDatasetTask(ProgressTask):
         remote_data = []
 
         for i in remote_datasets:
-            if not is_replicated(i):
-                continue
-
             remote_data.append({
                 'name': i['name'],
-                'created_at': datetime.fromtimestamp(int(q.get(i, 'properties.creation.rawvalue'))),
-                'uuid': q.get(i, 'properties.org\\.freenas:uuid.value')
+                'created_at': int(q.get(i, 'properties.creation.rawvalue')),
+                'uuid': q.get(i, 'properties.org\\.freenas:uuid.value'),
+                'resume_token': q.get(i, 'properties.receive_resume_token.value')
             })
 
         for i in remote_snapshots:
@@ -1290,31 +1353,45 @@ class ReplicateDatasetTask(ProgressTask):
 
             remote_data.append({
                 'name': i['name'],
-                'created_at': datetime.fromtimestamp(int(q.get(i, 'properties.creation.rawvalue'))),
-                'uuid': q.get(i, 'properties.org\\.freenas:uuid.value')
+                'created_at': int(q.get(i, 'properties.creation.rawvalue')),
+                'uuid': q.get(i, 'properties.org\\.freenas:uuid.value'),
+                'resume_token': None
             })
 
-        (actions, send_size), = self.join_subtasks(self.run_subtask(
+        actions, send_size = self.run_subtask_sync(
             'replication.calculate_delta',
             localds,
             remoteds,
             remote_data,
             recursive,
             followdelete
-        ))
+        )
 
         if dry_run:
             return actions, send_size
 
         # 2nd pass - actual send
+        progress = 0
+        done = 0
+        actions_len = len(actions)
+
         for idx, action in enumerate(actions):
+            def get_progress(delta=None):
+                nonlocal progress, done, idx
+                if delta:
+                    done += delta
+
+                progress = ((idx / actions_len) * 100) + ((1 / actions_len) * 100 * (done / send_size))
+                if progress > 100:
+                    progress = 100
+
+                return progress
+
             if self.aborted:
                 break
 
-            progress = float(idx) / len(actions) * 100
-
             if action['type'] in (ReplicationActionType.DELETE_SNAPSHOTS.name, ReplicationActionType.CLEAR_SNAPSHOTS.name):
-                self.set_progress(progress, 'Removing snapshots on remote dataset {0}'.format(action['remotefs']))
+                self.set_progress(get_progress(), 'Removing snapshots on remote dataset {0}'.format(action['remotefs']))
                 # Remove snapshots on remote side
                 result = remote_client.call_task_sync(
                     'zfs.delete_multiple_snapshots',
@@ -1328,23 +1405,26 @@ class ReplicateDatasetTask(ProgressTask):
                     ))
 
             if action['type'] == ReplicationActionType.SEND_STREAM.name:
-                self.set_progress(progress, 'Sending {0} stream of snapshot {1}@{2}'.format(
-                    'incremental' if action['incremental'] else 'full',
-                    action['localfs'],
-                    action['snapshot']
-                ))
-
                 self.rd_fd, self.wr_fd = os.pipe()
                 fromsnap = action['anchor'] if 'anchor' in action else None
 
-                self.join_subtasks(
-                    self.run_subtask(
+                if action.get('resume'):
+                    send_task = self.run_subtask(
+                        'zfs.send_resume',
+                        action['token'],
+                        FileDescriptor(self.wr_fd)
+                    )
+                else:
+                    send_task = self.run_subtask(
                         'zfs.send',
                         action['localfs'],
                         fromsnap,
                         action['snapshot'],
                         FileDescriptor(self.wr_fd)
-                    ),
+                    )
+
+                self.join_subtasks(
+                    send_task,
                     self.run_subtask(
                         'replication.transport.send',
                         FileDescriptor(self.rd_fd),
@@ -1358,12 +1438,23 @@ class ReplicateDatasetTask(ProgressTask):
                                 'props': {'mountpoint': None}
                             },
                             'estimated_size': send_size
-                        }
+                        },
+                        progress_callback=lambda p, m, e=None: self.set_progress(
+                            get_progress(e),
+                            'Sending {0} stream of snapshot {1}@{2} - {3}% - speed {4}'.format(
+                                'incremental' if action['incremental'] else 'full',
+                                action['localfs'],
+                                action['snapshot'],
+                                int(p),
+                                human_readable_bytes(e, '/s')
+                            ),
+                            extra=e
+                        )
                     )
                 )
 
             if action['type'] == ReplicationActionType.DELETE_DATASET.name:
-                self.set_progress(progress, 'Removing remote dataset {0}'.format(action['remotefs']))
+                self.set_progress(get_progress(), 'Removing remote dataset {0}'.format(action['remotefs']))
                 result = remote_client.call_task_sync(
                     'zfs.destroy',
                     action['remotefs'].split('/')[0],
@@ -1425,10 +1516,6 @@ class ReplicationGetLatestLinkTask(ReplicationBaseTask):
         try:
             client = get_freenas_peer_client(self, remote)
             remote_link = client.call_sync('replication.get_one_local', name)
-            status = client.call_sync('replication.get_status', name)
-            if not self.dispatcher.call_sync('replication.get_status', name):
-                if status:
-                    self.dispatcher.call_sync('replication.put_status', name, status)
         except RpcException:
             pass
 
@@ -1443,7 +1530,7 @@ class ReplicationGetLatestLinkTask(ReplicationBaseTask):
                     'ids': [local_link['id']]
                 })
             elif local_update_date < remote_update_date:
-                self.join_subtasks(self.run_subtask('replication.update_link', remote_link))
+                self.run_subtask_sync('replication.update_link', remote_link)
                 latest_link = remote_link
                 self.dispatcher.dispatch_event('replication.changed', {
                     'operation': 'update',
@@ -1514,12 +1601,12 @@ class ReplicationRoleUpdateTask(ReplicationBaseTask):
         if not self.datastore.exists('replication.links', ('name', '=', name)):
             raise TaskException(errno.ENOENT, 'Replication link {0} do not exist.'.format(name))
 
-        link = self.join_subtasks(self.run_subtask('replication.get_latest_link', name))[0]
+        link = self.run_subtask_sync('replication.get_latest_link', name)
         if not link['bidirectional']:
             return
 
         is_master, remote = self.get_replication_state(link)
-        datasets = self.dispatcher.call_sync('replication.datasets_from_link', link)
+        datasets = self.dispatcher.call_sync('replication.local_datasets_from_link', link)
         current_readonly = self.dispatcher.call_sync(
             'zfs.dataset.query',
             [('name', '=', datasets[0]['name'])],
@@ -1543,11 +1630,11 @@ class ReplicationRoleUpdateTask(ReplicationBaseTask):
                     timeout=300
                 )
                 for reserved_item in items:
-                    self.join_subtasks(self.run_subtask(
+                    self.run_subtask_sync(
                         '{0}.immutable.set'.format(service[:-1]),
                         reserved_item['id'],
                         action_type
-                    ))
+                    )
 
 
 @private
@@ -1574,10 +1661,56 @@ class ReplicationCheckDatasetsTask(ReplicationBaseTask):
         self.check_datasets_valid(link)
 
 
+@description("Deletes replication status history")
+@accepts(str)
+class ReplicationCleanHistoryTask(ReplicationBaseTask):
+    @classmethod
+    def early_describe(cls):
+        return "Deleting replication status history"
+
+    def describe(self, id):
+        link = self.datastore.get_by_id('replication.links', id)
+        return TaskDescription("Deleting replication {name} status history", name=link['name'] if link else id)
+
+    def verify(self, id):
+        link = self.datastore.get_by_id('replication.links', id)
+
+        return ['replication{0}'.format(':' + link['name'] if link else '')]
+
+    def run(self, id):
+        if not self.datastore.exists('replication.links', ('id', '=', id)):
+            raise TaskException(errno.ENOENT, 'Replication link {0} do not exist.'.format(id))
+
+        link = self.datastore.get_by_id('replication.links', id)
+        link['status'] = []
+        link['update_date'] = str(datetime.utcnow())
+
+        _, remote = self.get_replication_state(link)
+        remote_client = get_freenas_peer_client(self, remote)
+
+        self.run_subtask_sync('replication.update_link', link)
+        self.dispatcher.dispatch_event('replication.changed', {
+            'operation': 'update',
+            'ids': [link['id']]
+        })
+
+        if remote_client:
+            call_task_and_check_state(
+                remote_client,
+                'replication.update_link',
+                self.remove_datastore_timestamps(link)
+            )
+            remote_client.emit_event('replication.changed', {
+                'operation': 'update',
+                'ids': [link['id']]
+            })
+            remote_client.disconnect()
+
+
 def get_services(dispatcher, service, relation, link_name):
     services = []
     link = dispatcher.call_task_sync('replication.get_latest_link', link_name)
-    datasets = dispatcher.call_sync('replication.datasets_from_link', link)
+    datasets = dispatcher.call_sync('replication.local_datasets_from_link', link)
     for dataset in datasets:
         dataset_path = dispatcher.call_sync('volume.get_dataset_path', dataset['name'])
         s = dispatcher.call_sync('{0}.get_dependencies'.format(service), dataset_path, False, False)
@@ -1590,10 +1723,18 @@ def get_services(dispatcher, service, relation, link_name):
 
 def get_replication_resources(dispatcher, link):
     resources = ['replication']
-    datasets = q.query(dispatcher.call_sync('replication.datasets_from_link', link), select='name')
+    datasets = q.query(dispatcher.call_sync('replication.local_datasets_from_link', link), select='name')
     for dataset in datasets:
         resources.append('zfs:{0}'.format(dataset))
     return resources
+
+
+def iterate_datasets(datasets, is_master, local=True):
+    for d in datasets:
+        if is_master and local:
+            yield d['master']
+        else:
+            yield d['slave']
 
 
 def _depends():
@@ -1601,6 +1742,10 @@ def _depends():
 
 
 def _init(dispatcher, plugin):
+    global link_cache, current_state_cache
+    link_cache = CacheStore()
+    current_state_cache = CacheStore()
+
     plugin.register_schema_definition('ReplicationOptions', {
         'type': 'object',
         'properties': {
@@ -1627,13 +1772,17 @@ def _init(dispatcher, plugin):
             'update_date': {'type': 'string'},
             'datasets': {
                 'type': 'array',
-                'items': {'type': 'string'}
+                'items': {'$ref': 'datasets-replication-pair'}
             },
             'bidirectional': {'type': 'boolean'},
             'auto_recover': {'type': 'boolean'},
             'replicate_services': {'type': 'boolean'},
             'recursive': {'type': 'boolean'},
-            'status': {'$ref': 'ReplicationStatus'},
+            'status': {
+                'type': 'array',
+                'items': {'$ref': 'ReplicationStatus'}
+            },
+            'current_state': {'$ref': 'ReplicationRuntimeState'},
             'transport_options': {
                 'type': 'array',
                 'items': {'$ref': 'ReplicationTransportOption'}
@@ -1647,10 +1796,26 @@ def _init(dispatcher, plugin):
     plugin.register_schema_definition('ReplicationStatus', {
         'type': 'object',
         'properties': {
+            'started_at': {'type': 'datetime'},
+            'ended_at': {'type': 'datetime'},
             'status': {'type': 'string'},
             'message': {'type': 'string'},
             'size': {'type': 'number'},
             'speed': {'type': 'number'}
+        },
+        'additionalProperties': False,
+    })
+
+    plugin.register_schema_definition('ReplicationRuntimeState', {
+        'type': 'object',
+        'properties': {
+            'created_at': {'type': 'datetime'},
+            'status': {
+                'type': 'string',
+                'enum': ['RUNNING', 'STOPPED', 'FAILED']
+            },
+            'progress': {'type': 'number'},
+            'speed': {'type': 'string'}
         },
         'additionalProperties': False,
     })
@@ -1664,6 +1829,15 @@ def _init(dispatcher, plugin):
             'uuid': {'type': ['string', 'null']},
             'type': {'$ref': 'SnapshotInfoType'}
         }
+    })
+
+    plugin.register_schema_definition('DatasetsReplicationPair', {
+        'type': 'object',
+        'properties': {
+            'master': {'type': 'string'},
+            'slave': {'type': 'string'}
+        },
+        'additionalProperties': False
     })
 
     plugin.register_schema_definition('SnapshotInfoType', {
@@ -1723,17 +1897,23 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('replication.reserve_services', ReplicationReserveServicesTask)
     plugin.register_task_handler('replication.delete', ReplicationDeleteTask)
     plugin.register_task_handler('replication.check_datasets', ReplicationCheckDatasetsTask)
+    plugin.register_task_handler('replication.clean_history', ReplicationCleanHistoryTask)
 
     plugin.register_event_type('replication.changed')
 
     def on_replication_change(args):
+        if args['operation'] == 'delete':
+            return
+
         for i in args['ids']:
-            link = dispatcher.call_sync('replication.local_query', [('name', '=', i)], {'single': True})
-            dispatcher.update_resource(
-                'replication:{0}'.format(link['name']),
-                new_parents=get_replication_resources(dispatcher, link)
-            )
-            dispatcher.call_task_sync('replication.role_update', i)
+            link = dispatcher.call_sync('replication.local_query', [('id', '=', i)], {'single': True})
+            if link:
+                dispatcher.update_resource(
+                    'replication:{0}'.format(link['name']),
+                    new_parents=get_replication_resources(dispatcher, link)
+                )
+                if link['bidirectional']:
+                    dispatcher.call_task_sync('replication.role_update', i)
 
     def update_link_cache(args):
         sshd_service = dispatcher.call_sync('service.query', [('name', '=', 'sshd')], {'single': True})
@@ -1759,9 +1939,14 @@ def _init(dispatcher, plugin):
                 if link['replicate_services']:
                     dispatcher.call_task_sync('replication.reserve_services', link['name'])
                 status = link.get('status')
+                if len(status):
+                    last_status = status[-1]
+                else:
+                    continue
+
                 is_master, _ = dispatcher.call_sync('replication.get_replication_state', link)
                 recover = link['auto_recover'] and link['initial_master'] != link['master'] and not is_master
-                if (status and status['status'] == 'FAILED') or recover:
+                if (last_status and last_status['status'] == 'FAILED') or recover:
                     dispatcher.call_task_sync(
                         'replication.sync',
                         link['name']
@@ -1790,7 +1975,8 @@ def _init(dispatcher, plugin):
             updated_pools = list(set([d.split('/', 1)[0] for d in args['ids']]))
 
         for link in links:
-            related_pools = list(set([d.split('/', 1)[0] for d in link['datasets']]))
+            is_master, _ = dispatcher.call_sync('replication.get_replication_state', link)
+            related_pools = list(set([d.split('/', 1)[0] for d in iterate_datasets(link['datasets'], is_master)]))
             if any(p in related_pools for p in updated_pools):
                 dispatcher.update_resource(
                     'replication:{0}'.format(link['name']),
@@ -1832,8 +2018,7 @@ def _init(dispatcher, plugin):
     plugin.register_event_handler('replication.changed', on_replication_change)
     plugin.register_event_handler('network.changed', update_link_cache)
     plugin.register_event_handler('zfs.dataset.changed', update_resources)
-    links = dispatcher.call_sync('replication.local_query')
-    for link in links:
+    for link in dispatcher.datastore.query_stream('replication.links'):
         dispatcher.register_resource(
             Resource('replication:{0}'.format(link['name'])),
             parents=get_replication_resources(dispatcher, link)

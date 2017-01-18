@@ -36,6 +36,7 @@ import logging
 import subprocess
 import errno
 import sid
+import time
 import contextlib
 from threading import Thread, Condition
 from datetime import datetime
@@ -121,7 +122,7 @@ class WinbindPlugin(DirectoryServicePlugin):
 
     @property
     def ldap_addresses(self):
-        records = get_srv_records('ldap', 'tcp', self.parameters['realm'], self.parameters.get('dc_address'))
+        records = get_srv_records('ldap', 'tcp', self.parameters['realm'])
         return [str(i) for i in records]
 
     @staticmethod
@@ -147,7 +148,9 @@ class WinbindPlugin(DirectoryServicePlugin):
                 return False
 
             # Check if we can fetch domain SID
-            if subprocess.call(['/usr/local/bin/net', 'getdomainsid']) != 0:
+            try:
+                subprocess.check_output(['/usr/local/bin/net', 'getdomainsid'])
+            except subprocess.CalledProcessError:
                 logger.debug('Cannot fetch domain SID')
                 return False
 
@@ -211,12 +214,10 @@ class WinbindPlugin(DirectoryServicePlugin):
                             logger.debug('Initializing LDAP connection')
                             logger.debug('LDAP server addresses: {0}'.format(', '.join(self.ldap_addresses)))
                             ldap_addresses = self.ldap_addresses
-                            sasl_credentials = None
 
                             if self.parameters.get('dc_address'):
                                 logger.debug('Using manually configured DC address')
-                                sasl_credentials = (self.ldap_addresses[0][:-1],)
-                                ldap_addresses = get_a_records(self.ldap_addresses[0], self.parameters['dc_address'])
+                                ldap_addresses = [self.parameters.get('dc_address')]
 
                             self.ldap_servers = [ldap3.Server(i) for i in ldap_addresses]
                             self.ldap = ldap3.Connection(
@@ -224,7 +225,7 @@ class WinbindPlugin(DirectoryServicePlugin):
                                 client_strategy='ASYNC',
                                 authentication=ldap3.SASL,
                                 sasl_mechanism='GSSAPI',
-                                sasl_credentials=sasl_credentials
+                                sasl_credentials=None
                             )
 
                             if not self.ldap.bind():
@@ -242,7 +243,7 @@ class WinbindPlugin(DirectoryServicePlugin):
                                 if not du:
                                     continue
 
-                                self.domain_users_guid = uuid.UUID(bytes=du['attributes']['objectGUID'][0])
+                                self.domain_users_guid = uuid.UUID(du['attributes']['objectGUID'])
                                 self.user_dn = join_dn('CN=Users', self.base_dn)
                                 self.group_dn = join_dn(dn, self.base_dn)
                                 logger.debug('Group DN is {0}'.format(self.group_dn))
@@ -252,6 +253,7 @@ class WinbindPlugin(DirectoryServicePlugin):
                                 raise RuntimeError('Failed to fetch Domain Users')
 
                         except BaseException as err:
+                            logger.debug('Failure details', exc_info=True)
                             self.directory.put_status(errno.ENXIO, '{0} <{1}>'.format(str(err), type(err).__name__))
                             self.directory.put_state(DirectoryState.FAILURE)
                         else:
@@ -262,7 +264,7 @@ class WinbindPlugin(DirectoryServicePlugin):
                         self.directory.put_state(DirectoryState.DISABLED)
 
     def configure_smb(self, enable):
-        workgroup = self.parameters['realm'].split('.')[0]
+        workgroup = self.parameters['realm'].split('.')[0].upper()
         cfg = smbconf.SambaConfig('registry')
         params = {
             'server role': 'member server',
@@ -310,7 +312,7 @@ class WinbindPlugin(DirectoryServicePlugin):
                 logger.debug('Setting samba parameter "{0}" to "{1}"'.format(k, v))
                 cfg[k] = v
 
-        subprocess.call(['/usr/sbin/service', 'samba_server', 'restart'])
+        self.context.client.call_sync('service.restart', 'smb')
 
     def get_directory_info(self):
         return {
@@ -327,10 +329,13 @@ class WinbindPlugin(DirectoryServicePlugin):
             # not a user
             return
 
-        username = get(entry, 'sAMAccountName.0')
-        usersid = sid.sid(get(entry, 'objectSid.0'), sid.SID_BINARY)
+        username = get(entry, 'sAMAccountName')
+        usersid = get(entry, 'objectSid')
         groups = []
-        wbu = self.wbc.get_user(name='{0}\\{1}'.format(self.realm, username))
+        try:
+            wbu = self.wbc.get_user(name='{0}\\{1}'.format(self.realm, username))
+        except:
+            return
 
         if not wbu:
             logging.warning('User {0} found in LDAP, but not in winbindd.'.format(username))
@@ -344,17 +349,17 @@ class WinbindPlugin(DirectoryServicePlugin):
 
             for r in self.search(self.group_dn, qstr):
                 r = dict(r['attributes'])
-                guid = uuid.UUID(bytes=get(r, 'objectGUID.0'))
+                guid = uuid.UUID(get(r, 'objectGUID'))
                 groups.append(str(guid))
 
         return {
-            'id': str(uuid.UUID(bytes=get(entry, 'objectGUID.0'))),
+            'id': str(uuid.UUID(get(entry, 'objectGUID'))),
             'sid': str(usersid),
             'uid': wbu.passwd.pw_uid,
             'builtin': False,
             'username': username,
             'aliases': [wbu.passwd.pw_name],
-            'full_name': get(entry, 'name.0'),
+            'full_name': get(entry, 'name'),
             'email': None,
             'locked': False,
             'sudo': False,
@@ -374,10 +379,13 @@ class WinbindPlugin(DirectoryServicePlugin):
             # not a group
             return
 
-        groupname = get(entry, 'sAMAccountName.0')
-        groupsid = sid.sid(get(entry, 'objectSid.0'), sid.SID_BINARY)
+        groupname = get(entry, 'sAMAccountName')
+        groupsid = get(entry, 'objectSid')
         parents = []
-        wbg = self.wbc.get_group(name='{0}\\{1}'.format(self.realm, groupname))
+        try:
+            wbg = self.wbc.get_group(name='{0}\\{1}'.format(self.realm, groupname))
+        except:
+            return
 
         if not wbg:
             logging.warning('Group {0} found in LDAP, but not in winbindd.'.format(groupname))
@@ -391,11 +399,11 @@ class WinbindPlugin(DirectoryServicePlugin):
 
             for r in self.search(self.group_dn, qstr):
                 r = dict(r['attributes'])
-                guid = uuid.UUID(bytes=get(r, 'objectGUID.0'))
+                guid = uuid.UUID(get(r, 'objectGUID'))
                 parents.append(str(guid))
 
         return {
-            'id': str(uuid.UUID(bytes=get(entry, 'objectGUID.0'))),
+            'id': str(uuid.UUID(get(entry, 'objectGUID'))),
             'sid': str(groupsid),
             'gid': wbg.group.gr_gid,
             'builtin': False,
@@ -419,8 +427,6 @@ class WinbindPlugin(DirectoryServicePlugin):
 
     def getpwuid(self, uid):
         logger.debug('getpwuid(uid={0})'.format(uid))
-        if not (self.uid_min <= uid <= self.uid_max):
-            return
 
         if not self.is_joined():
             logger.debug('getpwuid: not joined')
@@ -439,7 +445,7 @@ class WinbindPlugin(DirectoryServicePlugin):
             logger.debug('getpwuuid: not joined')
             return
 
-        guid = ldap3.utils.conv.escape_bytes(uuid.UUID(id).bytes)
+        guid = ldap3.utils.conv.escape_bytes(uuid.UUID(id).bytes_le)
         return self.convert_user(self.search_one(self.user_dn, '(objectGUID={0})'.format(guid)))
 
     def getpwnam(self, name):
@@ -485,7 +491,7 @@ class WinbindPlugin(DirectoryServicePlugin):
             logger.debug('getgruuid: not joined')
             return
 
-        guid = ldap3.utils.conv.escape_bytes(uuid.UUID(id).bytes)
+        guid = ldap3.utils.conv.escape_bytes(uuid.UUID(id).bytes_le)
         return self.convert_group(self.search_one(self.group_dn, '(objectGUID={0})'.format(guid)))
 
     def getgrgid(self, gid):
@@ -519,21 +525,36 @@ class WinbindPlugin(DirectoryServicePlugin):
 
         try:
             self.configure_smb(True)
-            obtain_or_renew_ticket(self.principal, self.parameters['password'])
 
             try:
                 subprocess.check_output(['/usr/local/bin/net', 'ads', 'join', self.realm, '-k'])
-                subprocess.call(['/usr/sbin/service', 'samba_server', 'restart'])
             except subprocess.CalledProcessError as err:
                 # Undo possibly partially successful join
                 subprocess.call(['/usr/local/bin/net', 'ads', 'leave'])
                 raise RuntimeError(err.output.decode('utf-8'))
 
-            self.dc = self.wbc.ping_dc(self.realm)
+            self.context.client.call_sync('serviced.job.restart', 'org.samba.winbindd')
+            logging.debug('Done restarting winbind')
+
+            # Retry few times in case samba haven't finished restarting yet
+            for _ in range(5):
+                try:
+                    self.dc = self.wbc.ping_dc(self.realm)
+                    break
+                except wbclient.WinbindException as err:
+                    if err.code == wbclient.WinbindErrorCode.WINBIND_NOT_AVAILABLE:
+                        time.sleep(1)
+                        continue
+
+                    raise
+            else:
+                raise RuntimeError('Cannot contact winbindd, maximum number of retries exceeded')
+
             self.domain_info = self.wbc.get_domain_info(self.realm)
             self.domain_name = self.wbc.interface.netbios_domain
 
         except BaseException as err:
+            logger.debug('Failure details', exc_info=True)
             self.directory.put_status(errno.ENXIO, str(err))
             self.directory.put_state(DirectoryState.FAILURE)
             return False
@@ -543,6 +564,7 @@ class WinbindPlugin(DirectoryServicePlugin):
 
     def leave(self):
         logger.info('Leaving domain')
+        subprocess.call(['/usr/local/bin/net', 'cache', 'flush'])
         subprocess.call(['/usr/local/bin/net', 'ads', 'leave'])
         self.configure_smb(False)
         self.dc = None

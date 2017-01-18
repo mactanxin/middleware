@@ -33,7 +33,7 @@ logger = logging.getLogger('custom-upssched-cmd')
 
 def main(name, *args):
     connection = Client()
-    connection.connect('unix:')
+    connection.connect('127.0.0.1')
     connection.login_service('ups')
 
     connection.emit_event('service.ups.signal', {

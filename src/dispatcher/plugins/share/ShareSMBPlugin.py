@@ -30,7 +30,7 @@ import pwd
 import datetime
 import logging
 import smbconf
-from task import Task, Provider, TaskException, TaskDescription
+from task import Task, Provider, TaskException, TaskDescription, VerifyException
 from freenas.dispatcher.rpc import RpcException, description, accepts, private
 from freenas.dispatcher.rpc import SchemaHelper as h
 from freenas.utils import normalize
@@ -73,6 +73,9 @@ class CreateSMBShareTask(Task):
         return TaskDescription("Creating SMB share {name}", name=share.get('name', '') if share else '')
 
     def verify(self, share):
+        if share['properties'].get('guest_only') and not share['properties'].get('guest_ok'):
+            raise VerifyException(errno.EINVAL, 'guest_only works only with guest_ok enabled')
+
         return ['service:smb']
 
     def run(self, share):
@@ -87,7 +90,21 @@ class CreateSMBShareTask(Task):
             'vfs_objects': [],
             'hosts_allow': None,
             'hosts_deny': None,
-            'extra_parameters': {}
+            'extra_parameters': {},
+            'full_audit_prefix': '%u|%I|%m|%S',
+            'full_audit_priority': 'notice',
+            'full_audit_failure': 'connect',
+            'full_audit_success': 'open mkdir unlink rmdir rename',
+            'case_sensitive': 'AUTO',
+            'allocation_roundup_size': 1048576,
+            'ea_support': False,
+            'store_dos_attributes': False,
+            'map_archive': True,
+            'map_hidden': False,
+            'map_readonly': True,
+            'map_system': False,
+            'fruit_metadata': 'STREAM'
+
         })
 
         id = self.datastore.insert('shares', share)
@@ -95,9 +112,17 @@ class CreateSMBShareTask(Task):
 
         try:
             smb_conf = smbconf.SambaConfig('registry')
-            smb_share = smbconf.SambaShare()
-            convert_share(self.dispatcher, smb_share, path, share['enabled'], share['properties'])
-            smb_conf.shares[share['name']] = smb_share
+            smb_conf.transaction_start()
+            try:
+                smb_share = smbconf.SambaShare()
+                convert_share(self.dispatcher, smb_share, path, share['enabled'], share['properties'])
+                smb_conf.shares[share['name']] = smb_share
+            except BaseException as err:
+                smb_conf.transaction_cancel()
+                raise TaskException(errno.EBUSY, 'Failed to update samba configuration: {0}', err)
+            else:
+                smb_conf.transaction_commit()
+
             reload_samba()
         except smbconf.SambaConfigException:
             raise TaskException(errno.EFAULT, 'Cannot access samba registry')
@@ -123,6 +148,12 @@ class UpdateSMBShareTask(Task):
         return TaskDescription("Updating SMB share {name}", name=share.get('name', id) if share else id)
 
     def verify(self, id, updated_fields):
+        share = self.datastore.get_by_id('shares', id)
+        share.update(updated_fields)
+
+        if share['properties'].get('guest_only') and not share['properties'].get('guest_ok'):
+            raise VerifyException(errno.EINVAL, 'guest_only works only with guest_ok enabled')
+
         return ['service:smb']
 
     def run(self, id, updated_fields):
@@ -135,14 +166,22 @@ class UpdateSMBShareTask(Task):
 
         try:
             smb_conf = smbconf.SambaConfig('registry')
-            if oldname != newname:
-                del smb_conf.shares[oldname]
-                smb_share = smbconf.SambaShare()
-                smb_conf.shares[newname] = smb_share
+            smb_conf.transaction_start()
+            try:
+                if oldname != newname:
+                    del smb_conf.shares[oldname]
+                    smb_share = smbconf.SambaShare()
+                    smb_conf.shares[newname] = smb_share
 
-            smb_share = smb_conf.shares[newname]
-            convert_share(self.dispatcher, smb_share, path, share['enabled'], share['properties'])
-            smb_share.save()
+                smb_share = smb_conf.shares[newname]
+                convert_share(self.dispatcher, smb_share, path, share['enabled'], share['properties'])
+                smb_share.save()
+            except BaseException as err:
+                smb_conf.transaction_cancel()
+                raise TaskException(errno.EBUSY, 'Failed to update samba configuration: {0}', err)
+            else:
+                smb_conf.transaction_commit()
+
             reload_samba()
 
             if not share['enabled']:
@@ -177,7 +216,14 @@ class DeleteSMBShareTask(Task):
 
         try:
             smb_conf = smbconf.SambaConfig('registry')
-            del smb_conf.shares[share['name']]
+            smb_conf.transaction_start()
+            try:
+                del smb_conf.shares[share['name']]
+            except BaseException as err:
+                smb_conf.transaction_cancel()
+                raise TaskException(errno.EBUSY, 'Failed to update samba configuration: {0}', err)
+            else:
+                smb_conf.transaction_commit()
 
             reload_samba()
             drop_share_connections(share['name'])
@@ -249,20 +295,31 @@ def drop_share_connections(share):
 
 
 def convert_share(dispatcher, ret, path, enabled, share):
-    vfs_objects = ['zfsacl', 'zfs_space'] + share.get('vfs_objects', []) + ['aio_pthread']
+    vfs_objects = ['zfsacl', 'zfs_space'] + share.get('vfs_objects', [])
     ret.clear()
     ret['path'] = path
     ret['available'] = yesno(enabled)
-    ret['guest ok'] = yesno(share.get('guest_ok', False))
-    ret['guest only'] = yesno(share.get('guest_only', False))
-    ret['read only'] = yesno(share.get('read_only', False))
-    ret['browseable'] = yesno(share.get('browseable', True))
-    ret['hide dot files'] = yesno(not share.get('show_hidden_files', False))
+    ret['guest ok'] = yesno(share['guest_ok'])
+    ret['guest only'] = yesno(share['guest_only'])
+    ret['read only'] = yesno(share['read_only'])
+    ret['browseable'] = yesno(share['browseable'])
+    ret['hide dot files'] = yesno(not share['show_hidden_files'])
     ret['printable'] = 'no'
     ret['nfs4:mode'] = 'special'
     ret['nfs4:acedup'] = 'merge'
     ret['nfs4:chown'] = 'true'
     ret['zfsacl:acesort'] = 'dontcare'
+    ret['case sensitive'] = share['case_sensitive'].lower()
+    ret['allocation roundup size'] = str(share['allocation_roundup_size'])
+    ret['ea support'] = yesno(share['ea_support'])
+    ret['store dos attributes'] = yesno(share['store_dos_attributes'])
+    ret['map archive'] = yesno(share['map_archive'])
+    ret['map hidden'] = yesno(share['map_hidden'])
+    ret['map readonly'] = yesno(share['map_readonly'])
+    ret['map system'] = yesno(share['map_system'])
+
+    if 'fruit' in vfs_objects:
+        ret['fruit:metadata'] = share['fruit_metadata'].lower()
 
     if share.get('hosts_allow'):
         ret['hosts allow'] = ','.join(share['hosts_allow'])
@@ -277,6 +334,13 @@ def convert_share(dispatcher, ret, path, enabled, share):
         ret['recycle:touch'] = 'yes'
         ret['recycle:directory_mode'] = '0777'
         ret['recycle:subdir_mode'] = '0700'
+        vfs_objects.append('recycle')
+
+    if 'full_audit' in vfs_objects:
+        ret['full_audit:prefix'] = share['full_audit_prefix']
+        ret['full_audit:priority'] = share['full_audit_priority']
+        ret['full_audit:failure'] = share['full_audit_failure']
+        ret['full_audit:success'] = share['full_audit_success']
 
     if share.get('previous_versions'):
         try:
@@ -287,7 +351,7 @@ def convert_share(dispatcher, ret, path, enabled, share):
         except RpcException as err:
             logger.warning('Failed to determine dataset for path {0}: {1}'.format(path, str(err)))
 
-    ret['vfs objects'] = ' '.join(vfs_objects)
+    ret['vfs objects'] = ' '.join(vfs_objects + ['aio_pthread'])
 
     for k, v in share['extra_parameters'].items():
         ret[k] = str(v)
@@ -320,6 +384,19 @@ def _init(dispatcher, plugin):
             'recyclebin': {'type': 'boolean'},
             'show_hidden_files': {'type': 'boolean'},
             'previous_versions': {'type': 'boolean'},
+            'full_audit_prefix': {'type': 'string'},
+            'full_audit_priority': {'type': 'string'},
+            'full_audit_failure': {'type': 'string'},
+            'full_audit_success': {'type': 'string'},
+            'case_sensitive': {'type': 'string', 'enum': ['AUTO', 'YES', 'NO']},
+            'allocation_roundup_size': {'type': 'integer'},
+            'ea_support': {'type': 'boolean'},
+            'store_dos_attributes': {'type': 'boolean'},
+            'map_archive': {'type': 'boolean'},
+            'map_hidden': {'type': 'boolean'},
+            'map_readonly': {'type': 'boolean'},
+            'map_system': {'type': 'boolean'},
+            'fruit_metadata': {'type': 'string', 'enum': ['STREAM', 'NETATALK']},
             'vfs_objects': {
                 'type': 'array',
                 'items': {'type': 'string'}
@@ -349,10 +426,17 @@ def _init(dispatcher, plugin):
 
     # Sync samba registry with our database
     smb_conf = smbconf.SambaConfig('registry')
-    smb_conf.shares.clear()
+    smb_conf.transaction_start()
+    try:
+        smb_conf.shares.clear()
 
-    for s in dispatcher.datastore.query_stream('shares', ('type', '=', 'smb')):
-        smb_share = smbconf.SambaShare()
-        path = dispatcher.call_sync('share.translate_path', s['id'])
-        convert_share(dispatcher, smb_share, path, s['enabled'], s.get('properties', {}))
-        smb_conf.shares[s['name']] = smb_share
+        for s in dispatcher.datastore.query_stream('shares', ('type', '=', 'smb')):
+            smb_share = smbconf.SambaShare()
+            path = dispatcher.call_sync('share.translate_path', s['id'])
+            convert_share(dispatcher, smb_share, path, s['enabled'], s.get('properties', {}))
+            smb_conf.shares[s['name']] = smb_share
+    except BaseException as err:
+        logger.error('Failed to update samba registry: {0}'.format(err), exc_info=True)
+        smb_conf.transaction_cancel()
+    else:
+        smb_conf.transaction_commit()

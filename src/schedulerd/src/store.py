@@ -25,11 +25,12 @@
 #
 #####################################################################
 
+import time
 from apscheduler.jobstores.base import BaseJobStore, JobLookupError, ConflictingIdError
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.util import datetime_to_utc_timestamp, utc_timestamp_to_datetime
 from apscheduler.job import Job
-from datastore import get_datastore, DuplicateKeyException
+from datastore import get_datastore, DuplicateKeyException, DatastoreException
 
 
 class FreeNASJobStore(BaseJobStore):
@@ -73,13 +74,14 @@ class FreeNASJobStore(BaseJobStore):
         self.ds.update('calendar_tasks', job.id, self._serialize_job(job))
 
     def remove_job(self, job_id):
-        result = self.collection.remove(job_id)
-        if result and result['n'] == 0:
+        try:
+            self.ds.delete('calendar_tasks', job_id)
+        except DatastoreException:
             raise JobLookupError(job_id)
 
     def remove_all_jobs(self):
         for i in self.get_all_jobs():
-            self.ds.delete(i.id)
+            self.ds.delete('calendar_tasks', i.id)
 
     def shutdown(self):
         self.ds.close()
@@ -101,6 +103,14 @@ class FreeNASJobStore(BaseJobStore):
     def _reconstitute_job(self, job_state):
         schedule = job_state['schedule']
         schedule.pop('coalesce', None)
+        next_run_time = job_state['next_run_time']
+
+        if next_run_time == 1:
+            # This is hacky. We need to subtract more than value of misfire_grace_time
+            # so that the job will be missed right after loading it for the first time
+            # after doing fresh install instead of being executed.
+            next_run_time = int(time.time() - 1200)
+
         job = Job(
             id=job_state['id'],
             func="__main__:job",
@@ -109,7 +119,7 @@ class FreeNASJobStore(BaseJobStore):
             args=[job_state['task']] + job_state['args'],
             scheduler=self._scheduler,
             executor='default',
-            next_run_time=utc_timestamp_to_datetime(job_state['next_run_time']),
+            next_run_time=utc_timestamp_to_datetime(next_run_time),
             kwargs={
                 'id': job_state['id'],
                 'name': job_state['name'],
@@ -120,7 +130,7 @@ class FreeNASJobStore(BaseJobStore):
 
         job.coalesce = True
         job.max_instances = 1
-        job.misfire_grace_time = 0
+        job.misfire_grace_time = 600
         job._jobstore_alias = self._alias
         return job
 

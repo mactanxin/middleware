@@ -29,6 +29,7 @@ import logging
 from datastore.config import ConfigNode
 from freenas.dispatcher.rpc import RpcException, SchemaHelper as h, description, accepts, returns, private
 from task import Task, Provider, TaskException, TaskDescription
+from freenas.utils import COUNTRY_CODES
 
 logger = logging.getLogger('LLDPPlugin')
 
@@ -55,14 +56,15 @@ class LLDPConfigureTask(Task):
         return TaskDescription('Configuring {name} LLDP service', name=node['save_description'] or '')
 
     def verify(self, lldp):
+
         return ['system']
 
     def run(self, lldp):
         node = ConfigNode('service.lldp', self.configstore).__getstate__()
         node.update(lldp)
-        import pycountry
-        if node['country_code'] and node['country_code'] not in pycountry.countries.indices['alpha2']:
-            raise TaskException(errno.EINVAL, 'Invalid ISO-3166 alpha 2 code')
+
+        if node['country_code'] and node['country_code'] not in COUNTRY_CODES.values():
+            raise TaskException(errno.EINVAL, 'Invalid ISO-3166 alpha 2 country code')
 
         try:
             self.dispatcher.dispatch_event('service.lldp.changed', {

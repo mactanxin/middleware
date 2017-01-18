@@ -40,6 +40,17 @@ from task import Task, Provider, TaskException, TaskDescription
 
 logger = logging.getLogger('UPSPlugin')
 
+nut_signal_descriptions = {
+    'ONLINE': 'UPS is back online',
+    'ONBATT':'UPS is on battery',
+    'LOWBATT': 'UPS is on battery and has a low battery',
+    'COMMOK': 'Communications established with the UPS',
+    'COMMBAD': 'Communications lost to the UPS',
+    'REPLBATT': 'The UPS battery is bad and needs to be replaced',
+    'NOCOMM': 'A UPS is unavailable (can’t be contacted for monitoring)',
+    'SHUTDOWN': 'The local system is going to be shut down',
+    'FSD': 'The UPS is in the "forced shutdown" mode'
+}
 
 @description('Provides info about UPS service configuration')
 class UPSProvider(Provider):
@@ -52,7 +63,7 @@ class UPSProvider(Provider):
     @accepts()
     @returns(h.array(h.array(str)))
     def drivers(self):
-        driver_list = '/usr/local/libexec/nut/driver.list'
+        driver_list = '/etc/local/nut/driver.list'
         if not os.path.exists(driver_list):
             return []
         drivers = []
@@ -94,69 +105,6 @@ class UPSProvider(Provider):
 
         return usb_devices_list
 
-    @private
-    def service_start(self):
-        ups = self.get_config()
-        if ups['mode'] == 'MASTER':
-            rc_scripts = ['nut']
-        else:
-            rc_scripts = []
-        rc_scripts.extend(['nut_upslog', 'nut_upsmon'])
-
-        try:
-            for i in rc_scripts:
-                system("/usr/sbin/service", i, 'onestart')
-        except SubprocessException as e:
-            raise TaskException(errno.EBUSY, e.err)
-
-    @private
-    def service_status(self):
-        ups = self.get_config()
-        if ups['mode'] == 'MASTER':
-            rc_scripts = ['nut']
-        else:
-            rc_scripts = []
-        rc_scripts.extend(['nut_upslog', 'nut_upsmon'])
-
-        try:
-            for i in rc_scripts:
-                system("/usr/sbin/service", i, 'onestatus')
-        except SubprocessException:
-            raise RpcException(errno.ENOENT, "UPS service is not running")
-        else:
-            return 'RUNNING'
-
-    @private
-    def service_stop(self):
-        ups = self.get_config()
-        rc_scripts = ['nut_upslog', 'nut_upsmon']
-        if ups['mode'] == 'MASTER':
-            rc_scripts.append('nut')
-
-        try:
-            for i in rc_scripts:
-                system("/usr/sbin/service", i, 'onestop')
-        except SubprocessException as e:
-            raise TaskException(errno.EBUSY, e.err)
-
-    @private
-    def service_restart(self):
-        ups = self.get_config()
-        # Stop monitor so it wont trigger signals when nut restarts
-        verbs = [
-            ('nut_upsmon', 'stop'),
-            ('nut_upslog', 'restart'),
-        ]
-        if ups['mode'] == 'MASTER':
-            verbs.append(('nut', 'restart'))
-        verbs.append(('nut_upsmon', 'start'))
-
-        try:
-            for svc, verb in verbs:
-                system("/usr/sbin/service", svc, 'one' + verb)
-        except SubprocessException as e:
-            raise TaskException(errno.EBUSY, e.err)
-
 
 @private
 @description('Configure UPS service')
@@ -180,7 +128,7 @@ class UPSConfigureTask(Task):
             raise TaskException(errno.EINVAL, 'Please provide a valid port and driver for monitored UPS device')
 
         if node['mode'] == 'SLAVE' and not node['remote_host']:
-            raise TaskException(errno.EINVAL, 'This field is required')
+            raise TaskException(errno.EINVAL, 'remote_host field is required in SLAVE mode')
 
         if not re.search(r'^[a-z0-9\.\-_]+$', node['identifier'], re.I):
             raise TaskException(errno.EINVAL, 'Use alphanumeric characters, ".", "-" and "_"')
@@ -214,29 +162,25 @@ def _init(dispatcher, plugin):
 
     def ups_signal(kwargs):
         ups = dispatcher.call_sync('service.ups.get_config')
-
         name = kwargs.get('name')
-        notifytype = kwargs.get('type')
+        logger.info('UPS Signal: %s received', name)
 
         if name == 'ONBATT':
+            if ups['propagate_alerts']:
+                dispatcher.call_sync('alert.emit', {
+                    'description': nut_signal_descriptions[name],
+                    'title':'UPS signal received', 'class': 'UpsSignal'
+                })
+
             if ups['shutdown_mode'] == 'BATT':
-                logger.warn('Issuing shutdown from UPS signal')
                 system('/usr/local/sbin/upsmon', '-c', 'fsd')
 
-        elif name in ('EMAIL', 'COMMBAD', 'COMMOK'):
-            if ups['email_notify'] and ups['email_recipients']:
-                subject = ups['email_subject'].replace('%d', time.asctime()).replace('%h', socket.gethostname())
-                dispatcher.call_sync('mail.send', {
-                    'to': ups['email_recipients'],
-                    'subject': subject,
-                    'message': 'UPS Status: {0}\n'.format(
-                        notifytype,
-                    ),
-                })
-            else:
-                logger.debug('Email not configured for UPS')
-        else:
-            logger.info('Unhandled UPS Signal: %s', name)
+        elif ups['propagate_alerts']:
+            dispatcher.call_sync('alert.emit', {
+                'description': nut_signal_descriptions[name],
+                'title':'UPS signal received', 'class': 'UpsSignal'
+            })
+
 
     # Register schemas
     plugin.register_schema_definition('ServiceUps', {
@@ -248,7 +192,7 @@ def _init(dispatcher, plugin):
             'identifier': {'type': 'string'},
             'remote_host': {'type': ['string', 'null']},
             'remote_port': {'type': 'integer'},
-            'driver': {'type': 'string'},
+            'driver': {'type': ['string', 'null']},
             'driver_port': {'type': ['string', 'null']},
             'description': {'type': ['string', 'null']},
             'shutdown_mode': {'$ref': 'ServiceUpsShutdownmode'},
@@ -257,9 +201,7 @@ def _init(dispatcher, plugin):
             'monitor_password': {'type': 'string'},
             'allow_remote_connections': {'type': 'boolean'},
             'auxiliary_users': {'type': ['string', 'null']},
-            'email_notify': {'type': 'boolean'},
-            'email_recipients': {'type': 'array', 'items': {'$ref': 'email'}},
-            'email_subject': {'type': 'string'},
+            'propagate_alerts': {'type': 'boolean'},
             'powerdown': {'type': 'boolean'},
             'auxiliary': {'type': ['string', 'null']},
         },

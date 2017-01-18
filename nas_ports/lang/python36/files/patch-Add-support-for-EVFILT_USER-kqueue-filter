@@ -1,0 +1,84 @@
+From 79f17361b8857f0bd647137d24cd499fe202d0f6 Mon Sep 17 00:00:00 2001
+From: Jakub Klama <jakub@ixsystems.com>
+Date: Wed, 11 Nov 2015 01:54:48 +0100
+Subject: [PATCH] Add support for EVFILT_USER kqueue filter.
+
+---
+ Doc/library/select.rst | 21 +++++++++++++++++++++
+ Modules/selectmodule.c | 14 ++++++++++++++
+ 2 files changed, 35 insertions(+)
+
+diff --git a/Doc/library/select.rst b/Doc/library/select.rst
+index a62dc84..b7d15da 100644
+--- Doc/library/select.rst
++++ Doc/library/select.rst
+@@ -509,6 +509,8 @@ http://www.freebsd.org/cgi/man.cgi?query=kqueue&sektion=2
+    +---------------------------+---------------------------------------------+
+    | :const:`KQ_FILTER_TIMER`  | Establishes an arbitrary timer              |
+    +---------------------------+---------------------------------------------+
++   | :const:`KQ_FILTER_USER`   | User-defined events                         |
++   +---------------------------+---------------------------------------------+
+ 
+ .. attribute:: kevent.flags
+ 
+@@ -606,6 +608,25 @@ http://www.freebsd.org/cgi/man.cgi?query=kqueue&sektion=2
+    | :const:`KQ_NOTE_LINKINV`   | link state is invalid                      |
+    +----------------------------+--------------------------------------------+
+ 
++   :const:`KQ_FILTER_USER` filter flags
++
++   +----------------------------+--------------------------------------------+
++   | Constant                   | Meaning                                    |
++   +============================+============================================+
++   | :const:`KQ_NOTE_FFNOP`     | ignore the input fflags                    |
++   +----------------------------+--------------------------------------------+
++   | :const:`KQ_NOTE_FFAND`     | bitwise AND fflags                         |
++   +----------------------------+--------------------------------------------+
++   | :const:`KQ_NOTE_FFOR`      | bitwise OR fflags                          |
++   +----------------------------+--------------------------------------------+
++   | :const:`KQ_NOTE_FFCOPY`    | copy fflags                                |
++   +----------------------------+--------------------------------------------+
++   | :const:`KQ_NOTE_FFCTRLMASK`| control mask for fflags                    |
++   +----------------------------+--------------------------------------------+
++   | :const:`KQ_NOTE_FFLAGSMASK`| user defined flag mask for fflags          |
++   +----------------------------+--------------------------------------------+
++   | :const:`KQ_NOTE_TRIGGER`   | cause the event to be triggered            |
++   +----------------------------+--------------------------------------------+
+ 
+ .. attribute:: kevent.data
+ 
+diff --git a/Modules/selectmodule.c b/Modules/selectmodule.c
+index b3ac807..a77b0b7 100644
+--- Modules/selectmodule.c
++++ Modules/selectmodule.c
+@@ -2527,6 +2527,9 @@ PyInit_select(void)
+ #endif
+     PyModule_AddIntConstant(m, "KQ_FILTER_SIGNAL", EVFILT_SIGNAL);
+     PyModule_AddIntConstant(m, "KQ_FILTER_TIMER", EVFILT_TIMER);
++#ifdef EVFILT_USER
++    PyModule_AddIntConstant(m, "KQ_FILTER_USER", EVFILT_USER);
++#endif
+ 
+     /* event flags */
+     PyModule_AddIntConstant(m, "KQ_EV_ADD", EV_ADD);
+@@ -2572,6 +2575,17 @@ PyInit_select(void)
+     PyModule_AddIntConstant(m, "KQ_NOTE_LINKINV", NOTE_LINKINV);
+ #endif
+ 
++    /* USER filter flags */
++#ifdef EVFILT_USER
++    PyModule_AddIntConstant(m, "KQ_NOTE_FFNOP", NOTE_FFNOP);
++    PyModule_AddIntConstant(m, "KQ_NOTE_FFAND", NOTE_FFAND);
++    PyModule_AddIntConstant(m, "KQ_NOTE_FFOR", NOTE_FFOR);
++    PyModule_AddIntConstant(m, "KQ_NOTE_FFCOPY", NOTE_FFCOPY);
++    PyModule_AddIntConstant(m, "KQ_NOTE_FFCTRLMASK", NOTE_FFCTRLMASK);
++    PyModule_AddIntConstant(m, "KQ_NOTE_FFLAGSMASK", NOTE_FFLAGSMASK);
++    PyModule_AddIntConstant(m, "KQ_NOTE_TRIGGER", NOTE_TRIGGER);
++#endif
++
+ #endif /* HAVE_KQUEUE */
+     return m;
+ }
+-- 
+2.6.2
+

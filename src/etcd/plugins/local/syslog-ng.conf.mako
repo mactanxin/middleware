@@ -1,4 +1,5 @@
 @version:3.7
+@module serviced
 
 #
 # This sample configuration file is essentially equilivent to the stock
@@ -59,6 +60,7 @@ destination mongodb {
             pair("program" "$PROGRAM"),
             pair("host" "$HOST"),
             pair("pid" int("$PID")),
+            pair("label", "$(pid-to-label $PID)"),
             pair("seqnum" int64("$SEQNUM")),
             pair("message" "$MESSAGE"),
             pair("date" datetime("$UNIXTIME")),

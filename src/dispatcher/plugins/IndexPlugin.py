@@ -96,11 +96,11 @@ class IndexDatasetIncrementalTask(ProgressTask):
         return ['zfs:{0}'.format(dataset)]
 
     def run(self, dataset):
-        self.join_subtasks(self.run_subtask('volume.snapshot.create', {
+        self.run_subtask_sync('volume.snapshot.create', {
             'dataset': dataset,
             'name': 'org.freenas.indexer:now',
             'hidden': True
-        }))
+        })
 
         prev = self.dispatcher.call_sync(
             'volume.snapshot.query',
@@ -122,10 +122,10 @@ class IndexDatasetIncrementalTask(ProgressTask):
         for rec in ds.diff('{0}@org.freenas.indexer:ref'.format(dataset), '{0}@org.freenas.indexer:now'.format(dataset)):
             collect(self.datastore, rec.path)
 
-        self.join_subtasks(self.run_subtask('volume.snapshot.delete', '{0}@org.freenas.indexer:ref'.format(dataset)))
-        self.join_subtasks(self.run_subtask('volume.snapshot.update', '{0}@org.freenas.indexer:now'.format(dataset), {
+        self.run_subtask_sync('volume.snapshot.delete', '{0}@org.freenas.indexer:ref'.format(dataset))
+        self.run_subtask_sync('volume.snapshot.update', '{0}@org.freenas.indexer:now'.format(dataset), {
             'name': 'org.freenas.indexer:ref',
-        }))
+        })
 
 
 @private
@@ -163,11 +163,11 @@ class IndexDatasetFullTask(ProgressTask):
                 collect(self.datastore, path)
                 done_files += 1
 
-        self.join_subtasks(self.run_subtask('volume.snapshot.create', {
+        self.run_subtask_sync('volume.snapshot.create', {
             'dataset': dataset,
             'name': 'org.freenas.indexer:ref',
             'hidden': True
-        }))
+        })
 
 
 def collect(datastore, path):

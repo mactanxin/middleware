@@ -419,7 +419,7 @@ class AccountService(RpcService):
         self.context = context
 
     @generator
-    def query(self, filter=None, params=None):
+    def query(self, filter=None, params=None, skip_ad=False):
         filter = filter or []
         params = params or {}
         params.pop('select', None)
@@ -431,12 +431,18 @@ class AccountService(RpcService):
         exclude_from_filter(filter, 'origin')
 
         for d in self.context.get_searched_directories():
+            if skip_ad and d.plugin_type == 'winbind':
+                continue
+
             if not test_filter(origin_directory, d.name) or not test_filter(origin_domain, d.domain_name):
                 continue
 
             try:
                 result = d.instance.getpwent(filter, params)
                 for user in result:
+                    if not user:
+                        continue
+
                     resolve_primary_group(self.context, user)
                     yield fix_passwords(annotate(user, d, 'username'))
                     if single:
@@ -447,16 +453,22 @@ class AccountService(RpcService):
                 self.context.logger.error('Directory {0} exception during account iteration'.format(d.name), exc_info=True)
                 continue
 
-    @accepts(int)
-    def getpwuid(self, uid):
+    @accepts(int, bool)
+    def getpwuid(self, uid, skip_ad=False):
         # Try the cache first
         item = self.context.users_cache.get(id=uid)
         if item:
+            if skip_ad and item.directory.plugin_type == 'winbind':
+                raise RpcException(errno.ENOENT, 'UID {0} not found'.format(uid))
+
             return fix_passwords(item.annotated)
 
         dirs = self.context.get_active_directories()
 
         for d in dirs:
+            if skip_ad and d.plugin_type == 'winbind':
+                continue
+
             try:
                 user = d.instance.getpwuid(uid)
             except:
@@ -471,11 +483,14 @@ class AccountService(RpcService):
 
         raise RpcException(errno.ENOENT, 'UID {0} not found'.format(uid))
 
-    @accepts(str)
-    def getpwnam(self, user_name):
+    @accepts(str, bool)
+    def getpwnam(self, user_name, skip_ad=False):
         # Try the cache first
         item = self.context.users_cache.get(name=user_name)
         if item:
+            if skip_ad and item.directory.plugin_type == 'winbind':
+                raise RpcException(errno.ENOENT, 'User {0} not found'.format(user_name))
+
             return fix_passwords(item.annotated)
 
         if '@' in user_name:
@@ -486,6 +501,9 @@ class AccountService(RpcService):
             dirs = self.context.get_searched_directories()
 
         for d in dirs:
+            if skip_ad and d.plugin_type == 'winbind':
+                continue
+
             try:
                 user = d.instance.getpwnam(user_name)
             except:
@@ -500,14 +518,20 @@ class AccountService(RpcService):
 
         raise RpcException(errno.ENOENT, 'User {0} not found'.format(user_name))
 
-    @accepts(str)
-    def getpwuuid(self, uuid):
+    @accepts(str, bool)
+    def getpwuuid(self, uuid, skip_ad=False):
         # Try the cache first
         item = self.context.users_cache.get(uuid=uuid)
         if item:
+            if skip_ad and item.directory.plugin_type == 'winbind':
+                raise RpcException(errno.ENOENT, 'UUID {0} not found'.format(uuid))
+
             return fix_passwords(item.annotated)
 
         for d in self.context.get_active_directories():
+            if skip_ad and d.plugin_type == 'winbind':
+                continue
+
             try:
                 user = d.instance.getpwuuid(uuid)
             except:
@@ -522,21 +546,21 @@ class AccountService(RpcService):
 
         raise RpcException(errno.ENOENT, 'UUID {0} not found'.format(uuid))
 
-    @accepts(str)
-    def getgroupmembership(self, user_name):
+    @accepts(str, bool)
+    def getgroupmembership(self, user_name, skip_ad=False):
         result = []
-        user = self.getpwnam(user_name)
+        user = self.getpwnam(user_name, skip_ad)
 
         def collect_groups(group):
             result.append(group['gid'])
             for i in group.get('parents', []):
-                g = self.context.group_service.getgruuid(i)
+                g = self.context.group_service.getgruuid(i, skip_ad)
                 if g:
                     collect_groups(g)
 
         for i in user.get('groups', []):
             try:
-                g = self.context.group_service.getgruuid(i)
+                g = self.context.group_service.getgruuid(i, skip_ad)
                 collect_groups(g)
             except:
                 continue
@@ -581,7 +605,7 @@ class GroupService(RpcService):
         self.context = context
 
     @generator
-    def query(self, filter=None, params=None):
+    def query(self, filter=None, params=None, skip_ad=False):
         filter = filter or []
         params = params or {}
         single = params.pop('single', False)
@@ -592,12 +616,18 @@ class GroupService(RpcService):
         exclude_from_filter(filter, 'origin')
 
         for d in self.context.get_searched_directories():
+            if skip_ad and d.plugin_type == 'winbind':
+                continue
+
             if not test_filter(origin_directory, d.name) or not test_filter(origin_domain, d.domain_name):
                 continue
 
             try:
                 result = d.instance.getgrent(filter, params)
                 for group in result:
+                    if not group:
+                        continue
+
                     yield annotate(group, d, 'name')
                     if single:
                         return
@@ -607,11 +637,14 @@ class GroupService(RpcService):
                 self.context.logger.error('Directory {0} exception during group iteration'.format(d.name), exc_info=True)
                 continue
 
-    @accepts(str)
-    def getgrnam(self, name):
+    @accepts(str, bool)
+    def getgrnam(self, name, skip_ad=False):
         # Try the cache first
         item = self.context.groups_cache.get(name=name)
         if item:
+            if skip_ad and item.directory.plugin_type == 'winbind':
+                raise RpcException(errno.ENOENT, 'Group {0} not found'.format(name))
+
             return item.annotated
 
         if '@' in name:
@@ -622,6 +655,9 @@ class GroupService(RpcService):
             dirs = self.context.get_searched_directories()
 
         for d in dirs:
+            if skip_ad and d.plugin_type == 'winbind':
+                continue
+
             try:
                 group = d.instance.getgrnam(name)
             except:
@@ -635,16 +671,22 @@ class GroupService(RpcService):
 
         raise RpcException(errno.ENOENT, 'Group {0} not found'.format(name))
 
-    @accepts(int)
-    def getgrgid(self, gid):
+    @accepts(int, bool)
+    def getgrgid(self, gid, skip_ad=False):
         # Try the cache first
         item = self.context.groups_cache.get(id=gid)
         if item:
+            if skip_ad and item.directory.plugin_type == 'winbind':
+                raise RpcException(errno.ENOENT, 'Group {0} not found'.format(gid))
+
             return item.annotated
 
         dirs = self.context.get_active_directories()
 
         for d in dirs:
+            if skip_ad and d.plugin_type == 'winbind':
+                continue
+
             try:
                 group = d.instance.getgrgid(gid)
             except:
@@ -658,14 +700,20 @@ class GroupService(RpcService):
 
         raise RpcException(errno.ENOENT, 'GID {0} not found'.format(gid))
 
-    @accepts(str)
-    def getgruuid(self, uuid):
+    @accepts(str, bool)
+    def getgruuid(self, uuid, skip_ad=False):
         # Try the cache first
         item = self.context.groups_cache.get(uuid=uuid)
         if item:
+            if skip_ad and item.directory.plugin_type == 'winbind':
+                raise RpcException(errno.ENOENT, 'UUID {0} not found'.format(uuid))
+
             return item.annotated
 
         for d in self.context.get_active_directories():
+            if skip_ad and d.plugin_type == 'winbind':
+                continue
+
             try:
                 group = d.instance.getgruuid(uuid)
             except:

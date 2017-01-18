@@ -90,13 +90,13 @@ class LDAPPlugin(DirectoryServicePlugin):
         checksum = crc32(dn_to_domain(self.parameters['base_dn']))
 
         if 'entryUUID' in entry:
-            return get(entry, 'entryUUID.0')
+            return get(entry, 'entryUUID')
 
         if 'uidNumber' in entry:
-            return str(uuid2(checksum, int(get(entry, 'uidNumber.0'))))
+            return str(uuid2(checksum, int(get(entry, 'uidNumber'))))
 
         if 'gidNumber' in entry:
-            return str(uuid2(checksum, int(get(entry, 'gidNumber.0'))))
+            return str(uuid2(checksum, int(get(entry, 'gidNumber'))))
 
         return str(uuid.uuid4())
 
@@ -105,35 +105,35 @@ class LDAPPlugin(DirectoryServicePlugin):
 
     def convert_user(self, entry):
         entry = dict(entry['attributes'])
-        pwd_change_time = get(entry, 'sambaPwdLastSet.0')
+        pwd_change_time = get(entry, 'sambaPwdLastSet')
         groups = []
         group = None
 
-        if contains(entry, 'gidNumber.0'):
+        if contains(entry, 'gidNumber'):
             ret = self.search_one(
                 self.group_dn,
-                '(gidNumber={0})'.format(get(entry, 'gidNumber.0'))
+                '(gidNumber={0})'.format(get(entry, 'gidNumber'))
             )
 
             if ret:
                 group = dict(ret['attributes'])
 
         # Try to find any auxiliary groups
-        for i in self.search(self.group_dn, '(memberUid={0})'.format(get(entry, 'uid.0'))):
+        for i in self.search(self.group_dn, '(memberUid={0})'.format(get(entry, 'uid'))):
             g = dict(i['attributes'])
             groups.append(self.get_id(g))
 
         return {
             'id': self.get_id(entry),
-            'sid': get(entry, 'sambaSID.0'),
-            'uid': int(get(entry, 'uidNumber.0')),
+            'sid': get(entry, 'sambaSID'),
+            'uid': int(get(entry, 'uidNumber')),
             'builtin': False,
             'username': get(entry, 'uid.0'),
-            'full_name': get(entry, 'gecos.0', get(entry, 'displayName.0', '<unknown>')),
-            'shell': get(entry, 'loginShell.0', '/bin/sh'),
-            'home': get(entry, 'homeDirectory.0', '/nonexistent'),
-            'nthash': get(entry, 'sambaNTPassword.0'),
-            'lmhash': get(entry, 'sambaLMPassword.0'),
+            'full_name': get(entry, 'gecos', get(entry, 'displayName', '<unknown>')),
+            'shell': get(entry, 'loginShell', '/bin/sh'),
+            'home': get(entry, 'homeDirectory', '/nonexistent'),
+            'nthash': get(entry, 'sambaNTPassword'),
+            'lmhash': get(entry, 'sambaLMPassword'),
             'password_changed_at': datetime.utcfromtimestamp(int(pwd_change_time)) if pwd_change_time else None,
             'group': self.get_id(group) if group else None,
             'groups': groups,
@@ -144,8 +144,8 @@ class LDAPPlugin(DirectoryServicePlugin):
         entry = dict(entry['attributes'])
         return {
             'id': self.get_id(entry),
-            'gid': int(get(entry, 'gidNumber.0')),
-            'sid': get(entry, 'sambaSID.0'),
+            'gid': int(get(entry, 'gidNumber')),
+            'sid': get(entry, 'sambaSID'),
             'name': get(entry, 'cn.0'),
             'builtin': False,
             'sudo': False

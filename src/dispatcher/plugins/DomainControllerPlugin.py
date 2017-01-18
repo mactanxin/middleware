@@ -84,8 +84,11 @@ class DCProvider(Provider):
                 return addresses
 
             except RpcException:
-                raise RpcException(errno.ENOENT, "Please wait - Domain Controller vm service is not ready or the zentyal_domain_controller " +\
-                       "virtual machine state was altered manually.")
+                raise RpcException(
+                    errno.ENOENT,
+                    "Please wait - Domain Controller vm service is not ready or the zentyal_domain_controller " +
+                    "virtual machine state was altered manually."
+                )
         else:
             raise RpcException(errno.ENOENT, 'Please configure and enable the Domain Controller vm service.')
 
@@ -128,9 +131,10 @@ class DCConfigureTask(ProgressTask):
         if (hw_capabilities['vtx_enabled'] and hw_capabilities['unrestricted_guest']) or hw_capabilities['svm_features']:
             return ['system']
         else:
-            raise VerifyException(errno.ENXIO,
-                        'Lack of the hardware virtualization support - check hardware setup.')
-
+            raise VerifyException(
+                errno.ENXIO,
+                'Lack of the hardware virtualization support - check hardware setup.'
+            )
 
     def run(self, dc):
         self.set_progress(0, 'Checking Domain Controller service state')
@@ -139,7 +143,7 @@ class DCConfigureTask(ProgressTask):
         if not node.get('volume'):
             raise TaskException(
                 errno.ENXIO,
-                'Domain controller service is hosted by the virutal machine.'
+                'Domain controller service is hosted by the virtual machine.'
                 'Please provide the valid zfs pool name for the virtual machine volume creation.'
             )
 
@@ -147,15 +151,30 @@ class DCConfigureTask(ProgressTask):
             try:
                 self.dispatcher.call_sync('service.dc.check_dc_vm_availability')
             except RpcException:
-                dc['vm_id'], = self.join_subtasks(self.run_subtask('vm.create', {
+                dc['vm_id'] = self.run_subtask_sync('vm.create', {
                     'name': 'zentyal_domain_controller',
                     'template': {'name': 'zentyal-4.2'},
                     'target': node['volume'],
-                    'config': {'autostart': True }},
+                    'config': {'autostart': True}},
                     progress_callback=lambda p, m, e=None: self.chunk_progress(
                         5, 100, 'Creating Domain Controller virtual machine: ', p, m, e
                     )
-                ))
+                )
+            finally:
+                vm_config = self.dispatcher.call_sync(
+                    'vm.query', [('id', '=', dc['vm_id'] if dc.get('vm_id') else node['vm_id'])],
+                    {'select': 'config', 'single': True}
+                )
+                if not node['enable'] and vm_config['autostart']:
+                    vm_config['autostart'] = False
+                elif node['enable'] and not vm_config['autostart']:
+                    vm_config['autostart'] = True
+
+                self.run_subtask_sync(
+                    'vm.update',
+                    dc['vm_id'] if dc.get('vm_id') else node['vm_id'],
+                    {'config': vm_config}
+                )
 
         try:
             node = ConfigNode('service.dc', self.configstore)

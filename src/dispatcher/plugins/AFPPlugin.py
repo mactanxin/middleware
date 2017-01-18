@@ -69,6 +69,10 @@ class AFPConfigureTask(Task):
             if p and not p.is_dir():
                 raise TaskException(errno.ENOTDIR, 'Path : {0} is not a directory'.format(p.as_posix()))
 
+        if afp.get('guest_user'):
+            if not self.dispatcher.call_sync('user.query', [('username', '=', afp['guest_user'])], {'single': True}):
+                raise TaskException(errno.EINVAL, 'User: {0} does not exist'.format(afp['guest_user']))
+
         try:
             node = ConfigNode('service.afp', self.configstore)
             node.update(afp)

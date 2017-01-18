@@ -75,10 +75,11 @@ from services import (
     ManagementService, DebugService, EventService, TaskService,
     PluginService, ShellService, LockService
 )
+from event import sync
 from schemas import register_general_purpose_schemas
 from balancer import Balancer
-from auth import PasswordAuthenticator, TokenStore, Token, TokenException, User, Service
-from freenas.utils import FaultTolerantLogHandler, load_module_from_file, xrecvmsg, xsendmsg, serialize_exception
+from auth import PasswordAuthenticator, TokenStore, Token, User, Service
+from freenas.utils import FaultTolerantLogHandler, load_module_from_file, serialize_exception
 from freenas.utils.trace_logger import TraceLogger, TRACE
 from freenas.serviced import checkin, push_status
 
@@ -161,7 +162,8 @@ class Plugin(object):
             self.module._init(self.dispatcher, self)
             self.state = self.LOADED
             self.dispatcher.dispatch_event('server.plugin.initialized', {"name": os.path.basename(self.filename)})
-            push_status('Plugin loaded: {0}'.format(os.path.basename(self.filename)))
+            with contextlib.suppress(BaseException):
+                push_status('Plugin loaded: {0}'.format(os.path.basename(self.filename)))
         except Exception as err:
             self.dispatcher.logger.exception('Plugin %s exception', self.filename)
             self.dispatcher.report_error('Cannot initalize plugin {0}'.format(self.filename), err)
@@ -191,6 +193,10 @@ class Plugin(object):
 
     def register_task_handler(self, name, clazz):
         self.dispatcher.register_task_handler(name, clazz)
+        self.registers['task_handlers'].append(name)
+
+    def register_task_alias(self, name, name2):
+        self.dispatcher.register_task_alias(name, name2)
         self.registers['task_handlers'].append(name)
 
     def unregister_task_handler(self, name):
@@ -628,6 +634,16 @@ class Dispatcher(object):
             if en == name:
                 ev.decref()
 
+    def register_event_handler_once(self, name, handler):
+        lock = RLock()
+
+        def doit(args):
+            with lock:
+                handler(args)
+                self.unregister_event_handler(name, doit)
+
+        self.register_event_handler(name, doit)
+
     def register_event_source(self, name, clazz):
         self.logger.debug("New event source: %s", name)
         self.event_sources[name] = clazz
@@ -645,8 +661,12 @@ class Dispatcher(object):
         self.dispatch_event('server.event.removed', {'name': name})
 
     def register_task_handler(self, name, clazz):
-        self.logger.debug("New task handler: %s", name)
+        self.logger.debug("New task handler: {0}".format(name))
         self.tasks[name] = clazz
+
+    def register_task_alias(self, name, name2):
+        self.logger.debug("New task alias: {0} -> {1}".format(name, name2))
+        self.tasks[name] = self.tasks[name2]
 
     def unregister_task_handler(self, name):
         del self.tasks[name]
@@ -1230,7 +1250,7 @@ class DispatcherConnection(ServerConnection):
                 'following error occured {0}'.format(str(werr)))
 
     def emit_event(self, event, args):
-        for i in self.event_masks:
+        for i in list(self.event_masks):
             if not match_event(event, i):
                 continue
 
@@ -1530,7 +1550,7 @@ def run(d, args):
         from frontend import frontend
 
         frontend.dispatcher = d
-        http_server4 = WSGIServer(('', args.s), frontend.app, **kwargs)
+        http_server4 = WSGIServer(('0.0.0.0', args.s), frontend.app, **kwargs)
         http_server6 = WSGIServer(('::', args.s), frontend.app, **kwargs)
 
         d.http_servers.extend([http_server4, http_server6])

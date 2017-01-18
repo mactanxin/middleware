@@ -193,7 +193,7 @@ def generate_keytab(datastore):
 
 def collect_debug(dispatcher):
     yield AttachFile('krb5.conf', '/etc/krb5.conf')
-    yield AttachCommandOutput('klist', ['/usr/bin/klist', 'conf', 'list'])
+    yield AttachCommandOutput('klist', ['/usr/bin/klist'])
 
 
 def _init(dispatcher, plugin):
@@ -242,5 +242,7 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('kerberos.keytab.create', KerberosKeytabCreateTask)
     plugin.register_task_handler('kerberos.keytab.update', KerberosKeytabUpdateTask)
     plugin.register_task_handler('kerberos.keytab.delete', KerberosKeytabDeleteTask)
+
+    plugin.register_debug_hook(collect_debug)
 
     generate_keytab(dispatcher.datastore)

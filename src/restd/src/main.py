@@ -185,7 +185,7 @@ class RESTApi(object):
         self.init_metadata()
         self.load_plugins()
 
-        server4 = WSGIServer(('', 8889), self, handler_class=RESTWSGIHandler)
+        server4 = WSGIServer(('0.0.0.0', 8889), self, handler_class=RESTWSGIHandler)
         self._threads = [gevent.spawn(server4.serve_forever)]
         checkin()
         gevent.joinall(self._threads)

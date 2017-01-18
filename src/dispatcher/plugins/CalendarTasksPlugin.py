@@ -231,7 +231,7 @@ class CommandTask(Task):
         return TaskDescription("Starting command {name} as {user}", name=command, user=user)
 
     def verify(self, user, command):
-        return ['system']
+        return []
 
     def run(self, user, command):
         try:

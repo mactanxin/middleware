@@ -30,8 +30,9 @@ import errno
 import logging
 import signal
 from task import Task, Provider, TaskException, TaskDescription, ValidationException, query
-from debug import AttachFile, AttachCommandOutput
+from debug import AttachFile, AttachData, AttachCommandOutput
 from resources import Resource
+from freenas.dispatcher.jsonenc import dumps
 from freenas.dispatcher.rpc import RpcException, description, accepts, private, returns, generator
 from freenas.dispatcher.rpc import SchemaHelper as h
 from datastore.config import ConfigNode
@@ -63,8 +64,13 @@ class ServiceInfoProvider(Provider):
             entry['config'] = self.get_service_config(i['id'])
             return entry
 
-        return self.datastore.query_stream('service_definitions', *(filter or []), callback=extend, **(params or {}))
-
+        return q.query(
+            self.datastore.query_stream('service_definitions', callback=extend),
+            *(filter or []),
+            stream=True,
+            **(params or {})
+        )
+    
     @accepts(str)
     @returns(h.object())
     def get_service_config(self, id):
@@ -179,8 +185,7 @@ class ServiceInfoProvider(Provider):
             plists = [launchd] if isinstance(launchd, dict) else launchd
 
             for i in plists:
-                self.dispatcher.call_sync('serviced.job.stop', i['Label'])
-                self.dispatcher.call_sync('serviced.job.start', i['Label'])
+                self.dispatcher.call_sync('serviced.job.restart', i['Label'])
 
             return
 
@@ -248,7 +253,7 @@ class ServiceManageTask(Task):
 
         if hook_rpc:
             try:
-                return self.dispatcher.call_sync(hook_rpc)
+                self.dispatcher.call_sync(hook_rpc)
             except RpcException as e:
                 raise TaskException(errno.EBUSY, 'Hook {0} for {1} failed: {2}'.format(
                     action, name, e
@@ -322,8 +327,6 @@ class UpdateServiceConfigTask(Task):
         updated_config.pop('type', None)
 
         if service_def.get('task'):
-            enable = updated_config.pop('enable', None)
-
             try:
                 self.verify_subtask(service_def['task'], updated_config)
             except RpcException as err:
@@ -331,12 +334,12 @@ class UpdateServiceConfigTask(Task):
                 new_err.propagate(err, [0], [1, 'config'])
                 raise new_err
 
-            result = self.join_subtasks(self.run_subtask(service_def['task'], updated_config))
-            restart = result[0] == 'RESTART'
-            reload = result[0] == 'RELOAD'
+            result = self.run_subtask_sync(service_def['task'], updated_config)
+            restart = result == 'RESTART'
+            reload = result == 'RELOAD'
 
-            if enable is not None:
-                node['enable'] = enable
+            if updated_config.get('enable') is not None:
+                node['enable'] = updated_config['enable']
         else:
             node.update(updated_config)
 
@@ -347,12 +350,12 @@ class UpdateServiceConfigTask(Task):
                 # Propagate to dependent services
                 for i in service_def.get('dependencies', []):
                     svc_dep = self.datastore.get_by_id('service_definitions', i)
-                    self.join_subtasks(self.run_subtask('service.update', i, {
+                    self.run_subtask_sync('service.update', i, {
                         'config': {
                             'type': 'service-{0}'.format(svc_dep['name']),
                             'enable': updated_config['enable']
                         }
-                    }))
+                    })
 
                 if service_def.get('auto_enable'):
                     # Consult state of services dependent on us
@@ -470,38 +473,20 @@ def get_status(dispatcher, datastore, service):
 def collect_debug(dispatcher):
     yield AttachFile('rc.conf', '/etc/rc.conf')
     yield AttachCommandOutput('servicectl-list', ['/usr/local/sbin/servicectl', 'list'])
+    yield AttachData('service-query', dumps(list(dispatcher.call_sync('service.query')), indent=4))
 
 
 def _init(dispatcher, plugin):
-    def on_rc_command(args):
-        cmd = args['action']
-        name = args['name']
-        svc = dispatcher.datastore.get_one('service_definitions', (
-            'or', (
-                ('rcng.rc-scripts', '=', name),
-                ('rcng.rc-scripts', 'in', name)
-            )
-        ))
-
-        if svc is None:
-            # ignore unknown rc scripts
-            return
-
-        if cmd not in ('start', 'stop', 'reload', 'restart'):
-            # ignore unknown actions
-            return
-
-        if cmd == 'stop':
-            cmd += 'p'
-
-        dispatcher.dispatch_event('service.{0}ed'.format(cmd), {
-            'name': svc['name']
-        })
-
     def on_ready(args):
         for svc in dispatcher.datastore.query('service_definitions'):
             logger.debug('Loading service {0}'.format(svc['name']))
-            enb = svc.get('builtin') or dispatcher.configstore.get('service.{0}.enable'.format(svc['name']))
+            enb = svc.get('builtin')
+
+            if svc.get('auto_enable'):
+                enb = False
+
+            if dispatcher.configstore.get('service.{0}.enable'.format(svc['name'])):
+                enb = True
 
             if 'launchd' in svc and enb:
                 try:
@@ -511,6 +496,8 @@ def _init(dispatcher, plugin):
                     continue
 
             plugin.register_resource(Resource('service:{0}'.format(svc['name'])), parents=['system'])
+
+        dispatcher.emit_event('service.ready', {})
 
     def on_job_changed(args):
         svc = dispatcher.datastore.get_one('service_definitions', ('launchd.Label', '=', args['Label']))
@@ -550,7 +537,6 @@ def _init(dispatcher, plugin):
         ]
     })
 
-    plugin.register_event_handler("service.rc.command", on_rc_command)
     plugin.register_event_handler("serviced.job.started", on_job_changed)
     plugin.register_event_handler("serviced.job.stopped", on_job_changed)
     plugin.register_event_handler("serviced.job.error", on_job_changed)
@@ -559,5 +545,6 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler("service.update", UpdateServiceConfigTask)
     plugin.register_provider("service", ServiceInfoProvider)
     plugin.register_event_type("service.changed")
+    plugin.register_event_type("service.ready")
 
     plugin.register_debug_hook(collect_debug)

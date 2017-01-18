@@ -25,6 +25,7 @@
 #
 #####################################################################
 
+import binascii
 import uuid
 import ldap3
 import ldap3.utils.dn
@@ -111,11 +112,12 @@ class FreeIPAPlugin(DirectoryServicePlugin):
         entry = dict(entry['attributes'])
         groups = []
         group = None
+        nthash = None
 
-        if contains(entry, 'gidNumber.0'):
+        if contains(entry, 'gidNumber'):
             ret = self.search_one(
                 self.group_dn,
-                '(gidNumber={0})'.format(get(entry, 'gidNumber.0'))
+                '(gidNumber={0})'.format(get(entry, 'gidNumber'))
             )
 
             if ret:
@@ -131,16 +133,22 @@ class FreeIPAPlugin(DirectoryServicePlugin):
                 r = dict(r['attributes'])
                 groups.append(get(r, 'ipaUniqueID.0'))
 
+        if contains(entry, 'ipaNTHash'):
+            nthash = binascii.hexlify(entry['ipaNTHash']).decode('ascii')
+
         return {
             'id': get(entry, 'ipaUniqueID.0'),
-            'uid': int(get(entry, 'uidNumber.0')),
-            'gid': int(get(entry, 'gidNumber.0')),
+            'uid': int(get(entry, 'uidNumber')),
+            'gid': int(get(entry, 'gidNumber')),
+            'sid': get(entry, 'ipaNTSecurityIdentifier'),
             'builtin': False,
             'username': get(entry, 'uid.0'),
-            'full_name': get(entry, 'gecos.0', get(entry, 'displayName.0', '<unknown>')),
-            'shell': get(entry, 'loginShell.0', '/bin/sh'),
-            'home': get(entry, 'homeDirectory.0', '/nonexistent'),
-            'sshpubkey': get(entry, 'ipaSshPubKey.0', None),
+            'full_name': get(entry, 'gecos', get(entry, 'displayName', '<unknown>')),
+            'nthash': nthash,
+            'password_changed_at': get(entry, 'krbLastPwdChange'),
+            'shell': get(entry, 'loginShell', '/bin/sh'),
+            'home': get(entry, 'homeDirectory', '/nonexistent'),
+            'sshpubkey': get(entry, 'ipaSshPubKey.0', b'').decode('ascii') or None,
             'group': get(group, 'ipaUniqueID.0') if group else None,
             'groups': groups,
             'sudo': False
@@ -162,7 +170,7 @@ class FreeIPAPlugin(DirectoryServicePlugin):
 
         return {
             'id': get(entry, 'ipaUniqueID.0'),
-            'gid': int(get(entry, 'gidNumber.0')),
+            'gid': int(get(entry, 'gidNumber')),
             'name': get(entry, 'cn.0'),
             'parents': parents,
             'builtin': False,

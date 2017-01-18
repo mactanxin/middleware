@@ -319,15 +319,15 @@ class UserCreateTask(Task):
 
         if user.get('group') is None:
             try:
-                result = self.join_subtasks(self.run_subtask('group.create', {
+                result = self.run_subtask_sync('group.create', {
                     'gid': uid,
                     'name': user['username']
-                }))
+                })
             except RpcException as err:
                 raise err
 
-            user['group'] = result[0]
-            self.created_group = result[0]
+            user['group'] = result
+            self.created_group = result
 
         try:
             id = self.datastore.insert('users', user)
@@ -361,10 +361,10 @@ class UserCreateTask(Task):
                 )
 
                 homedir_dataset_id = os.path.join(parent_dataset['id'], user['home'].split(os.path.sep)[-1])
-                self.join_subtasks(self.run_subtask(
+                self.run_subtask_sync(
                     'volume.dataset.create',
                     {'id': homedir_dataset_id, 'type': 'FILESYSTEM', 'volume': parent_dataset['volume']}
-                ))
+                )
                 os.chmod(user['home'], 0o755)
 
             else:
@@ -398,35 +398,36 @@ class UserCreateTask(Task):
             self.dispatcher.call_sync('etcd.generation.generate_group', 'accounts')
 
         if self.created_group:
-            self.join_subtasks(self.run_subtask('group.delete', self.created_group))
+            self.run_subtask_sync('group.delete', self.created_group)
 
 
 @description("Deletes an user from the system")
-@accepts(str, bool, bool)
+@accepts(str, h.ref('user-delete'))
 class UserDeleteTask(Task):
     @classmethod
     def early_describe(cls):
         return "Deleting user"
 
-    def describe(self, id, delete_homedir=False, delete_own_group=False):
+    def describe(self, id, delete_params=False):
         user = self.datastore.get_by_id('users', id)
         return TaskDescription("Deleting user {name}", name=user['username'] if user else id)
 
-    def verify(self, id, delete_homedir=False, delete_own_group=False):
+    def verify(self, id, delete_params=False):
         user = self.datastore.get_by_id('users', id)
         if user and user['builtin']:
             raise VerifyException(errno.EPERM, 'Cannot delete builtin user {0}'.format(user['username']))
 
         return ['system']
 
-    def run(self, id, delete_homedir=False, delete_own_group=False):
+    def run(self, id, delete_params=None):
         subtasks = []
         try:
             user = self.datastore.get_by_id('users', id)
             if user is None:
                 raise TaskException(errno.ENOENT, 'User with UID {0} does not exist'.format(id))
 
-            if delete_homedir and user['home'] not in (None, '/nonexistent') and os.path.exists(user['home']):
+            if (delete_params and delete_params.get('delete_home_directory') and
+                    user['home'] not in (None, '/nonexistent') and os.path.exists(user['home'])):
                 homedir_dataset = self.dispatcher.call_sync(
                     'volume.dataset.query',
                     [('mountpoint', '=', user['home'])],
@@ -442,13 +443,14 @@ class UserDeleteTask(Task):
 
             group = self.datastore.get_by_id('groups', user['group'])
             if group and user['uid'] == group['gid']:
-                if not delete_own_group:
+                if delete_params and delete_params.get('delete_own_group'):
+                    subtasks.append(self.run_subtask('group.delete', user['group']))
+
+                else:
                     self.add_warning(TaskWarning(
                         errno.EBUSY,
                         'Group {0} ({1}) left behind, you need to delete it separately'.format(group['name'], group['gid']))
                     )
-                else:
-                    subtasks.append(self.run_subtask('group.delete', user['group']))
 
             self.join_subtasks(*subtasks)
 
@@ -572,7 +574,9 @@ class UserUpdateTask(Task):
                 {'single': True}
             )
             homedir_mount_path = os.path.join('/', *(updated_fields['home'].split(os.path.sep)[:-1]))
-            user_gid = self.datastore.get_by_id('groups', user['group'])['gid']
+
+            user_gid = self.datastore.get_by_id('groups', user['group'])
+            user_gid = user_gid['gid'] if user_gid else 0
 
             if user['home'] != updated_fields['home']:
 
@@ -609,10 +613,10 @@ class UserUpdateTask(Task):
                         updated_fields['home'].split(os.path.sep)[-1]
                     )
 
-                    self.join_subtasks(self.run_subtask(
+                    self.run_subtask_sync(
                         'volume.dataset.create',
                         {'id': homedir_dataset_id, 'type': 'FILESYSTEM', 'volume': parent_dataset['volume']}
-                    ))
+                    )
                     os.chmod(updated_fields['home'], 0o755)
 
                 else:
@@ -920,6 +924,15 @@ def _init(dispatcher, plugin):
             }
         },
         'additionalProperties': False,
+    })
+
+    plugin.register_schema_definition('user-delete', {
+        'type': 'object',
+        'additionalProperties': False,
+        'properties': {
+            'delete_own_group': {'type': 'boolean'},
+            'delete_home_directory': {'type': 'boolean'},
+        }
     })
 
     # Register provider for querying accounts and groups data

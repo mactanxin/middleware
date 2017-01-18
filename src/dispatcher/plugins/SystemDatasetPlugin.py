@@ -27,6 +27,7 @@
 
 
 import os
+import stat
 import errno
 import uuid
 import logging
@@ -34,11 +35,11 @@ import shutil
 import time
 import tempfile
 import libzfs
+from bsd.copy import copytree
 from resources import Resource
 from freenas.dispatcher.rpc import RpcException, accepts, returns, description, private
 from freenas.dispatcher.rpc import SchemaHelper as h
-from task import Task, Provider, TaskException, TaskDescription
-from freenas.utils.copytree import copytree
+from task import Task, ProgressTask, Provider, TaskException, TaskDescription
 
 
 SYSTEM_DIR = '/var/db/system'
@@ -138,41 +139,6 @@ def umount_system_dataset(dispatcher, dsid, pool):
         logger.error('Cannot unmount .system dataset on pool {0}: {1}'.format(pool.name, str(err)))
 
 
-def move_system_dataset(dispatcher, dsid, services, src_pool, dst_pool):
-    logger.warning('Migrating system dataset from pool {0} to {1}'.format(src_pool, dst_pool))
-    tmpath = tempfile.mkdtemp()
-    create_system_dataset(dispatcher, dsid, dst_pool)
-    mount_system_dataset(dispatcher, dsid, dst_pool, tmpath)
-
-    for s in services:
-        try:
-            dispatcher.call_sync('service.ensure_stopped', s)
-        except RpcException as err:
-            logger.warning('Failed to stop {0} service: {1}'.format(s, err))
-
-    dispatcher.call_sync('management.stop_logdb')
-
-    try:
-        copytree(SYSTEM_DIR, tmpath)
-    except shutil.Error as err:
-        logger.warning('Following errors were encountered during migration:')
-        for i in err.args[0]:
-            logger.warning('{0} -> {1}: {2}'.format(*i[0]))
-
-    umount_system_dataset(dispatcher, dsid, dst_pool)
-    umount_system_dataset(dispatcher, dsid, src_pool)
-    mount_system_dataset(dispatcher, dsid, dst_pool, SYSTEM_DIR)
-    remove_system_dataset(dispatcher, dsid, src_pool)
-
-    dispatcher.call_sync('management.start_logdb')
-
-    for s in services:
-        try:
-            dispatcher.call_sync('service.ensure_started', s, timeout=20)
-        except RpcException as err:
-            logger.warning('Failed to start {0} service: {1}'.format(s, err))
-
-
 def import_system_dataset(dispatcher, services, src_pool, old_pool, old_id):
     logger.warning('Importing system dataset from pool {0}'.format(src_pool))
 
@@ -238,7 +204,13 @@ class SystemDatasetProvider(Provider):
 
 @description("Updates .system dataset configuration")
 @accepts(str)
-class SystemDatasetConfigure(Task):
+class SystemDatasetConfigure(ProgressTask):
+    def __init__(self, dispatcher, datastore):
+        super(SystemDatasetConfigure, self).__init__(dispatcher, datastore)
+        self.id = None
+        self.src_pool = None
+        self.services = []
+
     @classmethod
     def early_describe(cls):
         return 'Updating .system dataset configuration'
@@ -250,21 +222,29 @@ class SystemDatasetConfigure(Task):
         return ['root']
 
     def run(self, pool):
+        def log_errors(err):
+            logger.warning('Following errors were encountered during migration:')
+            for i in err:
+                logger.warning('{0} -> {1}: {2}'.format(*i))
+
+        self.set_progress(0, 'Checking free space on target pool {0}'.format(pool))
+
         status = self.dispatcher.call_sync('system_dataset.status')
-        services = self.configstore.get('system.dataset.services')
-        restart = [s for s in services if self.configstore.get('service.{0}.enable'.format(s))]
+        related_services = self.configstore.get('system.dataset.services')
+        self.services = [s for s in related_services if self.configstore.get('service.{0}.enable'.format(s))]
 
         if status['pool'] != pool:
-            id = self.configstore.get('system.dataset.id')
+            self.id = self.configstore.get('system.dataset.id')
+            self.src_pool = status['pool']
             system_dataset_size = self.dispatcher.call_sync(
                 'zfs.dataset.query',
-                [('id', '=', '{0}/.system-{1}'.format(status['pool'], id))],
+                [('id', '=', '{0}/.system-{1}'.format(status['pool'], self.id))],
                 {'select': 'properties.used.parsed', 'single': True}
             )
             if not system_dataset_size:
                 raise TaskException(
                     errno.ENOENT,
-                    'System dataset not found under {0}/.system-{1}'.format(status['pool'], id)
+                    'System dataset not found under {0}/.system-{1}'.format(status['pool'], self.id)
                 )
 
             target_free_space = self.dispatcher.call_sync(
@@ -290,17 +270,104 @@ class SystemDatasetConfigure(Task):
                     )
                 )
 
-            logger.warning('Services to be restarted: {0}'.format(', '.join(restart)))
+            try:
+                logger.warning('Services to be restarted: {0}'.format(', '.join(self.services)))
+                logger.warning('Migrating system dataset from pool {0} to {1}'.format(self.src_pool, pool))
 
-            move_system_dataset(
-                self.dispatcher,
-                id,
-                restart,
-                status['pool'],
-                pool
-            )
+                tmpath = tempfile.mkdtemp()
 
-        self.configstore.set('system.dataset.pool', pool)
+                self.set_progress(5, 'Creating a new system dataset on pool {0}'.format(pool))
+                create_system_dataset(self.dispatcher, self.id, pool)
+                mount_system_dataset(self.dispatcher, self.id, pool, tmpath)
+
+                self.manage_services('stop', 20)
+
+                self.set_progress(30, 'Copying system dataset')
+
+                def copy_error_cb(src, dst, err):
+                    if stat.S_ISSOCK(os.lstat(src).st_mode):
+                        return
+
+                    if stat.S_ISFIFO(os.lstat(src).st_mode):
+                        return
+
+                    log_errors((src, dst, str(err)))
+                    raise TaskException(
+                        errno.EIO,
+                        'System dataset migration failed. Unable to move {0} -> {1} - {2}'.format(src, dst, str(err))
+                    )
+
+                copytree(
+                    SYSTEM_DIR,
+                    tmpath,
+                    symlinks=True,
+                    error_cb=copy_error_cb,
+                    exclude=['freenas-log.db']
+                )
+
+                self.set_progress(70, 'Copying freenas-log database and switching to the new system dataset')
+
+                self.dispatcher.call_sync('management.stop_logdb')
+
+                try:
+                    copytree(
+                        os.path.join(SYSTEM_DIR, 'freenas-log.db'),
+                        os.path.join(tmpath, 'freenas-log.db'),
+                        symlinks=True
+                    )
+                except shutil.Error as err:
+                    log_errors(err)
+                    raise TaskException(
+                        errno.EIO,
+                        'System dataset migration failed. Unable to move freenas-log database.'
+                    )
+
+                umount_system_dataset(self.dispatcher, self.id, pool)
+                umount_system_dataset(self.dispatcher, self.id, self.src_pool)
+                mount_system_dataset(self.dispatcher, self.id, pool, SYSTEM_DIR)
+
+            except:
+                umount_system_dataset(self.dispatcher, self.id, pool)
+                remove_system_dataset(self.dispatcher, self.id, pool)
+
+                mount_system_dataset(self.dispatcher, self.id, self.src_pool, SYSTEM_DIR)
+
+                self.dispatcher.call_sync('management.stop_logdb')
+                self.dispatcher.call_sync('management.start_logdb')
+                self.manage_services('start')
+
+                if self.src_pool:
+                    self.configstore.set('system.dataset.pool', self.src_pool)
+
+                raise
+
+            remove_system_dataset(self.dispatcher, self.id, self.src_pool)
+
+            self.dispatcher.call_sync('management.start_logdb')
+            self.configstore.set('system.dataset.pool', pool)
+
+            self.manage_services('start', 90)
+
+    def manage_services(self, operation, start_progress=None):
+        states = ('RUNNING', 'STARTING') if operation == 'stop' else ('STOPPING', 'STOPPED')
+        services = self.dispatcher.call_sync(
+            'service.query',
+            [('name', 'in', self.services), ('state', 'in', states)],
+            {'select': ('id', 'name')}
+        )
+
+        for idx, service in enumerate(services):
+            id, name = service
+            if start_progress:
+                self.set_progress(
+                    start_progress + ((idx / len(self.services)) * 10),
+                    'Managing dependent services - {0} {1}'.format(operation, name)
+                )
+
+            try:
+                self.run_subtask_sync('service.manage', id, operation)
+            except TaskException as err:
+                logger.warning('Failed to {0} {1} service: {2}'.format(operation, name, err))
 
 
 @private
@@ -400,3 +467,4 @@ def _init(dispatcher, plugin):
 
     plugin.register_hook('system_dataset.pre_detach')
     plugin.register_hook('system_dataset.pre_attach')
+

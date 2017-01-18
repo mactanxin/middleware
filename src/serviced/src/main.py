@@ -80,10 +80,16 @@ def daemonize():
 
     sys.stdout.flush()
     sys.stderr.flush()
-    devnull = os.open('/dev/null', os.O_RDWR)
+    try:
+        devnull = os.open('/dev/null', os.O_RDWR)
+        log = os.open('/var/tmp/serviced.log', os.O_WRONLY | os.O_CREAT | os.O_TRUNC)
+    except OSError as e:
+        sys.stderr.write('failed to open log file: {0}'.format(e.strerror))
+        sys.exit(1)
+
     os.dup2(devnull, sys.stdin.fileno())
-    os.dup2(devnull, sys.stdout.fileno())
-    os.dup2(devnull, sys.stderr.fileno())
+    os.dup2(log, sys.stdout.fileno())
+    os.dup2(log, sys.stderr.fileno())
 
 
 class JobState(enum.Enum):
@@ -231,6 +237,9 @@ class Job(object):
                     group = grp.getgrnam(self.group)
                     os.setgid(group.gr_gid)
 
+                if not self.program_arguments:
+                    self.program_arguments = [self.program]
+
                 bsd.closefrom(3)
                 os.setsid()
                 env = BASE_ENV.copy()
@@ -284,6 +293,9 @@ class Job(object):
             self.status_message = status
             self.cv.notify_all()
 
+        if self.label == 'org.freenas.dispatcher':
+            self.context.init_dispatcher()
+
         self.context.emit_event('serviced.job.status', {
             'ID': self.id,
             'Label': self.label,
@@ -323,9 +335,6 @@ class Job(object):
                 except ProcessLookupError:
                     # Exited too quickly after exec()
                     return
-
-                if self.label == 'org.freenas.dispatcher':
-                    self.context.init_dispatcher()
 
                 if not self.supports_checkin:
                     self.set_state(JobState.RUNNING)
@@ -443,9 +452,9 @@ class JobService(RpcService):
             return q.query(self.context.jobs.values(), *(filter or []), **(params or {}))
 
     def load(self, plist):
+        job = Job(self.context)
+        job.load(plist)
         with self.context.lock:
-            job = Job(self.context)
-            job.load(plist)
             self.context.jobs[job.id] = job
 
     def unload(self, name_or_id):
@@ -454,24 +463,32 @@ class JobService(RpcService):
             if not job:
                 raise RpcException(errno.ENOENT, 'Job {0} not found'.format(name_or_id))
 
-            job.stop()
-            job.unload()
+        job.stop()
+        job.unload()
 
-    def start(self, name_or_id):
+    def start(self, name_or_id, wait=False):
         with self.context.lock:
             job = first_or_default(lambda j: j.label == name_or_id or j.id == name_or_id, self.context.jobs.values())
             if not job:
                 raise RpcException(errno.ENOENT, 'Job {0} not found'.format(name_or_id))
 
-            job.start()
+        job.start()
+        if wait:
+            self.wait(name_or_id, (JobState.RUNNING, JobState.ERROR))
 
-    def stop(self, name_or_id):
+    def stop(self, name_or_id, wait=False):
         with self.context.lock:
             job = first_or_default(lambda j: j.label == name_or_id or j.id == name_or_id, self.context.jobs.values())
             if not job:
                 raise RpcException(errno.ENOENT, 'Job {0} not found'.format(name_or_id))
 
-            job.stop()
+        job.stop()
+        if wait:
+            self.wait(name_or_id, (JobState.STOPPED, JobState.ERROR))
+
+    def restart(self, name_or_id):
+        self.stop(name_or_id, True)
+        self.start(name_or_id, True)
 
     def get(self, name_or_id):
         with self.context.lock:
@@ -479,7 +496,34 @@ class JobService(RpcService):
             if not job:
                 raise RpcException(errno.ENOENT, 'Job {0} not found'.format(name_or_id))
 
-            return job.__getstate__()
+        return job.__getstate__()
+
+    def get_by_pid(self, pid, fuzzy=False):
+        with self.context.lock:
+            def match(j):
+                return j.pid == pid
+
+            def fuzzy_match(j):
+                if j.parent and j.parent.pid == pid:
+                    return True
+
+                return j.pid == pid
+
+            job = first_or_default(fuzzy_match if fuzzy else match, self.context.jobs.values())
+            if not job:
+                raise RpcException(errno.ENOENT, 'Job {0} not found'.format(name_or_id))
+
+        return job.__getstate__()
+
+    def wait(self, name_or_id, states):
+        with self.context.lock:
+            job = first_or_default(lambda j: j.label == name_or_id or j.id == name_or_id, self.context.jobs.values())
+            if not job:
+                raise RpcException(errno.ENOENT, 'Job {0} not found'.format(name_or_id))
+
+        with job.cv:
+            job.cv.wait_for(lambda: job.state in states)
+            return job.state
 
     def checkin(self):
         sender = get_sender()
@@ -513,6 +557,9 @@ class Context(object):
         self.rpc.register_service_instance('serviced.job', JobService(self))
 
     def init_dispatcher(self):
+        if self.client and self.client.connected:
+            return
+
         def on_error(reason, **kwargs):
             if reason in (ClientError.CONNECTION_CLOSED, ClientError.LOGOUT):
                 self.logger.warning('Connection to dispatcher lost')
@@ -576,10 +623,11 @@ class Context(object):
                             except ProcessLookupError:
                                 continue
 
-                            job = Job(self)
-                            job.load_anonymous(pjob, ev.ident)
-                            self.jobs[job.id] = job
-                            self.logger.info('Added job {0}'.format(job.label))
+                            with self.lock:
+                                job = Job(self)
+                                job.load_anonymous(pjob, ev.ident)
+                                self.jobs[job.id] = job
+                                self.logger.info('Added job {0}'.format(job.label))
 
     def track_pid(self, pid):
         ev = select.kevent(

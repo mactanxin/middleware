@@ -96,7 +96,7 @@ class DirectoryServiceCreateTask(Task):
         return "Creating a directory"
 
     def describe(self, directory):
-        return TaskDescription("Creating directory {name}", name=directory['name'])
+        return TaskDescription("Creating directory {name}", name=directory.get('name', ''))
 
     def verify(self, directory):
         return ['system']
@@ -134,7 +134,7 @@ class DirectoryServiceCreateTask(Task):
             smb = self.dispatcher.call_sync('service.query', [('name', '=', 'smb')], {"single": True})
             if not q.get(smb, 'config.enable'):
                 q.set(smb, 'config.enable', True)
-                self.join_subtasks(self.run_subtask('service.update', smb['id'], smb))
+                self.run_subtask_sync('service.update', smb['id'], smb)
 
         self.id = self.datastore.insert('directories', directory)
         self.dispatcher.call_sync('dscached.management.configure_directory', self.id)

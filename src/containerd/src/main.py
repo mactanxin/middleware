@@ -31,6 +31,7 @@ gevent.monkey.patch_all()
 import os
 import enum
 import sys
+import re
 import argparse
 import json
 import logging
@@ -54,13 +55,15 @@ import pf
 import urllib.parse
 import requests
 import contextlib
-from docker.errors import NotFound
+import dhcp.client as dhcp
+from docker.errors import NotFound, APIError
 from datetime import datetime
 from bsd import kld, sysctl, setproctitle
 from threading import Condition
 from gevent.queue import Queue
 from gevent.event import Event
 from gevent.lock import RLock
+from gevent.threadpool import ThreadPool
 from geventwebsocket import WebSocketServer, WebSocketApplication, Resource
 from geventwebsocket.exceptions import WebSocketError
 from pyee import EventEmitter
@@ -68,14 +71,14 @@ from datastore import DatastoreException, get_datastore
 from datastore.config import ConfigStore
 from freenas.dispatcher.client import Client, ClientError
 from freenas.dispatcher.rpc import RpcService, RpcException, private, generator
+from freenas.dispatcher.jsonenc import loads, dumps
 from freenas.utils.debug import DebugService
-from freenas.utils import first_or_default, configure_logging, query as q
+from freenas.utils import bool_to_truefalse, truefalse_to_bool, normalize, first_or_default, configure_logging, query as q
 from freenas.serviced import checkin
 from vnc import app
 from mgmt import ManagementNetwork
 from ec2 import EC2MetadataServer
 from proxy import ReverseProxyServer
-import dhcp.client as dhcp
 
 
 BOOTROM_PATH = '/usr/local/share/uefi-firmware/BHYVE_UEFI.fd'
@@ -89,12 +92,37 @@ SCROLLBACK_SIZE = 20 * 1024
 vtx_enabled = False
 svm_features = False
 unrestricted_guest = True
+threadpool = ThreadPool(128)
+
+
+def normalize_docker_labels(labels):
+    normalize(labels, {
+        'org.freenas.autostart': "false",
+        'org.freenas.bridged': "false",
+        'org.freenas.capabilities-add': [],
+        'org.freenas.capabilities-drop': [],
+        'org.freenas.dhcp': "false",
+        'org.freenas.expose-ports-at-host': "false",
+        'org.freenas.interactive': "false",
+        'org.freenas.port-mappings': "",
+        'org.freenas.privileged': "false",
+        'org.freenas.settings': [],
+        'org.freenas.static-volumes': [],
+        'org.freenas.upgradeable': "false",
+        'org.freenas.version': '0',
+        'org.freenas.volumes': [],
+        'org.freenas.web-ui-path': '',
+        'org.freenas.web-ui-port': '',
+        'org.freenas.web-ui-protocol': ''
+    })
+    return labels
 
 
 class VirtualMachineState(enum.Enum):
     STOPPED = 1
     BOOTLOADER = 2
     RUNNING = 3
+    PAUSED = 4
 
 
 class DockerHostState(enum.Enum):
@@ -153,7 +181,7 @@ def get_interactive(details):
     return config.get('Tty') and config.get('OpenStdin')
 
 
-def get_dhcp_lease(context, container_name, dockerhost_id):
+def get_dhcp_lease(context, container_name, dockerhost_id, macaddr=None):
     dockerhost_name = context.get_docker_host(dockerhost_id).vm.name
     interfaces = context.client.call_sync('containerd.management.get_netif_mappings', dockerhost_id)
     interface = [i.get('target') for i in interfaces if i.get('mode') == 'BRIDGED']
@@ -170,7 +198,7 @@ def get_dhcp_lease(context, container_name, dockerhost_id):
             'multiple BRIDGED interfaces found on docker host : {0}'.format(dockerhost_name)
         )
     c = dhcp.Client(interface[0], dockerhost_name+'.'+container_name)
-    c.hwaddr = context.client.call_sync('vm.generate_mac')
+    c.hwaddr = macaddr if macaddr else context.client.call_sync('vm.generate_mac')
     c.start()
     lease = c.wait_for_bind(timeout=30).__getstate__()
     if c.state == dhcp.State.BOUND:
@@ -193,18 +221,18 @@ class BinaryRingBuffer(object):
 
 
 class VirtualMachine(object):
-    def __init__(self, context):
+    def __init__(self, context, name):
         self.context = context
         self.id = None
-        self.name = None
+        self.name = name
         self.nmdm = None
         self.state = VirtualMachineState.STOPPED
         self.guest_type = 'other'
         self.health = 'UNKNOWN'
         self.config = None
         self.devices = []
-        self.files_root = None
         self.bhyve_process = None
+        self.output_thread = None
         self.scrollback = BinaryRingBuffer(SCROLLBACK_SIZE)
         self.console_fd = None
         self.console_queues = []
@@ -239,6 +267,10 @@ class VirtualMachine(object):
     def vm_root(self):
         return self.context.client.call_sync('vm.get_vm_root', self.id)
 
+    @property
+    def files_root(self):
+        return os.path.join(self.vm_root, 'files')
+
     def get_link_address(self, mode):
         nic = first_or_default(
             lambda d: d['type'] == 'NIC' and d['properties']['mode'] == mode,
@@ -269,18 +301,18 @@ class VirtualMachine(object):
                 }
 
                 driver = drivermap.get(i['properties'].get('mode', 'AHCI'))
-                path = self.context.client.call_sync('vm.get_disk_path', self.id, i['name'])
+                path = self.context.client.call_sync('vm.get_device_path', self.id, i['name'])
                 args += ['-s', '{0}:0,{1},{2}'.format(index, driver, path)]
                 index += 1
 
             if i['type'] == 'CDROM':
-                path = self.context.client.call_sync('vm.get_disk_path', self.id, i['name'])
+                path = self.context.client.call_sync('vm.get_device_path', self.id, i['name'])
                 args += ['-s', '{0}:0,ahci-cd,{1}'.format(index, path)]
                 index += 1
 
             if i['type'] == 'VOLUME':
                 if i['properties']['type'] == 'VT9P':
-                    path = self.context.client.call_sync('vm.get_volume_path', self.id, i['name'])
+                    path = self.context.client.call_sync('vm.get_device_path', self.id, i['name'])
                     args += ['-s', '{0}:0,virtio-9p,{1}={2}'.format(index, i['name'], path)]
                     index += 1
 
@@ -512,8 +544,18 @@ class VirtualMachine(object):
         self.context.init_mgmt()
         self.context.logger.info('Starting VM {0} ({1})'.format(self.name, self.id))
         self.nmdm = self.get_nmdm()
+        dropped_devices = list(self.drop_invalid_devices())
         self.thread = gevent.spawn(self.run)
         self.console_thread = gevent.spawn(self.console_worker)
+        return dropped_devices
+
+    def drop_invalid_devices(self):
+        for i in list(self.devices):
+            if i['type'] in ('DISK', 'CDROM', 'VOLUME'):
+                path = self.context.client.call_sync('vm.get_device_path', self.id, i['name'])
+                if not os.path.exists(path):
+                    self.devices.remove(i)
+                    yield i
 
     def stop(self, force=False):
         self.logger.info('Stopping VM {0}'.format(self.name))
@@ -535,6 +577,7 @@ class VirtualMachine(object):
             i.put(b'\033[2J')
 
     def set_state(self, state):
+        self.logger.debug('State change: {0} -> {1}'.format(self.state, state))
         self.state = state
         self.changed()
 
@@ -561,7 +604,7 @@ class VirtualMachine(object):
                     bootswitch = '-r'
 
                     for i in filter(lambda i: i['type'] in ('DISK', 'CDROM'), self.devices):
-                        path = self.context.client.call_sync('vm.get_disk_path', self.id, i['name'])
+                        path = self.context.client.call_sync('vm.get_device_path', self.id, i['name'])
 
                         if i['type'] == 'DISK':
                             name = 'hd{0}'.format(hdcounter)
@@ -595,7 +638,7 @@ class VirtualMachine(object):
                     )
 
             if self.config['bootloader'] == 'BHYVELOAD':
-                path = self.context.client.call_sync('vm.get_disk_path', self.id, self.config['boot_device'])
+                path = self.context.client.call_sync('vm.get_device_path', self.id, self.config['boot_device'])
                 self.bhyve_process = subprocess.Popen(
                     [
                         '/usr/sbin/bhyveload', '-c', self.nmdm[0], '-m', str(self.config['memsize']),
@@ -626,11 +669,24 @@ class VirtualMachine(object):
 
             # Now it's time to start vmtools worker, because bhyve should be running now
             self.vmtools_thread = gevent.spawn(self.vmtools_worker)
-
-            for line in self.bhyve_process.stdout:
-                self.logger.debug('bhyve: {0}'.format(line.decode('utf-8', 'ignore').strip()))
+            self.output_thread = gevent.spawn(self.output_worker)
 
             self.bhyve_process.wait()
+
+            # not yet - broken in gevent
+            # while True:
+            #    pid, status = self.waitpid()
+            #    if os.WIFSTOPPED(status):
+            #        self.set_state(VirtualMachineState.PAUSED)
+            #        continue
+            #
+            #    if os.WIFCONTINUED(status):
+            #        self.set_state(VirtualMachineState.RUNNING)
+            #        continue
+            #
+            #    if os.WIFEXITED(status):
+            #        self.logger.info('bhyve process exited with code {0}'.format(os.WEXITSTATUS(status)))
+            #        break
 
             with contextlib.suppress(OSError):
                 os.unlink(self.vmtools_socket)
@@ -650,6 +706,13 @@ class VirtualMachine(object):
             self.logger.debug('VM {0} was a Docker host - shutting down Docker facilities'.format(self.name))
             self.docker_host.shutdown()
             self.context.docker_hosts.pop(self.id, None)
+
+    def waitpid(self):
+        return os.waitpid(self.bhyve_process.pid, os.WUNTRACED | os.WCONTINUED)
+
+    def output_worker(self):
+        for line in self.bhyve_process.stdout:
+            self.logger.debug('bhyve: {0}'.format(line.decode('utf-8', 'ignore').strip()))
 
     def console_worker(self):
         self.logger.debug('Opening console at {0}'.format(self.nmdm[1]))
@@ -788,7 +851,7 @@ class DockerHost(object):
     def init_autostart(self):
         for container in self.connection.containers(all=True):
             details = self.connection.inspect_container(container['Id'])
-            if 'org.freenas.autostart' in details['Config']['Labels']:
+            if truefalse_to_bool(q.get(details, 'Config.Labels.org\.freenas\.autostart')):
                 try:
                     self.connection.start(container=container['Id'])
                 except BaseException as err:
@@ -802,7 +865,9 @@ class DockerHost(object):
             'create': 'create',
             'pull': 'create',
             'destroy': 'delete',
-            'delete': 'delete'
+            'delete': 'delete',
+            'connect': 'update',
+            'disconnect': 'update',
         }
 
         while True:
@@ -815,14 +880,14 @@ class DockerHost(object):
                             'ids': [ev['id']]
                         })
                         details = self.connection.inspect_container(ev['id'])
+                        name = q.get(ev, 'Actor.Attributes.name')
 
                         if ev['Action'] == 'die':
                             state = details['State']
-                            name = details['Name'][1:]
                             if not state.get('Running') and state.get('ExitCode') not in (None, 0, 137):
                                 self.context.client.call_sync('alert.emit', {
                                     'class': 'DockerContainerDied',
-                                    'target': details['Name'],
+                                    'target': name,
                                     'title': 'Docker container {0} exited with nonzero status.'.format(name),
                                     'description': 'Docker container {0} has exited with status {1}'.format(
                                         name,
@@ -837,7 +902,7 @@ class DockerHost(object):
                         elif ev['Action'] == 'oom':
                             self.context.client.call_sync('alert.emit', {
                                 'class': 'DockerContainerDied',
-                                'target': details['Name'],
+                                'target': name,
                                 'title': 'Docker container {0} ran out of memory.'.format(name),
                                 'description': 'Docker container {0} has run out of memory.'.format(name)
                             })
@@ -855,10 +920,20 @@ class DockerHost(object):
                                     p.delete_rule('rdr', rule.index)
 
                         elif ev['Action'] == 'start':
-                            if 'org.freenas.expose-ports-at-host' not in details['Config']['Labels']:
+                            self.logger.debug('Cancelling active alerts for container {0}'.format(name))
+                            alert = self.context.client.call_sync(
+                                'alert.get_active_alert',
+                                'DockerContainerDied',
+                                name
+                            )
+                            if alert:
+                                self.context.client.call_sync('alert.cancel', alert['id'])
+
+                            labels = details['Config']['Labels']
+                            if not truefalse_to_bool(labels.get('org.freenas.expose-ports-at-host')):
                                 continue
 
-                            if 'org.freenas.bridged' in details['Config']['Labels']:
+                            if truefalse_to_bool(labels.get('org.freenas.bridged')):
                                 continue
 
                             self.logger.debug('Redirecting container {0} ports on host firewall'.format(ev['id']))
@@ -922,6 +997,12 @@ class DockerHost(object):
                         self.context.client.emit_event('containerd.docker.image.changed', {
                             'operation': transform_action(ev['Action']),
                             'ids': [id]
+                        })
+
+                    if ev['Type'] == 'network':
+                        self.context.client.emit_event('containerd.docker.network.changed', {
+                            'operation': actions.get(ev['Action'], 'update'),
+                            'ids': [ev['Actor']['ID']]
                         })
 
                 self.logger.warning('Disconnected from Docker API endpoint on {0}'.format(self.vm.name))
@@ -1116,27 +1197,14 @@ class ManagementService(RpcService):
                 )
             )
 
-        if not vtx_enabled and svm_features and container['config']['bootloader'] not in ('GRUB', 'BHYVELOAD'):
-            raise RpcException(
-                errno.ENOTSUP,
-                'Cannot start VM {0}. Only GRUB and BHYVELOAD bootloaders are supported for AMD architecture'.format(
-                    container['name']
-                )
-            )
-
-        vm = VirtualMachine(self.context)
+        vm = VirtualMachine(self.context, container['name'])
         vm.id = container['id']
-        vm.name = container['name']
         vm.guest_type = container['guest_type']
         vm.config = container['config']
         vm.devices = container['devices']
-        vm.files_root = self.context.client.call_sync(
-            'volume.get_dataset_path',
-            os.path.join(container['target'], 'vm', container['name'], 'files')
-        )
 
         try:
-            vm.start()
+            dropped_devices = vm.start()
         except BaseException as err:
             raise RpcException(errno.EFAULT, 'Cannot start VM: {0}'.format(err))
 
@@ -1148,6 +1216,8 @@ class ManagementService(RpcService):
         with self.context.cv:
             self.context.vms[id] = vm
             self.context.cv.notify_all()
+
+        return dropped_devices
 
     @private
     def stop_vm(self, id, force=False):
@@ -1250,10 +1320,113 @@ class DockerService(RpcService):
         host = self.context.docker_host_by_container_id(id)
         return host.vm.name
 
+    def host_name_by_network_id(self, id):
+        host = self.context.docker_host_by_network_id(id)
+        return host.vm.name
+
+    def labels_to_presets(self, labels=None):
+        if not labels:
+            labels = {}
+        labels = normalize_docker_labels(labels)
+        result = {
+            'autostart': truefalse_to_bool(labels.get('org.freenas.autostart')),
+            'bridge': {
+                'enable': truefalse_to_bool(labels.get('org.freenas.bridged')),
+                'dhcp': truefalse_to_bool(labels.get('org.freenas.dhcp')),
+                'address': None
+            },
+            'capabilities_add': [],
+            'capabilities_drop': [],
+            'expose_ports': truefalse_to_bool(labels.get('org.freenas.expose-ports-at-host')),
+            'interactive': truefalse_to_bool(labels.get('org.freenas.interactive')),
+            'ports': [],
+            'settings': [],
+            'static_volumes': [],
+            'upgradeable': truefalse_to_bool(labels.get('org.freenas.upgradeable')),
+            'version': labels.get('org.freenas.version'),
+            'volumes': [],
+            'web_ui_path': labels.get('org.freenas.web-ui-path'),
+            'web_ui_port': labels.get('org.freenas.web-ui-port'),
+            'web_ui_protocol': labels.get('org.freenas.web-ui-protocol'),
+            'privileged': truefalse_to_bool(labels.get('org.freenas.privileged')),
+        }
+
+        if labels.get('org.freenas.port-mappings'):
+            for mapping in labels.get('org.freenas.port-mappings').split(','):
+                m = re.match(r'^(\d+):(\d+)/(tcp|udp)$', mapping)
+                if not m:
+                    continue
+
+                result['ports'].append({
+                    'container_port': int(m.group(1)),
+                    'host_port': int(m.group(2)),
+                    'protocol': m.group(3).upper()
+                })
+
+        if labels.get('org.freenas.capabilities-add'):
+            try:
+                result['capabilities_add'] = loads(labels['org.freenas.capabilities-add'])
+            except ValueError:
+                pass
+
+        if labels.get('org.freenas.capabilities-drop'):
+            try:
+                result['capabilities_drop'] = loads(labels['org.freenas.capabilities-drop'])
+            except ValueError:
+                pass
+
+        if labels.get('org.freenas.volumes'):
+            try:
+                j = loads(labels['org.freenas.volumes'])
+            except ValueError:
+                pass
+            else:
+                for vol in j:
+                    if 'name' not in vol:
+                        continue
+
+                    result['volumes'].append({
+                        'description': vol.get('descr'),
+                        'container_path': vol['name'],
+                        'readonly': truefalse_to_bool(vol.get('readonly'))
+                    })
+
+        if labels.get('org.freenas.static-volumes'):
+            try:
+                j = loads(labels['org.freenas.static-volumes'])
+            except ValueError:
+                pass
+            else:
+                for vol in j:
+                    if any(v not in vol for v in ('container_path', 'host_path')):
+                        continue
+
+                    result['static_volumes'].append({
+                        'container_path': vol.get('container_path'),
+                        'host_path': vol.get('host_path'),
+                        'readonly': truefalse_to_bool(vol.get('readonly'))
+                    })
+
+        if labels.get('org.freenas.settings'):
+            try:
+                j = loads(labels['org.freenas.settings'])
+            except ValueError:
+                pass
+            else:
+                for setting in j:
+                    if 'env' not in setting:
+                        continue
+
+                    result['settings'].append({
+                        'id': setting['env'],
+                        'description': setting.get('descr'),
+                        'optional': setting.get('optional', True)
+                    })
+
+        return result
+
     @generator
     def query_containers(self, filter=None, params=None):
-        result = []
-
         def normalize_names(names):
             for i in names:
                 if i[0] == '/':
@@ -1261,36 +1434,88 @@ class DockerService(RpcService):
                 else:
                     yield i
 
+        def find_env(env, name):
+            for i in env:
+                n, v = i.split('=', maxsplit=1)
+                if n == name:
+                    return v
+
+            return None
+
+        result = []
         for host in self.context.iterate_docker_hosts():
             for container in host.connection.containers(all=True):
+                obj = {}
                 try:
                     details = host.connection.inspect_container(container['Id'])
                 except NotFound:
                     continue
 
                 external = q.get(details, 'NetworkSettings.Networks.external')
-                result.append({
+                labels = q.get(details, 'Config.Labels')
+                environment = q.get(details, 'Config.Env')
+                host_config = q.get(details, 'HostConfig')
+                names = list(normalize_names(container['Names']))
+                bridge_ipaddress = external['IPAddress'] if external else None
+                bridge_macaddress = external['MacAddress'] if external else None
+                presets = self.labels_to_presets(labels)
+                settings = []
+                web_ui_url = None
+                if presets:
+                    for i in presets.get('settings', []):
+                        settings.append({
+                            'id': i['id'],
+                            'value': find_env(environment, i['id'])
+                        })
+
+                obj.update({
                     'id': container['Id'],
                     'image': container['Image'],
-                    'names': list(normalize_names(container['Names'])),
+                    'image_id': container['ImageID'],
+                    'name': names[0],
+                    'names': names,
                     'command': container['Command'] if isinstance(container['Command'], list) else [container['Command']],
                     'running': details['State'].get('Running', False),
                     'host': host.vm.id,
                     'ports': list(get_docker_ports(details)),
                     'volumes': list(get_docker_volumes(details)),
                     'interactive': get_interactive(details),
-                    'labels': details['Config']['Labels'],
-                    'expose_ports': 'org.freenas.expose-ports-at-host' in details['Config']['Labels'],
-                    'autostart': 'org.freenas.autostart' in details['Config']['Labels'],
-                    'environment': details['Config']['Env'],
+                    'upgradeable': truefalse_to_bool(labels.get('org.freenas.upgradeable')),
+                    'expose_ports': truefalse_to_bool(labels.get('org.freenas.expose-ports-at-host')),
+                    'autostart': truefalse_to_bool(labels.get('org.freenas.autostart')),
+                    'environment': environment,
                     'hostname': details['Config']['Hostname'],
                     'exec_ids': details['ExecIDs'] or [],
                     'bridge': {
-                        'enabled': external is not None,
-                        'dhcp': 'org.freenas.dhcp' in details['Config']['Labels'],
-                        'address': external['IPAddress'] if external else None
-                    }
+                        'enable': external is not None,
+                        'dhcp': truefalse_to_bool(labels.get('org.freenas.dhcp')),
+                        'address': bridge_ipaddress,
+                        'macaddress': bridge_macaddress,
+                    },
+                    'web_ui_url': web_ui_url,
+                    'settings': settings,
+                    'version': presets.get('version'),
+                    'capabilities_add': host_config['CapAdd'] or [],
+                    'capabilities_drop': host_config['CapDrop'] or [],
+                    'privileged': host_config.get('Privileged', False),
                 })
+                if presets and presets.get('web_ui_protocol'):
+                    port = int(presets['web_ui_port'])
+                    port_configuration = first_or_default(
+                        lambda o: o['host_port'] == port and o['protocol'] == 'TCP',
+                        obj['ports']
+                    )
+
+                    if port_configuration and q.get(obj, 'bridge.enable'):
+                        port = port_configuration['container_port']
+
+                    obj['web_ui_url'] = '{0}://{1}:{2}/{3}'.format(
+                        presets['web_ui_protocol'],
+                        bridge_ipaddress or socket.gethostname(),
+                        port,
+                        presets['web_ui_path']
+                    )
+                result.append(obj)
 
         return q.query(result, *(filter or []), stream=True, **(params or {}))
 
@@ -1302,14 +1527,16 @@ class DockerService(RpcService):
             for network in host.connection.networks():
                 details = host.connection.inspect_network(network['Id'])
                 config = q.get(details, 'IPAM.Config.0')
+                containers = list(details.get('Containers', {}).keys())
 
                 result.append({
                     'id': details['Id'],
                     'name': details['Name'],
                     'driver': details['Driver'],
                     'subnet': config['Subnet'] if config else None,
-                    'gateway': config['Gateway'] if config else None,
+                    'gateway': config.get('Gateway', None) if config else None,
                     'host': host.vm.id,
+                    'containers': containers
                 })
 
         return q.query(result, *(filter or []), stream=True, **(params or {}))
@@ -1325,12 +1552,14 @@ class DockerService(RpcService):
                     old_img['hosts'].append(host.vm.id)
 
                 else:
+                    presets = self.labels_to_presets(image['Labels'])
                     result.append({
                         'id': image['Id'],
                         'names': image['RepoTags'] or [image['Id']],
                         'size': image['VirtualSize'],
-                        'labels': image['Labels'],
                         'hosts': [host.vm.id],
+                        'presets': presets,
+                        'version': presets['version'],
                         'created_at': datetime.utcfromtimestamp(int(image['Created']))
                     })
 
@@ -1345,10 +1574,10 @@ class DockerService(RpcService):
         for line in host.connection.pull(name, stream=True):
             yield json.loads(line.decode('utf-8'))
 
-    def delete_image(self, name, host):
+    def delete_image(self, id, host):
         host = self.context.get_docker_host(host)
         try:
-            host.connection.remove_image(image=name, force=True)
+            host.connection.remove_image(image=id, force=True)
         except BaseException as err:
             raise RpcException(errno.EFAULT, 'Failed to remove image: {0}'.format(str(err)))
 
@@ -1367,17 +1596,19 @@ class DockerService(RpcService):
             raise RpcException(errno.EFAULT, 'Failed to stop container: {0}'.format(str(err)))
 
     def create_container(self, container):
-        labels = []
-        networking_config = None
         host = self.context.get_docker_host(container['host'])
+        networking_config = None
         if not host:
             raise RpcException(errno.ENOENT, 'Docker host {0} not found'.format(container['host']))
 
-        if container.get('autostart'):
-            labels.append('org.freenas.autostart')
-
-        if container.get('expose_ports'):
-            labels.append('org.freenas.expose-ports-at-host')
+        bridge_enabled = q.get(container, 'bridge.enable')
+        dhcp_enabled = q.get(container, 'bridge.dhcp')
+        labels = {
+            'org.freenas.autostart': bool_to_truefalse(container.get('autostart')),
+            'org.freenas.expose-ports-at-host': bool_to_truefalse(container.get('expose_ports')),
+            'org.freenas.bridged': bool_to_truefalse(bridge_enabled),
+            'org.freenas.dhcp': bool_to_truefalse(dhcp_enabled),
+        }
 
         port_bindings = {
             str(i['container_port']) + '/' + i.get('protocol', 'tcp').lower(): i['host_port'] for i in container['ports']
@@ -1392,24 +1623,37 @@ class DockerService(RpcService):
                     )
                 )
 
-        bridge_enabled = q.get(container, 'bridge.enable')
         if bridge_enabled:
-            dhcp_enabled = q.get(container, 'bridge.dhcp')
+            macaddr = q.get(container, 'bridge.macaddress', self.context.client.call_sync('vm.generate_mac'))
             if dhcp_enabled:
-                lease = get_dhcp_lease(self.context, container['name'], container['host'])
+                lease = get_dhcp_lease(self.context, container['name'], container['host'], macaddr)
                 ipv4 = lease['client_ip']
-                macaddr = lease['client_mac']
-                labels.append('org.freenas.dhcp')
             else:
                 ipv4 = q.get(container, 'bridge.address')
-                macaddr = self.context.client.call_sync('vm.generate_mac')
 
             networking_config = host.connection.create_networking_config({
                 'external': host.connection.create_endpoint_config(
                     ipv4_address=ipv4
                 )
             })
-            labels.append('org.freenas.bridged')
+
+        caps_add = container.get('capabilities_add', [])
+        caps_add.append('NET_ADMIN') if 'NET_ADMIN' not in caps_add else None
+        caps_drop = container.get('capabilities_drop', [])
+
+        host_config= host.connection.create_host_config(
+            port_bindings=port_bindings,
+            binds={
+                i['host_path'].replace('/mnt', '/host'): {
+                    'bind': i['container_path'],
+                    'mode': 'ro' if i['readonly'] else 'rw'
+                } for i in container['volumes']
+                },
+            privileged=container['privileged'],
+            cap_add=caps_add,
+            cap_drop=caps_drop,
+            network_mode='external' if bridge_enabled else 'default'
+        )
 
         create_args = {
             'name': container['name'],
@@ -1418,17 +1662,7 @@ class DockerService(RpcService):
             'volumes': [i['container_path'] for i in container['volumes']],
             'labels': labels,
             'networking_config': networking_config,
-            'host_config': host.connection.create_host_config(
-                cap_add=['NET_ADMIN'],
-                port_bindings=port_bindings,
-                binds={
-                    i['host_path'].replace('/mnt', '/host'): {
-                        'bind': i['container_path'],
-                        'mode': 'ro' if i['readonly'] else 'rw'
-                    } for i in container['volumes']
-                },
-                network_mode='external' if bridge_enabled else 'default'
-            )
+            'host_config': host_config,
         }
 
         if container.get('command'):
@@ -1452,18 +1686,46 @@ class DockerService(RpcService):
         except BaseException as err:
             raise RpcException(errno.EFAULT, str(err))
 
+    def create_network(self, network):
+        host = self.context.get_docker_host(network.get('host'))
+        if not host:
+            raise RpcException(errno.ENOENT, 'Docker host {0} not found'.format(network.get('host')))
+
+        create_args = {
+            'name': network.get('name'),
+            'driver': network.get('driver'),
+        }
+
+        if network.get('subnet'):
+            create_args['ipam'] = docker.utils.create_ipam_config(
+                pool_configs=[
+                    docker.utils.create_ipam_pool(
+                        subnet=network.get('subnet'),
+                        gateway=network.get('gateway')
+                    )
+                ]
+            )
+
+        try:
+            host.connection.create_network(**create_args)
+        except BaseException as err:
+            raise RpcException(errno.EFAULT, 'Cannot create docker network {0}: {1}'.format(network.get('name'), err))
+
     def create_exec(self, id, command):
         host = self.context.docker_host_by_container_id(id)
         try:
             host.connection.start(container=id)
         except BaseException as err:
             raise RpcException(errno.EFAULT, 'Failed to start container: {0}'.format(str(err)))
-        exec = host.connection.exec_create(
-            container=id,
-            cmd=command,
-            tty=True,
-            stdin=True
-        )
+        try:
+            exec = host.connection.exec_create(
+                container=id,
+                cmd=command,
+                tty=True,
+                stdin=True
+            )
+        except docker.errors.APIError:
+            raise RpcException(errno.EINVAL, 'Cannot create exec. Container closed immediately after start')
         return exec['Id']
 
     def delete_container(self, id):
@@ -1481,6 +1743,21 @@ class DockerService(RpcService):
         except BaseException as err:
             raise RpcException(errno.EFAULT, 'Failed to remove container: {0}'.format(str(err)))
 
+    def delete_network(self, id):
+        try:
+            host = self.context.docker_host_by_network_id(id)
+        except RpcException as err:
+            if err.code == errno.ENOENT:
+                self.context.client.emit_event('containerd.docker.network.changed', {
+                    'operation': 'delete',
+                    'ids': id
+                })
+                return
+        try:
+            host.connection.remove_network(id)
+        except BaseException as err:
+            raise RpcException(errno.EFAULT, 'Failed to remove network: {0}'.format(str(err)))
+
     def set_api_forwarding(self, hostid):
         if hostid in self.context.docker_hosts:
             try:
@@ -1490,6 +1767,43 @@ class DockerService(RpcService):
                 raise RpcException(errno.EINVAL, err)
         else:
             self.context.set_docker_api_forwarding(None)
+
+    def connect_container_to_network(self, container_id, network_id):
+        host = self.context.docker_host_by_container_id(container_id)
+        try:
+            host.connection.connect_container_to_network(container_id, network_id)
+        except BaseException as err:
+            raise RpcException(errno.EFAULT, 'Failed to connect container to newtork: {0}'.format(str(err)))
+
+    def disconnect_container_from_network(self, container_id, network_id):
+        host = self.context.docker_host_by_container_id(container_id)
+        try:
+            host.connection.disconnect_container_from_network(container_id, network_id)
+        except BaseException as err:
+            raise RpcException(errno.EFAULT, 'Failed to disconnect container from network: {0}'.format(str(err)))
+
+    def commit_image(self, container_id, new_name):
+        host = self.context.docker_host_by_container_id(container_id)
+
+        if '/' not in new_name:
+            new_name = f'freenas/{new_name}'
+
+        if ':' not in new_name:
+            new_name = f'{new_name}:latest'
+
+        repo, tag = new_name.split(':', 1)
+
+        try:
+            image = host.connection.commit(
+                container=container_id,
+                repository=repo,
+                tag=tag
+            )
+        except BaseException as err:
+            raise RpcException(errno.EFAULT, str(err))
+
+        image_details = first_or_default(lambda i: i['Id'] == image['Id'], host.connection.images(), {})
+        return image_details['RepoTags'][0] or image['Id']
 
 
 class ServerResource(Resource):
@@ -1856,6 +2170,15 @@ class Main(object):
 
         raise RpcException(errno.ENOENT, 'Container {0} not found'.format(id))
 
+    def docker_host_by_network_id(self, id):
+        for host in self.docker_hosts.values():
+            for n in host.connection.networks():
+                if n['Id'] == id:
+                    host.ready.wait()
+                    return host
+
+        raise RpcException(errno.ENOENT, 'Network {0} not found'.format(id))
+
     def get_docker_host(self, id):
         host = self.docker_hosts.get(id)
         if not host:
@@ -1953,7 +2276,7 @@ class Main(object):
 
         # WebSockets server
         kwargs = {}
-        s4 = WebSocketServer(('', args.p), ServerResource({
+        s4 = WebSocketServer(('0.0.0.0', args.p), ServerResource({
             '/console': ConsoleConnection,
             '/vnc': VncConnection,
             '/webvnc/[\w]+': app

@@ -275,20 +275,6 @@ def _init(dispatcher, plugin):
         'additionalProperties': False,
     })
 
-    plugin.register_schema_definition('ipfs_info', {
-        'type': 'object',
-        'properties': {
-            'Addresses': {
-                'type': 'array',
-                'items': {'type': 'string'},
-            },
-            'AgentVersion': {'type': 'string'},
-            'ID': {'type': 'string'},
-            'ProtocolVersion': {'type': 'string'},
-            'PublicKey': {'type': 'string'}
-        },
-        'additionalProperties': False,
-    })
 
     # Register providers
     plugin.register_provider("service.ipfs", IPFSServiceProvider)

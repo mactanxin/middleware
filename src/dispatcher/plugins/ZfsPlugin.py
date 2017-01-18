@@ -44,6 +44,7 @@ from freenas.dispatcher.rpc import SchemaHelper as h
 from freenas.dispatcher.jsonenc import dumps
 from resources import Resource
 from debug import AttachData, AttachCommandOutput
+from lib.zfs import iterate_vdevs, vdev_by_guid, vdev_by_path
 from freenas.utils.trace_logger import TRACE
 from freenas.utils import first_or_default, query as q
 from utils import is_child
@@ -90,7 +91,7 @@ class ZpoolProvider(Provider):
         if not pool:
             raise RpcException(errno.ENOENT, 'Pool {0} not found'.format(name))
 
-        return [v['path'] for v in iterate_vdevs(pool['groups'])]
+        return [v['path'] for v, _ in iterate_vdevs(pool['groups'])]
 
     @accepts(str)
     @returns(h.object())
@@ -148,30 +149,13 @@ class ZpoolProvider(Provider):
     @returns(h.ref('ZfsVdev'))
     def vdev_by_guid(self, name, guid):
         pool = pools.get(name)
-        return first_or_default(lambda v: v['guid'] == guid, iterate_vdevs(pool['groups']))
+        return vdev_by_guid(pool['groups'], guid)
 
     @accepts(str, str)
     @returns(h.ref('ZfsVdev'))
     def vdev_by_path(self, name, path):
         pool = pools.get(name)
-        return first_or_default(lambda v: v['path'] == path, iterate_vdevs(pool['groups']))
-
-    @accepts(str)
-    def ensure_resilvered(self, name):
-        try:
-            zfs = get_zfs()
-            pool = zfs.get(name)
-
-            self.dispatcher.test_or_wait_for_event(
-                'fs.zfs.resilver.finished',
-                lambda args: args['guid'] == str(pool.guid),
-                lambda:
-                    pool.scrub.state == libzfs.ScanState.SCANNING and
-                    pool.scrub.function == libzfs.ScanFunction.RESILVER
-                )
-
-        except libzfs.ZFSException as err:
-            raise RpcException(zfs_error_to_errno(err.code), str(err))
+        return vdev_by_path(pool['groups'], path)
 
 
 @description('Provides information about ZFS datasets')
@@ -255,6 +239,12 @@ class ZfsDatasetProvider(Provider):
             return ds.get_send_space()
         except libzfs.ZFSException as err:
             raise RpcException(zfs_error_to_errno(err.code), str(err))
+
+    @accepts(str)
+    @returns(h.ref('zfs-resume-token'))
+    def describe_resume_token(self, token):
+        zfs = get_zfs()
+        return zfs.describe_resume_token(token)
 
 
 @description('Provides information about ZFS snapshots')
@@ -722,12 +712,12 @@ class ZpoolImportTask(Task):
         if guid.isdigit():
             pool = first_or_default(
                 lambda p: str(p.guid) == guid,
-                self.dispatcher.threaded(lambda: list(zfs.find_import()))
+                self.dispatcher.threaded(lambda: list(zfs.find_import(search_paths=['/dev/gptid'])))
             )
         else:
             pool = first_or_default(
                 None,
-                self.dispatcher.threaded(lambda: list(zfs.find_import(name=guid))),
+                self.dispatcher.threaded(lambda: list(zfs.find_import(search_paths=['/dev/gptid'], name=guid))),
             )
 
         if not pool:
@@ -742,12 +732,12 @@ class ZpoolImportTask(Task):
             if guid.isdigit():
                 pool = first_or_default(
                     lambda p: str(p.guid) == guid,
-                    zfs.find_import()
+                    zfs.find_import(search_paths=['/dev/gptid'])
                 )
             else:
                 pool = first_or_default(
                     None,
-                    zfs.find_import(name=guid),
+                    zfs.find_import(search_paths=['/dev/gptid'], name=guid),
                 )
 
             if not pool:
@@ -1220,6 +1210,38 @@ class ZfsSendTask(ZfsBaseTask):
 
 
 @private
+@description('Sends ZFS replication stream')
+class ZfsResumeSendTask(Task):
+    @classmethod
+    def early_describe(cls):
+        return 'Sending resumed ZFS replication stream'
+
+    def verify(self, token, fd):
+        token_info = self.dispatcher.call_sync('zfs.dataset.describe_resume_token', token)
+        ds, _, _ = token_info['toname'].partition('@')
+        return ['zfs:{0}'.format(ds)]
+
+    def describe(self, token, fd):
+        token_info = self.dispatcher.call_sync('zfs.dataset.describe_resume_token', token)
+        return TaskDescription(
+            'Sending resumed ZFS replication stream from {name}',
+            name=token_info['toname'] if token_info else 'unknown'
+        )
+
+    def run(self, token, fd):
+        try:
+            zfs = get_zfs()
+            zfs.send_resume(fd.fd, token, flags={
+                libzfs.SendFlag.PROGRESS,
+                libzfs.SendFlag.PROPS
+            })
+        except libzfs.ZFSException as err:
+            raise TaskException(zfs_error_to_errno(err.code), str(err))
+        finally:
+            os.close(fd.fd)
+
+
+@private
 @description('Receives ZFS replication stream')
 class ZfsReceiveTask(Task):
     @classmethod
@@ -1244,7 +1266,7 @@ class ZfsReceiveTask(Task):
     def run(self, name, fd, force=False, nomount=False, props=None, limitds=None):
         try:
             zfs = get_zfs()
-            zfs.receive(name, fd.fd, force, nomount, False, props, limitds)
+            zfs.receive(name, fd.fd, force, nomount, True, props, limitds)
         except libzfs.ZFSException as err:
             raise TaskException(zfs_error_to_errno(err.code), str(err))
         finally:
@@ -1285,18 +1307,6 @@ def pool_exists(pool):
         return False
 
 
-def iterate_vdevs(topology):
-    for grp in topology.values():
-        for vdev in grp:
-            if vdev['type'] == 'disk':
-                yield vdev
-                continue
-
-            if 'children' in vdev:
-                for child in vdev['children']:
-                    yield child
-
-
 def get_disk_names(dispatcher, pool):
     ret = []
     for x in pool.disks:
@@ -1313,7 +1323,23 @@ def get_disk_names(dispatcher, pool):
 def sync_zpool_cache(dispatcher, pool, guid=None):
     zfs = get_zfs()
     try:
+        oldpool = pools.get(pool)
         zfspool = dispatcher.threaded(lambda: zfs.get(pool).__getstate__(False))
+
+        if oldpool:
+            for vd, _ in iterate_vdevs(zfspool['groups']):
+                oldvd = vdev_by_guid(oldpool['groups'], vd['guid'])
+                if not oldvd:
+                    continue
+
+                if vd['status'] != oldvd['status']:
+                    dispatcher.emit_event('zfs.pool.vdev_state_changed', {
+                        'pool': pool,
+                        'guid': zfspool['guid'],
+                        'vdev_guid': vd['guid'],
+                        'status': vd['status']
+                    })
+
         pools.put(pool, zfspool)
         zpool_sync_resources(dispatcher, pool)
     except libzfs.ZFSException as e:
@@ -1528,6 +1554,9 @@ def _init(dispatcher, plugin):
     @sync
     def on_dataset_setprop(args):
         with dispatcher.get_lock('zfs-cache'):
+            if args['ds'].endswith('/%recv'):
+                args['ds'] = args['ds'][:-6]
+
             if args['action'] == 'set':
                 logger.log(TRACE, '{0} {1} property {2} set to: {3}'.format(
                     'Snapshot' if '@' in args['ds'] else 'Dataset',
@@ -1594,7 +1623,7 @@ def _init(dispatcher, plugin):
             if volume and (volume.get('key_encrypted') or volume.get('password_encrypted')):
                 continue
 
-            for vd in iterate_vdevs(p['groups']):
+            for vd, _ in iterate_vdevs(p['groups']):
                 if args['path'] == vd['path']:
                     logger.info('Device {0} that was part of the pool {1} got reconnected'.format(
                         args['path'],
@@ -1785,6 +1814,15 @@ def _init(dispatcher, plugin):
         'enum': ['ONLINE', 'OFFLINE', 'DEGRADED', 'FAULTED', 'REMOVED', 'UNAVAIL']
     })
 
+    plugin.register_schema_definition('zfs-resume-token', {
+        'fromguid': {'type': 'integer'},
+        'object': {'type': 'integer'},
+        'offset': {'type': 'integer'},
+        'bytes': {'type': 'integer'},
+        'toguid': {'type': 'integer'},
+        'toname': {'type': 'string'}
+    })
+
     # Register Providers
     plugin.register_provider('zfs.pool', ZpoolProvider)
     plugin.register_provider('zfs.dataset', ZfsDatasetProvider)
@@ -1792,6 +1830,7 @@ def _init(dispatcher, plugin):
 
     # Register Event Types
     plugin.register_event_type('zfs.pool.changed')
+    plugin.register_event_type('zfs.pool.vdev_state_changed')
     plugin.register_event_type('zfs.dataset.changed')
     plugin.register_event_type('zfs.snapshot.changed')
 
@@ -1823,6 +1862,7 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('zfs.clone', ZfsCloneTask)
     plugin.register_task_handler('zfs.rollback', ZfsRollbackTask)
     plugin.register_task_handler('zfs.send', ZfsSendTask)
+    plugin.register_task_handler('zfs.send_resume', ZfsResumeSendTask)
     plugin.register_task_handler('zfs.receive', ZfsReceiveTask)
 
     # Register debug hook
@@ -1934,6 +1974,7 @@ def _init(dispatcher, plugin):
     plugin.register_event_handler('fs.zfs.dataset.deleted', on_dataset_delete)
     plugin.register_event_handler('fs.zfs.dataset.renamed', on_dataset_rename)
     plugin.register_event_handler('fs.zfs.dataset.setprop', on_dataset_setprop)
+    plugin.register_event_handler('fs.zfs.snapshot.cloned', on_dataset_create)
     plugin.register_event_handler('system.device.attached', on_device_attached)
     plugin.register_event_handler('system.fs.mounted', lambda a: on_vfs_mount_or_unmount('mount', a))
     plugin.register_event_handler('system.fs.unmounted', lambda a: on_vfs_mount_or_unmount('unmount', a))

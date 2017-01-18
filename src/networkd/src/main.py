@@ -456,6 +456,7 @@ class ConfigurationService(RpcService):
                 else:
                     i.down()
 
+            self.config.set('network.autoconfigure', False)
             yield errno.ENOENT, 'Failed to configure any network interface'
             return
 
@@ -476,7 +477,7 @@ class ConfigurationService(RpcService):
 
         yield from self.configure_routes()
         yield from self.configure_dns()
-        self.client.call_sync('service.restart', 'rtsold')
+        self.client.call_sync('service.restart', 'rtsold', timeout=300)
         self.client.emit_event('network.changed', {
             'operation': 'update'
         })
@@ -550,7 +551,7 @@ class ConfigurationService(RpcService):
 
         # Now the static routes...
         old_routes = set(static_routes)
-        new_routes = set([convert_route(e) for e in self.datastore.query('network.routes')])
+        new_routes = set(convert_route(e) for e in self.datastore.query('network.routes'))
 
         for i in old_routes - new_routes:
             self.logger.info('Removing static route to {0}'.format(describe_route(i)))
@@ -667,8 +668,9 @@ class ConfigurationService(RpcService):
                     for port in old_ports - new_ports:
                         iface.delete_port(port)
 
-                    for port in new_ports - old_ports:
-                        iface.add_port(port)
+                    for port in lagg['ports']:
+                        if port in new_ports:
+                            iface.add_port(port)
 
             # Configure member interfaces for a bridge
             if entity.get('type') == 'BRIDGE':
@@ -692,7 +694,7 @@ class ConfigurationService(RpcService):
                         iface.remove_address(i)
 
                     self.logger.info('Trying to acquire DHCP lease on interface {0}...'.format(name))
-                    if not self.context.configure_dhcp(name):
+                    if not self.context.configure_dhcp(name, True, INITIAL_DHCP_TIMEOUT):
                         yield errno.ENETUNREACH, 'Failed to configure interface {0} using DHCP'.format(name)
             else:
                 if name in self.context.dhcp_clients:
@@ -720,7 +722,7 @@ class ConfigurationService(RpcService):
             if entity.get('rtadv', False):
                 iface.nd6_flags = iface.nd6_flags | {netif.NeighborDiscoveryFlags.ACCEPT_RTADV}
                 if restart_rtsold:
-                    self.client.call_sync('service.restart', 'rtsold')
+                    self.client.call_sync('service.restart', 'rtsold', timeout=300)
             else:
                 iface.nd6_flags = iface.nd6_flags - {netif.NeighborDiscoveryFlags.ACCEPT_RTADV}
 
@@ -1156,6 +1158,10 @@ class Main(object):
                 'active_media_type': {'type': 'string'},
                 'active_media_subtype': {'type': 'string'},
                 'media_options': {'$ref': 'NetworkInterfaceMediaopts'},
+                'supported_media': {
+                    'type': 'array',
+                    'items': {'type': 'string'}
+                },
                 'cloned': {'type': 'boolean'},
                 'capabilities': {'$ref': 'NetworkInterfaceCapabilities'},
                 'flags': {'$ref': 'NetworkInterfaceFlags'},

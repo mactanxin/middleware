@@ -1,7 +1,3 @@
-lib/crashd/src/main.py
-lib/crashd/src/main.pyc
-lib/crashd/src/wrapper.py
-lib/crashd/src/wrapper.pyc
 etc/rc.d/crashd
 sbin/crashd
 sbin/crash-wrapper

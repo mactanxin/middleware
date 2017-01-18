@@ -65,7 +65,8 @@ class Task(object):
             try:
                 self.progress_callbacks[id](
                     args['percentage'],
-                    args['message']
+                    args['message'],
+                    args['extra']
                 )
             except:
                 # ignore
@@ -123,6 +124,10 @@ class Task(object):
                     self.subtasks.remove(t)
                     self.progress_callbacks.pop(t, None)
 
+    def run_subtask_sync(self, classname, *args, **kwargs):
+        ret, = self.join_subtasks(self.run_subtask(classname, *args, **kwargs))
+        return ret
+
     def abort_subtask(self, id):
         return self.dispatcher.abort_subtask(id)
 
@@ -136,7 +141,7 @@ class Task(object):
         self.dispatcher.balancer.submit(task, *args)
 
     def verify(self, *args, **kwargs):
-        raise NotImplementedError()
+        return []
 
     def run(self, *args, **kwargs):
         raise NotImplementedError()
@@ -152,10 +157,20 @@ class ProgressTask(Task):
         self.put_progress(TaskStatus(percentage, message, extra))
 
     def chunk_progress(self, start_percentage, end_percentage, message, child_percentage, child_message=None, extra=None):
+        progress = start_percentage + ((end_percentage - start_percentage) * (child_percentage / 100))
         self.set_progress(
-            start_percentage + ((end_percentage - start_percentage) * (child_percentage / 100)),
+            progress,
             '{0} {1}'.format(message, child_message),
             extra
+        )
+        return progress
+
+    def run_subtask_sync_with_progress(self, classname, *args, **kwargs):
+        return self.run_subtask_sync(
+            classname,
+            *args,
+            progress_callback=lambda p, m=None, e=None: self.set_progress(p, m, e),
+            **kwargs
         )
 
 

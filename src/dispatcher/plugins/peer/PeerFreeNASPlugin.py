@@ -319,12 +319,12 @@ class FreeNASPeerCreateTask(Task):
                 peer['name'] = remote_hostname
                 ip = socket.gethostbyname(remote)
 
-                created_ids = self.join_subtasks(self.run_subtask(
+                created_id = self.run_subtask_sync(
                     'peer.freenas.create_local',
                     peer,
                     ip,
                     True
-                ))
+                )
 
                 peer['id'] = hostid
                 peer['name'] = remote_peer_name
@@ -351,7 +351,7 @@ class FreeNASPeerCreateTask(Task):
                     })
                     raise
 
-                return created_ids[0]
+                return created_id
         finally:
             remote_client.disconnect()
 
@@ -458,11 +458,11 @@ class FreeNASPeerDeleteTask(Task):
                     str(e)
                 ))
 
-            self.join_subtasks(self.run_subtask(
+            self.run_subtask_sync(
                 'peer.freenas.delete_local',
                 id,
                 True
-            ))
+            )
 
         finally:
             if remote_client:

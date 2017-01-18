@@ -29,5 +29,14 @@ do-install:
 
 post-install:
 	${PYTHON_CMD} -m compileall ${STAGEDIR}${PREFIX}/lib/crashd
+	(cd ${STAGEDIR}${PREFIX}/lib/crashd; ${FIND} -E . -type f -regex ".*.pyc?" \
+		| ${SED} -e 's,^\./,,g' \
+		| ${AWK} '{print length, $$0}' | ${SORT} -rn \
+		| ${AWK} '{print "lib/crashd/"$$2 }' >> ${TMPPLIST})
+
+	(cd ${STAGEDIR}${PREFIX}/libexec/telemetry; ${FIND} . -type f \
+		| ${SED} -e 's,^\./,,g' \
+		| ${AWK} '{print length, $$0}' | ${SORT} -rn \
+		| ${AWK} '{print "libexec/telemetry/"$$2 }' >> ${TMPPLIST})
 
 .include <bsd.port.mk>

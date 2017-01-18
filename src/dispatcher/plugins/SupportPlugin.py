@@ -156,7 +156,7 @@ class SupportSubmitTask(Task):
             )
 
             if data['debug']:
-                self.join_subtasks(self.run_subtask('debug.save_to_file', debug_file_name))
+                self.run_subtask_sync('debug.save_to_file', debug_file_name)
                 if ticket.get('attachments'):
                     ticket['attachments'].append(debug_file_name)
                 else:

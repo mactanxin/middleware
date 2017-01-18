@@ -20,7 +20,7 @@ RUN_DEPENDS=	${PYTHON_PKGNAMEPREFIX}argh>0:${PORTSDIR}/devel/py-argh \
 		${PYTHON_PKGNAMEPREFIX}gevent-websocket>0:${PORTSDIR}/www/py-gevent-websocket \
 		${PYTHON_PKGNAMEPREFIX}jsonschema>0:${PORTSDIR}/devel/py-jsonschema \
 		${PYTHON_PKGNAMEPREFIX}lxml>0:${PORTSDIR}/devel/py-lxml \
-		${PYTHON_PKGNAMEPREFIX}openssl>0:${PORTSDIR}/security/py-openssl \
+		${PYTHON_PKGNAMEPREFIX}openssl>=16.2.0:${PORTSDIR}/security/py-openssl \
 		${PYTHON_PKGNAMEPREFIX}psutil>0:${PORTSDIR}/sysutils/py-psutil \
 		${PYTHON_PKGNAMEPREFIX}pyee>0:${PORTSDIR}/devel/py-pyee \
 		${PYTHON_PKGNAMEPREFIX}requests>0:${PORTSDIR}/www/py-requests \
@@ -32,7 +32,6 @@ RUN_DEPENDS=	${PYTHON_PKGNAMEPREFIX}argh>0:${PORTSDIR}/devel/py-argh \
 		${PYTHON_PKGNAMEPREFIX}boto3>0:${PORTSDIR}/devel/py-boto3 \
 		${PYTHON_PKGNAMEPREFIX}dockerhub>0:${PORTSDIR}/freenas/py-dockerhub \
 		${PYTHON_PKGNAMEPREFIX}dockerfile-parse>0:${PORTSDIR}/devel/py-dockerfile-parse \
-		${PYTHON_PKGNAMEPREFIX}dropbox>0:${PORTSDIR}/net/py-dropbox \
 		${PYTHON_PKGNAMEPREFIX}python-consul>0:${PORTSDIR}/devel/py-consul \
 		${PYTHON_PKGNAMEPREFIX}sortedcontainers>0:${PORTSDIR}/devel/py-sortedcontainers \
 		${PYTHON_PKGNAMEPREFIX}freenas.dispatcher>0:${PORTSDIR}/freenas/py-freenas.dispatcher \

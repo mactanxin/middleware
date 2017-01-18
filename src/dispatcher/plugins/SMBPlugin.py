@@ -108,6 +108,10 @@ class SMBConfigureTask(Task):
         if workgroup.lower() in [i.lower() for i in netbiosname]:
             raise TaskException(errno.EINVAL, 'NetBIOS and Workgroup must be unique')
 
+        if smb.get('guest_user'):
+            if not self.dispatcher.call_sync('user.query', [('username', '=', smb['guest_user'])], {'single': True}):
+                raise TaskException(errno.EINVAL, 'User: {0} does not exist'.format(smb['guest_user']))
+
         try:
             action = 'NONE'
             node = ConfigNode('service.smb', self.configstore)
@@ -148,66 +152,75 @@ def yesno(val):
 
 def configure_params(smb, ad=False):
     conf = smbconf.SambaConfig('registry')
-    conf['netbios name'] = smb['netbiosname'][0]
-    conf['netbios aliases'] = ' '.join(smb['netbiosname'][1:])
+    conf.transaction_start()
+    try:
+        conf['netbios name'] = smb['netbiosname'][0]
+        conf['netbios aliases'] = ' '.join(smb['netbiosname'][1:])
 
-    if smb['bind_addresses']:
-        conf['interfaces'] = ' '.join(['127.0.0.1'] + smb['bind_addresses'])
+        if smb['bind_addresses']:
+            conf['interfaces'] = ' '.join(['127.0.0.1'] + smb['bind_addresses'])
 
-    conf['server string'] = smb['description']
-    conf['encrypt passwords'] = 'yes'
-    conf['dns proxy'] = 'no'
-    conf['strict locking'] = 'no'
-    conf['oplocks'] = 'yes'
-    conf['deadtime'] = '15'
-    conf['max log size'] = '51200'
-    conf['max open files'] = str(int(get_sysctl('kern.maxfilesperproc')) - 25)
+        conf['server string'] = smb['description']
+        conf['server max protocol'] = smb['max_protocol']
+        conf['server min protocol'] = smb['min_protocol']
+        conf['encrypt passwords'] = 'yes'
+        conf['dns proxy'] = 'no'
+        conf['strict locking'] = 'no'
+        conf['oplocks'] = 'yes'
+        conf['deadtime'] = '15'
+        conf['max log size'] = '51200'
+        conf['max open files'] = str(int(get_sysctl('kern.maxfilesperproc')) - 25)
 
-    if smb['syslog']:
-        conf['syslog only'] = 'yes'
-        conf['syslog'] = '1'
+        if smb['syslog']:
+            conf['syslog only'] = 'yes'
+            conf['syslog'] = '1'
 
-    if 'filemask' in smb:
-        if smb['filemask'] is not None:
-            conf['create mode'] = perm_to_oct_string(get_unix_permissions(smb['filemask'])).zfill(4)
+        if 'filemask' in smb:
+            if smb['filemask'] is not None:
+                conf['create mode'] = perm_to_oct_string(get_unix_permissions(smb['filemask'])).zfill(4)
 
-    if 'dirmask' in smb:
-        if smb['dirmask'] is not None:
-            conf['directory mode'] = perm_to_oct_string(get_unix_permissions(smb['dirmask'])).zfill(4)
+        if 'dirmask' in smb:
+            if smb['dirmask'] is not None:
+                conf['directory mode'] = perm_to_oct_string(get_unix_permissions(smb['dirmask'])).zfill(4)
 
-    conf['load printers'] = 'no'
-    conf['printing'] = 'bsd'
-    conf['printcap name'] = '/dev/null'
-    conf['disable spoolss'] = 'yes'
-    conf['getwd cache'] = 'yes'
-    conf['guest account'] = smb['guest_user']
-    conf['map to guest'] = 'Bad User'
-    conf['obey pam restrictions'] = yesno(smb['obey_pam_restrictions'])
-    conf['directory name cache size'] = '0'
-    conf['kernel change notify'] = 'no'
-    conf['panic action'] = '/usr/local/libexec/samba/samba-backtrace'
-    conf['nsupdate command'] = '/usr/local/bin/samba-nsupdate -g'
-    conf['ea support'] = 'yes'
-    conf['store dos attributes'] = 'yes'
-    conf['lm announce'] = 'yes'
-    conf['hostname lookups'] = yesno(smb['hostlookup'])
-    conf['unix extensions'] = yesno(smb['unixext'])
-    conf['time server'] = yesno(smb['time_server'])
-    conf['null passwords'] = yesno(smb['empty_password'])
-    conf['acl allow execute always'] = yesno(smb['execute_always'])
-    conf['acl check permissions'] = 'true'
-    conf['dos filemode'] = 'yes'
-    conf['multicast dns register'] = yesno(smb['zeroconf'])
-    conf['passdb backend'] = 'freenas'
-    conf['log level'] = str(getattr(LogLevel, smb['log_level']).value)
-    conf['username map'] = '/usr/local/etc/smbusers'
-    conf['idmap config *: range'] = '90000001-100000000'
-    conf['idmap config *: backend'] = 'tdb'
+        conf['load printers'] = 'no'
+        conf['printing'] = 'bsd'
+        conf['printcap name'] = '/dev/null'
+        conf['disable spoolss'] = 'yes'
+        conf['getwd cache'] = 'yes'
+        conf['guest account'] = smb['guest_user']
+        conf['map to guest'] = 'Bad User'
+        conf['obey pam restrictions'] = yesno(smb['obey_pam_restrictions'])
+        conf['directory name cache size'] = '0'
+        conf['kernel change notify'] = 'no'
+        conf['panic action'] = '/usr/local/libexec/samba/samba-backtrace'
+        conf['nsupdate command'] = '/usr/local/bin/samba-nsupdate -g'
+        conf['ea support'] = 'yes'
+        conf['store dos attributes'] = 'yes'
+        conf['lm announce'] = 'yes'
+        conf['hostname lookups'] = yesno(smb['hostlookup'])
+        conf['unix extensions'] = yesno(smb['unixext'])
+        conf['time server'] = yesno(smb['time_server'])
+        conf['null passwords'] = yesno(smb['empty_password'])
+        conf['acl allow execute always'] = yesno(smb['execute_always'])
+        conf['acl check permissions'] = 'true'
+        conf['dos filemode'] = 'yes'
+        conf['multicast dns register'] = yesno(smb['zeroconf'])
+        conf['passdb backend'] = 'freenas'
+        conf['log level'] = str(getattr(LogLevel, smb['log_level']).value)
+        conf['username map'] = '/usr/local/etc/smbusers'
+        conf['idmap config *: range'] = '90000001-100000000'
+        conf['idmap config *: backend'] = 'tdb'
 
-    if not ad:
-        conf['local master'] = yesno(smb['local_master'])
-        conf['server role'] = 'auto'
-        conf['workgroup'] = smb['workgroup']
+        if not ad:
+            conf['local master'] = yesno(smb['local_master'])
+            conf['server role'] = 'auto'
+            conf['workgroup'] = smb['workgroup']
+    except BaseException as err:
+        logger.error('Failed to update samba registry: {0}'.format(err), exc_info=True)
+        conf.transaction_cancel()
+    else:
+        conf.transaction_commit()
 
 
 def collect_debug(dispatcher):
@@ -313,8 +326,10 @@ def _init(dispatcher, plugin):
 
     plugin.register_schema_definition('ServiceSmbDoscharset', {
         'type': 'string',
-        'enum': ['CP437', 'CP850', 'CP852', 'CP866', 'CP932', 'CP949',
-                 'CP950', 'CP1029', 'CP1251', 'ASCII']
+        'enum': [
+            'CP437', 'CP850', 'CP852', 'CP866', 'CP932', 'CP949',
+            'CP950', 'CP1029', 'CP1251', 'ASCII'
+        ]
     })
 
     plugin.register_schema_definition('ServiceSmbUnixcharset', {
@@ -327,9 +342,10 @@ def _init(dispatcher, plugin):
         'enum': list(LogLevel.__members__.keys())
     })
 
+
     plugin.register_schema_definition('ServiceSmbMinprotocol', {
-        'type': ['string', 'null'],
-        'enum': [None] + PROTOCOLS
+        'type': 'string',
+        'enum': PROTOCOLS
     })
 
     plugin.register_schema_definition('ServiceSmbMaxprotocol', {

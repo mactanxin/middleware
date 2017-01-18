@@ -156,6 +156,9 @@ class TaskExecutor(object):
     def put_warning(self, warning):
         self.task.add_warning(warning)
 
+    def update_env(self, env):
+        self.conn.call_sync('taskproxy.update_env', env)
+
     def run(self, task):
         def match_file(module, f):
             name, ext = os.path.splitext(f)
@@ -837,6 +840,10 @@ class Balancer(object):
 
     def get_executor_by_sender(self, sender):
         return first_or_default(lambda t: t.conn == sender, self.executors)
+
+    def update_executor_environment(self, env):
+        for e in self.executors:
+            e.update_env(env)
 
 
 def serialize_error(err):

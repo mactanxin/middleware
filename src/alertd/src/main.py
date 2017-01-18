@@ -56,6 +56,7 @@ REMINDER_SCHEDULE = {
 
 operators_table = {
     '=': lambda x, y: x == y,
+    '==': lambda x, y: x == y,
     '!=': lambda x, y: x != y,
     '>': lambda x, y: x > y,
     '<': lambda x, y: x < y,
@@ -191,8 +192,11 @@ class Main(object):
                 if predicate['operator'] not in operators_table:
                     continue
 
-                if not operators_table[predicate['operator']](alert[predicate['property']], predicate['value']):
-                    break
+                try:
+                    if not operators_table[predicate['operator']](alert[predicate['property']], predicate['value']):
+                        break
+                except:
+                    continue
             else:
                 try:
                     emitter = self.emitters.get(i['emitter'])

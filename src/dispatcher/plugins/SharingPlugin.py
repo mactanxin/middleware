@@ -221,21 +221,21 @@ class CreateShareTask(Task):
 
             if not self.dispatcher.call_sync('zfs.dataset.query', [('name', '=', dataset)], {'single': True}):
                 if share_type['subtype'] == 'FILE':
-                    self.join_subtasks(self.run_subtask('volume.dataset.create', {
+                    self.run_subtask_sync('volume.dataset.create', {
                         'volume': pool,
                         'id': dataset,
                         'permissions_type': share_type['perm_type'],
                         'properties': dataset_properties or {}
-                    }))
+                    })
 
                 if share_type['subtype'] == 'BLOCK':
-                    self.join_subtasks(self.run_subtask('volume.dataset.create', {
+                    self.run_subtask_sync('volume.dataset.create', {
                         'volume': pool,
                         'id': dataset,
                         'type': 'VOLUME',
                         'volsize': share['properties']['size'],
                         'properties': dataset_properties or {}
-                    }))
+                    })
             else:
                 if share_type['subtype'] == 'FILE':
                     self.run_subtask('volume.dataset.update', dataset, {
@@ -243,6 +243,10 @@ class CreateShareTask(Task):
                     })
 
         elif share['target_type'] == 'DIRECTORY':
+            pool_mountpoints = tuple(self.dispatcher.call_sync('volume.query', [], {'select': 'mountpoint'}))
+            if not share['target_path'].startswith(pool_mountpoints):
+                raise TaskException(errno.EINVAL, "Provided directory has to reside within user defined ZFS pool")
+
             # Verify that target directory exists
             path = share['target_path']
             if not os.path.isdir(path):
@@ -258,15 +262,15 @@ class CreateShareTask(Task):
             raise AssertionError('Invalid target type')
 
         if share.get('permissions') and share['target_type'] not in ('ZVOL', 'FILE'):
-            self.join_subtasks(self.run_subtask('file.set_permissions', path, share.pop('permissions')))
+            self.run_subtask_sync('file.set_permissions', path, share.pop('permissions'))
 
-        ids = self.join_subtasks(self.run_subtask('share.{0}.create'.format(share['type']), share))
+        id = self.run_subtask_sync('share.{0}.create'.format(share['type']), share)
         self.dispatcher.dispatch_event('share.changed', {
             'operation': 'create',
-            'ids': ids
+            'ids': [id]
         })
 
-        new_share = self.datastore.get_by_id('shares', ids[0])
+        new_share = self.datastore.get_by_id('shares', id)
         path = self.dispatcher.call_sync('share.get_directory_path', new_share['id'])
         try:
             save_config(
@@ -282,14 +286,14 @@ class CreateShareTask(Task):
             if enable_service:
                 config = service_state['config']
                 config['enable'] = True
-                self.join_subtasks(self.run_subtask('service.update', service_state['id'], {'config': config}))
+                self.run_subtask_sync('service.update', service_state['id'], {'config': config})
             else:
                 self.add_warning(TaskWarning(
                     errno.ENXIO, "Share has been created but the service {0} is not currently running "
                                  "Please enable the {0} service.".format(share['type'])
                 ))
 
-        return ids[0]
+        return id
 
 
 @description("Updates existing share")
@@ -332,6 +336,10 @@ class UpdateShareTask(Task):
         permissions = updated_fields.pop('permissions', None)
         share_path = self.dispatcher.call_sync('share.expand_path', path_after_update, type_after_update)
 
+        pool_mountpoints = tuple(self.dispatcher.call_sync('volume.query', [], {'select': 'mountpoint'}))
+        if not path_after_update.startswith(pool_mountpoints):
+            raise TaskException(errno.EINVAL, "Provided directory has to reside within user defined ZFS pool")
+
         if not os.path.exists(share_path):
             raise TaskException(
                 errno.ENOENT,
@@ -362,14 +370,14 @@ class UpdateShareTask(Task):
                 )
 
             share.update(updated_fields)
-            self.join_subtasks(self.run_subtask('share.{0}.delete'.format(old_share_type), id))
-            self.join_subtasks(self.run_subtask('share.{0}.create'.format(updated_fields['type']), share))
+            self.run_subtask_sync('share.{0}.delete'.format(old_share_type), id)
+            self.run_subtask_sync('share.{0}.create'.format(updated_fields['type']), share)
         else:
-            self.join_subtasks(self.run_subtask('share.{0}.update'.format(share['type']), id, updated_fields))
+            self.run_subtask_sync('share.{0}.update'.format(share['type']), id, updated_fields)
 
         if permissions:
             path = self.dispatcher.call_sync('share.translate_path', id)
-            self.join_subtasks(self.run_subtask('file.set_permissions', path, permissions))
+            self.run_subtask_sync('file.set_permissions', path, permissions)
 
         self.dispatcher.dispatch_event('share.changed', {
             'operation': 'update',
@@ -392,7 +400,7 @@ class UpdateShareTask(Task):
             if enable_service:
                 config = service_state['config']
                 config['enable'] = True
-                self.join_subtasks(self.run_subtask('service.update', service_state['id'], {'config': config}))
+                self.run_subtask_sync('service.update', service_state['id'], {'config': config})
             else:
                 self.add_warning(TaskWarning(
                     errno.ENXIO, "Share has been updated but the service {0} is not currently running "
@@ -448,14 +456,14 @@ class ImportShareTask(Task):
                 share['type']
             ))
 
-        ids = self.join_subtasks(self.run_subtask('share.{0}.import'.format(share['type']), share))
+        id = self.run_subtask_sync('share.{0}.import'.format(share['type']), share)
 
         self.dispatcher.dispatch_event('share.changed', {
             'operation': 'create',
-            'ids': ids
+            'ids': [id]
         })
 
-        return ids[0]
+        return id
 
 
 @description("Sets share immutable")
@@ -519,7 +527,7 @@ class DeleteShareTask(Task):
         except OSError:
             pass
 
-        self.join_subtasks(self.run_subtask('share.{0}.delete'.format(share['type']), id))
+        self.run_subtask_sync('share.{0}.delete'.format(share['type']), id)
         self.dispatcher.dispatch_event('share.changed', {
             'operation': 'delete',
             'ids': [id]
@@ -545,7 +553,7 @@ class ExportShareTask(Task):
         if not share:
             raise TaskException(errno.ENOENT, 'Share not found')
 
-        self.join_subtasks(self.run_subtask('share.{0}.delete'.format(share['type']), id))
+        self.run_subtask_sync('share.{0}.delete'.format(share['type']), id)
         self.dispatcher.dispatch_event('share.changed', {
             'operation': 'delete',
             'ids': [id]
@@ -567,7 +575,7 @@ class DeleteDependentShares(Task):
 
     def run(self, path):
         for i in self.dispatcher.call_sync('share.get_dependencies', path):
-            self.join_subtasks(self.run_subtask('share.delete', i['id']))
+            self.run_subtask_sync('share.delete', i['id'])
 
 
 @private
@@ -606,7 +614,7 @@ class ShareTerminateConnectionTask(Task):
         return ['system']
 
     def run(self, share_type, address):
-        self.join_subtasks(self.run_subtask('share.{0}.terminate_connection'.format(share_type), address))
+        self.run_subtask_sync('share.{0}.terminate_connection'.format(share_type), address)
 
 
 def _depends():

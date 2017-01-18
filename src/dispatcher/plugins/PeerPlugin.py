@@ -91,15 +91,15 @@ class PeerCreateTask(Task):
             'health_check_interval': 60
         })
 
-        ids = self.join_subtasks(self.run_subtask(
+        id = self.run_subtask_sync(
             'peer.{0}.create'.format(peer.get('type')),
             peer,
             initial_credentials
-        ))
+        )
 
         self.dispatcher.dispatch_event('peer.changed', {
             'operation': 'create',
-            'ids': [ids[0]]
+            'ids': [id]
         })
 
 
@@ -125,7 +125,7 @@ class PeerUpdateTask(Task):
         if 'type' in updated_fields and peer['type'] != updated_fields['type']:
             raise TaskException(errno.EINVAL, 'Peer type cannot be updated')
 
-        self.join_subtasks(self.run_subtask('peer.{0}.update'.format(peer.get('type')), id, updated_fields))
+        self.run_subtask_sync('peer.{0}.update'.format(peer.get('type')), id, updated_fields)
         self.dispatcher.dispatch_event('peer.changed', {
             'operation': 'update',
             'ids': [id]
@@ -152,7 +152,7 @@ class PeerDeleteTask(Task):
 
         peer = self.datastore.get_by_id('peers', id)
 
-        self.join_subtasks(self.run_subtask('peer.{0}.delete'.format(peer.get('type')), id))
+        self.run_subtask_sync('peer.{0}.delete'.format(peer.get('type')), id)
         self.dispatcher.dispatch_event('peer.changed', {
             'operation': 'delete',
             'ids': [id]

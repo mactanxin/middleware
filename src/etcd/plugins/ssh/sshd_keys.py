@@ -31,7 +31,7 @@ import base64
 
 
 def run(context):
-    for keytype in ('host', 'rsa', 'dsa', 'ecdsa', 'ed25519'):
+    for keytype in ('rsa', 'dsa', 'ecdsa', 'ed25519'):
         config = context.configstore
         private_key = config.get('service.sshd.keys.{0}.private'.format(keytype))
         public_key = config.get('service.sshd.keys.{0}.public'.format(keytype))
@@ -48,8 +48,7 @@ def run(context):
                 return
 
             try:
-                keyalg = 'rsa1' if keytype == 'host' else keytype
-                subprocess.check_call(['/usr/bin/ssh-keygen', '-q', '-t', keyalg, '-f', private_key_file, '-N', ''])
+                subprocess.check_call(['/usr/bin/ssh-keygen', '-q', '-t', keytype, '-f', private_key_file, '-N', ''])
                 subprocess.check_call(['/usr/bin/ssh-keygen', '-l', '-f', public_key_file])
             except subprocess.CalledProcessError:
                 raise
