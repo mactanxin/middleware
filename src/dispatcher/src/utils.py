@@ -55,9 +55,13 @@ def split_dataset(dataset_path):
     return pool, dataset_path
 
 
-def save_config(conf_path, name_mod, entry):
-    with open(os.path.join(conf_path, '.config-{0}.json'.format(name_mod)), 'w', encoding='utf-8') as conf_file:
+def save_config(conf_path, name_mod, entry, file_perms=None):
+    file_name = os.path.join(conf_path, '.config-{0}.json'.format(name_mod))
+    with open(file_name, 'w', encoding='utf-8') as conf_file:
         conf_file.write(dumps(entry))
+
+    if file_perms:
+        os.chmod(file_name, file_perms)
 
 
 def load_config(conf_path, name_mod):
