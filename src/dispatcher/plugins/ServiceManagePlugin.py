@@ -346,24 +346,24 @@ class UpdateServiceConfigTask(Task):
             if service_def.get('etcd-group'):
                 self.dispatcher.call_sync('etcd.generation.generate_group', service_def.get('etcd-group'))
 
-            if 'enable' in updated_config:
-                # Propagate to dependent services
-                for i in service_def.get('dependencies', []):
-                    svc_dep = self.datastore.get_by_id('service_definitions', i)
-                    self.run_subtask_sync('service.update', i, {
-                        'config': {
-                            'type': 'service-{0}'.format(svc_dep['name']),
-                            'enable': updated_config['enable']
-                        }
-                    })
+        if 'enable' in updated_config:
+            # Propagate to dependent services
+            for i in service_def.get('dependencies', []):
+                svc_dep = self.datastore.get_by_id('service_definitions', i)
+                self.run_subtask_sync('service.update', i, {
+                    'config': {
+                        'type': 'service-{0}'.format(svc_dep['name']),
+                        'enable': updated_config['enable']
+                    }
+                })
 
-                if service_def.get('auto_enable'):
-                    # Consult state of services dependent on us
-                    for i in self.datastore.query('service_definitions', ('dependencies', 'in', service_def['name'])):
-                        enb = self.configstore.get('service.{0}.enable', i['name'])
-                        if enb != updated_config['enable']:
-                            del updated_config['enable']
-                            break
+            if service_def.get('auto_enable'):
+                # Consult state of services dependent on us
+                for i in self.datastore.query('service_definitions', ('dependencies', 'in', service_def['name'])):
+                    enb = self.configstore.get('service.{0}.enable', i['name'])
+                    if enb != updated_config['enable']:
+                        del updated_config['enable']
+                        break
 
         if 'launchd' in service_def:
             if enable:
