@@ -34,6 +34,7 @@ import signal
 import sys
 import re
 import tempfile
+import tarfile
 from freenas.utils import human_readable_bytes
 from resources import Resource
 from cache import CacheStore
@@ -273,11 +274,10 @@ class UpdateHandler(object):
         self.pkgname = ''
         self.pkgversion = ''
         self.operation = ''
-        self.filesize = 0
-        self.numfilestotal = 0
-        self.numfilesdone = 0
         self._baseprogress = 0
         self.master_progress = 0
+        self.pkgindex = 0
+        self.numpkgs = 0
         self.dispatcher = dispatcher
         # Below is the function handle passed to this by the Task so that
         # its status and progress can be updated accordingly
@@ -307,12 +307,24 @@ class UpdateHandler(object):
 
     def install_handler(self, index, name, packages):
         self.indeterminate = False
-        total = len(packages)
-        self.numfilesdone = index
-        self.numfilesdone = total
-        self.progress = int((float(index) / float(total)) * 100.0)
+        self.numpkgs = len(packages)
+        self.pkgindex = index
+        self.progress = int((self.pkgindex - 1) * 100 / self.numpkgs )
         self.operation = 'Installing'
         self.details = 'Installing {0}'.format(name)
+        self.emit_update_details()
+
+    def install_progress_handler(self, **kwargs):
+        total = kwargs.pop("total", 0)
+        index = kwargs.pop("index", 0)
+        done = kwargs.pop("done", False)
+
+        if done:
+            self.progress = int(self.pkgindex * 100 / self.numpkgs)
+        elif total:
+            cur_pct = int(index * 100 / (total * self.numpkgs))
+            if (self.progress + cur_pct) > self.progress:
+                self.progress = self.progress + cur_pct
         self.emit_update_details()
 
     def emit_update_details(self):
@@ -326,9 +338,6 @@ class UpdateHandler(object):
             'reboot': self.reboot,
             'pkg_name': self.pkgname,
             'pkg_version': self.pkgversion,
-            'filesize': self.filesize,
-            'num_files_one': self.numfilesdone,
-            'num_files_total': self.numfilestotal,
             'error': self.error,
             'finished': self.finished,
             'details': self.details,
@@ -835,7 +844,10 @@ class UpdateApplyTask(ProgressTask):
         # Note: for now we force reboots always, TODO: Fix in M3-M4
         try:
             result = ApplyUpdate(
-                cache_dir, install_handler=handler.install_handler, force_reboot=True
+                cache_dir,
+                install_handler=handler.install_handler,
+                progressFunc=handler.install_progress_handler,
+                force_reboot=True
             )
         except ManifestInvalidSignature as e:
             logger.debug('UpdateApplyTask Error: Cached manifest has invalid signature: %s', e)
@@ -1008,9 +1020,6 @@ def _init(dispatcher, plugin):
             'reboot': {'type': 'boolean'},
             'pkg_name': {'type': 'string'},
             'pkg_version': {'type': 'string'},
-            'filesize': {'type': 'integer'},
-            'num_files_done': {'type': 'integer'},
-            'num_files_total': {'type': 'integer'},
             'error': {'type': 'boolean'},
             'finished': {'type': 'boolean'}
         }
