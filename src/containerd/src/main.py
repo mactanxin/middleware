@@ -1000,9 +1000,17 @@ class DockerHost(object):
                         })
 
                     if ev['Type'] == 'network':
+                        netw_id = q.get(ev, 'Actor.ID')
+                        cont_id = q.get(ev, 'Actor.Attributes.container')
+                        operation = actions.get(ev['Action'], 'update')
+                        if cont_id:
+                            self.context.client.emit_event('containerd.docker.container.changed', {
+                                'operation': operation,
+                                'ids': [cont_id]
+                            })
                         self.context.client.emit_event('containerd.docker.network.changed', {
-                            'operation': actions.get(ev['Action'], 'update'),
-                            'ids': [ev['Actor']['ID']]
+                            'operation': operation,
+                            'ids': [netw_id]
                         })
 
                 self.logger.warning('Disconnected from Docker API endpoint on {0}'.format(self.vm.name))
