@@ -200,6 +200,7 @@ class VolumeProvider(Provider):
             'id': str,
             'name': str,
             'topology': h.ref('zfs-topology'),
+            'disks': h.array(str),
             'status': str
         })
     ))
