@@ -86,9 +86,9 @@ class DeviceInfoProvider(Provider):
     @description("Returns list of devices from given class")
     @accepts(str)
     @returns(h.any_of(
-        h.ref('disk-device'),
+        h.ref('DiskDevice'),
         h.ref('NetworkDevice'),
-        h.ref('cpu-device'),
+        h.ref('CpuDevice'),
         h.ref('SerialPortDevice'),
         h.ref('UsbDevice')
     ))
