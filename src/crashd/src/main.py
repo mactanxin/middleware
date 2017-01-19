@@ -82,7 +82,7 @@ class Main(object):
 
     def collect_telemetry(self):
         logger.info('Collecting telemetry data into {0}'.format(TELEMETRY_STAGING_PATH))
-        shutil.rmtree(TELEMETRY_STAGING_PATH)
+        shutil.rmtree(TELEMETRY_STAGING_PATH, ignore_errors=True)
         os.makedirs(TELEMETRY_STAGING_PATH)
         os.chdir(TELEMETRY_STAGING_PATH)
 
