@@ -306,9 +306,10 @@ class UpdateHandler(object):
         self.indeterminate = False
         self.numpkgs = len(packages)
         self.pkgindex = index
+        self.pkgname = name
         self.progress = self._baseprogress = int((self.pkgindex - 1) * 100 / self.numpkgs)
         self.operation = 'Installing'
-        self.details = 'Installing {0}'.format(name)
+        self.details = 'Installing {0}'.format(self.pkgname)
         self.emit_update_details()
 
     def install_progress_handler(self, **kwargs):
@@ -318,8 +319,12 @@ class UpdateHandler(object):
 
         if done:
             self.progress = int(self.pkgindex * 100 / self.numpkgs)
+            self.details = 'Done installing {0}'.format(self.pkgname)
         elif total:
             cur_pct = int(index * 100 / (total * self.numpkgs))
+            self.details = 'Installing {0} Progress: {1}'.format(
+                self.pkgname, self.numpkgs * cur_pct
+            )
             if (self._baseprogress + cur_pct) > self.progress:
                 self.progress = self._baseprogress + cur_pct
 
