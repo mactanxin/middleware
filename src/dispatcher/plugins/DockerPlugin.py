@@ -506,7 +506,12 @@ class DockerContainerCreateTask(DockerBaseTask):
             'privileged': False,
             'capabilities_add': [],
             'capabilities_drop': [],
+            'networks': [],
         })
+
+        for id in container.get('networks'):
+            if not self.dispatcher.call_sync('docker.network.query', [('id', '=', id)], {'count': True}):
+                raise TaskException(errno.EEXIST, 'Docker network {0} does not exist'.format(id))
 
         if not container.get('host'):
             container['host'] = self.get_default_host(
@@ -577,6 +582,17 @@ class DockerContainerCreateTask(DockerBaseTask):
             lambda: self.dispatcher.call_sync('containerd.docker.create_container', container, timeout=100),
             600
         )
+
+        if container.get('networks'):
+            self.set_progress(95, 'Connecting to networks')
+            contid = self.dispatcher.call_sync(
+                'docker.container.query',
+                [('name', '=', container.get('name'))],
+                {'select': 'id', 'single': True}
+            )
+            for netid in container.get('networks'):
+                self.run_subtask_sync('docker.network.connect', [contid], netid)
+
         self.set_progress(100, 'Finished')
 
 
@@ -933,7 +949,12 @@ class DockerNetworkCreateTask(DockerBaseTask):
             'driver': 'bridge',
             'subnet': None,
             'gateway': None,
+            'containers': []
         })
+
+        for id in network.get('containers'):
+            if not self.dispatcher.call_sync('docker.container.query', [('id', '=', id)], {'count': True}):
+                raise TaskException(errno.EEXIST, 'Docker container {0} does not exist'.format(id))
 
         if not network.get('host'):
             network['host'] = self.get_default_host(
@@ -957,6 +978,14 @@ class DockerNetworkCreateTask(DockerBaseTask):
             match_fn,
             lambda: self.dispatcher.call_sync('containerd.docker.create_network', network)
         )
+
+        if network.get('containers'):
+            netid = self.dispatcher.call_sync(
+                'docker.network.query',
+                [('name', '=', network.get('name'))],
+                {'select': 'id', 'single': True}
+            )
+            self.run_subtask_sync('docker.network.connect', network.get('containers'), netid)
 
 
 @description('Deletes a Docker network')
@@ -992,6 +1021,9 @@ class DockerNetworkDeleteTask(DockerBaseTask):
         if not self.datastore.exists('docker.networks', ('id', '=', id)):
             raise TaskException(errno.ENOENT, 'Docker network {0} does not exist'.format(id))
 
+        if self.dispatcher.call_sync('docker.network.query', [('id', '=', id)], {'select': 'containers', 'single': True}):
+            raise TaskException(errno.EINVAL, 'Cannot delete network "{0}" with connected containers'.format(id))
+
         try:
             self.dispatcher.call_sync('containerd.docker.host_name_by_network_id', id)
         except RpcException:
@@ -1021,30 +1053,30 @@ class DockerNetworkDeleteTask(DockerBaseTask):
         )
 
 
-@description('Connects container to a network')
-@accepts(str, str)
+@description('Connects selected containers to a network')
+@accepts(h.array(str), str)
 class DockerNetworkConnectTask(DockerBaseTask):
     @classmethod
     def early_describe(cls):
-        return 'Connecting container to network'
+        return 'Connecting containers to network'
 
-    def describe(self, container_id, network_id):
-        contname = self.dispatcher.call_sync(
-            'docker.container.query', [('id', '=', container_id)], {'single': True, 'select': 'names.0'}
+    def describe(self, container_ids, network_id):
+        contnames = self.dispatcher.call_sync(
+            'docker.container.query', [('id', 'in', container_ids)], {'select': 'name'}
         )
         netname = self.dispatcher.call_sync(
             'docker.network.query', [('id', '=', network_id)], {'single': True, 'select': 'name'}
         )
-        return TaskDescription('Connecting container {contname} to network {netname}',
-                               contname=contname or container_id,
+        return TaskDescription('Connecting containers {contnames} to network {netname}',
+                               contnames=','.join(contnames) or ','.join(container_ids),
                                netname=netname or network_id)
 
-    def verify(self, container_id=None, network_id=None):
-        if not container_id or not network_id:
-            raise TaskException(errno.EINVAL, 'Both container and network must be specified')
+    def verify(self, container_ids=None, network_id=None):
+        if not container_ids or not network_id:
+            raise TaskException(errno.EINVAL, 'Both container(s) and network must be specified')
         hostname = None
         try:
-            hostname = self.dispatcher.call_sync('containerd.docker.host_name_by_container_id', container_id)
+            hostname = self.dispatcher.call_sync('containerd.docker.host_name_by_container_id', container_ids[0])
         except RpcException:
             pass
 
@@ -1053,58 +1085,58 @@ class DockerNetworkConnectTask(DockerBaseTask):
         else:
             return ['docker']
 
-    def run(self, container_id, network_id):
-        container = self.dispatcher.call_sync('docker.container.query', [('id', '=', container_id)], {'single': True})
+    def run(self, container_ids, network_id):
+        for id in container_ids:
+            if not self.datastore.exists('docker.containers', ('id', '=', id)):
+                raise TaskException(errno.ENOENT, 'Docker container {0} not found'.format(id))
+
         network = self.dispatcher.call_sync('docker.network.query', [('id', '=', network_id)], {'single': True})
-        if not container:
-            raise TaskException(errno.ENOENT, 'Docker container {0} does not exist'.format(container['names'][0]))
-        if not container.get('running'):
-            raise TaskException(errno.ENOENT, 'Docker container {0} is stopped'.format(container['names'][0]))
         if not network:
             raise TaskException(errno.ENOENT, 'Docker network {0} does not exist'.format(network['name']))
 
         try:
-            self.dispatcher.call_sync('containerd.docker.host_name_by_container_id', container_id)
+            self.dispatcher.call_sync('containerd.docker.host_name_by_container_id', container_ids[0])
         except RpcException:
-            _, host_name = self.get_container_name_and_vm_name(container_id)
+            _, host_name = self.get_container_name_and_vm_name(container_ids[0])
             raise TaskException(
                 errno.EINVAL,
                 'Docker Host {0} is currently unreachable.'.format(host_name or '')
             )
 
-        self.dispatcher.exec_and_wait_for_event(
-            'docker.container.changed',
-            lambda args: args['operation'] == 'update' and container_id in args['ids'],
-            lambda: self.dispatcher.call_sync(
-                'containerd.docker.connect_container_to_network', container_id, network_id),
-            600
-        )
+        for id in container_ids:
+            self.dispatcher.exec_and_wait_for_event(
+                'docker.container.changed',
+                lambda args: args['operation'] == 'update' and id in args['ids'],
+                lambda: self.dispatcher.call_sync(
+                    'containerd.docker.connect_container_to_network', id, network_id),
+                600
+            )
 
 
-@description('Disconnects container from a network')
-@accepts(str, str)
+@description('Disconnects selected containers from a network')
+@accepts(h.array(str), str)
 class DockerNetworkDisconnectTask(DockerBaseTask):
     @classmethod
     def early_describe(cls):
-        return 'Disconnecting container from network'
+        return 'Disconnecting containers from network'
 
-    def describe(self, container_id, network_id):
-        contname = self.dispatcher.call_sync(
-            'docker.container.query', [('id', '=', container_id)], {'single': True, 'select': 'names.0'}
+    def describe(self, container_ids, network_id):
+        contnames = self.dispatcher.call_sync(
+            'docker.container.query', [('id', 'in', container_ids)], {'select': 'name'}
         )
         netname = self.dispatcher.call_sync(
             'docker.network.query', [('id', '=', network_id)], {'single': True, 'select': 'name'}
         )
-        return TaskDescription('Disconnecting container {contname} from network {netname}',
-                               contname=contname or container_id,
+        return TaskDescription('Disconnecting containers {contnames} from network {netname}',
+                               contnames=','.join(contnames) or ','.join(container_ids),
                                netname=netname or network_id)
 
-    def verify(self, container_id=None, network_id=None):
-        if not container_id or not network_id:
-            raise TaskException(errno.EINVAL, 'Both container and network must be specified')
+    def verify(self, container_ids=None, network_id=None):
+        if not container_ids or not network_id:
+            raise TaskException(errno.EINVAL, 'Both container(s) and network must be specified')
         hostname = None
         try:
-            hostname = self.dispatcher.call_sync('containerd.docker.host_name_by_container_id', container_id)
+            hostname = self.dispatcher.call_sync('containerd.docker.host_name_by_container_id', container_ids[0])
         except RpcException:
             pass
 
@@ -1113,32 +1145,32 @@ class DockerNetworkDisconnectTask(DockerBaseTask):
         else:
             return ['docker']
 
-    def run(self, container_id, network_id):
-        container = self.dispatcher.call_sync('docker.container.query', [('id', '=', container_id)], {'single': True})
+    def run(self, container_ids, network_id):
+        for id in container_ids:
+            if not self.datastore.exists('docker.containers', ('id', '=', id)):
+                raise TaskException(errno.ENOENT, 'Docker container {0} does not exist'.format(id))
+
         network = self.dispatcher.call_sync('docker.network.query', [('id', '=', network_id)], {'single': True})
-        if not container:
-            raise TaskException(errno.ENOENT, 'Docker container {0} does not exist'.format(container['names'][0]))
-        if not container.get('running'):
-            raise TaskException(errno.ENOENT, 'Docker container {0} is stopped'.format(container['names'][0]))
         if not network:
             raise TaskException(errno.ENOENT, 'Docker network {0} does not exist'.format(network['name']))
 
         try:
-            self.dispatcher.call_sync('containerd.docker.host_name_by_container_id', container_id)
+            self.dispatcher.call_sync('containerd.docker.host_name_by_container_id', container_ids[0])
         except RpcException:
-            _, host_name = self.get_container_name_and_vm_name(container_id)
+            _, host_name = self.get_container_name_and_vm_name(container_ids[0])
             raise TaskException(
                 errno.EINVAL,
                 'Docker Host {0} is currently unreachable.'.format(host_name or '')
             )
 
-        self.dispatcher.exec_and_wait_for_event(
-            'docker.container.changed',
-            lambda args: args['operation'] == 'update' and container_id in args['ids'],
-            lambda: self.dispatcher.call_sync(
-                'containerd.docker.disconnect_container_from_network', container_id, network_id),
-            600
-        )
+        for cid in container_ids:
+            self.dispatcher.exec_and_wait_for_event(
+                'docker.container.changed',
+                lambda args: args['operation'] == 'update' and cid in args['ids'],
+                lambda: self.dispatcher.call_sync(
+                    'containerd.docker.disconnect_container_from_network', cid, network_id),
+                600
+            )
 
 
 @description('Pulls a selected container image from Docker Hub and caches it on specified Docker host')
@@ -2056,6 +2088,10 @@ def _init(dispatcher, plugin):
                 'items': {'type': 'string'}
             },
             'privileged': {'type': 'boolean'},
+            'networks': {
+                'type': 'array',
+                'items': {'type': 'string'}
+            }
         }
     })
 
