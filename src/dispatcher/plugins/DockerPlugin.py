@@ -506,7 +506,12 @@ class DockerContainerCreateTask(DockerBaseTask):
             'privileged': False,
             'capabilities_add': [],
             'capabilities_drop': [],
+            'networks': [],
         })
+
+        for id in container.get('networks'):
+            if not self.dispatcher.call_sync('docker.network.query', [('id', '=', id)], {'count': True}):
+                raise TaskException(errno.EEXIST, 'Docker network {0} does not exist'.format(id))
 
         if not container.get('host'):
             container['host'] = self.get_default_host(
@@ -577,6 +582,17 @@ class DockerContainerCreateTask(DockerBaseTask):
             lambda: self.dispatcher.call_sync('containerd.docker.create_container', container, timeout=100),
             600
         )
+
+        if container.get('networks'):
+            self.set_progress(95, 'Connecting to networks')
+            contid = self.dispatcher.call_sync(
+                'docker.container.query',
+                [('name', '=', container.get('name'))],
+                {'select': 'id', 'single': True}
+            )
+            for netid in container.get('networks'):
+                self.run_subtask_sync('docker.network.connect', [contid], netid)
+
         self.set_progress(100, 'Finished')
 
 
