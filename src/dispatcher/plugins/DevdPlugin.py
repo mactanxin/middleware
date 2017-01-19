@@ -89,7 +89,7 @@ class DeviceInfoProvider(Provider):
         h.ref('disk-device'),
         h.ref('NetworkDevice'),
         h.ref('cpu-device'),
-        h.ref(SerialPortDevice'),
+        h.ref('SerialPortDevice'),
         h.ref('UsbDevice')
     ))
     def get_devices(self, dev_class):
