@@ -1103,21 +1103,12 @@ class DockerNetworkConnectTask(DockerBaseTask):
                 'Docker Host {0} is currently unreachable.'.format(host_name or '')
             )
 
-        containers = [c for c in self.dispatcher.call_sync(
-            'docker.container.query',
-            [('id', 'in', container_ids)],
-            {'select': ['id', 'name', 'running']}
-        )]
-        for _, cname, crunning in containers:
-            if not crunning:
-                raise TaskException(errno.ENOENT, 'Docker container {0} is stopped'.format(cname))
-
-        for cid, _, _ in containers:
+        for id in container_ids:
             self.dispatcher.exec_and_wait_for_event(
                 'docker.container.changed',
-                lambda args: args['operation'] == 'update' and cid in args['ids'],
+                lambda args: args['operation'] == 'update' and id in args['ids'],
                 lambda: self.dispatcher.call_sync(
-                    'containerd.docker.connect_container_to_network', cid, network_id),
+                    'containerd.docker.connect_container_to_network', id, network_id),
                 600
             )
 
@@ -1172,16 +1163,7 @@ class DockerNetworkDisconnectTask(DockerBaseTask):
                 'Docker Host {0} is currently unreachable.'.format(host_name or '')
             )
 
-        containers = [c for c in self.dispatcher.call_sync(
-            'docker.container.query',
-            [('id', 'in', container_ids)],
-            {'select': ['id', 'name', 'running']}
-        )]
-        for _, cname, crunning in containers:
-            if not crunning:
-                raise TaskException(errno.ENOENT, 'Docker container {0} is stopped'.format(cname))
-
-        for cid, _, _ in containers:
+        for cid in container_ids:
             self.dispatcher.exec_and_wait_for_event(
                 'docker.container.changed',
                 lambda args: args['operation'] == 'update' and cid in args['ids'],
