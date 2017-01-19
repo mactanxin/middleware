@@ -213,6 +213,11 @@ class VolumeProvider(Provider):
                         'disk.partition_to_disk',
                         vdev['path']
                     )
+
+                    vdev['disk_id'] = self.dispatcher.call_sync(
+                        'disk.path_to_id',
+                        vdev['path']
+                    )
                 except RpcException:
                     pass
 
@@ -223,6 +228,7 @@ class VolumeProvider(Provider):
                 'id': str(pool['guid']),
                 'name': pool['name'],
                 'topology': topology,
+                'disks': list(get_disk_ids(topology)),
                 'status': pool['status']
             })
 
