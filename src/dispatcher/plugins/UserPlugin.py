@@ -402,7 +402,7 @@ class UserCreateTask(Task):
 
 
 @description("Deletes an user from the system")
-@accepts(str, h.ref('user-delete'))
+@accepts(str, h.ref('UserDelete'))
 class UserDeleteTask(Task):
     @classmethod
     def early_describe(cls):
@@ -926,7 +926,7 @@ def _init(dispatcher, plugin):
         'additionalProperties': False,
     })
 
-    plugin.register_schema_definition('user-delete', {
+    plugin.register_schema_definition('UserDelete', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {

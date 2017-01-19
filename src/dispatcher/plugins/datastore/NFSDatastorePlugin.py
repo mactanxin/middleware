@@ -98,7 +98,7 @@ class NFSDatastoreProvider(Provider):
 
     @private
     @accepts(str, str)
-    @returns(h.ref('vm-datastore-path-type'))
+    @returns(h.ref('VmDatastorePathType'))
     def get_path_type(self, id, path):
         return self.dispatcher.call_sync('vm.datastore.local.get_path_type', id, path)
 
@@ -109,7 +109,7 @@ class NFSDatastoreProvider(Provider):
         return self.dispatcher.call_sync('vm.datastore.local.list_dirs', id, path)
 
 
-@accepts(h.ref('vm-datastore'))
+@accepts(h.ref('VmDatastore'))
 @returns(str)
 @description('Creates a NFS VM datastore')
 class NFSDatastoreCreateTask(Task):
@@ -127,7 +127,7 @@ class NFSDatastoreCreateTask(Task):
         mount(datastore['name'], datastore['properties'])
 
 
-@accepts(str, h.ref('vm-datastore'))
+@accepts(str, h.ref('VmDatastore'))
 @returns(str)
 @description('Updates a NFS VM datastore')
 class NFSDatastoreUpdateTask(Task):
@@ -202,19 +202,19 @@ def _depends():
 
 
 def _init(dispatcher, plugin):
-    plugin.register_schema_definition('vm-datastore-nfs-version', {
+    plugin.register_schema_definition('VmDatastoreNfsVersion', {
         'type': 'string',
         'enum': ['NFSV3', 'NFSV4']
     })
 
-    plugin.register_schema_definition('vm-datastore-properties-nfs', {
+    plugin.register_schema_definition('VmDatastorePropertiesNfs', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
-            '%type': {'enum': ['vm-datastore-nfs']},
+            '%type': {'enum': ['VmDatastoreNfs']},
             'address': {'type': 'string'},
             'path': {'type': 'string'},
-            'version': {'$ref': 'vm-datastore-nfs-version'}
+            'version': {'$ref': 'VmDatastoreNfsVersion'}
         }
     })
 

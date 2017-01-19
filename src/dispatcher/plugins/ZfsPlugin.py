@@ -241,7 +241,7 @@ class ZfsDatasetProvider(Provider):
             raise RpcException(zfs_error_to_errno(err.code), str(err))
 
     @accepts(str)
-    @returns(h.ref('zfs-resume-token'))
+    @returns(h.ref('ZfsResumeToken'))
     def describe_resume_token(self, token):
         zfs = get_zfs()
         return zfs.describe_resume_token(token)
@@ -1814,7 +1814,7 @@ def _init(dispatcher, plugin):
         'enum': ['ONLINE', 'OFFLINE', 'DEGRADED', 'FAULTED', 'REMOVED', 'UNAVAIL']
     })
 
-    plugin.register_schema_definition('zfs-resume-token', {
+    plugin.register_schema_definition('ZfsResumeToken', {
         'fromguid': {'type': 'integer'},
         'object': {'type': 'integer'},
         'offset': {'type': 'integer'},

@@ -98,7 +98,7 @@ class LocalDatastoreProvider(Provider):
 
     @private
     @accepts(str, str)
-    @returns(h.ref('vm-datastore-path-type'))
+    @returns(h.ref('VmDatastorePathType'))
     def get_path_type(self, id, path):
         path = self.dispatcher.call_sync('vm.datastore.get_filesystem_path', id, path)
         if not os.path.exists(path):
@@ -239,11 +239,11 @@ def _metadata():
 
 
 def _init(dispatcher, plugin):
-    plugin.register_schema_definition('vm-datastore-properties-local', {
+    plugin.register_schema_definition('VmDatastorePropertiesLocal', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
-            '%type': {'enum': ['vm-datastore-local']},
+            '%type': {'enum': ['VmDatastoreLocal']},
             'path': {'type': 'string'}
         }
     })

@@ -135,7 +135,7 @@ class VolumeDatastoreProvider(Provider):
 
     @private
     @accepts(str, str)
-    @returns(h.ref('vm-datastore-path-type'))
+    @returns(h.ref('VmDatastorePathType'))
     def get_path_type(self, id, path):
         zfs_path = os.path.join(id, path)
 
@@ -507,11 +507,11 @@ def _init(dispatcher, plugin):
             'ids': args['ids']
         })
 
-    plugin.register_schema_definition('vm-datastore-properties-volume', {
+    plugin.register_schema_definition('VmDatastorePropertiesVolume', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
-            '%type': {'enum': ['vm-datastore-volume']},
+            '%type': {'enum': ['VmDatastoreVolume]},
         }
     })
 
