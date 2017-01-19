@@ -1460,6 +1460,13 @@ class DockerService(RpcService):
                     continue
 
                 external = q.get(details, 'NetworkSettings.Networks.external')
+                networks=[]
+                #Docker does not assign the <container>.NetworkSettings.Networks.<network>.NetworkID
+                #untill the container is started, hence the below gymnastics to retrive the network id
+                network_names = list(q.get(details, 'NetworkSettings.Networks', {}).keys())
+                if network_names:
+                    for n in host.connection.networks(names=network_names):
+                        networks.append(n.get('Id'))
                 labels = q.get(details, 'Config.Labels')
                 environment = q.get(details, 'Config.Env')
                 host_config = q.get(details, 'HostConfig')
@@ -1506,6 +1513,7 @@ class DockerService(RpcService):
                     'capabilities_add': host_config['CapAdd'] or [],
                     'capabilities_drop': host_config['CapDrop'] or [],
                     'privileged': host_config.get('Privileged', False),
+                    'networks': networks,
                 })
                 if presets and presets.get('web_ui_protocol'):
                     port = int(presets['web_ui_port'])
