@@ -2087,6 +2087,10 @@ def _init(dispatcher, plugin):
                 'items': {'type': 'string'}
             },
             'privileged': {'type': 'boolean'},
+            'networks': {
+                'type': 'array',
+                'items': {'type': 'string'}
+            }
         }
     })
 
