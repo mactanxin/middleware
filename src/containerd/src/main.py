@@ -1798,6 +1798,18 @@ class DockerService(RpcService):
         except BaseException as err:
             raise RpcException(errno.EFAULT, 'Failed to connect container to newtork: {0}'.format(str(err)))
 
+        if not self.query_containers([('id', '=', container_id)], {'select': 'running', 'single': True}):
+            # Docker does not transmit any event when stopped container is connected to network
+            # so we must do this
+            self.context.client.emit_event('containerd.docker.container.changed', {
+                'operation': 'update',
+                'ids': [container_id]
+            })
+            self.context.client.emit_event('containerd.docker.network.changed', {
+                'operation': 'update',
+                'ids': [network_id]
+            })
+
     def disconnect_container_from_network(self, container_id, network_id):
         host = self.context.docker_host_by_container_id(container_id)
         try:
