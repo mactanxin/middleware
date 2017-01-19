@@ -1152,20 +1152,20 @@ class VMDeleteTask(Task):
         datastore = vm['target']
 
         snap_sources = []
-        for dir in self.dispatcher.call_sync('vm.datastore.list_dirs', datastore, vm_root_path):
-            source = self.dispatcher.call_sync('vm.datastore.get_clone_source', datastore, dir)
-            if source:
-                path, snap_id = source.split('@', 1)
-                if self.datastore.query('vm.snapshots', ('id', '=', snap_id)):
-                    continue
-
-                type = 'directory'
-                if self.dispatcher.call_sync('vm.datastore.get_path_type', datastore, path) == 'BLOCK_DEVICE':
-                    type = 'block_device'
-
-                snap_sources.append((type, source))
-
         try:
+            for dir in self.dispatcher.call_sync('vm.datastore.list_dirs', datastore, vm_root_path):
+                source = self.dispatcher.call_sync('vm.datastore.get_clone_source', datastore, dir)
+                if source:
+                    path, snap_id = source.split('@', 1)
+                    if self.datastore.query('vm.snapshots', ('id', '=', snap_id)):
+                        continue
+
+                    type = 'directory'
+                    if self.dispatcher.call_sync('vm.datastore.get_path_type', datastore, path) == 'BLOCK_DEVICE':
+                        type = 'block_device'
+
+                    snap_sources.append((type, source))
+
             self.run_subtask_sync('vm.datastore.directory.delete', vm['target'], get_vm_path(vm['name']))
         except RpcException as err:
             if err.code != errno.ENOENT:
