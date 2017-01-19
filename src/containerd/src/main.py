@@ -1540,10 +1540,17 @@ class DockerService(RpcService):
         result = []
 
         for host in self.context.iterate_docker_hosts():
-            for network in host.connection.networks():
+            networks = host.connection.networks()
+            networks_containers_map = {n['Name']: [] for n in networks}
+            containers = host.connection.containers(all=True)
+            for c in containers:
+                network_names = list(q.get(c, 'NetworkSettings.Networks', {}).keys())
+                for n in network_names:
+                    networks_containers_map[n].append(c['Id'])
+
+            for network in networks:
                 details = host.connection.inspect_network(network['Id'])
                 config = q.get(details, 'IPAM.Config.0')
-                containers = list(details.get('Containers', {}).keys())
 
                 result.append({
                     'id': details['Id'],
@@ -1552,7 +1559,7 @@ class DockerService(RpcService):
                     'subnet': config['Subnet'] if config else None,
                     'gateway': config.get('Gateway', None) if config else None,
                     'host': host.vm.id,
-                    'containers': containers
+                    'containers': networks_containers_map[details['Name']]
                 })
 
         return q.query(result, *(filter or []), stream=True, **(params or {}))
