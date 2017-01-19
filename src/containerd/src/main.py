@@ -1758,7 +1758,7 @@ class DockerService(RpcService):
             if err.code == errno.ENOENT:
                 self.context.client.emit_event('containerd.docker.container.changed', {
                     'operation': 'delete',
-                    'ids': id
+                    'ids': [id]
                 })
                 return
         try:
@@ -1773,7 +1773,7 @@ class DockerService(RpcService):
             if err.code == errno.ENOENT:
                 self.context.client.emit_event('containerd.docker.network.changed', {
                     'operation': 'delete',
-                    'ids': id
+                    'ids': [id]
                 })
                 return
         try:
