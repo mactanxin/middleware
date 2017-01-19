@@ -821,7 +821,7 @@
                     "RunAtLoad": true,
                     "SupportsCheckin": true,
                     "Requires": ["networking", "logging", "etc"],
-                    "Program": ["/usr/local/libexec/dispatcher/ipfs_wrapper"]
+                    "Program": "/usr/local/libexec/dispatcher/ipfs_wrapper"
                 },
                 "builtin": false,
                 "get_config_rpc": "service.ipfs.get_config",
