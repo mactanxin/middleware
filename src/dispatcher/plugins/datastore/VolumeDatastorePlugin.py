@@ -511,7 +511,7 @@ def _init(dispatcher, plugin):
         'type': 'object',
         'additionalProperties': False,
         'properties': {
-            '%type': {'enum': ['VmDatastoreVolume]},
+            '%type': {'enum': ['VmDatastoreVolume']},
         }
     })
 
