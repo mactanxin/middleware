@@ -306,7 +306,7 @@ class UpdateHandler(object):
         self.indeterminate = False
         self.numpkgs = len(packages)
         self.pkgindex = index
-        self.progress = int((self.pkgindex - 1) * 100 / self.numpkgs )
+        self.progress = self._baseprogress = int((self.pkgindex - 1) * 100 / self.numpkgs)
         self.operation = 'Installing'
         self.details = 'Installing {0}'.format(name)
         self.emit_update_details()
@@ -320,8 +320,9 @@ class UpdateHandler(object):
             self.progress = int(self.pkgindex * 100 / self.numpkgs)
         elif total:
             cur_pct = int(index * 100 / (total * self.numpkgs))
-            if (self.progress + cur_pct) > self.progress:
-                self.progress = self.progress + cur_pct
+            if (self._baseprogress + cur_pct) > self.progress:
+                self.progress = self._baseprogress + cur_pct
+
         self.emit_update_details()
 
     def emit_update_details(self):
@@ -663,8 +664,7 @@ class DownloadUpdateTask(ProgressTask):
         self.set_progress(progress, message)
 
     def run(self):
-        self.message = 'Downloading Updates...'
-        self.set_progress(0)
+        self.set_progress(0, 'Downloading Updates...')
         handler = UpdateHandler(self.dispatcher, update_progress=self.update_progress)
         train = self.configstore.get('update.train')
         cache_dir = self.dispatcher.call_sync('update.update_cache_getter', 'cache_dir')
@@ -710,8 +710,7 @@ class DownloadUpdateTask(ProgressTask):
         check_updates(self.dispatcher, self.configstore, cache_dir=cache_dir, check_now=False)
         handler.finished = True
         handler.emit_update_details()
-        self.message = "Updates Finished Downloading"
-        self.set_progress(100)
+        self.set_progress(100, 'Updates finished downloading')
 
 
 @description("Apply a manual update using specified tarfile")
@@ -865,12 +864,12 @@ class UpdateApplyTask(ProgressTask):
             'installed_version': version
         })
         self.dispatcher.call_sync('update.update_cache_putter', update_cache_value_dict)
-        self.message = "Updates Finished Installing Successfully"
+        message = 'Updates finished installing successfully'
         if reboot_post_install:
-            self.message = "Scheduling user specified reboot post succesfull update"
+            message = 'Scheduling user specified reboot post succesfull update'
             # Note not using subtasks on purpose as they do not have queuing logic
             self.dispatcher.submit_task('system.reboot', 3)
-        self.set_progress(100)
+        self.set_progress(100, message)
 
 
 @description("Verify installation integrity")
@@ -887,8 +886,7 @@ class UpdateVerifyTask(ProgressTask):
         return [update_resource_string]
 
     def verify_handler(self, index, total, fname):
-        self.message = 'Verifying {0}'.format(fname)
-        self.set_progress(int((float(index) / float(total)) * 100.0))
+        self.set_progress(int(index * 100 / total), 'Verifying {0}'.format(fname))
 
     def run(self):
         try:
