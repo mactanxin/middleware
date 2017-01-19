@@ -472,7 +472,7 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition(SerialPortDevice', {
+    plugin.register_schema_definition('SerialPortDevice', {
         'type': 'object',
         'properties': {
             'name': {'type': 'string'},
