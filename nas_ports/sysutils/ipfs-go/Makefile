@@ -1,7 +1,7 @@
 # $FreeBSD$
 
 PORTNAME=	ipfs-go
-PORTVERSION=	0.4.3
+PORTVERSION=	0.4.4
 DISTVERSIONPREFIX=	v
 CATEGORIES=	sysutils
 
@@ -15,13 +15,11 @@ USES=		gmake
 USE_GITHUB=	yes
 GH_ACCOUNT=	ipfs
 GH_PROJECT=	go-ipfs
-GH_TAGNAME=	v0.4.3-dev
+GH_TAGNAME=	v0.4.4
 
 MAKE_ENV+=	GOPATH=${WRKSRC}
 
 PLIST_FILES=	bin/${PORTNAME}
-
-USE_RC_SUBR=	${PORTNAME}
 
 STRIP=		# stripping can break go binaries
 
