@@ -710,14 +710,19 @@ class VMBaseTask(ProgressTask):
         reserved_storage = self.dispatcher.call_sync('vm.get_reserved_storage', vm['id'])
 
         if res['type'] in ('DISK', 'VOLUME'):
-            vm_root_dir = self.dispatcher.call_sync('vm.get_vm_root', vm['id'], False)
-            path = os.path.join(vm_root_dir, res['name'])
+            path = self.dispatcher.call_sync('vm.get_device_path', vm['id'], res['name'], False)
             if path in reserved_storage:
                 self.add_warning(TaskWarning(
                     errno.EACCES,
                     '{0} storage not deleted. There are VM snapshots related to {1} path.'.format(res['name'], path)
                 ))
             else:
+                if res['type'] == 'DISK' and q.get(res, 'properties.target_type') in ('DISK', 'FILE'):
+                    return
+
+                if res['type'] == 'VOLUME' and not q.get(res, 'properties.auto'):
+                    return
+
                 self.run_subtask_sync(
                     'vm.datastore.directory.delete',
                     vm['target'],
