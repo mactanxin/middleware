@@ -71,12 +71,16 @@ class VMProvider(Provider):
     def query(self, filter=None, params=None):
         def extend(obj):
             obj['status'] = self.dispatcher.call_sync('containerd.management.get_status', obj['id'])
-            root = self.dispatcher.call_sync('vm.get_vm_root', obj['id'])
-            if os.path.isdir(root):
-                readme = get_readme(root)
-                if readme:
-                    with open(readme, 'r') as readme_file:
-                        obj['config']['readme'] = readme_file.read()
+            try:
+                root = self.dispatcher.call_sync('vm.get_vm_root', obj['id'])
+                if os.path.isdir(root):
+                    readme = get_readme(root)
+                    if readme:
+                        with open(readme, 'r') as readme_file:
+                            obj['config']['readme'] = readme_file.read()
+            except (RpcException, OSError):
+                pass
+
             return obj
 
         return q.query(
