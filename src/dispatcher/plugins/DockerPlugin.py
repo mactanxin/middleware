@@ -1021,6 +1021,9 @@ class DockerNetworkDeleteTask(DockerBaseTask):
         if not self.datastore.exists('docker.networks', ('id', '=', id)):
             raise TaskException(errno.ENOENT, 'Docker network {0} does not exist'.format(id))
 
+        if self.dispatcher.call_sync('docker.network.query', [('id', '=', id)], {'select': 'containers', 'single': True}):
+            raise TaskException(errno.EINVAL, 'Cannot delete network "{0}" with connected containers'.format(id))
+
         try:
             self.dispatcher.call_sync('containerd.docker.host_name_by_network_id', id)
         except RpcException:
