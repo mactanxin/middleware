@@ -437,7 +437,7 @@ class Task(object):
                 self.progress = TaskStatus(0)
 
             self.dispatcher.dispatch_event('task.created' if self.state == TaskState.CREATED else 'task.updated', event)
-            self.dispatcher.datastore.update('tasks', self.id, self)
+            self.dispatcher.datastore_log.update('tasks', self.id, self)
             self.dispatcher.dispatch_event('task.changed', {
                 'operation': 'create' if state == TaskState.CREATED else 'update',
                 'ids': [self.id]
@@ -462,15 +462,15 @@ class Task(object):
 
     def set_env(self, key, value):
         self.environment[key] = value
-        self.dispatcher.datastore.update('tasks', self.id, self)
+        self.dispatcher.datastore_log.update('tasks', self.id, self)
 
     def set_output(self, output):
         self.output = output
-        self.dispatcher.datastore.update('tasks', self.id, self)
+        self.dispatcher.datastore_log.update('tasks', self.id, self)
 
     def add_warning(self, warning):
         self.warnings.append(warning)
-        self.dispatcher.datastore.update('tasks', self.id, self)
+        self.dispatcher.datastore_log.update('tasks', self.id, self)
         self.dispatcher.dispatch_event('task.changed', {
             'operation': 'update',
             'ids': [self.id]
@@ -507,11 +507,15 @@ class Balancer(object):
         self.debugged_tasks = None
         self.dispatcher.register_event_type('task.changed')
 
+    def clean_stale_tasks(self):
         # Lets try to get `EXECUTING|WAITING|CREATED` state tasks
         # from the previous dispatcher instance and set their
         # states to 'FAILED' since they are no longer running
         # in this instance of the dispatcher
-        for stale_task in dispatcher.datastore.query('tasks', ('state', 'in', ['EXECUTING', 'WAITING', 'CREATED'])):
+        for stale_task in self.dispatcher.datastore_log.query(
+            'tasks',
+            ('state', 'in', ['EXECUTING', 'WAITING', 'CREATED'])
+        ):
             self.logger.info('Stale task ID: {0}, name: {1} being set to FAILED'.format(
                 stale_task['id'],
                 stale_task['name']
@@ -528,7 +532,7 @@ class Balancer(object):
                 }
             })
 
-            dispatcher.datastore.update('tasks', stale_task['id'], stale_task)
+            self.dispatcher.datastore_log.update('tasks', stale_task['id'], stale_task)
 
     def create_initial_queues(self):
         self.resource_graph.add_resource(Resource('system'))
@@ -592,7 +596,7 @@ class Balancer(object):
             task.user = task.environment['RUN_AS_USER']
 
         task.environment['SENDER_ADDRESS'] = sender.client_address
-        task.id = self.dispatcher.datastore.insert("tasks", task)
+        task.id = self.dispatcher.datastore_log.insert("tasks", task)
         task.set_state(TaskState.CREATED)
         self.task_queue.put(task)
         self.logger.info("Task %d submitted (type: %s, class: %s)", task.id, name, task.clazz)
@@ -664,7 +668,7 @@ class Balancer(object):
         task.instance = task.clazz(self.dispatcher, self.dispatcher.datastore)
         task.instance.verify(*task.args)
         task.description = task.instance.describe(*task.args)
-        task.id = self.dispatcher.datastore.insert("tasks", task)
+        task.id = self.dispatcher.datastore_log.insert("tasks", task)
         task.parent = parent
         task.environment = {}
 

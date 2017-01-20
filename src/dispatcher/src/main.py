@@ -32,6 +32,7 @@ import copy
 import os
 import sys
 import re
+import collections
 import fnmatch
 import json
 import datetime
@@ -340,6 +341,7 @@ class Dispatcher(object):
         self.rpc = None
         self.balancer = None
         self.datastore = None
+        self.datastore_log = None
         self.configfile = None
         self.configstore = None
         self.config = None
@@ -360,18 +362,11 @@ class Dispatcher(object):
 
     def init(self):
         self.logger.info('Initializing')
-        self.logger.info('Starting log database')
-        self.start_logdb()
 
         self.datastore = get_datastore(self.configfile)
         self.configstore = ConfigStore(self.datastore)
 
-        self.migrate_logdb()
-
         self.logger.info('Connected to datastore')
-        self.require_collection('events', 'serial', type='log')
-        self.require_collection('sessions', 'serial', type='log')
-        self.require_collection('logs', 'uuid', type='log')
 
         self.balancer = Balancer(self)
         self.auth = PasswordAuthenticator(self)
@@ -850,9 +845,11 @@ class Dispatcher(object):
 
     def start_logdb(self):
         self.logdb_proc = subprocess.Popen(['/usr/local/sbin/dswatch', 'datastore-log'], preexec_fn=os.setpgrp)
+        self.datastore_log = get_datastore(self.configfile, log=True)
+        self.emit_event('server.logdb_ready', {})
 
     def migrate_logdb(self):
-        FACTORY_FILE = '/usr/local/share/datastore/factory.json'
+        FACTORY_FILE = '/usr/local/share/datastore/factory-log.json'
         MIGRATIONS_DIR = '/usr/local/share/datastore/migrations'
 
         self.logger.info('Migrating log database')
@@ -860,7 +857,7 @@ class Dispatcher(object):
         try:
             with open(FACTORY_FILE, 'r') as fd:
                 dump = json.load(fd)
-                migrate_db(self.datastore, dump, MIGRATIONS_DIR, ['log'])
+                migrate_db(self.datastore_log, dump, MIGRATIONS_DIR, ['log'])
         except IOError as err:
             self.logger.warning('Cannot open factory.json: {0}'.format(str(err)))
         except ValueError as err:
@@ -1178,13 +1175,14 @@ class DispatcherConnection(ServerConnection):
         super(DispatcherConnection, self).on_rpc_call(id, data)
 
     def open_session(self):
-        self.session_id = self.dispatcher.datastore.insert('sessions', {
-            'started_at': datetime.datetime.utcnow(),
-            'address': self.client_address,
-            'resource': self.resource,
-            'active': True,
-            'username': self.user.name
-        })
+        if self.dispatcher.datastore_log:
+            self.session_id = self.dispatcher.datastore.insert('sessions', {
+                'started_at': datetime.datetime.utcnow(),
+                'address': self.client_address,
+                'resource': self.resource,
+                'active': True,
+                'username': self.user.name
+            })
 
         self.dispatcher.dispatch_event('session.changed', {
             'operation': 'create',
@@ -1192,7 +1190,7 @@ class DispatcherConnection(ServerConnection):
         })
 
     def close_session(self):
-        if self.session_id:
+        if self.session_id and self.dispatcher.datastore_log:
             session = self.dispatcher.datastore.get_by_id('sessions', self.session_id)
             session['active'] = False
             session['ended_at'] = datetime.datetime.utcnow()
