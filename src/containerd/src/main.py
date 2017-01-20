@@ -1465,8 +1465,8 @@ class DockerService(RpcService):
                 environment = q.get(details, 'Config.Env')
                 host_config = q.get(details, 'HostConfig')
                 names = list(normalize_names(container['Names']))
-                bridge_ipaddress = external['IPAddress'] if external else None
-                bridge_macaddress = external['MacAddress'] if external else None
+                bridge_ipaddress = q.get(external, 'IPAMConfig.IPv4Address') if external else None
+                bridge_macaddress = q.get(details, 'Config.MacAddress') if external else None
                 presets = self.labels_to_presets(labels)
                 settings = []
                 web_ui_url = None
@@ -1601,6 +1601,22 @@ class DockerService(RpcService):
     def start(self, id):
         host = self.context.docker_host_by_container_id(id)
         try:
+            name, hostid, bridge = self.query_containers(
+                [('id', '=', id)],
+                {'single': True, 'select': ['name', 'host', 'bridge']}
+            )
+        except ValueError as err:
+            raise RpcException(errno.EFAULT, 'Failed to start container: {0}'.format(str(err)))
+
+        if bridge.get('dhcp'):
+            lease = get_dhcp_lease(self.context, name, hostid, bridge.get('macaddress'))
+            if bridge.get('address') != lease['client_ip']:
+                raise RpcException(
+                    errno.EINVAL,
+                    'Could not renew the dhcp lease for macaddr = {0}'.format(bridge.get('macaddress'))
+                )
+
+        try:
             host.connection.start(container=id)
         except BaseException as err:
             raise RpcException(errno.EFAULT, 'Failed to start container: {0}'.format(str(err)))
@@ -1641,7 +1657,7 @@ class DockerService(RpcService):
                 )
 
         if bridge_enabled:
-            macaddr = q.get(container, 'bridge.macaddress', self.context.client.call_sync('vm.generate_mac'))
+            macaddr = q.get(container, 'bridge.macaddress') or self.context.client.call_sync('vm.generate_mac')
             if dhcp_enabled:
                 lease = get_dhcp_lease(self.context, container['name'], container['host'], macaddr)
                 ipv4 = lease['client_ip']
