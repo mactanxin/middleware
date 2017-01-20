@@ -82,6 +82,7 @@ class WinbindPlugin(DirectoryServicePlugin):
         self.directory = None
         self.ldap_servers = None
         self.ldap = None
+        self.domain_sid = None
         self.domain_users_guid = None
         self.user_dn = None
         self.group_dn = None
@@ -177,6 +178,19 @@ class WinbindPlugin(DirectoryServicePlugin):
             generator=True
         )
 
+    def search_dn(self, dn, attributes=None):
+        if self.ldap.closed:
+            self.ldap.bind()
+
+        return first_or_default(None, self.ldap.extend.standard.paged_search(
+            search_base=dn,
+            search_filter='(objectclass=*)',
+            search_scope=ldap3.BASE,
+            attributes=attributes or ldap3.ALL_ATTRIBUTES,
+            paged_size=1,
+            generator=False
+        ))
+
     def search_one(self, *args, **kwargs):
         return first_or_default(None, self.search(*args, **kwargs))
 
@@ -237,9 +251,18 @@ class WinbindPlugin(DirectoryServicePlugin):
 
                             logger.debug('LDAP bound')
 
+                            # Get the domain object
+                            domain = self.search_dn(self.base_dn)
+                            if not domain:
+                                raise RuntimeError('Failed to fetch domain LDAP object, incorrect realm?')
+
+                            self.domain_sid = domain['attributes']['objectSid']
+                            logger.info('Domain SID: {0}'.format(self.domain_sid))
+
                             # Figure out group DN and prefetch "Domain Users" GUID
                             for dn in ('CN=Users', 'CN=Groups'):
-                                du = self.search_one(join_dn(dn, self.base_dn), '(sAMAccountName=Domain Users)')
+                                dsid = sid.sid('{0}-{1}'.format(self.domain_sid, 513))
+                                du = self.search_one(join_dn(dn, self.base_dn), '(objectSid={0})'.format(dsid.ldap()))
                                 if not du:
                                     continue
 
