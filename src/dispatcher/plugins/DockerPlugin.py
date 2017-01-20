@@ -1554,6 +1554,9 @@ def _init(dispatcher, plugin):
     global images
     global containers_state
 
+    containers_lock = RLock()
+    networks_lock = RLock()
+
     images = EventCacheStore(dispatcher, 'docker.image')
     collections = CacheStore()
     containers_state = CacheStore()
@@ -1690,38 +1693,39 @@ def _init(dispatcher, plugin):
         collection = 'docker.containers'
         event = 'docker.container.changed'
 
-        if args['ids']:
-            for id in args['ids']:
-                if args['operation'] in ('create', 'update'):
-                    state = dispatcher.call_sync(
-                        CONTAINERS_QUERY,
-                        [('id', '=', id)],
-                        {'single': True, 'select': 'running'}
-                    )
-                    containers_state.put(id, state)
-                else:
-                    containers_state.remove(id)
-
-            if args['operation'] == 'delete':
-                for i in args['ids']:
-                    dispatcher.datastore.delete(collection, i)
-
-                dispatcher.dispatch_event(event, {
-                    'operation': 'delete',
-                    'ids': args['ids']
-                })
-            else:
-                objs = dispatcher.call_sync(CONTAINERS_QUERY, [('id', 'in', args['ids'])])
-                for obj in map(lambda o: exclude(o, 'running'), objs):
-                    if args['operation'] == 'create':
-                        dispatcher.datastore.insert(collection, obj)
+        with containers_lock:
+            if args['ids']:
+                for id in args['ids']:
+                    if args['operation'] in ('create', 'update'):
+                        state = dispatcher.call_sync(
+                            CONTAINERS_QUERY,
+                            [('id', '=', id)],
+                            {'single': True, 'select': 'running'}
+                        )
+                        containers_state.put(id, state)
                     else:
-                        dispatcher.datastore.update(collection, obj['id'], obj)
+                        containers_state.remove(id)
+
+                if args['operation'] == 'delete':
+                    for i in args['ids']:
+                        dispatcher.datastore.delete(collection, i)
 
                     dispatcher.dispatch_event(event, {
-                        'operation': args['operation'],
+                        'operation': 'delete',
                         'ids': args['ids']
                     })
+                else:
+                    objs = dispatcher.call_sync(CONTAINERS_QUERY, [('id', 'in', args['ids'])])
+                    for obj in map(lambda o: exclude(o, 'running'), objs):
+                        if args['operation'] == 'create':
+                            dispatcher.datastore.insert(collection, obj)
+                        else:
+                            dispatcher.datastore.update(collection, obj['id'], obj)
+
+                        dispatcher.dispatch_event(event, {
+                            'operation': args['operation'],
+                            'ids': args['ids']
+                        })
 
     def on_network_event(args):
         logger.trace('Received Docker network event: {}'.format(args))
@@ -1729,27 +1733,28 @@ def _init(dispatcher, plugin):
         collection = 'docker.networks'
         event = 'docker.network.changed'
 
-        if args['ids']:
-            if args['operation'] == 'delete':
-                for i in args['ids']:
-                    dispatcher.datastore.delete(collection, i)
-
-                dispatcher.dispatch_event(event, {
-                    'operation': 'delete',
-                    'ids': args['ids']
-                })
-            else:
-                objs = dispatcher.call_sync(NETWORKS_QUERY, [('id', 'in', args['ids'])])
-                for obj in objs:
-                    if args['operation'] == 'create':
-                        dispatcher.datastore.insert(collection, obj)
-                    else:
-                        dispatcher.datastore.update(collection, obj['id'], obj)
+        with networks_lock:
+            if args['ids']:
+                if args['operation'] == 'delete':
+                    for i in args['ids']:
+                        dispatcher.datastore.delete(collection, i)
 
                     dispatcher.dispatch_event(event, {
-                        'operation': args['operation'],
+                        'operation': 'delete',
                         'ids': args['ids']
                     })
+                else:
+                    objs = dispatcher.call_sync(NETWORKS_QUERY, [('id', 'in', args['ids'])])
+                    for obj in objs:
+                        if args['operation'] == 'create':
+                            dispatcher.datastore.insert(collection, obj)
+                        else:
+                            dispatcher.datastore.update(collection, obj['id'], obj)
+
+                        dispatcher.dispatch_event(event, {
+                            'operation': args['operation'],
+                            'ids': args['ids']
+                        })
 
     def on_collection_change(args):
         if args['operation'] == 'delete':
@@ -1768,44 +1773,45 @@ def _init(dispatcher, plugin):
             active_hosts = list(dispatcher.call_sync('docker.host.query', [('state', '=', 'UP')], {'select': 'id'}))
             filter.append(('host', 'in', active_hosts))
 
-        current = list(dispatcher.call_sync(CONTAINERS_QUERY, filter))
-        old = dispatcher.datastore.query(collection, *filter)
-        created = []
-        updated = []
-        deleted = []
-        for obj in map(lambda o: exclude(o, 'running'), current):
-            old_obj = first_or_default(lambda o: o['id'] == obj['id'], old)
-            if old_obj:
-                if obj != old_obj:
-                    dispatcher.datastore.update(collection, obj['id'], obj)
-                    updated.append(obj['id'])
+        with containers_lock:
+            current = list(dispatcher.call_sync(CONTAINERS_QUERY, filter))
+            old = dispatcher.datastore.query(collection, *filter)
+            created = []
+            updated = []
+            deleted = []
+            for obj in map(lambda o: exclude(o, 'running'), current):
+                old_obj = first_or_default(lambda o: o['id'] == obj['id'], old)
+                if old_obj:
+                    if obj != old_obj:
+                        dispatcher.datastore.update(collection, obj['id'], obj)
+                        updated.append(obj['id'])
 
-            else:
-                dispatcher.datastore.insert(collection, obj)
-                created.append(obj['id'])
+                else:
+                    dispatcher.datastore.insert(collection, obj)
+                    created.append(obj['id'])
 
-        for obj in old:
-            if not first_or_default(lambda o: o['id'] == obj['id'], current):
-                dispatcher.datastore.delete(collection, obj['id'])
-                deleted.append(obj['id'])
+            for obj in old:
+                if not first_or_default(lambda o: o['id'] == obj['id'], current):
+                    dispatcher.datastore.delete(collection, obj['id'])
+                    deleted.append(obj['id'])
 
-        if created:
-            dispatcher.dispatch_event(event, {
-                'operation': 'create',
-                'ids': created
-            })
+            if created:
+                dispatcher.dispatch_event(event, {
+                    'operation': 'create',
+                    'ids': created
+                })
 
-        if updated:
-            dispatcher.dispatch_event(event, {
-                'operation': 'update',
-                'ids': updated
-            })
+            if updated:
+                dispatcher.dispatch_event(event, {
+                    'operation': 'update',
+                    'ids': updated
+                })
 
-        if deleted:
-            dispatcher.dispatch_event(event, {
-                'operation': 'delete',
-                'ids': deleted
-            })
+            if deleted:
+                dispatcher.dispatch_event(event, {
+                    'operation': 'delete',
+                    'ids': deleted
+                })
 
     def refresh_networks(host_id=None):
         collection = 'docker.networks'
@@ -1817,44 +1823,45 @@ def _init(dispatcher, plugin):
             active_hosts = list(dispatcher.call_sync('docker.host.query', [('state', '=', 'UP')], {'select': 'id'}))
             filter.append(('host', 'in', active_hosts))
 
-        current = list(dispatcher.call_sync(NETWORKS_QUERY, filter))
-        old = dispatcher.datastore.query(collection, *filter)
-        created = []
-        updated = []
-        deleted = []
-        for obj in current:
-            old_obj = first_or_default(lambda o: o['id'] == obj['id'], old)
-            if old_obj:
-                if obj != old_obj:
-                    dispatcher.datastore.update(collection, obj['id'], obj)
-                    updated.append(obj['id'])
+        with networks_lock:
+            current = list(dispatcher.call_sync(NETWORKS_QUERY, filter))
+            old = dispatcher.datastore.query(collection, *filter)
+            created = []
+            updated = []
+            deleted = []
+            for obj in current:
+                old_obj = first_or_default(lambda o: o['id'] == obj['id'], old)
+                if old_obj:
+                    if obj != old_obj:
+                        dispatcher.datastore.update(collection, obj['id'], obj)
+                        updated.append(obj['id'])
 
-            else:
-                dispatcher.datastore.insert(collection, obj)
-                created.append(obj['id'])
+                else:
+                    dispatcher.datastore.insert(collection, obj)
+                    created.append(obj['id'])
 
-        for obj in old:
-            if not first_or_default(lambda o: o['id'] == obj['id'], current):
-                dispatcher.datastore.delete(collection, obj['id'])
-                deleted.append(obj['id'])
+            for obj in old:
+                if not first_or_default(lambda o: o['id'] == obj['id'], current):
+                    dispatcher.datastore.delete(collection, obj['id'])
+                    deleted.append(obj['id'])
 
-        if created:
-            dispatcher.dispatch_event(event, {
-                'operation': 'create',
-                'ids': created
-            })
+            if created:
+                dispatcher.dispatch_event(event, {
+                    'operation': 'create',
+                    'ids': created
+                })
 
-        if updated:
-            dispatcher.dispatch_event(event, {
-                'operation': 'update',
-                'ids': updated
-            })
+            if updated:
+                dispatcher.dispatch_event(event, {
+                    'operation': 'update',
+                    'ids': updated
+                })
 
-        if deleted:
-            dispatcher.dispatch_event(event, {
-                'operation': 'delete',
-                'ids': deleted
-            })
+            if deleted:
+                dispatcher.dispatch_event(event, {
+                    'operation': 'delete',
+                    'ids': deleted
+                })
 
     def init_images():
         logger.trace('Initializing Docker images cache')
