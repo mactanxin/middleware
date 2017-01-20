@@ -1641,7 +1641,7 @@ class DockerService(RpcService):
                 )
 
         if bridge_enabled:
-            macaddr = q.get(container, 'bridge.macaddress', self.context.client.call_sync('vm.generate_mac'))
+            macaddr = q.get(container, 'bridge.macaddress') or self.context.client.call_sync('vm.generate_mac')
             if dhcp_enabled:
                 lease = get_dhcp_lease(self.context, container['name'], container['host'], macaddr)
                 ipv4 = lease['client_ip']
