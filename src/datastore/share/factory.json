@@ -1247,18 +1247,6 @@
     },
     {
         "metadata": {
-            "name": "schedulerd.runs",
-            "migration": "keep",
-            "pkey-type": "uuid",
-            "attributes": {
-                "type": "log"
-            }
-        },
-        "data": {
-        }
-    },
-    {
-        "metadata": {
             "name": "volumes",
             "migration": "keep",
             "pkey-type": "native",
@@ -1276,30 +1264,6 @@
             "pkey-type": "uuid",
             "attributes": {
                 "type": "config"
-            }
-        },
-        "data": {
-        }
-    },
-    {
-        "metadata": {
-            "name": "docker.containers",
-            "migration": "keep",
-            "pkey-type": "uuid",
-            "attributes": {
-                "type": "log"
-            }
-        },
-        "data": {
-        }
-    },
-    {
-        "metadata": {
-            "name": "docker.networks",
-            "migration": "keep",
-            "pkey-type": "uuid",
-            "attributes": {
-                "type": "log"
             }
         },
         "data": {
@@ -1816,36 +1780,11 @@
     },
     {
         "metadata": {
-            "name": "syslog",
-            "migration": "keep",
-            "pkey-type": "uuid",
-            "attributes": {
-                "type": "log",
-                "cap": 8589934592
-            }
-        },
-        "data": {
-        }
-    },
-    {
-        "metadata": {
             "name": "backup",
             "migration": "keep",
             "pkey-type": "uuid",
             "attributes": {
                 "type": "config"
-            }
-        },
-        "data": {
-        }
-    },
-    {
-        "metadata": {
-            "name": "backup.runs",
-            "migration": "keep",
-            "pkey-type": "integer",
-            "attributes": {
-                "type": "log"
             }
         },
         "data": {
@@ -1911,18 +1850,6 @@
                 "unique_indexes": [
                     ["name"]
                 ]
-            }
-        },
-        "data": {
-        }
-    },
-    {
-        "metadata": {
-            "name": "fileindex",
-            "migration": "keep",
-            "pkey-type": "uuid",
-            "attributes": {
-                "type": "log"
             }
         },
         "data": {
