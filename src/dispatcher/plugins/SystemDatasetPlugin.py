@@ -456,6 +456,14 @@ def _init(dispatcher, plugin):
     )
     last_sysds_name = '{0}/.system-{1}'.format(pool, dsid)
 
+    logger.info('Mounting system dataset')
+    create_system_dataset(dispatcher, dsid, pool)
+    mount_system_dataset(dispatcher, dsid, pool, SYSTEM_DIR)
+
+    logger.info('Starting log database')
+    dispatcher.start_logdb()
+    dispatcher.migrate_logdb()
+
     plugin.register_event_handler('volume.changed', on_volumes_changed)
     plugin.register_event_handler('entity-subscriber.zfs.dataset.changed', on_datasets_changed)
     plugin.attach_hook('volume.pre_destroy', volume_pre_destroy)
