@@ -552,13 +552,30 @@ class ReplicationPrepareSlaveTask(ReplicationBaseTask):
                         remote_dataset = remote_client.call_sync(
                             'zfs.dataset.query',
                             [('name', '=', datasets_pair['slave'])],
-                            {'single': True, 'count': True}
+                            {'count': True}
                         )
 
                         if not remote_dataset:
-                            raise TaskException(
-                                'Target dataset {0} not found on the target system'.format(datasets_pair['slave'])
+                            parent_exists = remote_client.call_sync(
+                                'zfs.dataset.query',
+                                [('id', '=', os.path.dirname(datasets_pair['slave']))],
+                                {'count': True}
                             )
+                            if parent_exists:
+                                call_task_and_check_state(
+                                    remote_client,
+                                    'volume.dataset.create',
+                                    {
+                                        'volume': datasets_pair['slave'].split('/', 1)[0],
+                                        'id': datasets_pair['slave']
+                                    }
+                                )
+                            else:
+                                ds = datasets_pair['slave']
+                                raise TaskException(
+                                    errno.ENOENT,
+                                    f'Neither target dataset {ds} not its parent could be found on the target system'
+                                )
 
                 self.set_datasets_mount_ro(link, True, remote_client)
 
