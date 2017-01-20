@@ -148,7 +148,7 @@ class Main(object):
             frontend.cleanup()
 
         if self.failed_job:
-            print('Critical system job {0} failed to start.')
+            print('Critical system job {0} failed to start.'.format(self.failed_job))
             print('Dropping into single user mode')
             sys.exit(1)
 
