@@ -1372,16 +1372,10 @@ class DockerService(RpcService):
                 })
 
         if labels.get('org.freenas.capabilities-add'):
-            try:
-                result['capabilities_add'] = loads(labels['org.freenas.capabilities-add'])
-            except ValueError:
-                pass
+            result['capabilities_add'] = labels['org.freenas.capabilities-add'].split(',')
 
         if labels.get('org.freenas.capabilities-drop'):
-            try:
-                result['capabilities_drop'] = loads(labels['org.freenas.capabilities-drop'])
-            except ValueError:
-                pass
+            result['capabilities_drop'] = labels['org.freenas.capabilities-drop'].split(',')
 
         if labels.get('org.freenas.volumes'):
             try:
