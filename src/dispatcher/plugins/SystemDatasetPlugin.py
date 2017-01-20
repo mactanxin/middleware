@@ -48,7 +48,19 @@ logger = logging.getLogger('SystemDataset')
 
 def link_directories(dispatcher):
     for name, d in dispatcher.configstore.get('system.dataset.layout').items():
-        target = dispatcher.call_sync('system_dataset.request_directory', name)
+        target = os.path.join(SYSTEM_DIR, name)
+
+        if not os.path.isdir(target):
+            try:
+                os.mkdir(target)
+            except OSError as err:
+                if err.errno != errno.EEXIST:
+                    logger.warning('Cannot create skeleton directory {0}: {1}'.format(
+                        target,
+                        str(err))
+                    )
+                    continue
+
         if 'link' in d:
             if not os.path.islink(d['link']) or not os.readlink(d['link']) == target:
                 if os.path.exists(d['link']):
@@ -459,6 +471,7 @@ def _init(dispatcher, plugin):
     logger.info('Mounting system dataset')
     create_system_dataset(dispatcher, dsid, pool)
     mount_system_dataset(dispatcher, dsid, pool, SYSTEM_DIR)
+    link_directories(dispatcher)
 
     logger.info('Starting log database')
     dispatcher.start_logdb()
