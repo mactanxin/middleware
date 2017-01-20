@@ -1465,8 +1465,8 @@ class DockerService(RpcService):
                 environment = q.get(details, 'Config.Env')
                 host_config = q.get(details, 'HostConfig')
                 names = list(normalize_names(container['Names']))
-                bridge_ipaddress = external['IPAddress'] if external else None
-                bridge_macaddress = external['MacAddress'] if external else None
+                bridge_ipaddress = q.get(external, 'IPAMConfig.IPv4Address') if external else None
+                bridge_macaddress = q.get(details, 'Config.MacAddress') if external else None
                 presets = self.labels_to_presets(labels)
                 settings = []
                 web_ui_url = None
