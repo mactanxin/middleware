@@ -1,0 +1,7 @@
+{
+    "Label": "org.freenas.logd",
+    "RunAtLoad": true,
+    "SupportsCheckin": true,
+    "Provides": ["logging"],
+    "Program": "/usr/local/sbin/logd"
+}
