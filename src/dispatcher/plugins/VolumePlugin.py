@@ -3111,7 +3111,14 @@ def _init(dispatcher, plugin):
                     break
 
         if ds['mountpoint'] and '.system' not in ds['name'] and ds['name'] != ds['pool'] and local_mountpoint:
+            # Correct mountpoint of a non-root dataset
             dispatcher.call_task_sync('zfs.update', ds['name'], {'mountpoint': {'source': 'INHERITED'}})
+
+        if ds['name'] == ds['pool']:
+            # Correct mountpoint of a root dataset
+            desired_mountpoint = os.path.join(VOLUMES_ROOT, ds['pool'])
+            if q.get(ds, 'properties.mountpoint.parsed') != desired_mountpoint:
+                dispatcher.call_task_sync('zfs.update', ds['name'], {'mountpoint': {'value': desired_mountpoint}})
 
         prop = q.get(ds, 'properties.org\\.freenas:last_replicated_at')
         if prop and prop['source'] == 'LOCAL':
