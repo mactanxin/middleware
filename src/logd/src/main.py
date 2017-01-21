@@ -35,33 +35,45 @@ import collections
 import signal
 import logging
 import itertools
+import time
 import datastore
 from datetime import datetime
+from bsd import SyslogPriority, SyslogFacility
 from freenas.dispatcher.server import Server
 from freenas.dispatcher.rpc import RpcContext, RpcService, RpcException, generator
+from freenas.serviced import checkin
 from freenas.utils import query as q
 
 
 FLUSH_INTERVAL = 180
 SYSLOG_PATTERN = re.compile(r'<(?P<priority>\d+)>(?P<timestamp>\w+ \d+ \d+:\d+:\d+) (?P<process>[\w\[\]]+): (?P<message>.*)')
+KLOG_PATTERN = re.compile(r'<(?P<priority>\d+)>(?P<message>.*)')
 PROC_PATTERN = re.compile(r'(?P<name>\w+)\[(?P<pid>\d+)\]')
 DEFAULT_SOCKET_ADDRESS = 'unix:///var/run/logd.sock'
+KLOG_PATH = '/dev/klog'
 SYSLOG_SOCKETS = {
     '/var/run/log': 0o666,
     '/var/run/logpriv': 0o600
 }
 
 
+def parse_priority(prio):
+    return prio & 0x7, prio << 3
+
+
 class LoggingService(RpcService):
     def __init__(self, context):
         self.context = context
+
+    def get_boot_id(self):
+        return self.context.boot_id
 
     def set_flush(self, enable):
         with self.context.cv:
             self.context.flush = bool(enable)
             self.context.cv.notify_all()
 
-    def log(self, priority, progname, pid, message, args):
+    def log(self, priority, progname, message, args):
         pass
 
     @generator
@@ -69,6 +81,34 @@ class LoggingService(RpcService):
         return itertools.chain(
             q.query(self.context.store, *(filter or []), **(params or {}))
         )
+
+
+class KernelLogReader(object):
+    def __init__(self, context):
+        self.context = context
+
+    def process(self):
+        while True:
+            with open(KLOG_PATH, 'rb') as fp:
+                for line in fp:
+                    # Skip lines with 'ESC' character inside
+                    if '\033' in line:
+                        continue
+
+                    m = KLOG_PATTERN.match(line)
+                    if not m:
+                        continue
+
+                    m = m.groupdict()
+                    self.context.push({
+                        'priority': m['priority'],
+                        'message': m['message'],
+                        'process': 'kernel',
+                        'timestamp': datetime.utcnow()
+                    })
+
+            logging.warning('Lost connection to {0}, retrying in 1 second'.format(KLOG_PATH))
+            time.sleep(1)
 
 
 class SyslogServer(object):
@@ -119,11 +159,19 @@ class SyslogServer(object):
                 self.context.push(item)
 
 
+class SyslogForwarder(object):
+    def __init__(self, host, port, context):
+        self.host = host
+        self.port = port
+        self.context = context
+
+
 class Context(object):
     def __init__(self):
         self.store = collections.deque()
         self.lock = threading.Lock()
         self.rpc_server = Server(self)
+        self.boot_id = str(uuid.uuid4())
         self.server = None
         self.servers = []
         self.flush = False
@@ -156,12 +204,20 @@ class Context(object):
 
     def push(self, item):
         with self.lock:
-            item['id'] = uuid.uuid4()
+            priority, facility = parse_priority(int(item['priority']))
+            item.udpate({
+                'id': uuid.uuid4(),
+                'boot_id': self.boot_id,
+                'priority': priority,
+                'facility': facility
+            })
             self.store.append(item)
 
     def flush(self):
         while True:
+            # Flush immediately after getting wakeup or when timeout expires
             self.cv.wait(FLUSH_INTERVAL)
+
             if not self.flush:
                 continue
 
@@ -179,6 +235,7 @@ class Context(object):
     def main(self):
         self.init_syslog_server()
         self.init_rpc_server()
+        checkin()
 
 
 if __name__ == '__main__':
