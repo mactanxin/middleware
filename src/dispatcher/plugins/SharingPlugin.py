@@ -276,7 +276,8 @@ class CreateShareTask(Task):
             save_config(
                 path,
                 '{0}-{1}'.format(new_share['type'], new_share['name']),
-                new_share
+                new_share,
+                file_perms=0o600
             )
         except OSError as err:
             self.add_warning(TaskWarning(errno.ENXIO, 'Cannot save backup config file: {0}'.format(str(err))))
@@ -390,7 +391,8 @@ class UpdateShareTask(Task):
             save_config(
                 path,
                 '{0}-{1}'.format(updated_share['type'], updated_share['name']),
-                updated_share
+                updated_share,
+                file_perms=0o600
             )
         except OSError as err:
             self.add_warning(TaskWarning(errno.ENXIO, 'Cannot save backup config file: {0}'.format(str(err))))
