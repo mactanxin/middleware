@@ -182,28 +182,28 @@ class DockerImagesProvider(Provider):
     @generator
     def search(self, term):
         parser = dockerfile_parse.DockerfileParser()
-        hub = dockerhub.DockerHub()
 
-        for i in hub.search(term):
-            presets = None
-            icon = None
+        with dockerhub.DockerHub() as hub:
+            for i in hub.search(term):
+                presets = None
+                icon = None
 
-            if i['is_automated']:
-                # Fetch dockerfile
-                try:
-                    parser.content = hub.get_dockerfile(i['repo_name'])
-                    presets = self.dispatcher.call_sync('containerd.docker.labels_to_presets', parser.labels)
-                except:
-                    pass
+                if i['is_automated']:
+                    # Fetch dockerfile
+                    try:
+                        parser.content = hub.get_dockerfile(i['repo_name'])
+                        presets = self.dispatcher.call_sync('containerd.docker.labels_to_presets', parser.labels)
+                    except:
+                        pass
 
-            yield {
-                'name': i['repo_name'],
-                'description': i['short_description'],
-                'star_count': i['star_count'],
-                'pull_count': i['pull_count'],
-                'icon': icon,
-                'presets': presets
-            }
+                yield {
+                    'name': i['repo_name'],
+                    'description': i['short_description'],
+                    'star_count': i['star_count'],
+                    'pull_count': i['pull_count'],
+                    'icon': icon,
+                    'presets': presets
+                }
 
     @description('Returns a list of docker images from a given collection')
     @returns(h.array(h.ref('docker-hub-image')))
@@ -212,46 +212,49 @@ class DockerImagesProvider(Provider):
     def get_collection_images(self, collection='freenas'):
         def update_collection(c, q):
             parser = dockerfile_parse.DockerfileParser()
-            hub = dockerhub.DockerHub()
             items = []
 
-            with self.update_collection_lock:
-                try:
-                    for i in hub.get_repositories(c):
-                        presets = None
-                        icon = None
-                        repo_name = '{0}/{1}'.format(i['user'], i['name'])
+            with dockerhub.DockerHub() as hub:
+                with self.update_collection_lock:
+                    try:
+                        for i in hub.get_repositories(c):
+                            presets = None
+                            icon = None
+                            repo_name = '{0}/{1}'.format(i['user'], i['name'])
 
-                        if i['is_automated']:
-                            # Fetch dockerfile
-                            try:
-                                parser.content = hub.get_dockerfile(repo_name)
-                                presets = self.dispatcher.call_sync('containerd.docker.labels_to_presets', parser.labels)
-                            except:
-                                pass
+                            if i['is_automated']:
+                                # Fetch dockerfile
+                                try:
+                                    parser.content = hub.get_dockerfile(repo_name)
+                                    presets = self.dispatcher.call_sync(
+                                        'containerd.docker.labels_to_presets',
+                                        parser.labels
+                                    )
+                                except:
+                                    pass
 
-                        item = {
-                            'name': repo_name,
-                            'description': i['description'],
-                            'star_count': i['star_count'],
-                            'pull_count': i['pull_count'],
-                            'icon': icon,
-                            'presets': presets,
-                            'version': '0' if not presets else presets.get('version', '0')
-                        }
-                        items.append(item)
-                        q.put(item)
-                except TimeoutError as e:
-                    raise RpcException(errno.ETIMEDOUT, e)
-                except ConnectionError as e:
-                    raise RpcException(errno.ECONNABORTED, e)
-                finally:
-                    q.put(StopIteration)
+                            item = {
+                                'name': repo_name,
+                                'description': i['description'],
+                                'star_count': i['star_count'],
+                                'pull_count': i['pull_count'],
+                                'icon': icon,
+                                'presets': presets,
+                                'version': '0' if not presets else presets.get('version', '0')
+                            }
+                            items.append(item)
+                            q.put(item)
+                    except TimeoutError as e:
+                        raise RpcException(errno.ETIMEDOUT, e)
+                    except ConnectionError as e:
+                        raise RpcException(errno.ECONNABORTED, e)
+                    finally:
+                        q.put(StopIteration)
 
-                collections.put(c, {
-                    'update_time': datetime.now(),
-                    'items': items
-                })
+                    collections.put(c, {
+                        'update_time': datetime.now(),
+                        'items': items
+                    })
 
         outdated_collections = []
         now = datetime.now()
@@ -279,11 +282,11 @@ class DockerImagesProvider(Provider):
     @accepts(str)
     @returns(str)
     def readme(self, repo_name):
-        hub = dockerhub.DockerHub()
-        try:
-            return hub.get_repository(repo_name).get('full_description')
-        except ValueError:
-            return None
+        with dockerhub.DockerHub() as hub:
+            try:
+                return hub.get_repository(repo_name).get('full_description')
+            except ValueError:
+                return None
 
 
 @description('Provides information about cached Docker container collections')
