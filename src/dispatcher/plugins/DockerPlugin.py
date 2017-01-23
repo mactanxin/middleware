@@ -1546,6 +1546,41 @@ class DockerCollectionDeleteTask(Task):
         })
 
 
+@accepts(str)
+@returns(h.array(h.ref('docker-hub-image')))
+@description('Returns a list of Docker images related to a saved collection')
+class DockerCollectionGetPresetsTask(ProgressTask):
+    @classmethod
+    def early_describe(cls):
+        return 'Downloading Docker collection presets'
+
+    def describe(self, id):
+        collection = self.datastore.get_by_id('docker.collections', id)
+        return TaskDescription('Downloading Docker collection {name} presets', name=collection.get(''))
+
+    def verify(self, id):
+        return ['docker']
+
+    def run(self, id):
+        if not self.datastore.exists('docker.collections', ('id', '=', id)):
+            raise TaskException(errno.ENOENT, 'Docker collection {0} not found'.format(id))
+
+        result = []
+        collection = self.datastore.get_by_id('docker.collections', id)
+        name = collection['collection']
+
+        self.set_progress(0, 'Downloading {0} collection presets'.format(name))
+
+        with dockerhub.DockerHub() as hub:
+            collection_len = len([i for i in hub.get_repositories(name) if collection['match_expr'] in i['name']])
+
+        for i in self.dispatcher.call_sync('docker.collection.get_entries', id):
+            result.append(i)
+            self.set_progress((len(result) / collection_len) * 100, 'Downloading {0} collection presets'.format(name))
+
+        return result
+
+
 def collect_debug(dispatcher):
     yield AttachData('hosts-query', dumps(list(dispatcher.call_sync('docker.host.query')), indent=4))
     yield AttachData('containers-query', dumps(list(dispatcher.call_sync('docker.container.query')), indent=4))
@@ -1936,6 +1971,7 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('docker.collection.create', DockerCollectionCreateTask)
     plugin.register_task_handler('docker.collection.update', DockerCollectionUpdateTask)
     plugin.register_task_handler('docker.collection.delete', DockerCollectionDeleteTask)
+    plugin.register_task_handler('docker.collection.get_presets', DockerCollectionGetPresetsTask)
 
     plugin.register_event_type('docker.host.changed')
     plugin.register_event_type('docker.container.changed')
