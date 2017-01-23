@@ -337,9 +337,10 @@ class UpdateShareTask(Task):
         permissions = updated_fields.pop('permissions', None)
         share_path = self.dispatcher.call_sync('share.expand_path', path_after_update, type_after_update)
 
-        pool_mountpoints = tuple(self.dispatcher.call_sync('volume.query', [], {'select': 'mountpoint'}))
-        if not path_after_update.startswith(pool_mountpoints):
-            raise TaskException(errno.EINVAL, "Provided directory has to reside within user defined ZFS pool")
+        if type_after_update in ('DIRECTORY', 'FILE'):
+            pool_mountpoints = tuple(self.dispatcher.call_sync('volume.query', [], {'select': 'mountpoint'}))
+            if not path_after_update.startswith(pool_mountpoints):
+                raise TaskException(errno.EINVAL, "Provided directory or file has to reside within user defined ZFS pool")
 
         if not os.path.exists(share_path):
             raise TaskException(
