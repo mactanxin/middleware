@@ -33,6 +33,7 @@ import dockerhub
 import logging
 import requests
 from gevent.lock import RLock
+from gevent.queue import Queue
 from resources import Resource
 from datetime import datetime, timedelta
 from task import Provider, Task, ProgressTask, TaskDescription, TaskException, query, TaskWarning, VerifyException
@@ -209,7 +210,7 @@ class DockerImagesProvider(Provider):
     @accepts(str)
     @generator
     def get_collection_images(self, collection='freenas'):
-        def update_collection(c):
+        def update_collection(c, q):
             parser = dockerfile_parse.DockerfileParser()
             hub = dockerhub.DockerHub()
             items = []
@@ -239,10 +240,13 @@ class DockerImagesProvider(Provider):
                             'version': '0' if not presets else presets.get('version', '0')
                         }
                         items.append(item)
+                        q.put(item)
                 except TimeoutError as e:
                     raise RpcException(errno.ETIMEDOUT, e)
                 except ConnectionError as e:
                     raise RpcException(errno.ECONNABORTED, e)
+                finally:
+                    q.put(StopIteration)
 
                 collections.put(c, {
                     'update_time': datetime.now(),
@@ -258,18 +262,18 @@ class DockerImagesProvider(Provider):
 
         collections.remove_many(outdated_collections)
 
-        if collections.is_valid(collection):
-            collection_data = collections.get(collection)
-            time_since_last_update = now - collection_data['update_time']
+        collection_data = collections.get(collection, {})
+        time_since_last_update = now - collection_data.get('update_time', now)
 
-            if time_since_last_update > self.throttle_period:
-                update_collection(collection)
+        if not collections.is_valid(collection) or time_since_last_update > self.throttle_period:
+            queue = Queue()
+            gevent.spawn(update_collection, collection, queue)
+            for i in queue:
+                yield i
         else:
-            update_collection(collection)
-
-        collection_data = collections.get(collection)
-        for i in collection_data['items']:
-            yield i
+            collection_data = collections.get(collection)
+            for i in collection_data['items']:
+                yield i
 
     @description('Returns a full description of specified Docker container image')
     @accepts(str)
