@@ -593,7 +593,14 @@ class UpdateConfigureTask(Task):
             self.configstore.set('update.check_auto', props['check_auto'])
 
         if 'internal' in props:
-            conf = Configuration.Configuration()
+            conf = Configuration.SystemConfiguration()
+            if 'internal' not in conf.ListUpdateServers():
+                conf.AddUpdateServer(Configuration.UpdateServer(
+                    'internal',
+                    'http://update-int.ixsystems.com/FreeNAS/',
+                    signing=False
+                ))
+
             conf.SetUpdateServer('internal' if props['internal'] else 'default')
 
         self.dispatcher.dispatch_event('update.changed', {'operation': 'update'})
