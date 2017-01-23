@@ -1466,7 +1466,7 @@ class DockerCollectionCreateTask(Task):
         if 'name' not in collection:
             raise RpcException(errno.EINVAL, 'Collection name has to be specified')
         if 'collection' not in collection:
-            raise RpcException(errno.EINVAL, 'Name of DockerHub collection has to be specified')
+            raise RpcException(errno.EINVAL, 'Name of Dockerhub collection has to be specified')
 
         return ['docker']
 
