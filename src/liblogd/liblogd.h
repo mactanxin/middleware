@@ -25,6 +25,9 @@
  *
  */
 
+#ifndef __LIBLOGD_H
+#define __LIBLOGD_H
+
 #include <stdbool.h>
 #include <stdarg.h>
 #include <sys/types.h>
@@ -51,3 +54,5 @@ struct logd_pair
 void logd_print(int priority, const char *format, ...);
 void logd_printv(int priority, const char *format, va_list ap);
 void logd_send(struct logd_pair *pairs, int npairs);
+
+#endif /* __LIBLOGD_H */
