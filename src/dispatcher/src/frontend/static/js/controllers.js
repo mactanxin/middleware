@@ -94,18 +94,11 @@ function RpcController($scope, $location, $routeParams, $route, $rootScope, Moda
         $scope.current_service = service_name;
     }
     $scope.setInput = function(method_name) {
-      // get method name by ng-click on #service method_list
-      // then set value ot #method tag
-      // that's all
       clearInputText();
       $("#method").val($("#current_service").html() + "." + method_name);
       setParams();
     }
     function setParams() {
-      //fix later
-      //temporary solution
-      //every time set params to '[]';
-      //get params from middleware then set it to #args
       $("#args").val('[]');
     }
 
@@ -121,8 +114,6 @@ function RpcController($scope, $location, $routeParams, $route, $rootScope, Moda
         );
     }
     function clearInputText() {
-      //extra tweak for everytime you click on a new method
-      //then it should clear all previous text left inside textarea
       $("#method").val('');
       $("#result").val('');
     }
@@ -281,15 +272,6 @@ function EventsController($scope, $location, $routeParams, $route, $rootScope) {
     $scope.clearEvents = function() {
         $scope.item_list = [];
     }
-    // $scope.myFilter = function (sys_event) {
-    //     if ($scope.regexText === ''){
-    //         return true;
-    //     }
-    //     var reg = RegExp("^" + $scope.regexText);
-    //     if(reg.test(sys_event.name) || reg.test(sys_event.args)) {
-    //         return sys_event;
-    //     }
-    // };
 }
 function SyslogController($scope, $location, $routeParams, $route, $rootScope) {
     document.title = "System Logs";
@@ -350,17 +332,6 @@ function StatsController($scope, $location, $routeParams, $route, $rootScope) {
             colors: {
                 rows: ['#1f77b4', '#aec7e8', '#ff7f0e', '#ffbb78', '#2ca02c', '#98df8a', '#d62728', '#ff9896', '#9467bd', '#c5b0d5', '#8c564b', '#c49c94', '#e377c2', '#f7b6d2', '#7f7f7f', '#c7c7c7', '#bcbd22', '#dbdb8d', '#17becf', '#9edae5']
             }
-            // },
-            // axis: {
-            //     x: {
-            //         type: "timeseries",
-            //         tick: {
-            //             format: function(x) {
-            //                 return moment.unix(x).format('MMM Do, HH:mm:ss');
-            //             }
-            //         }
-            //     }
-            // }
         })
     }
 
@@ -568,7 +539,6 @@ function FileBrowserController($scope, $location, $routeParams, $route, $rootSco
           };
         });
         sessionStorage.setItem( "filebrowser:cwd", path );
-        // $scope.current_dirs = dirs.map(humanizeDirItem);
         $scope.$apply(function(){
             $scope.current_dir_items = dirs.map(humanizeDirItem);
         });
