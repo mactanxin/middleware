@@ -1176,7 +1176,7 @@ class DispatcherConnection(ServerConnection):
 
     def open_session(self):
         if self.dispatcher.datastore_log:
-            self.session_id = self.dispatcher.datastore.insert('sessions', {
+            self.session_id = self.dispatcher.datastore_log.insert('sessions', {
                 'started_at': datetime.datetime.utcnow(),
                 'address': self.client_address,
                 'resource': self.resource,
@@ -1191,10 +1191,10 @@ class DispatcherConnection(ServerConnection):
 
     def close_session(self):
         if self.session_id and self.dispatcher.datastore_log:
-            session = self.dispatcher.datastore.get_by_id('sessions', self.session_id)
+            session = self.dispatcher.datastore_log.get_by_id('sessions', self.session_id)
             session['active'] = False
             session['ended_at'] = datetime.datetime.utcnow()
-            self.dispatcher.datastore.update('sessions', self.session_id, session)
+            self.dispatcher.datastore_log.update('sessions', self.session_id, session)
             self.dispatcher.dispatch_event('session.changed', {
                 'operation': 'update',
                 'ids': [self.session_id]
