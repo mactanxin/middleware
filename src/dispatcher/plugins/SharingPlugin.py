@@ -194,6 +194,7 @@ class CreateShareTask(Task):
 
         root = self.dispatcher.call_sync('volume.get_volumes_root')
         share_type = self.dispatcher.call_sync('share.supported_types').get(share['type'])
+        pool_mountpoints = tuple(self.dispatcher.call_sync('volume.query', [], {'select': 'mountpoint'}))
 
         assert share_type['subtype'] in ('FILE', 'BLOCK'),\
             "Unsupported Share subtype: {0}".format(share_type['subtype'])
@@ -243,7 +244,6 @@ class CreateShareTask(Task):
                     })
 
         elif share['target_type'] == 'DIRECTORY':
-            pool_mountpoints = tuple(self.dispatcher.call_sync('volume.query', [], {'select': 'mountpoint'}))
             if not share['target_path'].startswith(pool_mountpoints):
                 raise TaskException(errno.EINVAL, "Provided directory has to reside within user defined ZFS pool")
 
@@ -253,6 +253,8 @@ class CreateShareTask(Task):
                 raise TaskException(errno.ENOENT, "Target directory {0} doesn't exist".format(path))
 
         elif share['target_type'] == 'FILE':
+            if not share['target_path'].startswith(pool_mountpoints):
+                raise TaskException(errno.EINVAL, "Provided file has to reside within user defined ZFS pool")
             # Verify that target file exists
             path = share['target_path']
             if not os.path.isfile(path):
