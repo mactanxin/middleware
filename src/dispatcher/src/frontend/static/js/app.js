@@ -3,12 +3,15 @@
 /* App Module */
 
 var DebuggerApp = angular.module('Debugger', [
-    'angularModalService',
-	'ngRoute',
-    'ui.bootstrap',
-    'ngCookies',
-    'ngAnimate'
+  'angularModalService',
+  'ngRoute',
+  'ui.bootstrap',
+  'ngCookies',
+  'ngAnimate',
+  'pascalprecht.translate'
 ]);
+
+
 DebuggerApp.config(['$routeProvider', function($routeProvider) {
   $routeProvider.
     when('/', {
