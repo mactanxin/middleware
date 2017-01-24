@@ -345,26 +345,27 @@ function StatsController($scope, $location, $routeParams, $route, $rootScope) {
         chart = c3.generate({
             bindto: "#chart",
             data: {
-                x: "x",
-                rows: [["x", "value"]].concat(data)
+                rows: [["value"]].concat(data)
             },
-            color: {
-                pattern: ['#1f77b4', '#aec7e8', '#ff7f0e', '#ffbb78', '#2ca02c', '#98df8a', '#d62728', '#ff9896', '#9467bd', '#c5b0d5', '#8c564b', '#c49c94', '#e377c2', '#f7b6d2', '#7f7f7f', '#c7c7c7', '#bcbd22', '#dbdb8d', '#17becf', '#9edae5']
-            },
-            axis: {
-                x: {
-                    type: "timeseries",
-                    tick: {
-                        format: function(x) {
-                            return moment.unix(x).format('MMM Do, HH:mm:ss');
-                        }
-                    }
-                }
+            colors: {
+                rows: ['#1f77b4', '#aec7e8', '#ff7f0e', '#ffbb78', '#2ca02c', '#98df8a', '#d62728', '#ff9896', '#9467bd', '#c5b0d5', '#8c564b', '#c49c94', '#e377c2', '#f7b6d2', '#7f7f7f', '#c7c7c7', '#bcbd22', '#dbdb8d', '#17becf', '#9edae5']
             }
+            // },
+            // axis: {
+            //     x: {
+            //         type: "timeseries",
+            //         tick: {
+            //             format: function(x) {
+            //                 return moment.unix(x).format('MMM Do, HH:mm:ss');
+            //             }
+            //         }
+            //     }
+            // }
         })
     }
 
     function update_chart(event){
+        console.log(event);
         chart.flow({
             rows: [["x", "value"], [event.timestamp, event.value]]
         })
@@ -378,9 +379,7 @@ function StatsController($scope, $location, $routeParams, $route, $rootScope) {
             end: {"$date": moment().format()},
             frequency: $("#frequency").val()
         }], function (response) {
-            for (var i in response.data) {
-                response.data[i][0] = moment(response.data[i][0]["$date"]).unix();
-            }
+            console.log(response.data);
             render_chart(response.data);
         });
     }

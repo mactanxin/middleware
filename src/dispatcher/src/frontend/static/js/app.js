@@ -3,12 +3,30 @@
 /* App Module */
 
 var DebuggerApp = angular.module('Debugger', [
-    'angularModalService',
-	'ngRoute',
-    'ui.bootstrap',
-    'ngCookies',
-    'ngAnimate'
+  'angularModalService',
+  'ngRoute',
+  'ui.bootstrap',
+  'ngCookies',
+  'ngAnimate',
+  'pascalprecht.translate'
 ]);
+
+DebuggerApp.config(['$translateProvider', function ($translateProvider) {
+  $locationProvider.html5Mode(true);
+  $translateProvider.translations('en', {
+    'TITLE': 'Hello',
+    'FOO': 'This is a paragraph'
+  });
+ 
+  $translateProvider.translations('de', {
+    'TITLE': 'Hallo',
+    'FOO': 'Dies ist ein Absatz'
+  });
+ 
+  $translateProvider.preferredLanguage('en');
+}]);
+
+
 DebuggerApp.config(['$routeProvider', function($routeProvider) {
   $routeProvider.
     when('/', {
