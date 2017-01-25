@@ -162,7 +162,7 @@ def is_update_applied(dispatcher, update_version):
         update_boot_env = "%s-%s" % (Avatar(), update_version)
 
     return dispatcher.call_sync(
-        'boot.environment.query', [('realname', '=', update_boot_env)], single=True
+        'boot.environment.query', [('realname', '=', update_boot_env)], {"single": True}
     )
 
 
@@ -179,21 +179,36 @@ def check_updates(dispatcher, configstore, cache_dir=None, check_now=False):
     current_update_info = None
     try:
         current_update_info = dispatcher.call_sync('update.update_info')
-    except RpcException:
-        pass
+        if (
+            current_update_info.get('installed') and
+            dispatcher.call_sync(
+                'boot.environment.query',
+                [('realname', '=', current_update_info.get('installed_version'))],
+                {"single": True}
+            )
+        ):
+            update_cache_value_dict.update({
+                'installed': True,
+                'installed_version': current_update_info.get('installed_version')
+            })
 
-    if current_update_info:
-        update_cache_value_dict['installed'] = current_update_info.get('installed')
-        update_cache_value_dict['installed_version'] = current_update_info.get('installed_version')
         if check_now and current_update_info['downloaded']:
             update_cache_value_dict.update(current_update_info.copy())
             update_cache_value_dict['available'] = True
+    except RpcException:
+        pass
 
+    logger.trace('check_updates: this is the current_update_info: {0}'.format(current_update_info))
     dispatcher.call_sync('update.update_cache_invalidate', list(update_cache_value_dict.keys()))
 
     conf = Configuration.Configuration()
     handler = CheckUpdateHandler()
     train = configstore.get('update.train')
+
+    logger.trace(
+        'check_updates: Update server name: {0}, url: {1}'.format(
+            conf.UpdateServerName(), conf.UpdateServerURL())
+    )
 
     try:
         update = CheckForUpdates(
@@ -204,54 +219,73 @@ def check_updates(dispatcher, configstore, cache_dir=None, check_now=False):
 
         if update:
             version = update.Version()
-            update_installed_bootenv = list(is_update_applied(dispatcher, version))
+            update_installed_bootenv = is_update_applied(dispatcher, version)
+            sys_mani = conf.SystemManifest()
+            sequence = sys_mani.Sequence() if sys_mani else ''
             if version == update_cache_value_dict['installed_version'] or update_installed_bootenv:
-                logger.debug('Update is already installed')
-                update_cache_value_dict = default_update_dict.copy()
+                if update_installed_bootenv and update_installed_bootenv['active']:
+                    # it could be possible that the installed os has the same version as
+                    # the one available from the server and yet the one on the server has
+                    # something new to offer, hence check for seequence numbers to rule out
+                    # all doubt
+                    if update.Sequence() == sequence:
+                        logger.debug('Update has same sequence number as current OS')
+                        # At this point clear any installed version stuff
+                        update_cache_value_dict.update({
+                            'installed': False,
+                            'installed_version': ''
+                        })
+                    else:
+                        logger.debug(
+                            'Update has same version but different sequence number as current OS'
+                        )
+                else:
+                    # TODO: mount the BE in question to inspect sequence number
+                    logger.debug(
+                        'Update version {0} is already installed in BE {1}'.format(
+                            version, update_installed_bootenv
+                        )
+                    )
+                    update_cache_value_dict = default_update_dict.copy()
+                    update_cache_value_dict.update({
+                        'installed': True,
+                        'installed_version': version
+                    })
+                    dispatcher.call_sync(
+                        'update.update_alert_set',
+                        'UpdateInstalled',
+                        version,
+                        {'update_installed_bootenv': update_installed_bootenv}
+                    )
+            else:
+                logger.debug('Update {0} is available'.format(version))
+                try:
+                    if check_now:
+                        changelog = get_changelog(
+                            train, cache_dir=cache_dir, start=sequence, end=update.Sequence()
+                        )
+                    else:
+                        with open("{0}/ChangeLog.txt".format(cache_dir), 'r') as changelog_file:
+                            changelog = parse_changelog(
+                                changelog_file.read(), start=sequence, end=update.Sequence()
+                            )
+                except Exception:
+                    changelog = ''
                 update_cache_value_dict.update({
-                    'installed': True,
-                    'installed_version': version
+                    'available': True,
+                    'notes': update.Notes(),
+                    'notice': update.Notice(),
+                    'operations': handler.output(),
+                    'version': version,
+                    'changelog': changelog,
+                    'downloaded': False if check_now else True
                 })
+
                 dispatcher.call_sync(
                     'update.update_alert_set',
-                    'UpdateInstalled',
-                    version,
-                    {'update_installed_bootenv': update_installed_bootenv}
+                    'UpdateDownloaded' if update_cache_value_dict['downloaded'] else 'UpdateAvailable',
+                    update_cache_value_dict['version']
                 )
-                return
-            logger.debug("An update is available")
-            sys_mani = conf.SystemManifest()
-            if sys_mani:
-                sequence = sys_mani.Sequence()
-            else:
-                sequence = ''
-            try:
-                if check_now:
-                    changelog = get_changelog(
-                        train, cache_dir=cache_dir, start=sequence, end=update.Sequence()
-                    )
-                else:
-                    changelog_file = "{0}/ChangeLog.txt".format(cache_dir)
-                    changelog = parse_changelog(
-                        changelog_file.read(), start=sequence, end=update.Sequence()
-                    )
-            except Exception:
-                changelog = ''
-            update_cache_value_dict.update({
-                'available': True,
-                'notes': update.Notes(),
-                'notice': update.Notice(),
-                'operations': handler.output(),
-                'version': version,
-                'changelog': changelog,
-                'downloaded': False if check_now else True
-            })
-
-            dispatcher.call_sync(
-                'update.update_alert_set',
-                'UpdateDownloaded' if update_cache_value_dict['downloaded'] else 'UpdateAvailable',
-                update_cache_value_dict['version']
-            )
 
         else:
             logger.debug('No update available')
@@ -524,9 +558,9 @@ class UpdateProvider(Provider):
                 desc = 'Update containing {0} is downloaded and ready for install'.format(update_version)
             elif update_class == 'UpdateInstalled':
                 update_installed_bootenv = kwargs.get('update_installed_bootenv')
-                if update_installed_bootenv and not update_installed_bootenv[0]['on_reboot']:
+                if update_installed_bootenv and not update_installed_bootenv['on_reboot']:
                     desc = 'Update containing {0} is installed.'.format(update_version)
-                    desc += ' Please activate {0} and Reboot to use this updated version'.format(update_installed_bootenv[0]['realname'])
+                    desc += ' Please activate {0} and Reboot to use this updated version'.format(update_installed_bootenv['realname'])
                 else:
                     desc = 'Update containing {0} is installed and activated for next boot'.format(update_version)
             else:
@@ -604,6 +638,9 @@ class UpdateConfigureTask(Task):
                 ))
 
             conf.SetUpdateServer('internal' if props['internal'] else 'default')
+
+        cache_dir = self.dispatcher.call_sync('update.update_cache_getter', 'cache_dir')
+        check_updates(self.dispatcher, self.configstore, cache_dir=cache_dir, check_now=True)
 
         self.dispatcher.dispatch_event('update.changed', {'operation': 'update'})
 
