@@ -48,7 +48,7 @@ logger = logging.getLogger('SystemDataset')
 
 def link_directories(dispatcher):
     for name, d in dispatcher.configstore.get('system.dataset.layout').items():
-        target = os.path.join(SYSTEM_DIR, name)
+        target = os.path.join(SYSTEM_DIR, name.replace('+', '.'))
 
         if not os.path.isdir(target):
             try:
@@ -74,6 +74,7 @@ def link_directories(dispatcher):
                 os.chown(target, user['uid'], group['gid'])
 
         for cname, c in d.get('children', {}).items():
+            cname = cname.replace('+', '.')
             try:
                 os.mkdir(os.path.join(target, cname))
             except OSError as err:
