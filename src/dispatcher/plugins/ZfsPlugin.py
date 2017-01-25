@@ -1881,6 +1881,11 @@ def _init(dispatcher, plugin):
             try:
                 logger.info('Importing pool {0} <{1}>'.format(pool.name, pool.guid))
                 dispatcher.threaded(zfs.import_pool, pool, pool.name, opts)
+
+                # Mount the volume
+                logger.info('Mounting pool {0}'.format(pool.name))
+                ds = dispatcher.threaded(zfs.get_dataset, pool.name)
+                dispatcher.threaded(ds.mount_recursive)
             except libzfs.ZFSException as err:
                 logger.error('Cannot import user pool {0}: {1}'.format(pool.name, str(err)))
                 continue
@@ -1934,6 +1939,11 @@ def _init(dispatcher, plugin):
                     try:
                         logger.info('Importing pool {0} <{1}>'.format(vol['id'], vol['guid']))
                         dispatcher.threaded(zfs.import_pool, pool_to_import, pool_to_import.name, opts)
+
+                        # Mount the volume
+                        logger.info('Mounting pool {0}'.format(vol['id']))
+                        ds = dispatcher.threaded(zfs.get_dataset, vol['id'])
+                        dispatcher.threaded(ds.mount_recursive)
                     except libzfs.ZFSException as err:
                         logger.error('Cannot import pool {0} <{1}>: {2}'.format(
                             pool_to_import.name,
