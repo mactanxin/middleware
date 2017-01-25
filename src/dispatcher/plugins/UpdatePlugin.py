@@ -34,6 +34,7 @@ import re
 import tarfile
 import shutil
 from freenas.utils import human_readable_bytes
+from freenas.utils.decorators import throttle
 from resources import Resource
 from cache import CacheStore
 from freenas.dispatcher.rpc import (
@@ -330,6 +331,7 @@ class UpdateHandler(object):
 
         self.emit_update_details()
 
+    @throttle(seconds=1)
     def emit_update_details(self):
         # Doing the drill below as there is a small window when
         # step*progress logic does not catch up with the new value of step
