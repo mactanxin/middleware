@@ -38,17 +38,18 @@ import itertools
 import time
 import datastore
 from datetime import datetime
+from bsd import setproctitle
 from bsd import SyslogPriority, SyslogFacility
 from freenas.dispatcher.server import Server
 from freenas.dispatcher.rpc import RpcContext, RpcService, RpcException, generator
-from freenas.serviced import checkin
+from freenas.serviced import checkin, get_job_by_pid
 from freenas.utils import query as q
 
 
 FLUSH_INTERVAL = 180
-SYSLOG_PATTERN = re.compile(r'<(?P<priority>\d+)>(?P<timestamp>\w+ \d+ \d+:\d+:\d+) (?P<process>[\w\[\]]+): (?P<message>.*)')
+SYSLOG_PATTERN = re.compile(r'<(?P<priority>\d+)>(?P<timestamp>\w+ \d+ \d+:\d+:\d+) (?P<identifier>[\w\[\]]+): (?P<message>.*)')
 KLOG_PATTERN = re.compile(r'<(?P<priority>\d+)>(?P<message>.*)')
-PROC_PATTERN = re.compile(r'(?P<name>\w+)\[(?P<pid>\d+)\]')
+PROC_PATTERN = re.compile(r'(?P<identifier>\w+)\[(?P<pid>\d+)\]')
 DEFAULT_SOCKET_ADDRESS = 'unix:///var/run/logd.sock'
 KLOG_PATH = '/dev/klog'
 SYSLOG_SOCKETS = {
@@ -58,7 +59,11 @@ SYSLOG_SOCKETS = {
 
 
 def parse_priority(prio):
-    return prio & 0x7, prio << 3
+    if isinstance(prio, str):
+        return getattr(SyslogPriority, prio, SyslogPriority.INFO), None
+
+    if isinstance(prio, int):
+        return SyslogPriority(int(prio) & 0x7), int(prio) << 3
 
 
 class LoggingService(RpcService):
@@ -73,13 +78,19 @@ class LoggingService(RpcService):
             self.context.flush = bool(enable)
             self.context.cv.notify_all()
 
-    def log(self, priority, progname, message, args):
-        pass
+    def push(self, entry):
+        self.context.push(entry)
 
     @generator
     def query(self, filter=None, params=None):
-        return itertools.chain(
-            q.query(self.context.store, *(filter or []), **(params or {}))
+        ds_results = self.context.datastore.query_stream('syslog', *(filter or []), **(params or {})) \
+            if self.context.datastore \
+            else []
+
+        return q.query(
+            itertools.chain(self.context.store, ds_results),
+            *(filter or []),
+            **(params or {})
         )
 
 
@@ -103,7 +114,8 @@ class KernelLogReader(object):
                     self.context.push({
                         'priority': m['priority'],
                         'message': m['message'],
-                        'process': 'kernel',
+                        'identifier': 'kernel',
+                        'source': 'klog',
                         'timestamp': datetime.utcnow()
                     })
 
@@ -131,13 +143,17 @@ class SyslogServer(object):
         self.thread.start()
 
     def parse_message(self, msg):
+        now = datetime.now()
         m = SYSLOG_PATTERN.match(msg.decode('utf-8'))
         if not m:
             return
 
         m = m.groupdict()
-        m['priority'] = int(m['priority'])
-        m['timestamp'] = datetime.strptime(m['timestamp'], '%b %d %H:%M:%S')
+        m.update({
+            'priority': int(m['priority']),
+            'timestamp': datetime.strptime(m['timestamp'], '%b %d %H:%M:%S').replace(year=now.year),
+            'source': 'syslog'
+        })
 
         p = PROC_PATTERN.match(m['process'])
         if not p:
@@ -154,9 +170,8 @@ class SyslogServer(object):
             if not msg:
                 break
 
-            with self.context.lock:
-                item = self.parse_message(msg)
-                self.context.push(item)
+            item = self.parse_message(msg)
+            self.context.push(item)
 
 
 class SyslogForwarder(object):
@@ -192,7 +207,8 @@ class Context(object):
         self.server.rpc = self.rpc
         self.server.streaming = True
         self.server.start(DEFAULT_SOCKET_ADDRESS, transport_options={'permissions': 0o666})
-        self.server.serve_forever()
+        thread = threading.Thread(target=self.server.serve_forever, name='RPC server thread', daemon=True)
+        thread.start()
 
     def init_syslog_server(self):
         for path, perm in SYSLOG_SOCKETS.items():
@@ -200,15 +216,31 @@ class Context(object):
             server.start()
             self.servers.append(server)
 
-        signal.pause()
+    def init_flush(self):
+        thread = threading.Thread(target=self.flush, name='Flush thread', daemon=True)
+        thread.start()
 
     def push(self, item):
+        if not item:
+            return
+
+        if 'message' not in item or 'priority' not in item:
+            return
+
+        if 'timestamp' not in item:
+            item['timestamp'] = datetime.now()
+
+        if 'pid' in item:
+            job = get_job_by_pid(item, True)
+            item['service'] = job['Label']
+
         with self.lock:
-            priority, facility = parse_priority(int(item['priority']))
-            item.udpate({
+            logging.debug('Pushing message: {0}'.format(item))
+            priority, facility = parse_priority(item['priority'])
+            item.update({
                 'id': uuid.uuid4(),
                 'boot_id': self.boot_id,
-                'priority': priority,
+                'priority': priority.name,
                 'facility': facility
             })
             self.store.append(item)
@@ -221,6 +253,14 @@ class Context(object):
             if not self.flush:
                 continue
 
+            if not self.datastore:
+                try:
+                    self.init_datastore()
+                except BaseException as err:
+                    logging.warning('Cannot initialize datastore: {0}'.format(err))
+                    logging.warning('Flush skipped')
+                    continue
+
             logging.debug('Attempting to flush logs')
             self.init_datastore()
             with self.lock:
@@ -232,12 +272,19 @@ class Context(object):
 
             logging.debug('Flushed {0} log items'.format(count))
 
+    def sigusr1(self, signo, frame):
+        self.cv.notify_all()
+
     def main(self):
+        setproctitle('logd')
         self.init_syslog_server()
         self.init_rpc_server()
+        self.init_flush()
         checkin()
+        signal.pause()
 
 
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.DEBUG)
     c = Context()
     c.main()
