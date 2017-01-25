@@ -531,7 +531,7 @@ def _init(dispatcher, plugin):
     plugin.register_schema_definition('ServiceConfig', {
         'discriminator': 'type',
         'oneOf': [
-            {'$ref': 'service-{0}'.format(svc['name'])}
+            {'$ref': 'Service{0}'.format(svc['name'].title())}
             for svc in dispatcher.datastore.query('service_definitions')
             if not svc['builtin']
         ]

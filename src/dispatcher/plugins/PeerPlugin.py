@@ -265,9 +265,9 @@ def _init(dispatcher, plugin):
 
         for p in dispatcher.plugins.values():
             if p.metadata and p.metadata.get('type') == 'peering':
-                credential_types.append('{0}-credentials'.format(p.metadata['subtype']))
+                credential_types.append('{0}Credentials'.format(p.metadata['subtype'].title()))
                 if p.metadata.get('initial_credentials'):
-                    initial_credential_types.append('{0}-initial-credentials'.format(p.metadata['subtype']))
+                    initial_credential_types.append('{0}InitialCredentials'.format(p.metadata['subtype'].title()))
 
         plugin.register_schema_definition('PeerCredentials', {
             'discriminator': '%type',

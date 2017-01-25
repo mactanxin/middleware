@@ -671,7 +671,7 @@ def _init(dispatcher, plugin):
             'type': 'object',
             'properties': {
                 'subtype': {'$ref': 'ShareTypesSubtype'},
-                'perm_type': { 'oneOf': [
+                'perm_type': {'oneOf': [
                     {'$ref': 'ShareTypesPermtype'},
                     {'type': 'null'}
                 ]},
@@ -737,7 +737,7 @@ def _init(dispatcher, plugin):
         plugin.register_schema_definition('ShareProperties', {
             'discriminator': '%type',
             'oneOf': [
-                {'$ref': 'share-{0}'.format(name)} for name in dispatcher.call_sync('share.supported_types')
+                {'$ref': 'Share{0}'.format(name.title())} for name in dispatcher.call_sync('share.supported_types')
             ]
         })
 

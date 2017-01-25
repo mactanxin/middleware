@@ -480,7 +480,7 @@ def _init(dispatcher, plugin):
         plugin.register_schema_definition('BackupProperties', {
             'discriminator': '%type',
             'oneOf': [
-                {'$ref': 'backup-{0}'.format(name)} for name in dispatcher.call_sync('backup.supported_providers')
+                {'$ref': 'Backup{0}'.format(name.title())} for name in dispatcher.call_sync('backup.supported_providers')
             ]
         })
 

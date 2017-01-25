@@ -646,7 +646,7 @@ def _init(dispatcher, plugin):
         plugin.register_schema_definition('VmDatastoreProperties', {
             'discriminator': '%type',
             'oneOf': [
-                {'$ref': 'VmDatastoreProperties{0}'.format(name)}
+                {'$ref': 'VmDatastoreProperties{0}'.format(name.title())}
                 for name
                 in dispatcher.call_sync('vm.datastore.supported_drivers')
             ]
