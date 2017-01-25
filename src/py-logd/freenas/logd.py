@@ -25,7 +25,10 @@
 #
 #####################################################################
 
+import os
+import sys
 import logging
+from datetime import datetime
 from freenas.dispatcher.client import Client
 
 
@@ -39,9 +42,10 @@ PRIORITY_MAP = {
 
 
 class LogdLogHandler(logging.Handler):
-    def __init__(self, level=logging.NOTSET, address=None):
+    def __init__(self, level=logging.NOTSET, address=None, ident=None):
         super(LogdLogHandler, self).__init__(level)
         self.address = address or 'unix:///var/run/logd.sock'
+        self.ident = ident or os.path.basename(sys.executable)
         self.client = Client()
         self.client.connect(self.address)
 
@@ -50,12 +54,17 @@ class LogdLogHandler(logging.Handler):
             self.client.connect(self.address)
 
         self.client.call_sync('logd.logging.push', {
+            'timestamp': datetime.utcfromtimestamp(record.created),
             'priority': PRIORITY_MAP.get(record.levelno, 'INFO'),
             'message': record.message,
-            'process': record.processName,
+            'process': self.ident,
             'thread': record.threadName,
             'tid': record.thread,
             'module_name': record.name,
             'source_file': record.pathname,
             'source_line': record.lineno,
         })
+
+    def close(self):
+        super(LogdLogHandler, self).close()
+        self.client.disconnect()
