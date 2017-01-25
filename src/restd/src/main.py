@@ -197,7 +197,7 @@ class RESTApi(object):
 
 def main():
 
-    configure_logging('/var/log/restd.log', 'DEBUG')
+    configure_logging('restd', 'DEBUG')
 
     api = RESTApi()
     api.run()

@@ -177,7 +177,7 @@ class Main(object):
         parser.add_argument('-c', metavar='CONFIG', default=DEFAULT_CONFIGFILE, help='Middleware config file')
         args = parser.parse_args()
         self.config = args.c
-        configure_logging('/var/log/neighbord.log', 'DEBUG')
+        configure_logging('neighbord', 'DEBUG')
 
         setproctitle('neighbord')
         self.parse_config(self.config)

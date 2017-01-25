@@ -2273,7 +2273,7 @@ class Main(object):
         parser.add_argument('-c', metavar='CONFIG', default=DEFAULT_CONFIGFILE, help='Middleware config file')
         parser.add_argument('-p', type=int, metavar='PORT', default=5500, help="WebSockets server port")
         args = parser.parse_args()
-        configure_logging('/var/log/containerd.log', 'DEBUG')
+        configure_logging('containerd', 'DEBUG')
         setproctitle('containerd')
 
         gevent.signal(signal.SIGTERM, self.die)

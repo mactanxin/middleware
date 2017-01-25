@@ -125,7 +125,7 @@ class Main(object):
         parser.add_argument('-c', metavar='CONFIG', default=DEFAULT_CONFIGFILE, help='Middleware config file')
         args = parser.parse_args()
         self.config = args.c
-        configure_logging('/var/log/clid.log', 'DEBUG')
+        configure_logging('clid', 'DEBUG')
 
         setproctitle('clid')
         self.init_dispatcher()

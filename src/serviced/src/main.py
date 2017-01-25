@@ -247,7 +247,7 @@ class Job(object):
                 try:
                     os.execvpe(self.program, self.program_arguments, env)
                 except:
-                    sys.exit(254)
+                    os._exit(254)
 
             self.logger.debug('Started as PID {0}'.format(pid))
             self.pid = pid
@@ -694,7 +694,7 @@ class Context(object):
         parser.add_argument('-s', metavar='SOCKET', default=DEFAULT_SOCKET_ADDRESS, help='Socket address to listen on')
         args = parser.parse_args()
 
-        configure_logging('/var/log/serviced.log', 'DEBUG')
+        configure_logging('/var/log/serviced.log', 'DEBUG', file=True)
         bsd.setproctitle('serviced')
         self.logger.info('Started')
         self.init_server(args.s)

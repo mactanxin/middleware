@@ -140,7 +140,7 @@ def main():
     parser.add_argument('name', metavar='NAME', help='Datastore name')
     args = parser.parse_args()
     config = read_config(args.c)
-    configure_logging('/var/tmp/dswatch.{0}.log'.format(args.name), 'DEBUG')
+    configure_logging('/var/tmp/dswatch.{0}.log'.format(args.name), 'DEBUG', file=True)
     dsconfig = config.get(args.name)
 
     if not dsconfig:

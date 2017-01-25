@@ -1,5 +1,4 @@
-#!/usr/local/bin/python3
-#+
+#
 # Copyright 2014 iXsystems, Inc.
 # All rights reserved
 #
@@ -250,7 +249,7 @@ class Main(object):
         parser.add_argument('-f', action='store_true', default=False, help='Run in foreground')
         parser.add_argument('mountpoint', metavar='MOUNTPOINT', default='/etc', help='/etc mount point')
         args = parser.parse_args()
-        configure_logging('/var/log/etcd.log', 'DEBUG')
+        configure_logging('etcd', 'DEBUG')
 
         setproctitle('etcd')
         self.root = args.mountpoint

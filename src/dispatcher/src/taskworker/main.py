@@ -204,7 +204,7 @@ class Context(object):
             sys.exit(errno.EINVAL)
 
         key = sys.argv[1]
-        configure_logging(None, logging.DEBUG)
+        configure_logging('taskworker', logging.DEBUG)
 
         self.datastore = get_datastore()
         self.configstore = ConfigStore(self.datastore)

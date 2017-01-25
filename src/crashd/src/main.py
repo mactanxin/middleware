@@ -217,7 +217,7 @@ class Main(object):
 
     def main(self):
         setproctitle('crashd')
-        configure_logging('/var/log/crashd.log', 'DEBUG')
+        configure_logging('crashd', 'DEBUG')
         logger.info('Started')
 
         self.collect_telemetry()

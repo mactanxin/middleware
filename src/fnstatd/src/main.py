@@ -548,7 +548,7 @@ class Main(object):
         parser = argparse.ArgumentParser()
         parser.add_argument('-c', metavar='CONFIG', default=DEFAULT_CONFIGFILE, help='Middleware config file')
         args = parser.parse_args()
-        configure_logging('/var/log/fnstatd.log', 'DEBUG')
+        configure_logging('fnstatd', 'DEBUG')
         setproctitle('fnstatd')
 
         # Signal handlers

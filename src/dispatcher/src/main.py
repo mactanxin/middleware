@@ -76,13 +76,13 @@ from services import (
     ManagementService, DebugService, EventService, TaskService,
     PluginService, ShellService, LockService
 )
-from event import sync
 from schemas import register_general_purpose_schemas
 from balancer import Balancer
 from auth import PasswordAuthenticator, TokenStore, Token, User, Service
 from freenas.utils import FaultTolerantLogHandler, load_module_from_file, serialize_exception
 from freenas.utils.trace_logger import TraceLogger, TRACE
 from freenas.serviced import checkin, push_status
+from freenas.logd import LogdLogHandler
 
 DEFAULT_CONFIGFILE = '/usr/local/etc/middleware.conf'
 LOGGING_FORMAT = '%(asctime)s %(levelname)s %(filename)s:%(lineno)d %(message)s'
@@ -536,19 +536,6 @@ class Dispatcher(object):
             return
 
         self.dispatch_event("server.plugin.loaded", {"name": os.path.basename(path)})
-
-    def __on_service_started(self, args):
-        if args['name'] == 'syslog':
-            try:
-                self.__init_syslog()
-                self.unregister_event_handler('service.started', self.__on_service_started)
-            except IOError as err:
-                self.logger.warning('Cannot initialize syslog: %s', str(err))
-
-    def __init_syslog(self):
-        handler = logging.handlers.SysLogHandler('/var/run/log', facility='local3')
-        logging.root.setLevel(logging.DEBUG)
-        logging.root.addHandler(handler)
 
     def set_syslog_level(self, level):
         if level == 'TRACE':
@@ -1573,6 +1560,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--log-level', type=str, metavar='LOG_LEVEL', default='INFO', help="Logging level")
     parser.add_argument('--log-file', type=str, metavar='LOG_FILE', help="Log to file")
+    parser.add_argument('--syslog', action='store_true', help="Log to syslog")
+    parser.add_argument('--logd', action='store_true', help="Log to logd")
     parser.add_argument('-s', type=int, metavar='PORT', default=8180, help="Run debug frontend server on port")
     parser.add_argument('-p', type=int, metavar='PORT', default=5000, help="WebSockets server port")
     parser.add_argument('-u', type=str, metavar='PATH', default='/var/run/dispatcher.sock', help="Unix domain server path")
@@ -1583,11 +1572,24 @@ def main():
     logging.setLoggerClass(TraceLogger)
     logging.basicConfig(
         level=logging.getLevelName(args.log_level),
-        format=LOGGING_FORMAT)
+        format=LOGGING_FORMAT
+    )
 
     if args.log_file:
         handler = FaultTolerantLogHandler(args.log_file)
         handler.setFormatter(logging.Formatter(LOGGING_FORMAT))
+        logging.root.removeHandler(logging.root.handlers[0])
+        logging.root.addHandler(handler)
+
+    if args.syslog:
+        handler = logging.handlers.SysLogHandler('/var/run/log', facility='local3')
+        handler.setLevel(logging.DEBUG)
+        logging.root.removeHandler(logging.root.handlers[0])
+        logging.root.addHandler(handler)
+
+    if args.logd:
+        handler = LogdLogHandler(ident='dispatcher')
+        handler.setLevel(logging.DEBUG)
         logging.root.removeHandler(logging.root.handlers[0])
         logging.root.addHandler(handler)
 
