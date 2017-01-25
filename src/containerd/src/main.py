@@ -99,8 +99,8 @@ def normalize_docker_labels(labels):
     normalize(labels, {
         'org.freenas.autostart': "false",
         'org.freenas.bridged': "false",
-        'org.freenas.capabilities-add': [],
-        'org.freenas.capabilities-drop': [],
+        'org.freenas.capabilities-add': "",
+        'org.freenas.capabilities-drop': "",
         'org.freenas.dhcp': "false",
         'org.freenas.expose-ports-at-host': "false",
         'org.freenas.interactive': "false",
