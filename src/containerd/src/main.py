@@ -1610,7 +1610,7 @@ class DockerService(RpcService):
         except ValueError as err:
             raise RpcException(errno.EFAULT, 'Failed to start container: {0}'.format(str(err)))
 
-        if bridge.get('dhcp'):
+        if bridge.get('enable') and bridge.get('dhcp'):
             lease = get_dhcp_lease(self.context, name, hostid, bridge.get('macaddress'))
             if bridge.get('address') != lease['client_ip']:
                 raise RpcException(
@@ -1637,7 +1637,7 @@ class DockerService(RpcService):
             raise RpcException(errno.ENOENT, 'Docker host {0} not found'.format(container['host']))
 
         bridge_enabled = q.get(container, 'bridge.enable')
-        dhcp_enabled = q.get(container, 'bridge.dhcp')
+        dhcp_enabled = q.get(container, 'bridge.dhcp') if bridge_enabled else False
         labels = {
             'org.freenas.autostart': bool_to_truefalse(container.get('autostart')),
             'org.freenas.expose-ports-at-host': bool_to_truefalse(container.get('expose_ports')),
