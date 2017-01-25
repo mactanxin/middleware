@@ -1663,6 +1663,11 @@ class DockerService(RpcService):
                 ipv4 = lease['client_ip']
             else:
                 ipv4 = q.get(container, 'bridge.address')
+            if not ipv4:
+                raise RpcException(
+                    errno.EINVAL,
+                    'Either dhcp or static address must be selected for bridged container'
+                )
 
             networking_config = host.connection.create_networking_config({
                 'external': host.connection.create_endpoint_config(
