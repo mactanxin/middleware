@@ -984,7 +984,7 @@ class DockerHost(object):
                         def transform_action(action):
                             operation = actions.get(action, 'update')
                             if operation in ('create', 'delete'):
-                                ref_cnt = self.context.client(
+                                ref_cnt = self.context.client.call_sync(
                                     'containerd.docker.query_images',
                                     [('id', '=', id)],
                                     {'select': 'hosts', 'count': True}
