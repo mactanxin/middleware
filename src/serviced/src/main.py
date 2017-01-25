@@ -511,7 +511,7 @@ class JobService(RpcService):
 
             job = first_or_default(fuzzy_match if fuzzy else match, self.context.jobs.values())
             if not job:
-                raise RpcException(errno.ENOENT, 'Job {0} not found'.format(name_or_id))
+                raise RpcException(errno.ENOENT, 'Job for PID {0} not found'.format(pid))
 
         return job.__getstate__()
 
