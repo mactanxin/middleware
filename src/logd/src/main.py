@@ -42,7 +42,7 @@ from bsd import setproctitle
 from bsd import SyslogPriority, SyslogFacility
 from freenas.dispatcher.server import Server
 from freenas.dispatcher.rpc import RpcContext, RpcService, RpcException, generator
-from freenas.serviced import checkin, get_job_by_pid
+from freenas.serviced import ServicedException, checkin, get_job_by_pid
 from freenas.utils import query as q
 
 
@@ -155,12 +155,12 @@ class SyslogServer(object):
             'source': 'syslog'
         })
 
-        p = PROC_PATTERN.match(m['process'])
+        p = PROC_PATTERN.match(m['identifier'])
         if not p:
             return m
 
         p = p.groupdict()
-        m['process'] = p['name']
+        m['identifier'] = p['identifier']
         m['pid'] = int(p['pid'])
         return m
 
@@ -197,7 +197,7 @@ class Context(object):
 
     def init_datastore(self):
         try:
-            self.datastore = datastore.get_datastore()
+            self.datastore = datastore.get_datastore(log=True)
         except datastore.DatastoreException as err:
             logging.error('Cannot initialize datastore: %s', str(err))
             sys.exit(1)
@@ -217,7 +217,7 @@ class Context(object):
             self.servers.append(server)
 
     def init_flush(self):
-        thread = threading.Thread(target=self.flush, name='Flush thread', daemon=True)
+        thread = threading.Thread(target=self.do_flush, name='Flush thread', daemon=True)
         thread.start()
 
     def push(self, item):
@@ -231,49 +231,54 @@ class Context(object):
             item['timestamp'] = datetime.now()
 
         if 'pid' in item:
-            job = get_job_by_pid(item, True)
-            item['service'] = job['Label']
+            try:
+                job = get_job_by_pid(item, True)
+                item['service'] = job['Label']
+            except ServicedException:
+                pass
 
         with self.lock:
-            logging.debug('Pushing message: {0}'.format(item))
             priority, facility = parse_priority(item['priority'])
             item.update({
-                'id': uuid.uuid4(),
+                'id': str(uuid.uuid4()),
                 'boot_id': self.boot_id,
                 'priority': priority.name,
                 'facility': facility
             })
             self.store.append(item)
 
-    def flush(self):
+    def do_flush(self):
+        logging.debug('Flush thread initialized')
         while True:
             # Flush immediately after getting wakeup or when timeout expires
-            self.cv.wait(FLUSH_INTERVAL)
+            with self.cv:
+                self.cv.wait(FLUSH_INTERVAL)
 
-            if not self.flush:
-                continue
-
-            if not self.datastore:
-                try:
-                    self.init_datastore()
-                except BaseException as err:
-                    logging.warning('Cannot initialize datastore: {0}'.format(err))
-                    logging.warning('Flush skipped')
+                if not self.flush:
                     continue
 
-            logging.debug('Attempting to flush logs')
-            self.init_datastore()
-            with self.lock:
-                for i in self.store:
-                    self.datastore.insert('syslog', i)
+                if not self.datastore:
+                    try:
+                        self.init_datastore()
+                        logging.info('Datastore initialized')
+                    except BaseException as err:
+                        logging.warning('Cannot initialize datastore: {0}'.format(err))
+                        logging.warning('Flush skipped')
+                        continue
 
-                count = len(self.store)
-                self.store.clear()
+                logging.debug('Attempting to flush logs')
+                with self.lock:
+                    for i in self.store:
+                        self.datastore.insert('syslog', i)
 
-            logging.debug('Flushed {0} log items'.format(count))
+                    count = len(self.store)
+                    self.store.clear()
+
+                logging.debug('Flushed {0} log items'.format(count))
 
     def sigusr1(self, signo, frame):
-        self.cv.notify_all()
+        with self.cv:
+            self.cv.notify_all()
 
     def main(self):
         setproctitle('logd')
@@ -281,6 +286,7 @@ class Context(object):
         self.init_rpc_server()
         self.init_flush()
         checkin()
+        signal.signal(signal.SIGUSR1, self.sigusr1)
         signal.pause()
 
 

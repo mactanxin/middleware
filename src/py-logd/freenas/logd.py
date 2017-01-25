@@ -56,8 +56,9 @@ class LogdLogHandler(logging.Handler):
         self.client.call_sync('logd.logging.push', {
             'timestamp': datetime.utcfromtimestamp(record.created),
             'priority': PRIORITY_MAP.get(record.levelno, 'INFO'),
-            'message': record.message,
-            'process': self.ident,
+            'message': record.getMessage(),
+            'identifier': self.ident,
+            'pid': os.getpid(),
             'thread': record.threadName,
             'tid': record.thread,
             'module_name': record.name,
