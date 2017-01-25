@@ -490,6 +490,13 @@ class DockerContainerCreateTask(DockerBaseTask):
                     )
                 )
 
+        bridge = container.get('bridge')
+        if bridge.get('enable') and not (bridge.get('dhcp') or bridge.get('address')):
+            raise VerifyException(
+                errno.EINVAL,
+                'Either dhcp or static address must be selected for bridged container'
+            )
+
         if hostname:
             return ['docker:{0}'.format(hostname)]
         else:
@@ -627,6 +634,13 @@ class DockerContainerUpdateTask(DockerBaseTask):
                         v['host_path'], v['source'].lower()
                     )
                 )
+
+        bridge = updated_fields.get('bridge', {})
+        if bridge.get('enable') and not (bridge.get('dhcp') or bridge.get('address')):
+            raise VerifyException(
+                errno.EINVAL,
+                'Either dhcp or static address must be selected for bridged container'
+            )
 
         if 'running' in updated_fields:
             raise VerifyException(errno.EINVAL, 'Running parameter cannot be set')
