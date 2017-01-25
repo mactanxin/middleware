@@ -101,6 +101,7 @@ def normalize_docker_labels(labels):
         'org.freenas.bridged': "false",
         'org.freenas.capabilities-add': "",
         'org.freenas.capabilities-drop': "",
+        'org.freenas.command': "",
         'org.freenas.dhcp': "false",
         'org.freenas.expose-ports-at-host': "false",
         'org.freenas.interactive': "false",
@@ -1345,6 +1346,7 @@ class DockerService(RpcService):
             },
             'capabilities_add': [],
             'capabilities_drop': [],
+            'command': [],
             'expose_ports': truefalse_to_bool(labels.get('org.freenas.expose-ports-at-host')),
             'interactive': truefalse_to_bool(labels.get('org.freenas.interactive')),
             'ports': [],
@@ -1376,6 +1378,9 @@ class DockerService(RpcService):
 
         if labels.get('org.freenas.capabilities-drop'):
             result['capabilities_drop'] = labels['org.freenas.capabilities-drop'].split(',')
+
+        if labels.get('org.freenas.command'):
+            result['command'] = labels['org.freenas.command'].split(',')
 
         if labels.get('org.freenas.volumes'):
             try:
