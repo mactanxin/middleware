@@ -35,8 +35,9 @@
 static int call_logd(const char *, json_t *);
 
 static int
-call_logd(const char *method, json_t *args);
+call_logd(const char *method, json_t *args)
 {
+	json_t *result;
 	connection_t *conn;
 	int err, rpc_err;
 
@@ -44,11 +45,11 @@ call_logd(const char *method, json_t *args);
 	if (conn == NULL)
 		return (-1);
 
-	err = dispatcher_call_sync(conn, method, args, result);
+	err = dispatcher_call_sync(conn, method, args, &result);
 	if (err == RPC_CALL_ERROR) {
-		rpc_err = json_integer_value(json_object_get(*result, "code"));
-		*result = json_null();
+		rpc_err = json_integer_value(json_object_get(result, "code"));
 		dispatcher_close(conn);
+		json_decref(result);
 		errno = rpc_err;
 		return (-1);
 	}
@@ -59,8 +60,8 @@ call_logd(const char *method, json_t *args);
 		return (-1);
 	}
 
-	json_incref(*result);
 	dispatcher_close(conn);
+	json_decref(result);
 	return (0);
 }
 
@@ -79,11 +80,13 @@ logd_printv(int priority, const char *format, va_list ap)
 {
 	struct logd_pair pairs[2];
 
+	pairs[0].lp_name = "priority";
 	pairs[0].lp_type = LOGD_TYPE_INT;
 	pairs[0].lp_int = priority;
+	pairs[1].lp_name = "message";
 	pairs[1].lp_type = LOGD_TYPE_STRING;
 	vasprintf(&pairs[1].lp_string, format, ap);
-	logd_send(pairs, sizeof(pairs));
+	logd_send(pairs, 2);
 }
 
 void
@@ -112,8 +115,8 @@ logd_send(struct logd_pair *pairs, int npairs)
 			val = json_real(pairs[i].lp_double);
 			break;
 
-		case LOGD_TYPE_DOUBLE:
-			val = json_bool(pairs[i].lp_double);
+		case LOGD_TYPE_BOOL:
+			val = json_boolean(pairs[i].lp_double);
 			break;
 
 		default:
@@ -123,6 +126,6 @@ logd_send(struct logd_pair *pairs, int npairs)
 		json_object_set(args, pairs[i].lp_name, val);
 	}
 
-	(void)call_logd("logd.logging.push", json_pack("[o]", args), NULL);
+	(void)call_logd("logd.logging.push", json_pack("[o]", args));
 	json_decref(args);
 }
