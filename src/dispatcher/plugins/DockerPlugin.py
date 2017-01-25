@@ -151,6 +151,12 @@ class DockerNetworkProvider(Provider):
     @query('docker-network')
     @generator
     def query(self, filter=None, params=None):
+        hide_builtin_networks = [('name', 'nin', ('bridge', 'external'))]
+        if filter:
+            filter.extend(hide_builtin_networks)
+        else:
+            filter = hide_builtin_networks
+
         return q.query(
             self.datastore.query_stream('docker.networks'),
             *(filter or []),
