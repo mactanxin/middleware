@@ -31,6 +31,7 @@ import os
 import errno
 import tempfile
 import socket
+import contextlib
 from freenas.dispatcher.jsonenc import dumps, loads
 from freenas.dispatcher.client import Client
 from freenas.utils.url import wrap_address
@@ -61,7 +62,8 @@ def save_config(conf_path, name_mod, entry, file_perms=None):
         conf_file.write(dumps(entry))
 
     if file_perms:
-        os.chmod(file_name, file_perms)
+        with contextlib.suppress(OSError):
+            os.chmod(file_name, file_perms)
 
 
 def load_config(conf_path, name_mod):
