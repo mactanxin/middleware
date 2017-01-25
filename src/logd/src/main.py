@@ -39,9 +39,10 @@ import time
 import datastore
 from datetime import datetime
 from bsd import setproctitle
+from bsd import kinfo_getproc
 from bsd import SyslogPriority, SyslogFacility
 from freenas.dispatcher.server import Server
-from freenas.dispatcher.rpc import RpcContext, RpcService, RpcException, generator
+from freenas.dispatcher.rpc import RpcContext, RpcService, RpcException, generator, get_sender
 from freenas.serviced import ServicedException, checkin, get_job_by_pid
 from freenas.utils import query as q
 
@@ -79,6 +80,19 @@ class LoggingService(RpcService):
             self.context.cv.notify_all()
 
     def push(self, entry):
+        creds = get_sender().credentials
+        if creds:
+            entry['pid'] = creds['pid']
+            entry['uid'] = creds['uid']
+            entry['gid'] = creds['gid']
+
+        if 'identifier' not in entry:
+            try:
+                proc = kinfo_getproc(entry['pid'])
+                entry['identifier'] = proc.command
+            except OSError:
+                entry['identifier'] = 'unknown'
+
         self.context.push(entry)
 
     @generator

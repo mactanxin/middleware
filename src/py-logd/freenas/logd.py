@@ -58,7 +58,6 @@ class LogdLogHandler(logging.Handler):
             'priority': PRIORITY_MAP.get(record.levelno, 'INFO'),
             'message': record.getMessage(),
             'identifier': self.ident,
-            'pid': os.getpid(),
             'thread': record.threadName,
             'tid': record.thread,
             'module_name': record.name,
