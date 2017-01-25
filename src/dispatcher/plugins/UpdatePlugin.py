@@ -181,11 +181,7 @@ def check_updates(dispatcher, configstore, cache_dir=None, check_now=False):
         current_update_info = dispatcher.call_sync('update.update_info')
         if (
             current_update_info.get('installed') and
-            dispatcher.call_sync(
-                'boot.environment.query',
-                [('realname', '=', current_update_info.get('installed_version'))],
-                {"single": True}
-            )
+            is_update_applied(dispatcher, current_update_info.get('installed_version'))
         ):
             update_cache_value_dict.update({
                 'installed': True,
