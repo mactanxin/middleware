@@ -1458,9 +1458,19 @@ class DockerHostUpdateTask(ProgressTask):
 
         vm = self.datastore.query('vms', ('id', '=', id), single=True)
 
-        vm.update(updated_params)
+        diff = {}
+        if 'name' in updated_params:
+            diff['name'] = updated_params['name']
 
-        diff = {vm[k] for k in updated_params.keys()}
+        if 'config' in updated_params:
+            diff['config'] = vm['config']
+            updated_config = updated_params['config']
+
+            if 'ncpus' in updated_config:
+                q.set(diff, 'config.ncpus', updated_config['ncpus'])
+
+            if 'memsize' in updated_config:
+                q.set(diff, 'config.memsize', updated_config['memsize'])
 
         return self.run_subtask_sync_with_progress('vm.update', id, diff)
 
