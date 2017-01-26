@@ -99,27 +99,31 @@ logging.getLogger('requests').setLevel(logging.WARNING)
 logging.getLogger('urllib').setLevel(logging.WARNING)
 
 
+DOCKER_LABELS_MAP = {
+    'org.freenas.autostart'           : {'default': 'false', 'preset': 'autostart'        },
+    'org.freenas.bridged'             : {'default': 'false', 'preset': 'bridge.enable'    },
+    'org.freenas.capabilities-add'    : {'default': ''     , 'preset': 'capabilities_add' },
+    'org.freenas.capabilities-drop'   : {'default': ''     , 'preset': 'capabilities_drop'},
+    'org.freenas.command'             : {'default': ''     , 'preset': 'command'          },
+    'org.freenas.dhcp'                : {'default': 'false', 'preset': 'bridge.dhcp'      },
+    'org.freenas.expose-ports-at-host': {'default': 'false', 'preset': 'expose_ports'     },
+    'org.freenas.immutable'           : {'default': ''     , 'preset': 'immutable'        },
+    'org.freenas.interactive'         : {'default': 'false', 'preset': 'interactive'      },
+    'org.freenas.port-mappings'       : {'default': ''     , 'preset': 'ports'            },
+    'org.freenas.privileged'          : {'default': 'false', 'preset': 'privileged'       },
+    'org.freenas.settings'            : {'default': []     , 'preset': 'settings'         },
+    'org.freenas.static-volumes'      : {'default': []     , 'preset': 'static_volumes'   },
+    'org.freenas.upgradeable'         : {'default': 'false', 'preset': 'upgradeable'      },
+    'org.freenas.version'             : {'default': '0'    , 'preset': 'version'          },
+    'org.freenas.volumes'             : {'default': []     , 'preset': 'volumes'          },
+    'org.freenas.web-ui-path'         : {'default': ''     , 'preset': 'web_ui_path'      },
+    'org.freenas.web-ui-port'         : {'default': ''     , 'preset': 'web_ui_port'      },
+    'org.freenas.web-ui-protocol'     : {'default': ''     , 'preset': 'web_ui_protocol'  },
+}
+
+
 def normalize_docker_labels(labels):
-    normalize(labels, {
-        'org.freenas.autostart': "false",
-        'org.freenas.bridged': "false",
-        'org.freenas.capabilities-add': "",
-        'org.freenas.capabilities-drop': "",
-        'org.freenas.command': "",
-        'org.freenas.dhcp': "false",
-        'org.freenas.expose-ports-at-host': "false",
-        'org.freenas.interactive': "false",
-        'org.freenas.port-mappings': "",
-        'org.freenas.privileged': "false",
-        'org.freenas.settings': [],
-        'org.freenas.static-volumes': [],
-        'org.freenas.upgradeable': "false",
-        'org.freenas.version': '0',
-        'org.freenas.volumes': [],
-        'org.freenas.web-ui-path': '',
-        'org.freenas.web-ui-port': '',
-        'org.freenas.web-ui-protocol': ''
-    })
+    normalize(labels, {e: v.get('default') for e, v in DOCKER_LABELS_MAP.items()})
     return labels
 
 
@@ -1355,8 +1359,10 @@ class DockerService(RpcService):
             'capabilities_drop': [],
             'command': [],
             'expose_ports': truefalse_to_bool(labels.get('org.freenas.expose-ports-at-host')),
+            'immutable': [],
             'interactive': truefalse_to_bool(labels.get('org.freenas.interactive')),
             'ports': [],
+            'privileged': truefalse_to_bool(labels.get('org.freenas.privileged')),
             'settings': [],
             'static_volumes': [],
             'upgradeable': truefalse_to_bool(labels.get('org.freenas.upgradeable')),
@@ -1365,8 +1371,11 @@ class DockerService(RpcService):
             'web_ui_path': labels.get('org.freenas.web-ui-path'),
             'web_ui_port': labels.get('org.freenas.web-ui-port'),
             'web_ui_protocol': labels.get('org.freenas.web-ui-protocol'),
-            'privileged': truefalse_to_bool(labels.get('org.freenas.privileged')),
         }
+
+        if labels.get('org.freenas.immutable'):
+            for l in labels.get('org.freenas.immutable').split(','):
+                result['immutable'].append(DOCKER_LABELS_MAP[l].get('preset'))
 
         if labels.get('org.freenas.port-mappings'):
             for mapping in labels.get('org.freenas.port-mappings').split(','):
@@ -1504,6 +1513,7 @@ class DockerService(RpcService):
                     'ports': list(get_docker_ports(details)),
                     'volumes': list(get_docker_volumes(details)),
                     'interactive': get_interactive(details),
+                    'immutable': presets.get('immutable'),
                     'upgradeable': truefalse_to_bool(labels.get('org.freenas.upgradeable')),
                     'expose_ports': truefalse_to_bool(labels.get('org.freenas.expose-ports-at-host')),
                     'autostart': truefalse_to_bool(labels.get('org.freenas.autostart')),
