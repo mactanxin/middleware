@@ -80,6 +80,11 @@ class DockerHostProvider(Provider):
             ret = {
                 'id': obj['id'],
                 'name': obj['name'],
+                'target': obj['target'],
+                'config': {
+                    'memsize': q.get(obj, 'config.memsize'),
+                    'ncpus': q.get(obj, 'config.ncpus')
+                },
                 'state': 'DOWN',
                 'status': None
             }
