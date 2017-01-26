@@ -66,18 +66,12 @@ class ISCSIConfigureTask(Task):
     def run(self, iscsi):
         try:
             node = ConfigNode('service.iscsi', self.configstore)
-            self.dispatcher.call_sync('etcd.generation.generate_group', 'services')
+            node.update(iscsi)
             self.dispatcher.call_sync('etcd.generation.generate_group', 'ctl')
-            self.dispatcher.call_sync('service.apply_state', 'iscsi')
-
-            self.dispatcher.dispatch_event('service.iscsi.changed', {
-                'operation': 'updated',
-                'ids': None,
-            })
         except RpcException as e:
-            raise TaskException(
-                errno.ENXIO, 'Cannot reconfigure iSCSI: {0}'.format(str(e))
-            )
+            raise TaskException(errno.ENXIO, 'Cannot reconfigure iSCSI: {0}'.format(str(e)))
+            
+        return 'RELOAD'
 
 
 def _depends():
