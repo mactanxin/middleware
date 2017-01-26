@@ -281,6 +281,12 @@ class Job(object):
             if not self.cv.wait_for(lambda: self.state == JobState.STOPPED, self.exit_timeout):
                 self.logger.error('Unkillable process {0}'.format(self.pid))
 
+    def send_signal(self, signo):
+        if not self.pid:
+            return
+
+        os.kill(self.pid, signo)
+
     def checkin(self):
         with self.cv:
             self.logger.info('Service check-in')
@@ -489,6 +495,14 @@ class JobService(RpcService):
     def restart(self, name_or_id):
         self.stop(name_or_id, True)
         self.start(name_or_id, True)
+
+    def send_signal(self, name_or_id, signo):
+        with self.context.lock:
+            job = first_or_default(lambda j: j.label == name_or_id or j.id == name_or_id, self.context.jobs.values())
+            if not job:
+                raise RpcException(errno.ENOENT, 'Job {0} not found'.format(name_or_id))
+
+        job.send_signal(signo)
 
     def get(self, name_or_id):
         with self.context.lock:
