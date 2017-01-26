@@ -95,6 +95,10 @@ unrestricted_guest = True
 threadpool = ThreadPool(128)
 
 
+logging.getLogger('requests').setLevel(logging.WARNING)
+logging.getLogger('urllib').setLevel(logging.WARNING)
+
+
 def normalize_docker_labels(labels):
     normalize(labels, {
         'org.freenas.autostart': "false",

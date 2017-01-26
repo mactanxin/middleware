@@ -56,6 +56,8 @@ IMAGES_QUERY = 'containerd.docker.query_images'
 
 dockerfile_parser_logger = logging.getLogger('dockerfile_parse.parser')
 dockerfile_parser_logger.setLevel(logging.ERROR)
+logging.getLogger('requests').setLevel(logging.WARNING)
+logging.getLogger('urllib').setLevel(logging.WARNING)
 
 docker_names_pattern = '^[a-zA-Z0-9._-]*$'
 
