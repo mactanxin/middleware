@@ -966,19 +966,25 @@ class DiskTestTask(ProgressTask):
 
         return ['disk:{0}'.format(disk['path'])]
 
-    def handle_progress(self, progress):
-        self.set_progress(progress)
-
     def run(self, id, test_type):
         try:
             diskinfo = self.dispatcher.call_sync('disk.get_disk_config_by_id', id)
         except RpcException:
             raise TaskException(errno.ENOENT, 'Disk {0} not found'.format(id))
 
+        def handle_progress(progress):
+            self.set_progress(
+                progress, "Performing {0} SMART test on disk id: {1}, path: {2}".format(
+                    test_type,
+                    id,
+                    diskinfo['path']
+                )
+            )
+
         dev = Device(diskinfo['gdisk_name'])
         dev.run_selftest_and_wait(
             getattr(SelfTestType, test_type).value,
-            progress_handler=self.handle_progress
+            progress_handler=handle_progress
         )
         self.dispatcher.call_sync('disk.update_disk_cache', diskinfo['path'], timeout=120)
 
