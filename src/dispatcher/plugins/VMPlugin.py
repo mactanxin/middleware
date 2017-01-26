@@ -71,12 +71,16 @@ class VMProvider(Provider):
     def query(self, filter=None, params=None):
         def extend(obj):
             obj['status'] = self.dispatcher.call_sync('containerd.management.get_status', obj['id'])
-            root = self.dispatcher.call_sync('vm.get_vm_root', obj['id'])
-            if os.path.isdir(root):
-                readme = get_readme(root)
-                if readme:
-                    with open(readme, 'r') as readme_file:
-                        obj['config']['readme'] = readme_file.read()
+            try:
+                root = self.dispatcher.call_sync('vm.get_vm_root', obj['id'])
+                if os.path.isdir(root):
+                    readme = get_readme(root)
+                    if readme:
+                        with open(readme, 'r') as readme_file:
+                            obj['config']['readme'] = readme_file.read()
+            except (RpcException, OSError):
+                pass
+
             return obj
 
         return q.query(
@@ -710,14 +714,19 @@ class VMBaseTask(ProgressTask):
         reserved_storage = self.dispatcher.call_sync('vm.get_reserved_storage', vm['id'])
 
         if res['type'] in ('DISK', 'VOLUME'):
-            vm_root_dir = self.dispatcher.call_sync('vm.get_vm_root', vm['id'], False)
-            path = os.path.join(vm_root_dir, res['name'])
+            path = self.dispatcher.call_sync('vm.get_device_path', vm['id'], res['name'], False)
             if path in reserved_storage:
                 self.add_warning(TaskWarning(
                     errno.EACCES,
                     '{0} storage not deleted. There are VM snapshots related to {1} path.'.format(res['name'], path)
                 ))
             else:
+                if res['type'] == 'DISK' and q.get(res, 'properties.target_type') in ('DISK', 'FILE'):
+                    return
+
+                if res['type'] == 'VOLUME' and not q.get(res, 'properties.auto'):
+                    return
+
                 self.run_subtask_sync(
                     'vm.datastore.directory.delete',
                     vm['target'],
@@ -1076,15 +1085,18 @@ class VMUpdateTask(VMBaseTask):
         })
 
         vm = self.datastore.get_by_id('vms', id)
-        save_config(
-            self.dispatcher.call_sync(
-                'vm.datastore.get_filesystem_path',
-                vm['target'],
-                get_vm_path(vm['name'])
-            ),
-            'vm-{0}'.format(vm['name']),
-            vm
-        )
+        try:
+            save_config(
+                self.dispatcher.call_sync(
+                    'vm.datastore.get_filesystem_path',
+                    vm['target'],
+                    get_vm_path(vm['name'])
+                ),
+                'vm-{0}'.format(vm['name']),
+                vm
+            )
+        except OSError:
+            pass
 
 
 @accepts(str)
@@ -1140,20 +1152,20 @@ class VMDeleteTask(Task):
         datastore = vm['target']
 
         snap_sources = []
-        for dir in self.dispatcher.call_sync('vm.datastore.list_dirs', datastore, vm_root_path):
-            source = self.dispatcher.call_sync('vm.datastore.get_clone_source', datastore, dir)
-            if source:
-                path, snap_id = source.split('@', 1)
-                if self.datastore.query('vm.snapshots', ('id', '=', snap_id)):
-                    continue
-
-                type = 'directory'
-                if self.dispatcher.call_sync('vm.datastore.get_path_type', datastore, path) == 'BLOCK_DEVICE':
-                    type = 'block_device'
-
-                snap_sources.append((type, source))
-
         try:
+            for dir in self.dispatcher.call_sync('vm.datastore.list_dirs', datastore, vm_root_path):
+                source = self.dispatcher.call_sync('vm.datastore.get_clone_source', datastore, dir)
+                if source:
+                    path, snap_id = source.split('@', 1)
+                    if self.datastore.query('vm.snapshots', ('id', '=', snap_id)):
+                        continue
+
+                    type = 'directory'
+                    if self.dispatcher.call_sync('vm.datastore.get_path_type', datastore, path) == 'BLOCK_DEVICE':
+                        type = 'block_device'
+
+                    snap_sources.append((type, source))
+
             self.run_subtask_sync('vm.datastore.directory.delete', vm['target'], get_vm_path(vm['name']))
         except RpcException as err:
             if err.code != errno.ENOENT:

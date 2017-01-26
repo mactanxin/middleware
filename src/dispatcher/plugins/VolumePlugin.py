@@ -200,6 +200,7 @@ class VolumeProvider(Provider):
             'id': str,
             'name': str,
             'topology': h.ref('ZfsTopology'),
+            'disks': h.array(str),
             'status': str
         })
     ))
@@ -213,6 +214,11 @@ class VolumeProvider(Provider):
                         'disk.partition_to_disk',
                         vdev['path']
                     )
+
+                    vdev['disk_id'] = self.dispatcher.call_sync(
+                        'disk.path_to_id',
+                        vdev['path']
+                    )
                 except RpcException:
                     pass
 
@@ -223,6 +229,7 @@ class VolumeProvider(Provider):
                 'id': str(pool['guid']),
                 'name': pool['name'],
                 'topology': topology,
+                'disks': list(get_disk_ids(topology)),
                 'status': pool['status']
             })
 
@@ -3103,8 +3110,15 @@ def _init(dispatcher, plugin):
                     temp_mountpoint = mnt.dest
                     break
 
-        if ds['mountpoint'] not in (None, '/var/db/system') and ds['name'] != ds['pool'] and local_mountpoint:
+        if ds['mountpoint'] and '.system' not in ds['name'] and ds['name'] != ds['pool'] and local_mountpoint:
+            # Correct mountpoint of a non-root dataset
             dispatcher.call_task_sync('zfs.update', ds['name'], {'mountpoint': {'source': 'INHERITED'}})
+
+        if ds['name'] == ds['pool']:
+            # Correct mountpoint of a root dataset
+            desired_mountpoint = os.path.join(VOLUMES_ROOT, ds['pool'])
+            if q.get(ds, 'properties.mountpoint.parsed') != desired_mountpoint:
+                dispatcher.call_task_sync('zfs.update', ds['name'], {'mountpoint': {'value': desired_mountpoint}})
 
         prop = q.get(ds, 'properties.org\\.freenas:last_replicated_at')
         if prop and prop['source'] == 'LOCAL':

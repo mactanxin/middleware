@@ -194,6 +194,7 @@ class CreateShareTask(Task):
 
         root = self.dispatcher.call_sync('volume.get_volumes_root')
         share_type = self.dispatcher.call_sync('share.supported_types').get(share['type'])
+        pool_mountpoints = tuple(self.dispatcher.call_sync('volume.query', [], {'select': 'mountpoint'}))
 
         assert share_type['subtype'] in ('FILE', 'BLOCK'),\
             "Unsupported Share subtype: {0}".format(share_type['subtype'])
@@ -243,7 +244,6 @@ class CreateShareTask(Task):
                     })
 
         elif share['target_type'] == 'DIRECTORY':
-            pool_mountpoints = tuple(self.dispatcher.call_sync('volume.query', [], {'select': 'mountpoint'}))
             if not share['target_path'].startswith(pool_mountpoints):
                 raise TaskException(errno.EINVAL, "Provided directory has to reside within user defined ZFS pool")
 
@@ -253,6 +253,8 @@ class CreateShareTask(Task):
                 raise TaskException(errno.ENOENT, "Target directory {0} doesn't exist".format(path))
 
         elif share['target_type'] == 'FILE':
+            if not share['target_path'].startswith(pool_mountpoints):
+                raise TaskException(errno.EINVAL, "Provided file has to reside within user defined ZFS pool")
             # Verify that target file exists
             path = share['target_path']
             if not os.path.isfile(path):
@@ -276,7 +278,8 @@ class CreateShareTask(Task):
             save_config(
                 path,
                 '{0}-{1}'.format(new_share['type'], new_share['name']),
-                new_share
+                new_share,
+                file_perms=0o600
             )
         except OSError as err:
             self.add_warning(TaskWarning(errno.ENXIO, 'Cannot save backup config file: {0}'.format(str(err))))
@@ -336,9 +339,10 @@ class UpdateShareTask(Task):
         permissions = updated_fields.pop('permissions', None)
         share_path = self.dispatcher.call_sync('share.expand_path', path_after_update, type_after_update)
 
-        pool_mountpoints = tuple(self.dispatcher.call_sync('volume.query', [], {'select': 'mountpoint'}))
-        if not path_after_update.startswith(pool_mountpoints):
-            raise TaskException(errno.EINVAL, "Provided directory has to reside within user defined ZFS pool")
+        if type_after_update in ('DIRECTORY', 'FILE'):
+            pool_mountpoints = tuple(self.dispatcher.call_sync('volume.query', [], {'select': 'mountpoint'}))
+            if not path_after_update.startswith(pool_mountpoints):
+                raise TaskException(errno.EINVAL, "Provided directory or file has to reside within user defined ZFS pool")
 
         if not os.path.exists(share_path):
             raise TaskException(
@@ -390,7 +394,8 @@ class UpdateShareTask(Task):
             save_config(
                 path,
                 '{0}-{1}'.format(updated_share['type'], updated_share['name']),
-                updated_share
+                updated_share,
+                file_perms=0o600
             )
         except OSError as err:
             self.add_warning(TaskWarning(errno.ENXIO, 'Cannot save backup config file: {0}'.format(str(err))))

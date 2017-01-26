@@ -27,21 +27,19 @@
 
 import errno
 import gevent
-import hashlib
 import logging
 import os
-import signal
 import sys
-import random
 import re
-import tempfile
+import tarfile
+import shutil
 from freenas.utils import human_readable_bytes
+from freenas.utils.decorators import throttle
 from resources import Resource
 from cache import CacheStore
 from freenas.dispatcher.rpc import (
     RpcException, description, accepts, returns, private, SchemaHelper as h
 )
-from gevent import subprocess
 from task import (
     Provider, Task, ProgressTask, TaskException, TaskDescription,
     VerifyException, TaskWarning
@@ -164,7 +162,7 @@ def is_update_applied(dispatcher, update_version):
         update_boot_env = "%s-%s" % (Avatar(), update_version)
 
     return dispatcher.call_sync(
-        'boot.environment.query', [('realname', '=', update_boot_env)], single=True
+        'boot.environment.query', [('realname', '=', update_boot_env)], {"single": True}
     )
 
 
@@ -181,21 +179,32 @@ def check_updates(dispatcher, configstore, cache_dir=None, check_now=False):
     current_update_info = None
     try:
         current_update_info = dispatcher.call_sync('update.update_info')
-    except RpcException:
-        pass
+        if (
+            current_update_info.get('installed') and
+            is_update_applied(dispatcher, current_update_info.get('installed_version'))
+        ):
+            update_cache_value_dict.update({
+                'installed': True,
+                'installed_version': current_update_info.get('installed_version')
+            })
 
-    if current_update_info:
-        update_cache_value_dict['installed'] = current_update_info.get('installed')
-        update_cache_value_dict['installed_version'] = current_update_info.get('installed_version')
         if check_now and current_update_info['downloaded']:
             update_cache_value_dict.update(current_update_info.copy())
             update_cache_value_dict['available'] = True
+    except RpcException:
+        pass
 
+    logger.trace('check_updates: this is the current_update_info: {0}'.format(current_update_info))
     dispatcher.call_sync('update.update_cache_invalidate', list(update_cache_value_dict.keys()))
 
     conf = Configuration.Configuration()
     handler = CheckUpdateHandler()
     train = configstore.get('update.train')
+
+    logger.trace(
+        'check_updates: Update server name: {0}, url: {1}'.format(
+            conf.UpdateServerName(), conf.UpdateServerURL())
+    )
 
     try:
         update = CheckForUpdates(
@@ -206,54 +215,73 @@ def check_updates(dispatcher, configstore, cache_dir=None, check_now=False):
 
         if update:
             version = update.Version()
-            update_installed_bootenv = list(is_update_applied(dispatcher, version))
+            update_installed_bootenv = is_update_applied(dispatcher, version)
+            sys_mani = conf.SystemManifest()
+            sequence = sys_mani.Sequence() if sys_mani else ''
             if version == update_cache_value_dict['installed_version'] or update_installed_bootenv:
-                logger.debug('Update is already installed')
-                update_cache_value_dict = default_update_dict.copy()
+                if update_installed_bootenv and update_installed_bootenv['active']:
+                    # it could be possible that the installed os has the same version as
+                    # the one available from the server and yet the one on the server has
+                    # something new to offer, hence check for seequence numbers to rule out
+                    # all doubt
+                    if update.Sequence() == sequence:
+                        logger.debug('Update has same sequence number as current OS')
+                        # At this point clear any installed version stuff
+                        update_cache_value_dict.update({
+                            'installed': False,
+                            'installed_version': ''
+                        })
+                    else:
+                        logger.debug(
+                            'Update has same version but different sequence number as current OS'
+                        )
+                else:
+                    # TODO: mount the BE in question to inspect sequence number
+                    logger.debug(
+                        'Update version {0} is already installed in BE {1}'.format(
+                            version, update_installed_bootenv
+                        )
+                    )
+                    update_cache_value_dict = default_update_dict.copy()
+                    update_cache_value_dict.update({
+                        'installed': True,
+                        'installed_version': version
+                    })
+                    dispatcher.call_sync(
+                        'update.update_alert_set',
+                        'UpdateInstalled',
+                        version,
+                        {'update_installed_bootenv': update_installed_bootenv}
+                    )
+            else:
+                logger.debug('Update {0} is available'.format(version))
+                try:
+                    if check_now:
+                        changelog = get_changelog(
+                            train, cache_dir=cache_dir, start=sequence, end=update.Sequence()
+                        )
+                    else:
+                        with open("{0}/ChangeLog.txt".format(cache_dir), 'r') as changelog_file:
+                            changelog = parse_changelog(
+                                changelog_file.read(), start=sequence, end=update.Sequence()
+                            )
+                except Exception:
+                    changelog = ''
                 update_cache_value_dict.update({
-                    'installed': True,
-                    'installed_version': version
+                    'available': True,
+                    'notes': update.Notes(),
+                    'notice': update.Notice(),
+                    'operations': handler.output(),
+                    'version': version,
+                    'changelog': changelog,
+                    'downloaded': False if check_now else True
                 })
+
                 dispatcher.call_sync(
                     'update.update_alert_set',
-                    'UpdateInstalled',
-                    version,
-                    {'update_installed_bootenv': update_installed_bootenv}
+                    'UpdateDownloaded' if update_cache_value_dict['downloaded'] else 'UpdateAvailable',
+                    update_cache_value_dict['version']
                 )
-                return
-            logger.debug("An update is available")
-            sys_mani = conf.SystemManifest()
-            if sys_mani:
-                sequence = sys_mani.Sequence()
-            else:
-                sequence = ''
-            try:
-                if check_now:
-                    changelog = get_changelog(
-                        train, cache_dir=cache_dir, start=sequence, end=update.Sequence()
-                    )
-                else:
-                    changelog_file = "{0}/ChangeLog.txt".format(cache_dir)
-                    changelog = parse_changelog(
-                        changelog_file.read(), start=sequence, end=update.Sequence()
-                    )
-            except Exception:
-                changelog = ''
-            update_cache_value_dict.update({
-                'available': True,
-                'notes': update.Notes(),
-                'notice': update.Notice(),
-                'operations': handler.output(),
-                'version': version,
-                'changelog': changelog,
-                'downloaded': False if check_now else True
-            })
-
-            dispatcher.call_sync(
-                'update.update_alert_set',
-                'UpdateDownloaded' if update_cache_value_dict['downloaded'] else 'UpdateAvailable',
-                update_cache_value_dict['version']
-            )
 
         else:
             logger.debug('No update available')
@@ -274,11 +302,10 @@ class UpdateHandler(object):
         self.pkgname = ''
         self.pkgversion = ''
         self.operation = ''
-        self.filesize = 0
-        self.numfilestotal = 0
-        self.numfilesdone = 0
         self._baseprogress = 0
         self.master_progress = 0
+        self.pkgindex = 0
+        self.numpkgs = 0
         self.dispatcher = dispatcher
         # Below is the function handle passed to this by the Task so that
         # its status and progress can be updated accordingly
@@ -308,14 +335,33 @@ class UpdateHandler(object):
 
     def install_handler(self, index, name, packages):
         self.indeterminate = False
-        total = len(packages)
-        self.numfilesdone = index
-        self.numfilesdone = total
-        self.progress = int((float(index) / float(total)) * 100.0)
+        self.numpkgs = len(packages)
+        self.pkgindex = index
+        self.pkgname = name
+        self.progress = self._baseprogress = int((self.pkgindex - 1) * 100 / self.numpkgs)
         self.operation = 'Installing'
-        self.details = 'Installing {0}'.format(name)
+        self.details = 'Installing {0}'.format(self.pkgname)
         self.emit_update_details()
 
+    def install_progress_handler(self, **kwargs):
+        total = kwargs.pop("total", 0)
+        index = kwargs.pop("index", 0)
+        done = kwargs.pop("done", False)
+
+        if done:
+            self.progress = int(self.pkgindex * 100 / self.numpkgs)
+            self.details = 'Done installing {0}'.format(self.pkgname)
+        elif total:
+            cur_pct = int(index * 100 / (total * self.numpkgs))
+            self.details = 'Installing {0} Progress: {1}'.format(
+                self.pkgname, self.numpkgs * cur_pct
+            )
+            if (self._baseprogress + cur_pct) > self.progress:
+                self.progress = self._baseprogress + cur_pct
+
+        self.emit_update_details()
+
+    @throttle(seconds=1)
     def emit_update_details(self):
         # Doing the drill below as there is a small window when
         # step*progress logic does not catch up with the new value of step
@@ -327,9 +373,6 @@ class UpdateHandler(object):
             'reboot': self.reboot,
             'pkg_name': self.pkgname,
             'pkg_version': self.pkgversion,
-            'filesize': self.filesize,
-            'num_files_one': self.numfilesdone,
-            'num_files_total': self.numfilestotal,
             'error': self.error,
             'finished': self.finished,
             'details': self.details,
@@ -511,9 +554,9 @@ class UpdateProvider(Provider):
                 desc = 'Update containing {0} is downloaded and ready for install'.format(update_version)
             elif update_class == 'UpdateInstalled':
                 update_installed_bootenv = kwargs.get('update_installed_bootenv')
-                if update_installed_bootenv and not update_installed_bootenv[0]['on_reboot']:
+                if update_installed_bootenv and not update_installed_bootenv['on_reboot']:
                     desc = 'Update containing {0} is installed.'.format(update_version)
-                    desc += ' Please activate {0} and Reboot to use this updated version'.format(update_installed_bootenv[0]['realname'])
+                    desc += ' Please activate {0} and Reboot to use this updated version'.format(update_installed_bootenv['realname'])
                 else:
                     desc = 'Update containing {0} is installed and activated for next boot'.format(update_version)
             else:
@@ -582,8 +625,18 @@ class UpdateConfigureTask(Task):
             self.configstore.set('update.check_auto', props['check_auto'])
 
         if 'internal' in props:
-            conf = Configuration.Configuration()
+            conf = Configuration.SystemConfiguration()
+            if 'internal' not in conf.ListUpdateServers():
+                conf.AddUpdateServer(Configuration.UpdateServer(
+                    'internal',
+                    'http://update-int.ixsystems.com/FreeNAS/',
+                    signing=False
+                ))
+
             conf.SetUpdateServer('internal' if props['internal'] else 'default')
+
+        cache_dir = self.dispatcher.call_sync('update.update_cache_getter', 'cache_dir')
+        check_updates(self.dispatcher, self.configstore, cache_dir=cache_dir, check_now=True)
 
         self.dispatcher.dispatch_event('update.changed', {'operation': 'update'})
 
@@ -658,8 +711,7 @@ class DownloadUpdateTask(ProgressTask):
         self.set_progress(progress, message)
 
     def run(self):
-        self.message = 'Downloading Updates...'
-        self.set_progress(0)
+        self.set_progress(0, 'Downloading Updates...')
         handler = UpdateHandler(self.dispatcher, update_progress=self.update_progress)
         train = self.configstore.get('update.train')
         cache_dir = self.dispatcher.call_sync('update.update_cache_getter', 'cache_dir')
@@ -705,92 +757,85 @@ class DownloadUpdateTask(ProgressTask):
         check_updates(self.dispatcher, self.configstore, cache_dir=cache_dir, check_now=False)
         handler.finished = True
         handler.emit_update_details()
-        self.message = "Updates Finished Downloading"
-        self.set_progress(100)
+        self.set_progress(100, 'Updates finished downloading')
 
 
-@description("Apply a manual update file")
-@accepts(str, str)
+@description("Apply a manual update using specified tarfile")
+@accepts(str, h.one_of(bool, None))
 class UpdateManualTask(ProgressTask):
     @classmethod
     def early_describe(cls):
-        return 'Updating from a file'
+        return 'Updating via the provided update tarfile'
 
-    def describe(self, path, sha256):
-        return TaskDescription("Updating from a file ({name})".format(name=path))
+    def describe(self, path, reboot_post_install=False):
+        return TaskDescription("Updating from tarfile ({name})".format(name=path))
 
-    def verify(self, path, sha256):
+    def verify(self, path, reboot_post_install=False):
 
         if not os.path.exists(path):
             raise VerifyException(errno.EEXIST, 'File does not exist')
 
+        if not tarfile.is_tarfile(path):
+            raise VerifyException(errno.EEXIST, 'File does not exist')
+
         return ['root']
 
-    def run(self, path, sha256):
-        self.message = 'Applying update...'
-        self.set_progress(0)
+    def run(self, path, reboot_post_install=False):
+        self.set_progress(0, 'Extracting update from tarfile...')
 
-        filehash = hashlib.sha256()
-        with open(path, 'rb') as f:
-            while True:
-                read = f.read(65536)
-                if not read:
-                    break
-                filehash.update(read)
-
-        if filehash.hexdigest() != sha256:
-            raise TaskException(errno.EINVAL, 'SHA 256 hash does not match file')
-
-        os.chdir(os.path.dirname(path))
-
-        size = os.stat(path).st_size
-        temperr = tempfile.NamedTemporaryFile()
-
-        proc = subprocess.Popen(
-            ["/usr/bin/tar", "-xSJpf", path],
-            stdout=subprocess.PIPE,
-            stderr=temperr,
-            close_fds=False)
-        RE_TAR = re.compile(r"^In: (\d+)", re.M | re.S)
-        while True:
-            if proc.poll() is not None:
-                break
+        cache_dir = self.dispatcher.call_sync('update.update_cache_getter', 'cache_dir')
+        if cache_dir is None:
             try:
-                os.kill(proc.pid, signal.SIGINFO)
-            except:
-                break
-            gevent.sleep(1)
-            with open(temperr.name, 'r') as f:
-                line = f.read()
-            reg = RE_TAR.findall(line)
-            if reg:
-                current = float(reg[-1])
-                percent = ((current / size) * 100)
-                self.set_progress(percent / 3)
-        temperr.close()
-        proc.communicate()
-        if proc.returncode != 0:
-            raise TaskException(errno.EINVAL, 'Image is invalid, make sure to use .txz file')
+                cache_dir = self.dispatcher.call_sync(
+                    'system_dataset.request_directory', 'update'
+                )
+            except RpcException:
+                cache_dir = '/var/tmp/update'
+        # Frozen tarball.  We'll extract it into the cache directory, and
+        # then add a couple of things to make it pass sanity, and then apply it.
+        # For now we just copy the code above.
+        # First, remove the cache directory
+        # Hrm, could overstep a locked file.
+        shutil.rmtree(cache_dir, ignore_errors=True)
+        try:
+            os.makedirs(cache_dir)
+        except BaseException as e:
+            raise TaskException(
+                errno.EPERM,
+                "Unable to create cache directory {0}: {1}".format(cache_dir, str(e))
+            )
 
         try:
-            subprocess.check_output(
-                ['bin/install_worker.sh', 'pre-install'], stderr=subprocess.STDOUT,
+            with tarfile.open(path) as tf:
+                files = tf.getmembers()
+                for f in files:
+                    if f.name in ("./", ".", "./."):
+                        continue
+                    if not f.name.startswith("./"):
+                        continue
+                    if len(f.name.split("/")) != 2:
+                        continue
+                    tf.extract(f.name, path=cache_dir)
+        except BaseException as e:
+            raise TaskException(
+                errno.EIO,
+                "Unable to extract frozen update {0}: {1}".format(path, str(e))
             )
-        except subprocess.CalledProcessError as cpe:
-            raise TaskException(errno.EINVAL, (
-                'The firmware does not meet the pre-install criteria: {0}'.format(cpe.output)))
 
-        try:
-            subprocess.check_output(
-                ['bin/install_worker.sh', 'install'], stderr=subprocess.STDOUT,
-            )
-        except subprocess.CalledProcessError as cpe:
-            raise TaskException(errno.EFAULT, 'The update failed: {0}'.format(cpe.output))
+        config = Configuration.SystemConfiguration()
+        # Exciting!  Now we need to have a SEQUENCE file, or it will fail verification.
+        with open(os.path.join(cache_dir, "SEQUENCE"), "w") as s:
+            s.write(config.SystemManifest().Sequence())
+        # And now the SERVER file
+        with open(os.path.join(cache_dir, "SERVER"), "w") as s:
+            s.write(config.UpdateServerName())
 
-        # FIXME: New world order
-        open('/data/need-update').close()
-
-        self.set_progress(100)
+        # Now we can go for the update apply task
+        self.run_subtask_sync(
+            'update.apply',
+            reboot_post_install,
+            progress_callback=lambda p, m='Installing updates from extracted tarfile', e=None: self.chunk_progress(0, 100, '', p, m, e)
+        )
 
 
 @accepts(bool)
@@ -810,8 +855,7 @@ class UpdateApplyTask(ProgressTask):
         self.set_progress(progress, message)
 
     def run(self, reboot_post_install=False):
-        self.message = 'Applying Updates...'
-        self.set_progress(0)
+        self.set_progress(0, 'Applying Updates...')
         handler = UpdateHandler(self.dispatcher, update_progress=self.update_progress)
         cache_dir = self.dispatcher.call_sync('update.update_cache_getter', 'cache_dir')
         if cache_dir is None:
@@ -836,7 +880,10 @@ class UpdateApplyTask(ProgressTask):
         # Note: for now we force reboots always, TODO: Fix in M3-M4
         try:
             result = ApplyUpdate(
-                cache_dir, install_handler=handler.install_handler, force_reboot=True
+                cache_dir,
+                install_handler=handler.install_handler,
+                progressFunc=handler.install_progress_handler,
+                force_reboot=True
             )
         except ManifestInvalidSignature as e:
             logger.debug('UpdateApplyTask Error: Cached manifest has invalid signature: %s', e)
@@ -864,12 +911,12 @@ class UpdateApplyTask(ProgressTask):
             'installed_version': version
         })
         self.dispatcher.call_sync('update.update_cache_putter', update_cache_value_dict)
-        self.message = "Updates Finished Installing Successfully"
+        message = 'Updates finished installing successfully'
         if reboot_post_install:
-            self.message = "Scheduling user specified reboot post succesfull update"
+            message = 'Scheduling user specified reboot post succesfull update'
             # Note not using subtasks on purpose as they do not have queuing logic
             self.dispatcher.submit_task('system.reboot', 3)
-        self.set_progress(100)
+        self.set_progress(100, message)
 
 
 @description("Verify installation integrity")
@@ -886,8 +933,7 @@ class UpdateVerifyTask(ProgressTask):
         return [update_resource_string]
 
     def verify_handler(self, index, total, fname):
-        self.message = 'Verifying {0}'.format(fname)
-        self.set_progress(int((float(index) / float(total)) * 100.0))
+        self.set_progress(int(index * 100 / total), 'Verifying {0}'.format(fname))
 
     def run(self):
         try:
@@ -1009,9 +1055,6 @@ def _init(dispatcher, plugin):
             'reboot': {'type': 'boolean'},
             'pkg_name': {'type': 'string'},
             'pkg_version': {'type': 'string'},
-            'filesize': {'type': 'integer'},
-            'num_files_done': {'type': 'integer'},
-            'num_files_total': {'type': 'integer'},
             'error': {'type': 'boolean'},
             'finished': {'type': 'boolean'}
         }

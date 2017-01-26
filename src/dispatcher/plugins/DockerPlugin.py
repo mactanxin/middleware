@@ -33,6 +33,7 @@ import dockerhub
 import logging
 import requests
 from gevent.lock import RLock
+from gevent.queue import Queue
 from resources import Resource
 from datetime import datetime, timedelta
 from task import Provider, Task, ProgressTask, TaskDescription, TaskException, query, TaskWarning, VerifyException
@@ -150,6 +151,12 @@ class DockerNetworkProvider(Provider):
     @query('DockerNetwork')
     @generator
     def query(self, filter=None, params=None):
+        hide_builtin_networks = [('name', 'nin', ('bridge', 'external'))]
+        if filter:
+            filter.extend(hide_builtin_networks)
+        else:
+            filter = hide_builtin_networks
+
         return q.query(
             self.datastore.query_stream('docker.networks'),
             *(filter or []),
@@ -181,73 +188,79 @@ class DockerImagesProvider(Provider):
     @generator
     def search(self, term):
         parser = dockerfile_parse.DockerfileParser()
-        hub = dockerhub.DockerHub()
 
-        for i in hub.search(term):
-            presets = None
-            icon = None
+        with dockerhub.DockerHub() as hub:
+            for i in hub.search(term):
+                presets = None
+                icon = None
 
-            if i['is_automated']:
-                # Fetch dockerfile
-                try:
-                    parser.content = hub.get_dockerfile(i['repo_name'])
-                    presets = self.dispatcher.call_sync('containerd.docker.labels_to_presets', parser.labels)
-                except:
-                    pass
+                if i['is_automated']:
+                    # Fetch dockerfile
+                    try:
+                        parser.content = hub.get_dockerfile(i['repo_name'])
+                        presets = self.dispatcher.call_sync('containerd.docker.labels_to_presets', parser.labels)
+                    except:
+                        pass
 
-            yield {
-                'name': i['repo_name'],
-                'description': i['short_description'],
-                'star_count': i['star_count'],
-                'pull_count': i['pull_count'],
-                'icon': icon,
-                'presets': presets
-            }
+                yield {
+                    'name': i['repo_name'],
+                    'description': i['short_description'],
+                    'star_count': i['star_count'],
+                    'pull_count': i['pull_count'],
+                    'icon': icon,
+                    'presets': presets
+                }
 
     @description('Returns a list of docker images from a given collection')
     @returns(h.array(h.ref('DockerHubImage')))
     @accepts(str)
     @generator
     def get_collection_images(self, collection='freenas'):
-        def update_collection(c):
+        def update_collection(c, q):
             parser = dockerfile_parse.DockerfileParser()
-            hub = dockerhub.DockerHub()
             items = []
 
-            with self.update_collection_lock:
-                try:
-                    for i in hub.get_repositories(c):
-                        presets = None
-                        icon = None
-                        repo_name = '{0}/{1}'.format(i['user'], i['name'])
+            with dockerhub.DockerHub() as hub:
+                with self.update_collection_lock:
+                    try:
+                        for i in hub.get_repositories(c):
+                            presets = None
+                            icon = None
+                            repo_name = '{0}/{1}'.format(i['user'], i['name'])
 
-                        if i['is_automated']:
-                            # Fetch dockerfile
-                            try:
-                                parser.content = hub.get_dockerfile(repo_name)
-                                presets = self.dispatcher.call_sync('containerd.docker.labels_to_presets', parser.labels)
-                            except:
-                                pass
+                            if i['is_automated']:
+                                # Fetch dockerfile
+                                try:
+                                    parser.content = hub.get_dockerfile(repo_name)
+                                    presets = self.dispatcher.call_sync(
+                                        'containerd.docker.labels_to_presets',
+                                        parser.labels
+                                    )
+                                except:
+                                    pass
 
-                        item = {
-                            'name': repo_name,
-                            'description': i['description'],
-                            'star_count': i['star_count'],
-                            'pull_count': i['pull_count'],
-                            'icon': icon,
-                            'presets': presets,
-                            'version': '0' if not presets else presets.get('version', '0')
-                        }
-                        items.append(item)
-                except TimeoutError as e:
-                    raise RpcException(errno.ETIMEDOUT, e)
-                except ConnectionError as e:
-                    raise RpcException(errno.ECONNABORTED, e)
+                            item = {
+                                'name': repo_name,
+                                'description': i['description'],
+                                'star_count': i['star_count'],
+                                'pull_count': i['pull_count'],
+                                'icon': icon,
+                                'presets': presets,
+                                'version': '0' if not presets else presets.get('version', '0')
+                            }
+                            items.append(item)
+                            q.put(item)
+                    except TimeoutError as e:
+                        raise RpcException(errno.ETIMEDOUT, e)
+                    except ConnectionError as e:
+                        raise RpcException(errno.ECONNABORTED, e)
+                    finally:
+                        q.put(StopIteration)
 
-                collections.put(c, {
-                    'update_time': datetime.now(),
-                    'items': items
-                })
+                    collections.put(c, {
+                        'update_time': datetime.now(),
+                        'items': items
+                    })
 
         outdated_collections = []
         now = datetime.now()
@@ -258,28 +271,28 @@ class DockerImagesProvider(Provider):
 
         collections.remove_many(outdated_collections)
 
-        if collections.is_valid(collection):
-            collection_data = collections.get(collection)
-            time_since_last_update = now - collection_data['update_time']
+        collection_data = collections.get(collection, {})
+        time_since_last_update = now - collection_data.get('update_time', now)
 
-            if time_since_last_update > self.throttle_period:
-                update_collection(collection)
+        if not collections.is_valid(collection) or time_since_last_update > self.throttle_period:
+            queue = Queue()
+            gevent.spawn(update_collection, collection, queue)
+            for i in queue:
+                yield i
         else:
-            update_collection(collection)
-
-        collection_data = collections.get(collection)
-        for i in collection_data['items']:
-            yield i
+            collection_data = collections.get(collection)
+            for i in collection_data['items']:
+                yield i
 
     @description('Returns a full description of specified Docker container image')
     @accepts(str)
     @returns(str)
     def readme(self, repo_name):
-        hub = dockerhub.DockerHub()
-        try:
-            return hub.get_repository(repo_name).get('full_description')
-        except ValueError:
-            return None
+        with dockerhub.DockerHub() as hub:
+            try:
+                return hub.get_repository(repo_name).get('full_description')
+            except ValueError:
+                return None
 
 
 @description('Provides information about cached Docker container collections')
@@ -483,6 +496,13 @@ class DockerContainerCreateTask(DockerBaseTask):
                     )
                 )
 
+        bridge = container.get('bridge')
+        if bridge.get('enable') and not (bridge.get('dhcp') or bridge.get('address')):
+            raise VerifyException(
+                errno.EINVAL,
+                'Either dhcp or static address must be selected for bridged container'
+            )
+
         if hostname:
             return ['docker:{0}'.format(hostname)]
         else:
@@ -506,32 +526,17 @@ class DockerContainerCreateTask(DockerBaseTask):
             'privileged': False,
             'capabilities_add': [],
             'capabilities_drop': [],
+            'networks': [],
         })
+
+        for id in container.get('networks'):
+            if not self.dispatcher.call_sync('docker.network.query', [('id', '=', id)], {'count': True}):
+                raise TaskException(errno.EEXIST, 'Docker network {0} does not exist'.format(id))
 
         if not container.get('host'):
             container['host'] = self.get_default_host(
                 lambda p, m, e=None: self.chunk_progress(0, 30, 'Looking for default Docker host:', p, m, e)
             )
-
-        for v in container.get('volumes', []):
-            if v['host_path'].startswith('/mnt'):
-                try:
-                    ds_id = self.dispatcher.call_sync('volume.decode_path', v['host_path'])[1]
-                except RpcException:
-                    continue
-
-                ds_perm_type = self.dispatcher.call_sync(
-                    'volume.dataset.query',
-                    [('id', '=', ds_id)],
-                    {'single': True, 'select': 'permissions_type'}
-                )
-                if str(ds_perm_type) == 'ACL':
-                    self.add_warning(TaskWarning(
-                        errno.EINVAL,
-                        'Dataset\'s {0} Windows type permissions are not supported in container\'s sharing'.format(
-                            ds_id
-                        )
-                    ))
 
         self.check_host_state(container['host'])
 
@@ -577,6 +582,17 @@ class DockerContainerCreateTask(DockerBaseTask):
             lambda: self.dispatcher.call_sync('containerd.docker.create_container', container, timeout=100),
             600
         )
+
+        if container.get('networks'):
+            self.set_progress(95, 'Connecting to networks')
+            contid = self.dispatcher.call_sync(
+                'docker.container.query',
+                [('name', '=', container.get('name'))],
+                {'select': 'id', 'single': True}
+            )
+            for netid in container.get('networks'):
+                self.run_subtask_sync('docker.network.connect', [contid], netid)
+
         self.set_progress(100, 'Finished')
 
 
@@ -604,6 +620,13 @@ class DockerContainerUpdateTask(DockerBaseTask):
                         v['host_path'], v['source'].lower()
                     )
                 )
+
+        bridge = updated_fields.get('bridge', {})
+        if bridge.get('enable') and not (bridge.get('dhcp') or bridge.get('address')):
+            raise VerifyException(
+                errno.EINVAL,
+                'Either dhcp or static address must be selected for bridged container'
+            )
 
         if 'running' in updated_fields:
             raise VerifyException(errno.EINVAL, 'Running parameter cannot be set')
@@ -933,7 +956,12 @@ class DockerNetworkCreateTask(DockerBaseTask):
             'driver': 'bridge',
             'subnet': None,
             'gateway': None,
+            'containers': []
         })
+
+        for id in network.get('containers'):
+            if not self.dispatcher.call_sync('docker.container.query', [('id', '=', id)], {'count': True}):
+                raise TaskException(errno.EEXIST, 'Docker container {0} does not exist'.format(id))
 
         if not network.get('host'):
             network['host'] = self.get_default_host(
@@ -957,6 +985,14 @@ class DockerNetworkCreateTask(DockerBaseTask):
             match_fn,
             lambda: self.dispatcher.call_sync('containerd.docker.create_network', network)
         )
+
+        if network.get('containers'):
+            netid = self.dispatcher.call_sync(
+                'docker.network.query',
+                [('name', '=', network.get('name'))],
+                {'select': 'id', 'single': True}
+            )
+            self.run_subtask_sync('docker.network.connect', network.get('containers'), netid)
 
 
 @description('Deletes a Docker network')
@@ -989,8 +1025,16 @@ class DockerNetworkDeleteTask(DockerBaseTask):
             return ['docker']
 
     def run(self, id):
-        if not self.datastore.exists('docker.networks', ('id', '=', id)):
+        name, containers = self.dispatcher.call_sync(
+            'docker.network.query',
+            [('id', '=', id)],
+            {'select': ['name', 'containers'], 'single': True}
+        )
+        if not name:
             raise TaskException(errno.ENOENT, 'Docker network {0} does not exist'.format(id))
+
+        if containers:
+            raise TaskException(errno.EINVAL, 'Cannot delete network "{0}" with connected containers'.format(name))
 
         try:
             self.dispatcher.call_sync('containerd.docker.host_name_by_network_id', id)
@@ -1021,30 +1065,30 @@ class DockerNetworkDeleteTask(DockerBaseTask):
         )
 
 
-@description('Connects container to a network')
-@accepts(str, str)
+@description('Connects selected containers to a network')
+@accepts(h.array(str), str)
 class DockerNetworkConnectTask(DockerBaseTask):
     @classmethod
     def early_describe(cls):
-        return 'Connecting container to network'
+        return 'Connecting containers to network'
 
-    def describe(self, container_id, network_id):
-        contname = self.dispatcher.call_sync(
-            'docker.container.query', [('id', '=', container_id)], {'single': True, 'select': 'names.0'}
+    def describe(self, container_ids, network_id):
+        contnames = self.dispatcher.call_sync(
+            'docker.container.query', [('id', 'in', container_ids)], {'select': 'name'}
         )
         netname = self.dispatcher.call_sync(
             'docker.network.query', [('id', '=', network_id)], {'single': True, 'select': 'name'}
         )
-        return TaskDescription('Connecting container {contname} to network {netname}',
-                               contname=contname or container_id,
+        return TaskDescription('Connecting containers {contnames} to network {netname}',
+                               contnames=','.join(contnames) or ','.join(container_ids),
                                netname=netname or network_id)
 
-    def verify(self, container_id=None, network_id=None):
-        if not container_id or not network_id:
-            raise TaskException(errno.EINVAL, 'Both container and network must be specified')
+    def verify(self, container_ids=None, network_id=None):
+        if not container_ids or not network_id:
+            raise TaskException(errno.EINVAL, 'Both container(s) and network must be specified')
         hostname = None
         try:
-            hostname = self.dispatcher.call_sync('containerd.docker.host_name_by_container_id', container_id)
+            hostname = self.dispatcher.call_sync('containerd.docker.host_name_by_container_id', container_ids[0])
         except RpcException:
             pass
 
@@ -1053,58 +1097,58 @@ class DockerNetworkConnectTask(DockerBaseTask):
         else:
             return ['docker']
 
-    def run(self, container_id, network_id):
-        container = self.dispatcher.call_sync('docker.container.query', [('id', '=', container_id)], {'single': True})
+    def run(self, container_ids, network_id):
+        for id in container_ids:
+            if not self.datastore.exists('docker.containers', ('id', '=', id)):
+                raise TaskException(errno.ENOENT, 'Docker container {0} not found'.format(id))
+
         network = self.dispatcher.call_sync('docker.network.query', [('id', '=', network_id)], {'single': True})
-        if not container:
-            raise TaskException(errno.ENOENT, 'Docker container {0} does not exist'.format(container['names'][0]))
-        if not container.get('running'):
-            raise TaskException(errno.ENOENT, 'Docker container {0} is stopped'.format(container['names'][0]))
         if not network:
             raise TaskException(errno.ENOENT, 'Docker network {0} does not exist'.format(network['name']))
 
         try:
-            self.dispatcher.call_sync('containerd.docker.host_name_by_container_id', container_id)
+            self.dispatcher.call_sync('containerd.docker.host_name_by_container_id', container_ids[0])
         except RpcException:
-            _, host_name = self.get_container_name_and_vm_name(container_id)
+            _, host_name = self.get_container_name_and_vm_name(container_ids[0])
             raise TaskException(
                 errno.EINVAL,
                 'Docker Host {0} is currently unreachable.'.format(host_name or '')
             )
 
-        self.dispatcher.exec_and_wait_for_event(
-            'docker.container.changed',
-            lambda args: args['operation'] == 'update' and container_id in args['ids'],
-            lambda: self.dispatcher.call_sync(
-                'containerd.docker.connect_container_to_network', container_id, network_id),
-            600
-        )
+        for id in container_ids:
+            self.dispatcher.exec_and_wait_for_event(
+                'docker.container.changed',
+                lambda args: args['operation'] == 'update' and id in args['ids'],
+                lambda: self.dispatcher.call_sync(
+                    'containerd.docker.connect_container_to_network', id, network_id),
+                600
+            )
 
 
-@description('Disconnects container from a network')
-@accepts(str, str)
+@description('Disconnects selected containers from a network')
+@accepts(h.array(str), str)
 class DockerNetworkDisconnectTask(DockerBaseTask):
     @classmethod
     def early_describe(cls):
-        return 'Disconnecting container from network'
+        return 'Disconnecting containers from network'
 
-    def describe(self, container_id, network_id):
-        contname = self.dispatcher.call_sync(
-            'docker.container.query', [('id', '=', container_id)], {'single': True, 'select': 'names.0'}
+    def describe(self, container_ids, network_id):
+        contnames = self.dispatcher.call_sync(
+            'docker.container.query', [('id', 'in', container_ids)], {'select': 'name'}
         )
         netname = self.dispatcher.call_sync(
             'docker.network.query', [('id', '=', network_id)], {'single': True, 'select': 'name'}
         )
-        return TaskDescription('Disconnecting container {contname} from network {netname}',
-                               contname=contname or container_id,
+        return TaskDescription('Disconnecting containers {contnames} from network {netname}',
+                               contnames=','.join(contnames) or ','.join(container_ids),
                                netname=netname or network_id)
 
-    def verify(self, container_id=None, network_id=None):
-        if not container_id or not network_id:
-            raise TaskException(errno.EINVAL, 'Both container and network must be specified')
+    def verify(self, container_ids=None, network_id=None):
+        if not container_ids or not network_id:
+            raise TaskException(errno.EINVAL, 'Both container(s) and network must be specified')
         hostname = None
         try:
-            hostname = self.dispatcher.call_sync('containerd.docker.host_name_by_container_id', container_id)
+            hostname = self.dispatcher.call_sync('containerd.docker.host_name_by_container_id', container_ids[0])
         except RpcException:
             pass
 
@@ -1113,32 +1157,32 @@ class DockerNetworkDisconnectTask(DockerBaseTask):
         else:
             return ['docker']
 
-    def run(self, container_id, network_id):
-        container = self.dispatcher.call_sync('docker.container.query', [('id', '=', container_id)], {'single': True})
+    def run(self, container_ids, network_id):
+        for id in container_ids:
+            if not self.datastore.exists('docker.containers', ('id', '=', id)):
+                raise TaskException(errno.ENOENT, 'Docker container {0} does not exist'.format(id))
+
         network = self.dispatcher.call_sync('docker.network.query', [('id', '=', network_id)], {'single': True})
-        if not container:
-            raise TaskException(errno.ENOENT, 'Docker container {0} does not exist'.format(container['names'][0]))
-        if not container.get('running'):
-            raise TaskException(errno.ENOENT, 'Docker container {0} is stopped'.format(container['names'][0]))
         if not network:
             raise TaskException(errno.ENOENT, 'Docker network {0} does not exist'.format(network['name']))
 
         try:
-            self.dispatcher.call_sync('containerd.docker.host_name_by_container_id', container_id)
+            self.dispatcher.call_sync('containerd.docker.host_name_by_container_id', container_ids[0])
         except RpcException:
-            _, host_name = self.get_container_name_and_vm_name(container_id)
+            _, host_name = self.get_container_name_and_vm_name(container_ids[0])
             raise TaskException(
                 errno.EINVAL,
                 'Docker Host {0} is currently unreachable.'.format(host_name or '')
             )
 
-        self.dispatcher.exec_and_wait_for_event(
-            'docker.container.changed',
-            lambda args: args['operation'] == 'update' and container_id in args['ids'],
-            lambda: self.dispatcher.call_sync(
-                'containerd.docker.disconnect_container_from_network', container_id, network_id),
-            600
-        )
+        for cid in container_ids:
+            self.dispatcher.exec_and_wait_for_event(
+                'docker.container.changed',
+                lambda args: args['operation'] == 'update' and cid in args['ids'],
+                lambda: self.dispatcher.call_sync(
+                    'containerd.docker.disconnect_container_from_network', cid, network_id),
+                600
+            )
 
 
 @description('Pulls a selected container image from Docker Hub and caches it on specified Docker host')
@@ -1422,7 +1466,7 @@ class DockerCollectionCreateTask(Task):
         if 'name' not in collection:
             raise RpcException(errno.EINVAL, 'Collection name has to be specified')
         if 'collection' not in collection:
-            raise RpcException(errno.EINVAL, 'Name of DockerHub collection has to be specified')
+            raise RpcException(errno.EINVAL, 'Name of Dockerhub collection has to be specified')
 
         return ['docker']
 
@@ -1502,6 +1546,41 @@ class DockerCollectionDeleteTask(Task):
         })
 
 
+@accepts(str)
+@returns(h.array(h.ref('docker-hub-image')))
+@description('Returns a list of Docker images related to a saved collection')
+class DockerCollectionGetPresetsTask(ProgressTask):
+    @classmethod
+    def early_describe(cls):
+        return 'Downloading Docker collection presets'
+
+    def describe(self, id):
+        collection = self.datastore.get_by_id('docker.collections', id)
+        return TaskDescription('Downloading Docker collection {name} presets', name=collection.get(''))
+
+    def verify(self, id):
+        return ['docker']
+
+    def run(self, id):
+        if not self.datastore.exists('docker.collections', ('id', '=', id)):
+            raise TaskException(errno.ENOENT, 'Docker collection {0} not found'.format(id))
+
+        result = []
+        collection = self.datastore.get_by_id('docker.collections', id)
+        name = collection['collection']
+
+        self.set_progress(0, 'Downloading {0} collection presets'.format(name))
+
+        with dockerhub.DockerHub() as hub:
+            collection_len = len([i for i in hub.get_repositories(name) if collection['match_expr'] in i['name']])
+
+        for i in self.dispatcher.call_sync('docker.collection.get_entries', id):
+            result.append(i)
+            self.set_progress((len(result) / collection_len) * 100, 'Downloading {0} collection presets'.format(name))
+
+        return result
+
+
 def collect_debug(dispatcher):
     yield AttachData('hosts-query', dumps(list(dispatcher.call_sync('docker.host.query')), indent=4))
     yield AttachData('containers-query', dumps(list(dispatcher.call_sync('docker.container.query')), indent=4))
@@ -1521,6 +1600,9 @@ def _init(dispatcher, plugin):
     global collections
     global images
     global containers_state
+
+    containers_lock = RLock()
+    networks_lock = RLock()
 
     images = EventCacheStore(dispatcher, 'docker.image')
     collections = CacheStore()
@@ -1658,38 +1740,39 @@ def _init(dispatcher, plugin):
         collection = 'docker.containers'
         event = 'docker.container.changed'
 
-        if args['ids']:
-            for id in args['ids']:
-                if args['operation'] in ('create', 'update'):
-                    state = dispatcher.call_sync(
-                        CONTAINERS_QUERY,
-                        [('id', '=', id)],
-                        {'single': True, 'select': 'running'}
-                    )
-                    containers_state.put(id, state)
-                else:
-                    containers_state.remove(id)
-
-            if args['operation'] == 'delete':
-                for i in args['ids']:
-                    dispatcher.datastore.delete(collection, i)
-
-                dispatcher.dispatch_event(event, {
-                    'operation': 'delete',
-                    'ids': args['ids']
-                })
-            else:
-                objs = dispatcher.call_sync(CONTAINERS_QUERY, [('id', 'in', args['ids'])])
-                for obj in map(lambda o: exclude(o, 'running'), objs):
-                    if args['operation'] == 'create':
-                        dispatcher.datastore.insert(collection, obj)
+        with containers_lock:
+            if args['ids']:
+                for id in args['ids']:
+                    if args['operation'] in ('create', 'update'):
+                        state = dispatcher.call_sync(
+                            CONTAINERS_QUERY,
+                            [('id', '=', id)],
+                            {'single': True, 'select': 'running'}
+                        )
+                        containers_state.put(id, state)
                     else:
-                        dispatcher.datastore.update(collection, obj['id'], obj)
+                        containers_state.remove(id)
+
+                if args['operation'] == 'delete':
+                    for i in args['ids']:
+                        dispatcher.datastore.delete(collection, i)
 
                     dispatcher.dispatch_event(event, {
-                        'operation': args['operation'],
+                        'operation': 'delete',
                         'ids': args['ids']
                     })
+                else:
+                    objs = dispatcher.call_sync(CONTAINERS_QUERY, [('id', 'in', args['ids'])])
+                    for obj in map(lambda o: exclude(o, 'running'), objs):
+                        if args['operation'] == 'create':
+                            dispatcher.datastore.insert(collection, obj)
+                        else:
+                            dispatcher.datastore.update(collection, obj['id'], obj)
+
+                        dispatcher.dispatch_event(event, {
+                            'operation': args['operation'],
+                            'ids': args['ids']
+                        })
 
     def on_network_event(args):
         logger.trace('Received Docker network event: {}'.format(args))
@@ -1697,27 +1780,28 @@ def _init(dispatcher, plugin):
         collection = 'docker.networks'
         event = 'docker.network.changed'
 
-        if args['ids']:
-            if args['operation'] == 'delete':
-                for i in args['ids']:
-                    dispatcher.datastore.delete(collection, i)
-
-                dispatcher.dispatch_event(event, {
-                    'operation': 'delete',
-                    'ids': args['ids']
-                })
-            else:
-                objs = dispatcher.call_sync(NETWORKS_QUERY, [('id', 'in', args['ids'])])
-                for obj in objs:
-                    if args['operation'] == 'create':
-                        dispatcher.datastore.insert(collection, obj)
-                    else:
-                        dispatcher.datastore.update(collection, obj['id'], obj)
+        with networks_lock:
+            if args['ids']:
+                if args['operation'] == 'delete':
+                    for i in args['ids']:
+                        dispatcher.datastore.delete(collection, i)
 
                     dispatcher.dispatch_event(event, {
-                        'operation': args['operation'],
+                        'operation': 'delete',
                         'ids': args['ids']
                     })
+                else:
+                    objs = dispatcher.call_sync(NETWORKS_QUERY, [('id', 'in', args['ids'])])
+                    for obj in objs:
+                        if args['operation'] == 'create':
+                            dispatcher.datastore.insert(collection, obj)
+                        else:
+                            dispatcher.datastore.update(collection, obj['id'], obj)
+
+                        dispatcher.dispatch_event(event, {
+                            'operation': args['operation'],
+                            'ids': args['ids']
+                        })
 
     def on_collection_change(args):
         if args['operation'] == 'delete':
@@ -1726,9 +1810,7 @@ def _init(dispatcher, plugin):
             if default_collection and default_collection in args['ids']:
                 node.update({'default_collection': None})
 
-    def refresh_containers(host_id=None):
-        collection = 'docker.containers'
-        event = 'docker.container.changed'
+    def refresh_database_cache(collection, event, query, host_id=None):
         filter = []
         if host_id:
             filter.append(('host', '=', host_id))
@@ -1736,101 +1818,61 @@ def _init(dispatcher, plugin):
             active_hosts = list(dispatcher.call_sync('docker.host.query', [('state', '=', 'UP')], {'select': 'id'}))
             filter.append(('host', 'in', active_hosts))
 
-        current = list(dispatcher.call_sync(CONTAINERS_QUERY, filter))
-        old = dispatcher.datastore.query(collection, *filter)
-        created = []
-        updated = []
-        deleted = []
-        for obj in map(lambda o: exclude(o, 'running'), current):
-            old_obj = first_or_default(lambda o: o['id'] == obj['id'], old)
-            if old_obj:
-                if obj != old_obj:
-                    dispatcher.datastore.update(collection, obj['id'], obj)
-                    updated.append(obj['id'])
+        with containers_lock:
+            current = list(dispatcher.call_sync(query, filter))
+            old = dispatcher.datastore.query(collection, *filter)
+            created = []
+            updated = []
+            deleted = []
+            for obj in map(lambda o: exclude(o, 'running'), current):
+                old_obj = first_or_default(lambda o: o['id'] == obj['id'], old)
+                if old_obj:
+                    if obj != old_obj:
+                        dispatcher.datastore.update(collection, obj['id'], obj)
+                        updated.append(obj['id'])
 
-            else:
-                dispatcher.datastore.insert(collection, obj)
-                created.append(obj['id'])
+                else:
+                    dispatcher.datastore.insert(collection, obj)
+                    created.append(obj['id'])
 
-        for obj in old:
-            if not first_or_default(lambda o: o['id'] == obj['id'], current):
-                dispatcher.datastore.delete(collection, obj['id'])
-                deleted.append(obj['id'])
+            for obj in old:
+                if not first_or_default(lambda o: o['id'] == obj['id'], current):
+                    dispatcher.datastore.delete(collection, obj['id'])
+                    deleted.append(obj['id'])
 
-        if created:
-            dispatcher.dispatch_event(event, {
-                'operation': 'create',
-                'ids': created
-            })
+            if created:
+                dispatcher.dispatch_event(event, {
+                    'operation': 'create',
+                    'ids': created
+                })
 
-        if updated:
-            dispatcher.dispatch_event(event, {
-                'operation': 'update',
-                'ids': updated
-            })
+            if updated:
+                dispatcher.dispatch_event(event, {
+                    'operation': 'update',
+                    'ids': updated
+                })
 
-        if deleted:
-            dispatcher.dispatch_event(event, {
-                'operation': 'delete',
-                'ids': deleted
-            })
+            if deleted:
+                dispatcher.dispatch_event(event, {
+                    'operation': 'delete',
+                    'ids': deleted
+                })
 
     def refresh_networks(host_id=None):
-        collection = 'docker.networks'
-        event = 'docker.network.changed'
+        refresh_database_cache('docker.networks', 'docker.network.changed', NETWORKS_QUERY, host_id)
+
+    def refresh_containers(host_id=None):
+        refresh_database_cache('docker.containers', 'docker.container.changed', CONTAINERS_QUERY, host_id)
+
+    def sync_images(ids=None, host_id=None):
         filter = []
+        if ids:
+            filter.append(('id', 'in', ids))
+
         if host_id:
-            filter.append(('host', '=', host_id))
-        else:
-            active_hosts = list(dispatcher.call_sync('docker.host.query', [('state', '=', 'UP')], {'select': 'id'}))
-            filter.append(('host', 'in', active_hosts))
+            filter.append(('hosts', 'contains', host_id))
 
-        current = list(dispatcher.call_sync(NETWORKS_QUERY, filter))
-        old = dispatcher.datastore.query(collection, *filter)
-        created = []
-        updated = []
-        deleted = []
-        for obj in current:
-            old_obj = first_or_default(lambda o: o['id'] == obj['id'], old)
-            if old_obj:
-                if obj != old_obj:
-                    dispatcher.datastore.update(collection, obj['id'], obj)
-                    updated.append(obj['id'])
-
-            else:
-                dispatcher.datastore.insert(collection, obj)
-                created.append(obj['id'])
-
-        for obj in old:
-            if not first_or_default(lambda o: o['id'] == obj['id'], current):
-                dispatcher.datastore.delete(collection, obj['id'])
-                deleted.append(obj['id'])
-
-        if created:
-            dispatcher.dispatch_event(event, {
-                'operation': 'create',
-                'ids': created
-            })
-
-        if updated:
-            dispatcher.dispatch_event(event, {
-                'operation': 'update',
-                'ids': updated
-            })
-
-        if deleted:
-            dispatcher.dispatch_event(event, {
-                'operation': 'delete',
-                'ids': deleted
-            })
-
-    def init_images():
-        logger.trace('Initializing Docker images cache')
-        sync_images()
-        images.ready = True
-
-    def sync_images(ids=None):
-        objects = list(dispatcher.call_sync(IMAGES_QUERY, [('id', 'in', ids)] if ids else []))
+        objects = list(dispatcher.call_sync(IMAGES_QUERY, filter))
         images.update(**{i['id']: i for i in objects})
         if not ids:
             nonexistent_ids = []
@@ -1840,18 +1882,16 @@ def _init(dispatcher, plugin):
 
             images.remove_many(nonexistent_ids)
 
-    def sync_caches():
-        interval = dispatcher.configstore.get('container.cache_refresh_interval')
-        while True:
-            gevent.sleep(interval)
-            if images.ready:
-                logger.trace('Syncing Docker containers, networks, image cache')
-                try:
-                    sync_images()
-                    refresh_containers()
-                    refresh_networks()
-                except RpcException:
-                    pass
+    def refresh_cache(host_id=None):
+        logger.trace('Syncing Docker containers, networks, image cache')
+
+        sync_images(host_id=host_id)
+        refresh_containers(host_id=host_id)
+        refresh_networks(host_id=host_id)
+
+        if not images.ready:
+            logger.trace('Docker images cache initialized')
+            images.ready = True
 
     plugin.register_provider('docker.config', DockerConfigProvider)
     plugin.register_provider('docker.host', DockerHostProvider)
@@ -1885,6 +1925,7 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('docker.collection.create', DockerCollectionCreateTask)
     plugin.register_task_handler('docker.collection.update', DockerCollectionUpdateTask)
     plugin.register_task_handler('docker.collection.delete', DockerCollectionDeleteTask)
+    plugin.register_task_handler('docker.collection.get_presets', DockerCollectionGetPresetsTask)
 
     plugin.register_event_type('docker.host.changed')
     plugin.register_event_type('docker.container.changed')
@@ -1896,9 +1937,10 @@ def _init(dispatcher, plugin):
     plugin.register_event_handler('containerd.docker.container.changed', on_container_event)
     plugin.register_event_handler('containerd.docker.network.changed', on_network_event)
     plugin.register_event_handler('containerd.docker.image.changed', on_image_event)
+    plugin.register_event_handler('containerd.docker.client.disconnected', lambda a: refresh_cache(host_id=a['id']))
     plugin.register_event_handler('vm.changed', on_vm_change)
     plugin.register_event_handler('plugin.service_registered',
-                                  lambda a: init_images() if a['service-name'] == 'containerd.docker' else None)
+                                  lambda a: refresh_cache() if a['service-name'] == 'containerd.docker' else None)
     plugin.register_event_handler('docker.collection.changed', on_collection_change)
 
     plugin.attach_hook('vm.pre_destroy', vm_pre_destroy)
@@ -2056,6 +2098,10 @@ def _init(dispatcher, plugin):
                 'items': {'type': 'string'}
             },
             'privileged': {'type': 'boolean'},
+            'networks': {
+                'type': 'array',
+                'items': {'type': 'string'}
+            }
         }
     })
 
@@ -2146,9 +2192,7 @@ def _init(dispatcher, plugin):
     })
 
     if 'containerd.docker' in dispatcher.call_sync('discovery.get_services'):
-        init_images()
-
-    gevent.spawn(sync_caches)
+        refresh_cache()
 
     if not dispatcher.call_sync('docker.config.get_config').get('default_host'):
         host_id = dispatcher.datastore.query(

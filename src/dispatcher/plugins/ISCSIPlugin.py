@@ -30,7 +30,7 @@ import logging
 
 from datastore.config import ConfigNode
 from freenas.dispatcher.rpc import RpcException, SchemaHelper as h, description, accepts, returns, private
-from task import Task, Provider, TaskException, TaskDescription, ValidationException
+from task import Task, Provider, TaskException, TaskDescription, VerifyException
 
 
 logger = logging.getLogger('ISCSIPlugin')
@@ -60,7 +60,7 @@ class ISCSIConfigureTask(Task):
 
     def verify(self, iscsi):
         if iscsi.get('pool_space_threshold') and iscsi['pool_space_threshold'] not in range(100):
-            raise ValidationException(errno.EINVAL, "Space treshold value should not exceed 100%")
+            raise VerifyException(errno.EINVAL, "Space treshold value should not exceed 100%")
         return ['system']
 
     def run(self, iscsi):

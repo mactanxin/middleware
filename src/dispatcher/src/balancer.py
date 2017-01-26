@@ -534,7 +534,7 @@ class Balancer(object):
         self.resource_graph.add_resource(Resource('system'))
 
     def start_executors(self):
-        for i in range(0, get_sysctl("hw.ncpu")):
+        for i in range(0, max(get_sysctl("hw.ncpu"), 2)):
             self.logger.info('Starting task executor #{0}...'.format(i))
             self.executors.append(TaskExecutor(self, i))
 

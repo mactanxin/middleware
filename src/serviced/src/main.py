@@ -584,7 +584,7 @@ class Context(object):
             self.logger.debug('Adding dependency targets: {0}'.format(', '.join(targets)))
             with self.lock:
                 self.provides |= targets
-                for job in self.jobs.values():
+                for job in list(self.jobs.values()):
                     if job.state == JobState.STOPPED and job.requires <= self.provides:
                         job.start()
 

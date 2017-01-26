@@ -94,7 +94,8 @@ class SDLFrontend(object):
 class Main(object):
     def __init__(self):
         self.cv = Condition()
-        self.exiting = False
+        self.etc = False
+        self.network = False
         self.failed_job = None
         self.msg = 'Loading...'
         with open('/etc/version', 'r') as f:
@@ -104,7 +105,10 @@ class Main(object):
         with self.cv:
             if name == 'serviced.job.started':
                 if args['Label'] == 'org.freenas.etcd':
-                    self.exiting = True
+                    self.etc = True
+
+                if args['Label'] == 'org.freenas.networkd':
+                    self.network = True
 
                 if args['Anonymous']:
                     return
@@ -136,7 +140,7 @@ class Main(object):
             with self.cv:
                 while True:
                     self.cv.wait(0.5)
-                    if self.exiting:
+                    if self.etc and self.network:
                         break
 
                     frontend.draw(self.msg)

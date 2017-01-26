@@ -204,7 +204,7 @@
             "service.dc.volume": null,
             "service.sshd.allow_pubkey_auth": true,
             "service.sshd.allow_password_auth": true,
-            "service.sshd.allow_gssapi_auth": true,
+            "service.sshd.allow_gssapi_auth": false,
             "service.sshd.compression": false,
             "service.sshd.allow_port_forwarding": false,
             "service.sshd.permit_root_login": true,
@@ -372,7 +372,6 @@
             "container.docker.default_host": null,
             "container.docker.api_forwarding": null,
             "container.docker.api_forwarding_enable": false,
-            "container.cache_refresh_interval": 60,
             "container.docker.default_collection": "7f4d5a8d-b8dd-4ffa-a866-b074067b381d",
             "storage.hotsparing.autoreplace": true,
             "storage.hotsparing.strong_match": false,
@@ -821,7 +820,7 @@
                     "RunAtLoad": true,
                     "SupportsCheckin": true,
                     "Requires": ["networking", "logging", "etc"],
-                    "Program": ["/usr/local/libexec/dispatcher/ipfs_wrapper"]
+                    "Program": "/usr/local/libexec/dispatcher/ipfs_wrapper"
                 },
                 "builtin": false,
                 "get_config_rpc": "service.ipfs.get_config",

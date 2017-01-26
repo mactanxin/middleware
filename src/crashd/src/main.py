@@ -53,7 +53,7 @@ TELEMETRY_STAGING_PATH = '/var/tmp/telemetry'
 TELEMETRY_PLUGINS_PATH = '/usr/local/libexec/telemetry'
 USER_CORES_PATH = '/var/db/system/cores'
 KERNEL_CORES_PATH = '/data/crash'
-TELEMETRY_ENDPOINT_PATH = 'https://ext-data.ixsystems.com:8080/upload'
+TELEMETRY_ENDPOINT_PATH = 'http://ext-data10.ixsystems.com/telemetry/upload'
 API_ENDPOINT_PATH = 'https://api.rollbar.com/api/1/item/'
 ACCESS_TOKEN = 'f65476dd78a74cde8ce5899aa3f4b58c'
 RETRY_INTERVAL = 1800
@@ -82,7 +82,7 @@ class Main(object):
 
     def collect_telemetry(self):
         logger.info('Collecting telemetry data into {0}'.format(TELEMETRY_STAGING_PATH))
-        shutil.rmtree(TELEMETRY_STAGING_PATH)
+        shutil.rmtree(TELEMETRY_STAGING_PATH, ignore_errors=True)
         os.makedirs(TELEMETRY_STAGING_PATH)
         os.chdir(TELEMETRY_STAGING_PATH)
 

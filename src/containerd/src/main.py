@@ -99,8 +99,9 @@ def normalize_docker_labels(labels):
     normalize(labels, {
         'org.freenas.autostart': "false",
         'org.freenas.bridged': "false",
-        'org.freenas.capabilities-add': [],
-        'org.freenas.capabilities-drop': [],
+        'org.freenas.capabilities-add': "",
+        'org.freenas.capabilities-drop': "",
+        'org.freenas.command': "",
         'org.freenas.dhcp': "false",
         'org.freenas.expose-ports-at-host': "false",
         'org.freenas.interactive': "false",
@@ -983,7 +984,7 @@ class DockerHost(object):
                         def transform_action(action):
                             operation = actions.get(action, 'update')
                             if operation in ('create', 'delete'):
-                                ref_cnt = self.context.client(
+                                ref_cnt = self.context.client.call_sync(
                                     'containerd.docker.query_images',
                                     [('id', '=', id)],
                                     {'select': 'hosts', 'count': True}
@@ -1000,9 +1001,17 @@ class DockerHost(object):
                         })
 
                     if ev['Type'] == 'network':
+                        netw_id = q.get(ev, 'Actor.ID')
+                        cont_id = q.get(ev, 'Actor.Attributes.container')
+                        operation = actions.get(ev['Action'], 'update')
+                        if cont_id:
+                            self.context.client.emit_event('containerd.docker.container.changed', {
+                                'operation': operation,
+                                'ids': [cont_id]
+                            })
                         self.context.client.emit_event('containerd.docker.network.changed', {
-                            'operation': actions.get(ev['Action'], 'update'),
-                            'ids': [ev['Actor']['ID']]
+                            'operation': operation,
+                            'ids': [netw_id]
                         })
 
                 self.logger.warning('Disconnected from Docker API endpoint on {0}'.format(self.vm.name))
@@ -1010,6 +1019,9 @@ class DockerHost(object):
             except BaseException as err:
                 self.logger.info('Docker connection closed: {0}, retrying in 1 second'.format(str(err)))
                 time.sleep(1)
+                self.context.client.emit_event('containerd.docker.client.disconnected', {
+                    'id': self.vm.id
+                })
 
     def get_container_console(self, id):
         if id not in self.active_consoles:
@@ -1337,6 +1349,7 @@ class DockerService(RpcService):
             },
             'capabilities_add': [],
             'capabilities_drop': [],
+            'command': [],
             'expose_ports': truefalse_to_bool(labels.get('org.freenas.expose-ports-at-host')),
             'interactive': truefalse_to_bool(labels.get('org.freenas.interactive')),
             'ports': [],
@@ -1364,16 +1377,13 @@ class DockerService(RpcService):
                 })
 
         if labels.get('org.freenas.capabilities-add'):
-            try:
-                result['capabilities_add'] = loads(labels['org.freenas.capabilities-add'])
-            except ValueError:
-                pass
+            result['capabilities_add'] = labels['org.freenas.capabilities-add'].split(',')
 
         if labels.get('org.freenas.capabilities-drop'):
-            try:
-                result['capabilities_drop'] = loads(labels['org.freenas.capabilities-drop'])
-            except ValueError:
-                pass
+            result['capabilities_drop'] = labels['org.freenas.capabilities-drop'].split(',')
+
+        if labels.get('org.freenas.command'):
+            result['command'] = labels['org.freenas.command'].split(',')
 
         if labels.get('org.freenas.volumes'):
             try:
@@ -1452,12 +1462,21 @@ class DockerService(RpcService):
                     continue
 
                 external = q.get(details, 'NetworkSettings.Networks.external')
+                networks=[]
+                hidden_builtin_networks = ('bridge', 'external')
+                #Docker does not assign the <container>.NetworkSettings.Networks.<network>.NetworkID
+                #untill the container is started, hence the below gymnastics to retrive the network id
+                network_names = list(q.get(details, 'NetworkSettings.Networks', {}).keys())
+                if network_names:
+                    for n in host.connection.networks(names=network_names):
+                        if n.get('Name') not in hidden_builtin_networks:
+                            networks.append(n.get('Id'))
                 labels = q.get(details, 'Config.Labels')
                 environment = q.get(details, 'Config.Env')
                 host_config = q.get(details, 'HostConfig')
                 names = list(normalize_names(container['Names']))
-                bridge_ipaddress = external['IPAddress'] if external else None
-                bridge_macaddress = external['MacAddress'] if external else None
+                bridge_ipaddress = q.get(external, 'IPAMConfig.IPv4Address') if external else None
+                bridge_macaddress = q.get(details, 'Config.MacAddress') if external else None
                 presets = self.labels_to_presets(labels)
                 settings = []
                 web_ui_url = None
@@ -1498,6 +1517,7 @@ class DockerService(RpcService):
                     'capabilities_add': host_config['CapAdd'] or [],
                     'capabilities_drop': host_config['CapDrop'] or [],
                     'privileged': host_config.get('Privileged', False),
+                    'networks': networks,
                 })
                 if presets and presets.get('web_ui_protocol'):
                     port = int(presets['web_ui_port'])
@@ -1524,10 +1544,17 @@ class DockerService(RpcService):
         result = []
 
         for host in self.context.iterate_docker_hosts():
-            for network in host.connection.networks():
+            networks = host.connection.networks()
+            networks_containers_map = {n['Name']: [] for n in networks}
+            containers = host.connection.containers(all=True)
+            for c in containers:
+                network_names = list(q.get(c, 'NetworkSettings.Networks', {}).keys())
+                for n in network_names:
+                    networks_containers_map[n].append(c['Id'])
+
+            for network in networks:
                 details = host.connection.inspect_network(network['Id'])
                 config = q.get(details, 'IPAM.Config.0')
-                containers = list(details.get('Containers', {}).keys())
 
                 result.append({
                     'id': details['Id'],
@@ -1536,7 +1563,7 @@ class DockerService(RpcService):
                     'subnet': config['Subnet'] if config else None,
                     'gateway': config.get('Gateway', None) if config else None,
                     'host': host.vm.id,
-                    'containers': containers
+                    'containers': networks_containers_map[details['Name']]
                 })
 
         return q.query(result, *(filter or []), stream=True, **(params or {}))
@@ -1584,6 +1611,22 @@ class DockerService(RpcService):
     def start(self, id):
         host = self.context.docker_host_by_container_id(id)
         try:
+            name, hostid, bridge = self.query_containers(
+                [('id', '=', id)],
+                {'single': True, 'select': ['name', 'host', 'bridge']}
+            )
+        except ValueError as err:
+            raise RpcException(errno.EFAULT, 'Failed to start container: {0}'.format(str(err)))
+
+        if bridge.get('enable') and bridge.get('dhcp'):
+            lease = get_dhcp_lease(self.context, name, hostid, bridge.get('macaddress'))
+            if bridge.get('address') != lease['client_ip']:
+                raise RpcException(
+                    errno.EINVAL,
+                    'Could not renew the dhcp lease for macaddr = {0}'.format(bridge.get('macaddress'))
+                )
+
+        try:
             host.connection.start(container=id)
         except BaseException as err:
             raise RpcException(errno.EFAULT, 'Failed to start container: {0}'.format(str(err)))
@@ -1602,7 +1645,7 @@ class DockerService(RpcService):
             raise RpcException(errno.ENOENT, 'Docker host {0} not found'.format(container['host']))
 
         bridge_enabled = q.get(container, 'bridge.enable')
-        dhcp_enabled = q.get(container, 'bridge.dhcp')
+        dhcp_enabled = q.get(container, 'bridge.dhcp') if bridge_enabled else False
         labels = {
             'org.freenas.autostart': bool_to_truefalse(container.get('autostart')),
             'org.freenas.expose-ports-at-host': bool_to_truefalse(container.get('expose_ports')),
@@ -1624,12 +1667,17 @@ class DockerService(RpcService):
                 )
 
         if bridge_enabled:
-            macaddr = q.get(container, 'bridge.macaddress', self.context.client.call_sync('vm.generate_mac'))
+            macaddr = q.get(container, 'bridge.macaddress') or self.context.client.call_sync('vm.generate_mac')
             if dhcp_enabled:
                 lease = get_dhcp_lease(self.context, container['name'], container['host'], macaddr)
                 ipv4 = lease['client_ip']
             else:
                 ipv4 = q.get(container, 'bridge.address')
+            if not ipv4:
+                raise RpcException(
+                    errno.EINVAL,
+                    'Either dhcp or static address must be selected for bridged container'
+                )
 
             networking_config = host.connection.create_networking_config({
                 'external': host.connection.create_endpoint_config(
@@ -1735,7 +1783,7 @@ class DockerService(RpcService):
             if err.code == errno.ENOENT:
                 self.context.client.emit_event('containerd.docker.container.changed', {
                     'operation': 'delete',
-                    'ids': id
+                    'ids': [id]
                 })
                 return
         try:
@@ -1750,7 +1798,7 @@ class DockerService(RpcService):
             if err.code == errno.ENOENT:
                 self.context.client.emit_event('containerd.docker.network.changed', {
                     'operation': 'delete',
-                    'ids': id
+                    'ids': [id]
                 })
                 return
         try:
@@ -1774,6 +1822,18 @@ class DockerService(RpcService):
             host.connection.connect_container_to_network(container_id, network_id)
         except BaseException as err:
             raise RpcException(errno.EFAULT, 'Failed to connect container to newtork: {0}'.format(str(err)))
+
+        if not self.query_containers([('id', '=', container_id)], {'select': 'running', 'single': True}):
+            # Docker does not transmit any event when stopped container is connected to network
+            # so we must do this
+            self.context.client.emit_event('containerd.docker.container.changed', {
+                'operation': 'update',
+                'ids': [container_id]
+            })
+            self.context.client.emit_event('containerd.docker.network.changed', {
+                'operation': 'update',
+                'ids': [network_id]
+            })
 
     def disconnect_container_from_network(self, container_id, network_id):
         host = self.context.docker_host_by_container_id(container_id)
