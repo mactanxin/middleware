@@ -53,9 +53,15 @@ class ServiceInfoProvider(Provider):
             entry = {
                 'id': i['id'],
                 'name': i['name'],
+                'labels': None,
                 'state': state,
                 'error': error
             }
+
+            if 'launchd' in i:
+                launchd = i['launchd']
+                jobs = [launchd] if isinstance(launchd, dict) else launchd
+                entry['labels'] = [j['Label'] for j in jobs]
 
             if pid is not None:
                 entry['pid'] = pid
@@ -516,6 +522,10 @@ def _init(dispatcher, plugin):
             'pid': {
                 'type': ['array', 'null'],
                 'items': {'type': 'integer'}
+            },
+            'labels': {
+                'type': ['array', 'null'],
+                'items': {'type': 'string'}
             },
             'builtin': {'type': 'boolean'},
             'state': {'$ref': 'service-state'},
