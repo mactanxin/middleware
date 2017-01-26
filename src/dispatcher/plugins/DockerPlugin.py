@@ -151,7 +151,7 @@ class DockerNetworkProvider(Provider):
     @generator
     def query(self, filter=None, params=None):
         return q.query(
-            self.datastore.query_stream('docker.networks'),
+            self.datastore_log.query_stream('docker.networks'),
             *(filter or []),
             stream=True,
             **(params or {})
@@ -308,9 +308,7 @@ class DockerCollectionProvider(Provider):
     @query('docker-collection')
     @generator
     def query(self, filter=None, params=None):
-        return self.datastore_log.query_stream(
-            'docker.collections', *(filter or []), **(params or {})
-        )
+        return self.datastore_log.query_stream('docker.collections', *(filter or []), **(params or {}))
 
     @description('Returns a list of Docker images related to a saved collection')
     @returns(h.array(h.ref('docker-hub-image')))
