@@ -400,6 +400,7 @@ class Dispatcher(object):
         self.started_at = time.time()
         self.balancer.start()
         self.ready.set()
+        self.logger.info('Server is ready')
         self.dispatch_event('server.ready', {
             'description': 'Server is completely loaded and ready to use.',
         })

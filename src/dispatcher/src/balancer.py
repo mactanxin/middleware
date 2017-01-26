@@ -284,7 +284,7 @@ class TaskExecutor(object):
         while not self.exiting:
             try:
                 self.proc = Popen(
-                    [TASKWORKER_PATH, self.key],
+                    [TASKWORKER_PATH, self.key, str(self.index)],
                     close_fds=True,
                     preexec_fn=os.setpgrp,
                     stdout=subprocess.PIPE,
@@ -500,7 +500,6 @@ class Balancer(object):
         self.logger = logging.getLogger('Balancer')
         self.dispatcher.require_collection('tasks', 'serial', type='log')
         self.create_initial_queues()
-        self.start_executors()
         self.schedule_lock = RLock()
         self.distribution_lock = RLock()
         self.debugger = None
@@ -543,6 +542,8 @@ class Balancer(object):
             self.executors.append(TaskExecutor(self, i))
 
     def start(self):
+        self.clean_stale_tasks()
+        self.start_executors()
         self.threads.append(gevent.spawn(self.distribution_thread))
         self.logger.info("Started")
 

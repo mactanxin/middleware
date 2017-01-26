@@ -199,12 +199,13 @@ class Context(object):
             instance.join_subtasks(instance.run_subtask(hook, *task['args'], **extra_env))
 
     def main(self):
-        if len(sys.argv) != 2:
+        if len(sys.argv) != 3:
             print("Invalid number of arguments", file=sys.stderr)
             sys.exit(errno.EINVAL)
 
         key = sys.argv[1]
-        configure_logging('taskworker', logging.DEBUG)
+        index = int(sys.argv[2])
+        configure_logging('taskworker#{0}'.format(index), logging.DEBUG)
 
         self.datastore = get_datastore()
         self.configstore = ConfigStore(self.datastore)
