@@ -831,17 +831,13 @@ class VMCreateTask(VMBaseTask):
             if vm.get('devices'):
                 for device in template['devices']:
                     if device['type'] == 'GRAPHICS':
+
                         for vm_device in vm['devices']:
                             if vm_device['type'] == 'GRAPHICS':
-                                if vm_device['properties'] != device['properties']:
-                                    raise TaskException(
-                                        errno.EPERM, 'Framebuffer settings cannot be changed if the VM is created from template'
-                                    )
-                                else:
-                                    break
+                                break
                         else:
                             raise TaskException(
-                                errno.EPERM, 'Framebuffer device cannot be removed if the VM is created from template'
+                                errno.EPERM, 'GRAPHICS device cannot be removed if the VM is created from template'
                             )
 
 
