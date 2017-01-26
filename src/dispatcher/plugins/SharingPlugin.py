@@ -639,7 +639,7 @@ def _init(dispatcher, plugin):
             },
             'permissions': {
                 'oneOf': [
-                    {'$ref': 'permissions'},
+                    {'$ref': 'Permissions'},
                     {'type': 'null'}
                 ]
             },
