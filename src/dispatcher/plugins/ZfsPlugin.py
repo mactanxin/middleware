@@ -1805,7 +1805,7 @@ def _init(dispatcher, plugin):
             'root_dataset': {'$ref': 'ZfsDataset'},
             'groups': {'$ref': 'ZfsTopology'},
             'guid': {'type': 'integer'},
-            'properties': {'$ref': 'zfs-properties'},
+            'properties': {'$ref': 'ZfsProperties'},
         }
     })
 

@@ -199,7 +199,7 @@ class VolumeProvider(Provider):
         h.object(properties={
             'id': str,
             'name': str,
-            'topology': h.ref('zfs-topology'),
+            'topology': h.ref('ZfsTopology'),
             'status': str
         })
     ))
@@ -3299,7 +3299,7 @@ def _init(dispatcher, plugin):
                 'type': 'array',
                 'items': {'$type': 'string'}
             },
-            'topology': {'$ref': 'zfs-topology'},
+            'topology': {'$ref': 'ZfsTopology'},
             'scan': {'$ref': 'zfs-scan'},
             'mountpoint': {
                 'type': ['string', 'null'],
