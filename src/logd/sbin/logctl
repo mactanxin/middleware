@@ -148,8 +148,6 @@ def main():
             output_entry(args.format, i, not args.no_colors)
             seqno = i['seqno']
 
-        print('QUERY END')
-
     if args.follow:
         try:
             signal.pause()
