@@ -95,5 +95,17 @@
         },
         "data": {
         }
+    },
+    {
+        "metadata": {
+            "name": "boots",
+            "migration": "keep",
+            "pkey-type": "uuid",
+            "attributes": {
+                "type": "log"
+            }
+        },
+        "data": {
+        }
     }
 ]
