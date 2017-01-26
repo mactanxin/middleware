@@ -1441,6 +1441,9 @@ class DockerHostUpdateTask(ProgressTask):
         return TaskDescription('Updating the Docker host {name}', name=host.get('name', ''))
 
     def verify(self, id, updated_params):
+        if 'target' in updated_params:
+            raise VerifyException(errno.EINVAL, 'Target datastore cannot be changed')
+
         host = self.dispatcher.call_sync('docker.host.query', [('id', '=', id)], {'single': True})
         resources = []
         if host:
