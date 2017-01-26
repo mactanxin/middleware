@@ -1830,9 +1830,7 @@ def _init(dispatcher, plugin):
             if default_collection and default_collection in args['ids']:
                 node.update({'default_collection': None})
 
-    def refresh_containers(host_id=None):
-        collection = 'docker.containers'
-        event = 'docker.container.changed'
+    def refresh_database_cache(collection, event, query, host_id=None):
         filter = []
         if host_id:
             filter.append(('host', '=', host_id))
@@ -1841,7 +1839,7 @@ def _init(dispatcher, plugin):
             filter.append(('host', 'in', active_hosts))
 
         with containers_lock:
-            current = list(dispatcher.call_sync(CONTAINERS_QUERY, filter))
+            current = list(dispatcher.call_sync(query, filter))
             old = dispatcher.datastore.query(collection, *filter)
             created = []
             updated = []
@@ -1881,62 +1879,20 @@ def _init(dispatcher, plugin):
                 })
 
     def refresh_networks(host_id=None):
-        collection = 'docker.networks'
-        event = 'docker.network.changed'
+        refresh_database_cache('docker.networks', 'docker.network.changed', NETWORKS_QUERY, host_id)
+
+    def refresh_containers(host_id=None):
+        refresh_database_cache('docker.containers', 'docker.container.changed', CONTAINERS_QUERY, host_id)
+
+    def sync_images(ids=None, host_id=None):
         filter = []
+        if ids:
+            filter.append(('id', 'in', ids))
+
         if host_id:
-            filter.append(('host', '=', host_id))
-        else:
-            active_hosts = list(dispatcher.call_sync('docker.host.query', [('state', '=', 'UP')], {'select': 'id'}))
-            filter.append(('host', 'in', active_hosts))
+            filter.append(('hosts', 'contains', host_id))
 
-        with networks_lock:
-            current = list(dispatcher.call_sync(NETWORKS_QUERY, filter))
-            old = dispatcher.datastore.query(collection, *filter)
-            created = []
-            updated = []
-            deleted = []
-            for obj in current:
-                old_obj = first_or_default(lambda o: o['id'] == obj['id'], old)
-                if old_obj:
-                    if obj != old_obj:
-                        dispatcher.datastore.update(collection, obj['id'], obj)
-                        updated.append(obj['id'])
-
-                else:
-                    dispatcher.datastore.insert(collection, obj)
-                    created.append(obj['id'])
-
-            for obj in old:
-                if not first_or_default(lambda o: o['id'] == obj['id'], current):
-                    dispatcher.datastore.delete(collection, obj['id'])
-                    deleted.append(obj['id'])
-
-            if created:
-                dispatcher.dispatch_event(event, {
-                    'operation': 'create',
-                    'ids': created
-                })
-
-            if updated:
-                dispatcher.dispatch_event(event, {
-                    'operation': 'update',
-                    'ids': updated
-                })
-
-            if deleted:
-                dispatcher.dispatch_event(event, {
-                    'operation': 'delete',
-                    'ids': deleted
-                })
-
-    def init_images():
-        logger.trace('Initializing Docker images cache')
-        sync_images()
-        images.ready = True
-
-    def sync_images(ids=None):
-        objects = list(dispatcher.call_sync(IMAGES_QUERY, [('id', 'in', ids)] if ids else []))
+        objects = list(dispatcher.call_sync(IMAGES_QUERY, filter))
         images.update(**{i['id']: i for i in objects})
         if not ids:
             nonexistent_ids = []
@@ -1946,18 +1902,16 @@ def _init(dispatcher, plugin):
 
             images.remove_many(nonexistent_ids)
 
-    def sync_caches():
-        interval = dispatcher.configstore.get('container.cache_refresh_interval')
-        while True:
-            gevent.sleep(interval)
-            if images.ready:
-                logger.trace('Syncing Docker containers, networks, image cache')
-                try:
-                    sync_images()
-                    refresh_containers()
-                    refresh_networks()
-                except RpcException:
-                    pass
+    def refresh_cache(host_id=None):
+        logger.trace('Syncing Docker containers, networks, image cache')
+
+        sync_images(host_id=host_id)
+        refresh_containers(host_id=host_id)
+        refresh_networks(host_id=host_id)
+
+        if not images.ready:
+            logger.trace('Docker images cache initialized')
+            images.ready = True
 
     plugin.register_provider('docker.config', DockerConfigProvider)
     plugin.register_provider('docker.host', DockerHostProvider)
@@ -2003,9 +1957,10 @@ def _init(dispatcher, plugin):
     plugin.register_event_handler('containerd.docker.container.changed', on_container_event)
     plugin.register_event_handler('containerd.docker.network.changed', on_network_event)
     plugin.register_event_handler('containerd.docker.image.changed', on_image_event)
+    plugin.register_event_handler('containerd.docker.client.disconnected', lambda a: refresh_cache(host_id=a['id']))
     plugin.register_event_handler('vm.changed', on_vm_change)
     plugin.register_event_handler('plugin.service_registered',
-                                  lambda a: init_images() if a['service-name'] == 'containerd.docker' else None)
+                                  lambda a: refresh_cache() if a['service-name'] == 'containerd.docker' else None)
     plugin.register_event_handler('docker.collection.changed', on_collection_change)
 
     plugin.attach_hook('vm.pre_destroy', vm_pre_destroy)
@@ -2257,9 +2212,7 @@ def _init(dispatcher, plugin):
     })
 
     if 'containerd.docker' in dispatcher.call_sync('discovery.get_services'):
-        init_images()
-
-    gevent.spawn(sync_caches)
+        refresh_cache()
 
     if not dispatcher.call_sync('docker.config.get_config').get('default_host'):
         host_id = dispatcher.datastore.query(

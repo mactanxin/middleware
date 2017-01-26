@@ -1019,6 +1019,9 @@ class DockerHost(object):
             except BaseException as err:
                 self.logger.info('Docker connection closed: {0}, retrying in 1 second'.format(str(err)))
                 time.sleep(1)
+                self.context.client.emit_event('containerd.docker.client.disconnected', {
+                    'id': self.vm.id
+                })
 
     def get_container_console(self, id):
         if id not in self.active_consoles:
