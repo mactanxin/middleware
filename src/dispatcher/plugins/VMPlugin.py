@@ -49,7 +49,9 @@ from datastore.config import ConfigNode
 from freenas.dispatcher.jsonenc import loads, dumps
 from freenas.dispatcher.rpc import RpcException, generator
 from freenas.dispatcher.rpc import SchemaHelper as h, description, accepts, returns, private
-from freenas.utils import first_or_default, normalize, deep_update, process_template, in_directory, sha256, query as q
+from freenas.utils import (
+    first_or_default, normalize, deep_update, process_template, in_directory, sha256, exclude, query as q
+)
 from utils import save_config, load_config, delete_config
 from freenas.utils.decorators import throttle
 from debug import AttachData, AttachDirectory
@@ -800,6 +802,36 @@ class VMCreateTask(VMBaseTask):
                     result[key] = vm[key]
             deep_update(template, result)
             vm = template
+            template = self.dispatcher.call_sync(
+                'vm.template.query',
+                [('template.name', '=', template_name)],
+                {'single': True}
+            )
+
+            if vm.get('guest_type') and vm['guest_type'] != template['guest_type']:
+                raise TaskException(errno.EPERM, 'Cannot change the guest type if VM is created from template')
+
+            if vm['config'].get('bootloader') and vm['config']['bootloader'] != template['config']['bootloader']:
+                raise TaskException(errno.EPERM, 'Cannot change the bootloader if VM is created from template')
+
+            if vm['config'].get('boot_directory') and vm['config']['boot_directory'] != template['config']['boot_directory']:
+                raise TaskException(errno.EPERM, 'Cannot change the boot directory if VM is created from template')
+
+            if vm['config'].get('boot_device'):
+                if vm['config']['boot_device'] != template['config']['boot_device']:
+                    raise TaskException(errno.EPERM, 'Cannot change the boot device if VM is created from template')
+
+            for device in template['devices']:
+                if device['type'] == 'DISK' and q.get(device, 'properties.source'):
+                    if not first_or_default(lambda o: exclude(o, 'id') == device, vm['devices']):
+                        raise TaskException(errno.EPERM, 'Cannot modify disk which is defined by template')
+
+                if device['type'] == 'GRAPHICS':
+                    if not first_or_default(lambda o: o['type'] == device['type'], vm['devices']):
+                        raise TaskException(
+                            errno.EPERM, 'GRAPHICS device cannot be removed if the VM is created from template'
+                        )
+
 
             self.run_subtask_sync(
                 'vm.cache.update',
