@@ -538,26 +538,6 @@ class DockerContainerCreateTask(DockerBaseTask):
                 lambda p, m, e=None: self.chunk_progress(0, 30, 'Looking for default Docker host:', p, m, e)
             )
 
-        for v in container.get('volumes', []):
-            if v['host_path'].startswith('/mnt'):
-                try:
-                    ds_id = self.dispatcher.call_sync('volume.decode_path', v['host_path'])[1]
-                except RpcException:
-                    continue
-
-                ds_perm_type = self.dispatcher.call_sync(
-                    'volume.dataset.query',
-                    [('id', '=', ds_id)],
-                    {'single': True, 'select': 'permissions_type'}
-                )
-                if str(ds_perm_type) == 'ACL':
-                    self.add_warning(TaskWarning(
-                        errno.EINVAL,
-                        'Dataset\'s {0} Windows type permissions are not supported in container\'s sharing'.format(
-                            ds_id
-                        )
-                    ))
-
         self.check_host_state(container['host'])
 
         self.set_progress(30, 'Pulling container {0} image'.format(container['image']))
