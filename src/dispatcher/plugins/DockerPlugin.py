@@ -1810,7 +1810,7 @@ def _init(dispatcher, plugin):
             if default_collection and default_collection in args['ids']:
                 node.update({'default_collection': None})
 
-    def refresh_database_cache(collection, event, query, host_id=None):
+    def refresh_database_cache(collection, event, query, lock, host_id=None):
         filter = []
         if host_id:
             filter.append(('host', '=', host_id))
@@ -1818,7 +1818,7 @@ def _init(dispatcher, plugin):
             active_hosts = list(dispatcher.call_sync('docker.host.query', [('state', '=', 'UP')], {'select': 'id'}))
             filter.append(('host', 'in', active_hosts))
 
-        with containers_lock:
+        with lock:
             current = list(dispatcher.call_sync(query, filter))
             old = dispatcher.datastore.query(collection, *filter)
             created = []
@@ -1859,10 +1859,10 @@ def _init(dispatcher, plugin):
                 })
 
     def refresh_networks(host_id=None):
-        refresh_database_cache('docker.networks', 'docker.network.changed', NETWORKS_QUERY, host_id)
+        refresh_database_cache('docker.networks', 'docker.network.changed', NETWORKS_QUERY, networks_lock, host_id)
 
     def refresh_containers(host_id=None):
-        refresh_database_cache('docker.containers', 'docker.container.changed', CONTAINERS_QUERY, host_id)
+        refresh_database_cache('docker.containers', 'docker.container.changed', CONTAINERS_QUERY, containers_lock, host_id)
 
     def sync_images(ids=None, host_id=None):
         filter = []
