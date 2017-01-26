@@ -31,7 +31,7 @@ import argparse
 import json
 import signal
 from threading import Lock
-from freenas.dispatcher.client import Client
+from freenas.dispatcher.client import Client, sync
 
 
 COLOR_MAP = {
@@ -97,22 +97,28 @@ def main():
     parser.add_argument('--follow', action='store_true')
     parser.add_argument('--no-colors', action='store_true')
     args = parser.parse_args()
+    c = create_client(args.socket)
 
     if args.sef:
         print('NO', file=sys.stderr)
         sys.exit(1)
 
     if args.get_boot_id:
-        c = create_client(args.socket)
         boot_id = c.call_sync('logd.logging.get_boot_id')
         print(boot_id)
         sys.exit(0)
 
-    c = create_client(args.socket)
     lock = Lock()
     filter = []
     params = {}
     seqno = -1
+
+    if not args.everything and not args.boot_id:
+        boot_id = c.call_sync('logd.logging.get_boot_id')
+        filter.append(('boot_id', '=', boot_id))
+
+    if args.boot_id:
+        filter.append(('boot_id', '=', args.boot_id))
 
     for ident in args.ident:
         filter.append(('identifier', '=', ident))
@@ -127,6 +133,7 @@ def main():
         params['limit'] = args.limit
 
     if args.follow:
+        @sync
         def on_message(msg):
             with lock:
                 if msg['seqno'] <= seqno:
@@ -141,8 +148,15 @@ def main():
             output_entry(args.format, i, not args.no_colors)
             seqno = i['seqno']
 
+        print('QUERY END')
+
     if args.follow:
-        signal.pause()
+        try:
+            signal.pause()
+        except KeyboardInterrupt:
+            pass
+
+    c.disconnect()
 
 
 if __name__ == '__main__':
