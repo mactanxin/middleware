@@ -958,6 +958,11 @@ class DiskTestTask(ProgressTask):
         disk = diskinfo_cache.get(id)
         if not disk:
             raise VerifyException(errno.ENOENT, 'Disk {0} not found'.format(id))
+        if not disk['smart_info']['smart_enabled']:
+            raise VerifyException(
+                errno.EINVAL,
+                'Disk id: {0}, path: {1} is not S.M.A.R.T enabled'.format(id, disk['path'])
+            )
 
         return ['disk:{0}'.format(disk['path'])]
 
@@ -994,7 +999,11 @@ class DiskParallelTestTask(ProgressTask):
             disk = diskinfo_cache.get(id)
             if not disk:
                 raise VerifyException(errno.ENOENT, 'Disk {0} not found'.format(id))
-
+            if not disk['smart_info']['smart_enabled']:
+                raise VerifyException(
+                    errno.EINVAL,
+                    'Disk id: {0}, path: {1} is not S.M.A.R.T enabled'.format(id, disk['path'])
+                )
             res.append('disk:{0}'.format(disk['path']))
 
         return res
