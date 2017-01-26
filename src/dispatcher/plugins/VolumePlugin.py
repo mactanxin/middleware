@@ -3338,7 +3338,7 @@ def _init(dispatcher, plugin):
             },
             'providers_presence': {
                 'oneOf': [
-                    {'$ref': 'VolumeProviderspresence'},
+                    {'$ref': 'VolumeProvidersPresence'},
                     {'type': 'null'}
                 ],
                 'readOnly': True
@@ -3363,7 +3363,7 @@ def _init(dispatcher, plugin):
         'enum': ['UNAVAIL', 'UNKNOWN', 'LOCKED', 'ONLINE']
     })
 
-    plugin.register_schema_definition('VolumeProviderspresence', {
+    plugin.register_schema_definition('VolumeProvidersPresence', {
         'type': 'string',
         'enum': ['ALL', 'PART', 'NONE']
     })
@@ -3407,7 +3407,7 @@ def _init(dispatcher, plugin):
             'volsize': {'type': ['integer', 'null']},
             'properties': {'$ref': 'VolumeDatasetProperties'},
             'permissions': {'$ref': 'permissions'},
-            'permissions_type': {'$ref': 'VolumeDatasetPermissionstype'},
+            'permissions_type': {'$ref': 'VolumeDatasetPermissionsType'},
             'last_replicated_by': {'type': ['string', 'null']},
             'last_replicated_at': {'type': ['datetime', 'null']},
             'metadata': {
@@ -3422,7 +3422,7 @@ def _init(dispatcher, plugin):
         'enum': ['FILESYSTEM', 'VOLUME'],
     })
 
-    plugin.register_schema_definition('VolumeDatasetPermissionstype', {
+    plugin.register_schema_definition('VolumeDatasetPermissionsType', {
         'type': 'string',
         'enum': ['PERM', 'ACL']
     })
