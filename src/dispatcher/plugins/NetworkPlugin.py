@@ -885,10 +885,10 @@ def _init(dispatcher, plugin):
         'additionalProperties': False,
         'properties': {
             'type': {'$ref': 'NetworkInterfaceAliasType'},
-            'address': {'$ref': 'ip-address'},
+            'address': {'$ref': 'IpAddress'},
             'netmask': {'type': 'integer'},
             'broadcast': {
-                'oneOf': [{'$ref': 'ipv4-address'}, {'type': 'null'}]
+                'oneOf': [{'$ref': 'Ipv4Address'}, {'type': 'null'}]
             }
         }
     })
@@ -904,9 +904,9 @@ def _init(dispatcher, plugin):
         'properties': {
             'id': {'type': 'string'},
             'type': {'$ref': 'NetworkRouteType'},
-            'network': {'$ref': 'ip-address'},
+            'network': {'$ref': 'IpAddress'},
             'netmask': {'type': 'integer'},
-            'gateway': {'$ref': 'ip-address'}
+            'gateway': {'$ref': 'IpAddress'}
         }
     })
 
@@ -922,7 +922,7 @@ def _init(dispatcher, plugin):
             'id': {'type': 'string'},
             'addresses': {
                 'type': 'array',
-                'items': {'$ref': 'ip-address'}
+                'items': {'$ref': 'IpAddress'}
             }
         }
     })
@@ -937,15 +937,15 @@ def _init(dispatcher, plugin):
                 'type': 'object',
                 'additionalProperties': False,
                 'properties': {
-                    'ipv4': {'oneOf': [{'$ref': 'ipv4-address'}, {'type': 'null'}]},
-                    'ipv6': {'oneOf': [{'$ref': 'ipv6-address'}, {'type': 'null'}]}
+                    'ipv4': {'oneOf': [{'$ref': 'Ipv4Address'}, {'type': 'null'}]},
+                    'ipv6': {'oneOf': [{'$ref': 'Ipv6Address'}, {'type': 'null'}]}
                 }
             },
             'dns': {
                 'type': 'object',
                 'additionalProperties': False,
                 'properties': {
-                    'addresses': {'type': 'array', 'items': {'$ref': 'ip-address'}},
+                    'addresses': {'type': 'array', 'items': {'$ref': 'IpAddress'}},
                     'search': {'type': 'array', 'items': {'type': 'string'}}
                 }
             },
@@ -964,7 +964,7 @@ def _init(dispatcher, plugin):
                     'enabled': {'type': 'boolean'},
                     'addresses': {
                         'type': 'array',
-                        'items': {'$ref': 'ip-address'}
+                        'items': {'$ref': 'IpAddress'}
                     }
                 }
             }
