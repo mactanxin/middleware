@@ -439,15 +439,14 @@ def _init(dispatcher, plugin):
             return
 
         for i in args['entities']:
-            if '.system-' in i['id']:
-                if i['mountpoint'] == SYSTEM_DIR:
-                    if i['id'] != last_sysds_name:
-                        dispatcher.update_resource(
-                            'system-dataset',
-                            new_parents=['zfs:{0}'.format(i['id'])]
-                        )
-                        last_sysds_name = i['id']
-                        return
+            if '.system-' in i['id'] and i['mountpoint'] == SYSTEM_DIR and i['id'] != last_sysds_name:
+                if dispatcher.resource_exists('system-dataset'):
+                    dispatcher.update_resource('system-dataset', new_parents=['zfs:{0}'.format(i['id'])])
+                else:
+                    dispatcher.register_resource(Resource('system-dataset'), parents=['zfs:{0}'.format(i['id'])])
+
+                last_sysds_name = i['id']
+                return
 
     def volume_pre_destroy(args):
         # Evacuate .system dataset from the pool
@@ -461,13 +460,11 @@ def _init(dispatcher, plugin):
         dispatcher.configstore.set('system.dataset.id', dsid)
         logger.info('New system dataset ID: {0}'.format(dsid))
 
+    plugin.register_event_handler('volume.changed', on_volumes_changed)
+    plugin.register_event_handler('entity-subscriber.zfs.dataset.changed', on_datasets_changed)
+
     pool = dispatcher.configstore.get('system.dataset.pool')
     dsid = dispatcher.configstore.get('system.dataset.id')
-    dispatcher.register_resource(
-        Resource('system-dataset'),
-        parents=['zfs:{0}/.system-{1}'.format(pool, dsid)]
-    )
-    last_sysds_name = '{0}/.system-{1}'.format(pool, dsid)
 
     logger.info('Mounting system dataset')
     create_system_dataset(dispatcher, dsid, pool)
@@ -478,8 +475,6 @@ def _init(dispatcher, plugin):
     dispatcher.start_logdb()
     dispatcher.migrate_logdb()
 
-    plugin.register_event_handler('volume.changed', on_volumes_changed)
-    plugin.register_event_handler('entity-subscriber.zfs.dataset.changed', on_datasets_changed)
     plugin.attach_hook('volume.pre_destroy', volume_pre_destroy)
     plugin.attach_hook('volume.pre_detach', volume_pre_destroy)
     plugin.attach_hook('volume.pre_rename', volume_pre_destroy)
