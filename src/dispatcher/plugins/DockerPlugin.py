@@ -1411,7 +1411,8 @@ class DockerHostCreateTask(ProgressTask):
         except RpcException as err:
             raise VerifyException(err.code, 'Invalid datastore: {0}'.format(err.message))
 
-        return resources.append('docker')
+        resources.append('docker')
+        return resources
 
     def run(self, host):
         if self.datastore.exists('vms', ('name', '=', host['name'])):
@@ -1448,7 +1449,8 @@ class DockerHostUpdateTask(ProgressTask):
             except RpcException as err:
                 raise VerifyException(err.code, 'Invalid datastore: {0}'.format(err.message))
 
-        return resources.append('docker')
+        resources.append('docker')
+        return resources
 
     def run(self, id, updated_params):
         if not self.datastore.exists('vms', ('id', '=', id)):
@@ -1483,7 +1485,8 @@ class DockerHostDeleteTask(ProgressTask):
             except RpcException as err:
                 raise VerifyException(err.code, 'Invalid datastore: {0}'.format(err.message))
 
-        return resources.append('docker')
+        resources.append('docker')
+        return resources
 
     def run(self, id):
         if not self.datastore.exists('vms', ('id', '=', id)):
