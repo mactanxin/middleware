@@ -1426,7 +1426,11 @@ class DockerHostCreateTask(ProgressTask):
 
         vm.update(host)
 
-        return self.run_subtask_sync_with_progress('vm.create', vm)
+        id = self.run_subtask_sync_with_progress('vm.create', vm)
+
+        self.run_subtask_sync('vm.start', id)
+
+        return id
 
 
 @accepts(str, h.ref('DockerHost'))
