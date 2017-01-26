@@ -215,9 +215,9 @@ class DockerImagesProvider(Provider):
 
     @description('Returns a list of docker images from a given collection')
     @returns(h.array(h.ref('docker-hub-image')))
-    @accepts(str)
+    @accepts(str, bool)
     @generator
-    def get_collection_images(self, collection='freenas'):
+    def get_collection_images(self, collection='freenas', force=False):
         def update_collection(c, q):
             parser = dockerfile_parse.DockerfileParser()
             items = []
@@ -276,7 +276,7 @@ class DockerImagesProvider(Provider):
         collection_data = collections.get(collection, {})
         time_since_last_update = now - collection_data.get('update_time', now)
 
-        if not collections.is_valid(collection) or time_since_last_update > self.throttle_period:
+        if force or not collections.is_valid(collection) or time_since_last_update > self.throttle_period:
             queue = Queue()
             gevent.spawn(update_collection, collection, queue)
             for i in queue:
@@ -1551,7 +1551,7 @@ class DockerCollectionDeleteTask(Task):
         })
 
 
-@accepts(str)
+@accepts(str, bool)
 @returns(h.array(h.ref('docker-hub-image')))
 @description('Returns a list of Docker images related to a saved collection')
 class DockerCollectionGetPresetsTask(ProgressTask):
@@ -1559,27 +1559,28 @@ class DockerCollectionGetPresetsTask(ProgressTask):
     def early_describe(cls):
         return 'Downloading Docker collection presets'
 
-    def describe(self, id):
+    def describe(self, id, force=False):
         collection = self.datastore.get_by_id('docker.collections', id)
         return TaskDescription('Downloading Docker collection {name} presets', name=collection.get(''))
 
-    def verify(self, id):
+    def verify(self, id, force=False):
         return ['docker']
 
-    def run(self, id):
+    def run(self, id, force=False):
         if not self.datastore.exists('docker.collections', ('id', '=', id)):
             raise TaskException(errno.ENOENT, 'Docker collection {0} not found'.format(id))
 
         result = []
         collection = self.datastore.get_by_id('docker.collections', id)
-        name = collection['collection']
+        name = collection['name']
+        cn_name = collection['collection']
 
         self.set_progress(0, 'Downloading {0} collection presets'.format(name))
 
         with dockerhub.DockerHub() as hub:
             collection_len = len([i for i in hub.get_repositories(name) if collection['match_expr'] in i['name']])
 
-        for i in self.dispatcher.call_sync('docker.collection.get_entries', id):
+        for i in self.dispatcher.call_sync('docker.image.get_collection_images', cn_name, force):
             result.append(i)
             self.set_progress((len(result) / collection_len) * 100, 'Downloading {0} collection presets'.format(name))
 
