@@ -1386,6 +1386,107 @@ class DockerImageFlushTask(DockerBaseTask):
             self.set_progress(int((idx / subtasks_cnt) * 100), 'Deleting docker images')
 
 
+@accepts(h.all_of(
+    h.ref('DockerHost'),
+    h.required('name', 'target')
+))
+@returns(str)
+@description('Creates a Docker host')
+class DockerHostCreateTask(ProgressTask):
+    @classmethod
+    def early_describe(cls):
+        return 'Creating a Docker host'
+
+    def describe(self, host):
+        return TaskDescription('Creating the Docker host {name}', name=host.get('name', ''))
+
+    def verify(self, host):
+        try:
+            resources = self.dispatcher.call_sync('vm.datastore.get_resources', host['target'])
+        except RpcException as err:
+            raise VerifyException(err.code, 'Invalid datastore: {0}'.format(err.message))
+
+        return resources.append('docker')
+
+    def run(self, host):
+        if self.datastore.exists('vms', ('name', '=', host['name'])):
+            raise TaskException(errno.EEXIST, 'VM {0} already exists'.format(host['name']))
+
+        vm = self.dispatcher.call_sync(
+            'vm.template.query',
+            [('template.name', '=', 'boot2docker')],
+            {'single': True}
+        )
+
+        vm.update(host)
+
+        return self.run_subtask_sync_with_progress('vm.create', vm)
+
+
+@accepts(str, h.ref('DockerHost'))
+@description('Updates a Docker host')
+class DockerHostUpdateTask(ProgressTask):
+    @classmethod
+    def early_describe(cls):
+        return 'Updating a Docker host'
+
+    def describe(self, id, updated_params):
+        host = self.dispatcher.call_sync('docker.host.query', [('id', '=', id)], {'single': True}) or {}
+        return TaskDescription('Updating the Docker host {name}', name=host.get('name', ''))
+
+    def verify(self, id, updated_params):
+        host = self.dispatcher.call_sync('docker.host.query', [('id', '=', id)], {'single': True})
+        resources = []
+        if host:
+            try:
+                resources = self.dispatcher.call_sync('vm.datastore.get_resources', host['target'])
+            except RpcException as err:
+                raise VerifyException(err.code, 'Invalid datastore: {0}'.format(err.message))
+
+        return resources.append('docker')
+
+    def run(self, id, updated_params):
+        if not self.datastore.exists('vms', ('id', '=', id)):
+            raise TaskException(errno.ENOENT, 'Docker host {0} does not exist'.format(id))
+
+        vm = self.datastore.query('vms', ('id', '=', id), single=True)
+
+        vm.update(updated_params)
+
+        diff = {vm[k] for k in updated_params.keys()}
+
+        return self.run_subtask_sync_with_progress('vm.update', id, diff)
+
+
+@accepts(str)
+@description('Deletes a Docker host')
+class DockerHostDeleteTask(ProgressTask):
+    @classmethod
+    def early_describe(cls):
+        return 'Deleting a Docker host'
+
+    def describe(self, id):
+        host = self.dispatcher.call_sync('docker.host.query', [('id', '=', id)], {'single': True}) or {}
+        return TaskDescription('Deleting the Docker host {name}', name=host.get('name', ''))
+
+    def verify(self, id):
+        host = self.dispatcher.call_sync('docker.host.query', [('id', '=', id)], {'single': True})
+        resources = []
+        if host:
+            try:
+                resources = self.dispatcher.call_sync('vm.datastore.get_resources', host['target'])
+            except RpcException as err:
+                raise VerifyException(err.code, 'Invalid datastore: {0}'.format(err.message))
+
+        return resources.append('docker')
+
+    def run(self, id):
+        if not self.datastore.exists('vms', ('id', '=', id)):
+            raise TaskException(errno.ENOENT, 'Docker host {0} does not exist'.format(id))
+
+        return self.run_subtask_sync_with_progress('vm.delete', id)
+
+
 @private
 @accepts(str, h.ref('vm'))
 @description('Updates Docker host resource')
@@ -1930,6 +2031,9 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('docker.image.delete', DockerImageDeleteTask)
     plugin.register_task_handler('docker.image.flush', DockerImageFlushTask)
 
+    plugin.register_task_handler('docker.host.create', DockerHostCreateTask)
+    plugin.register_task_handler('docker.host.update', DockerHostUpdateTask)
+    plugin.register_task_handler('docker.host.delete', DockerHostDeleteTask)
     plugin.register_task_handler('docker.host.update_resource', DockerUpdateHostResourceTask)
     plugin.register_task_handler('docker.host.rollback_resource', DockerRollbackHostResourceTask)
 
@@ -2004,6 +2108,15 @@ def _init(dispatcher, plugin):
             'id': {'type': 'string'},
             'name': {'type': 'string'},
             'state': {'$ref': 'DockerHostState'},
+            'target': {'type': 'string'},
+            'config': {
+                'type': 'object',
+                'additionalProperties': False,
+                'properties': {
+                    'memsize': {'type': 'integer'},
+                    'ncpus': {'type': 'integer'}
+                }
+            },
             'status': {
                 'oneOf': [{'$ref': 'DockerHostStatus'}, {'type': 'null'}]
             }
