@@ -1,0 +1,149 @@
+#!/usr/local/bin/python3 -u
+#
+# Copyright 2017 iXsystems, Inc.
+# All rights reserved
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted providing that the following conditions
+# are met:
+# 1. Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+# 2. Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in the
+#    documentation and/or other materials provided with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+# IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+# WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
+# DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+# OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+# HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+# STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
+# IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+#
+#####################################################################
+
+import sys
+import argparse
+import json
+import signal
+from threading import Lock
+from freenas.dispatcher.client import Client
+
+
+COLOR_MAP = {
+    'EMERG': 31,
+    'ALERT': 31,
+    'CRIT': 31,
+    'ERR': 31,
+    'WARNING': 33
+}
+
+
+def create_client(address):
+    c = Client()
+    c.connect(address)
+    return c
+
+
+def query(c, args, filter, params):
+    if args.offline:
+        from datastore import get_datastore
+        ds = get_datastore(log=True)
+        return ds.query('syslog', *filter, **params)
+
+    return c.call_sync('logd.logging.query', filter, params)
+
+
+def output_entry(format, entry, colors=False):
+    if format == 'json':
+        print(json.dumps(entry, indent=4))
+        print()
+        return
+
+    if format == 'syslog':
+        if colors:
+            print('\033[{0}m'.format(COLOR_MAP.get(entry['priority'], 0)), end='')
+
+        print('{timestamp:%Y-%m-%d %H:%M:%S} {identifier}: {message}'.format(**entry))
+
+        if colors:
+            print('\033[0m', end='')
+        return
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--offline', action='store_true')
+    parser.add_argument('--socket', default='unix:///var/run/logd.sock')
+    parser.add_argument('--everything', action='store_true', default=False)
+    parser.add_argument('--get-boot-id')
+    parser.add_argument('--boot-id', default=None)
+    parser.add_argument('--ident', nargs='+', default=[])
+    parser.add_argument('--service', nargs='+', default=[])
+    parser.add_argument('--prog')
+    parser.add_argument('--pid', type=int, nargs='+', default=[])
+    parser.add_argument('--prio', nargs='+')
+    parser.add_argument('--since')
+    parser.add_argument('--first')
+    parser.add_argument('--last')
+    parser.add_argument('--key', nargs='+')
+    parser.add_argument('--limit', type=int)
+    parser.add_argument('--sef', action='store_true')
+    parser.add_argument('--format', default='syslog')
+    parser.add_argument('--follow', action='store_true')
+    parser.add_argument('--no-colors', action='store_true')
+    args = parser.parse_args()
+
+    if args.sef:
+        print('NO', file=sys.stderr)
+        sys.exit(1)
+
+    if args.get_boot_id:
+        c = create_client(args.socket)
+        boot_id = c.call_sync('logd.logging.get_boot_id')
+        print(boot_id)
+        sys.exit(0)
+
+    c = create_client(args.socket)
+    lock = Lock()
+    filter = []
+    params = {}
+    seqno = -1
+
+    for ident in args.ident:
+        filter.append(('identifier', '=', ident))
+
+    for service in args.service:
+        filter.append(('service', '=', service))
+
+    for pid in args.pid:
+        filter.append(('pid', '=', pid))
+
+    if args.limit:
+        params['limit'] = args.limit
+
+    if args.follow:
+        def on_message(msg):
+            with lock:
+                if msg['seqno'] <= seqno:
+                    return
+
+                output_entry(args.format, msg, not args.no_colors)
+
+        c.register_event_handler('logd.logging.message', on_message)
+
+    with lock:
+        for i in query(c, args, filter, params):
+            output_entry(args.format, i, not args.no_colors)
+            seqno = i['seqno']
+
+    if args.follow:
+        signal.pause()
+
+
+if __name__ == '__main__':
+    main()

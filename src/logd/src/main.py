@@ -102,7 +102,7 @@ class LoggingService(RpcService):
             else []
 
         return q.query(
-            itertools.chain(self.context.store, ds_results),
+            itertools.chain(ds_results, self.context.store),
             *(filter or []),
             **(params or {})
         )
@@ -117,10 +117,10 @@ class KernelLogReader(object):
             with open(KLOG_PATH, 'rb') as fp:
                 for line in fp:
                     # Skip lines with 'ESC' character inside
-                    if '\033' in line:
+                    if b'\033' in line:
                         continue
 
-                    m = KLOG_PATTERN.match(line)
+                    m = KLOG_PATTERN.match(line.decode('utf-8', 'ignore'))
                     if not m:
                         continue
 
@@ -199,12 +199,15 @@ class Context(object):
     def __init__(self):
         self.store = collections.deque()
         self.lock = threading.Lock()
+        self.seqno = 0
         self.rpc_server = Server(self)
         self.boot_id = str(uuid.uuid4())
         self.server = None
         self.servers = []
+        self.klog_reader = None
         self.flush = False
         self.datastore = None
+        self.started_at = datetime.utcnow()
         self.rpc = RpcContext()
         self.rpc.register_service_instance('logd.logging', LoggingService(self))
         self.cv = threading.Condition()
@@ -229,6 +232,11 @@ class Context(object):
             server = SyslogServer(path, perm, self)
             server.start()
             self.servers.append(server)
+
+    def init_klog(self):
+        self.klog_reader = KernelLogReader(self)
+        thread = threading.Thread(target=self.klog_reader.process, name='klog reader', daemon=True)
+        thread.start()
 
     def init_flush(self):
         thread = threading.Thread(target=self.do_flush, name='Flush thread', daemon=True)
@@ -255,11 +263,14 @@ class Context(object):
             priority, facility = parse_priority(item['priority'])
             item.update({
                 'id': str(uuid.uuid4()),
+                'seqno': self.seqno,
                 'boot_id': self.boot_id,
                 'priority': priority.name,
                 'facility': facility
             })
             self.store.append(item)
+            self.seqno += 1
+            self.server.broadcast_event('logd.logging.message', item)
 
     def do_flush(self):
         logging.debug('Flush thread initialized')
@@ -297,6 +308,7 @@ class Context(object):
     def main(self):
         setproctitle('logd')
         self.init_syslog_server()
+        self.init_klog()
         self.init_rpc_server()
         self.init_flush()
         checkin()
