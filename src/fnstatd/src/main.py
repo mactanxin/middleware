@@ -480,7 +480,7 @@ class Main(object):
         return self.data_sources[name]
 
     def register_schemas(self):
-        self.client.register_schema('get-stats-params', {
+        self.client.register_schema('GetStatsParams', {
             'type': 'object',
             'additionalProperties': False,
             'properties': {
@@ -491,7 +491,7 @@ class Main(object):
             }
         })
 
-        self.client.register_schema('get-stats-result', {
+        self.client.register_schema('GetStatsResult', {
             'type': 'object',
             'additionalProperties': False,
             'properties': {

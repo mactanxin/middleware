@@ -47,7 +47,7 @@ def calculate_broadcast(address, netmask):
 
 @description("Provides access to global network configuration settings")
 class NetworkProvider(Provider):
-    @returns(h.ref('network-config'))
+    @returns(h.ref('NetworkConfig'))
     def get_config(self):
         node = ConfigNode('network', self.configstore).__getstate__()
         node.update({
@@ -75,7 +75,7 @@ class NetworkProvider(Provider):
 
 @description("Provides access to network interface settings")
 class InterfaceProvider(Provider):
-    @query('network-interface')
+    @query('NetworkInterface')
     @generator
     def query(self, filter=None, params=None):
         ifaces = self.dispatcher.call_sync('networkd.configuration.query_interfaces')
@@ -98,7 +98,7 @@ class InterfaceProvider(Provider):
 
 @description("Provides information on system's network routes")
 class RouteProvider(Provider):
-    @query('network-route')
+    @query('NetworkRoute')
     @generator
     def query(self, filter=None, params=None):
         return self.datastore.query_stream('network.routes', *(filter or []), **(params or {}))
@@ -106,14 +106,14 @@ class RouteProvider(Provider):
 
 @description("Provides access to static host entries database")
 class HostsProvider(Provider):
-    @query('network-host')
+    @query('NetworkHost')
     @generator
     def query(self, filter=None, params=None):
         return self.datastore.query_stream('network.hosts', *(filter or []), **(params or {}))
 
 
 @description("Updates global network configuration settings")
-@accepts(h.ref('network-config'))
+@accepts(h.ref('NetworkConfig'))
 class NetworkConfigureTask(Task):
     @classmethod
     def early_describe(cls):
@@ -152,7 +152,7 @@ class NetworkConfigureTask(Task):
 
 
 @accepts(h.all_of(
-    h.ref('network-interface'),
+    h.ref('NetworkInterface'),
     h.required('type'),
     h.forbidden('id', 'status')
 ))
@@ -324,7 +324,7 @@ class DeleteInterfaceTask(Task):
 
 @description("Alters network interface configuration")
 @accepts(str, h.all_of(
-    h.ref('network-interface'),
+    h.ref('NetworkInterface'),
     h.forbidden('id', 'type', 'status')
 ))
 class ConfigureInterfaceTask(Task):
@@ -525,7 +525,7 @@ class InterfaceRenewTask(Task):
 
 @description("Adds host entry to the database")
 @accepts(h.all_of(
-    h.ref('network-host'),
+    h.ref('NetworkHost'),
     h.required('id', 'addresses')
 ))
 class AddHostTask(Task):
@@ -551,7 +551,7 @@ class AddHostTask(Task):
 
 
 @description("Updates host entry in the database")
-@accepts(str, h.ref('network-host'))
+@accepts(str, h.ref('NetworkHost'))
 class UpdateHostTask(Task):
     @classmethod
     def early_describe(cls):
@@ -602,7 +602,7 @@ class DeleteHostTask(Task):
 
 @description("Adds static route to the system")
 @accepts(h.all_of(
-    h.ref('network-route'),
+    h.ref('NetworkRoute'),
     h.required('id', 'type', 'network', 'netmask', 'gateway')
 ))
 class AddRouteTask(Task):
@@ -669,7 +669,7 @@ class AddRouteTask(Task):
 
 
 @description("Updates static route in the system")
-@accepts(str, h.ref('network-route'))
+@accepts(str, h.ref('NetworkRoute'))
 class UpdateRouteTask(Task):
     @classmethod
     def early_describe(cls):
@@ -805,11 +805,11 @@ def _init(dispatcher, plugin):
         del hub.get_hub().resolver
         hub.get_hub()._resolver = None
 
-    plugin.register_schema_definition('network-interface', {
+    plugin.register_schema_definition('NetworkInterface', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
-            'type': {'$ref': 'network-interface-type'},
+            'type': {'$ref': 'NetworkInterfaceType'},
             'id': {'type': 'string'},
             'name': {'type': ['string', 'null']},
             'created_at': {'type': 'datetime'},
@@ -824,27 +824,27 @@ def _init(dispatcher, plugin):
                 'maximum': 16384
             },
             'media': {'type': ['string', 'null']},
-            'mediaopts': {'$ref': 'network-interface-mediaopts'},
+            'mediaopts': {'$ref': 'NetworkInterfaceMediaopts'},
             'capabilities': {
                 'type': 'object',
                 'additionalProperties': False,
                 'properties': {
-                    'add': {'$ref': 'network-interface-capabilities'},
-                    'del': {'$ref': 'network-interface-capabilities'},
+                    'add': {'$ref': 'NetworkInterfaceCapabilities'},
+                    'del': {'$ref': 'NetworkInterfaceCapabilities'},
                 }
             },
             'aliases': {
                 'type': 'array',
-                'items': {'$ref': 'network-interface-alias'}
+                'items': {'$ref': 'NetworkInterfaceAlias'}
             },
-            'vlan': {'$ref': 'network-interface-vlan-properties'},
-            'lagg': {'$ref': 'network-interface-lagg-properties'},
-            'bridge': {'$ref': 'network-interface-bridge-properties'},
-            'status': {'$ref': 'network-interface-status'}
+            'vlan': {'$ref': 'NetworkInterfaceVlanProperties'},
+            'lagg': {'$ref': 'NetworkInterfaceLaggProperties'},
+            'bridge': {'$ref': 'NetworkInterfaceBridgeProperties'},
+            'status': {'$ref': 'NetworkInterfaceStatus'}
         }
     })
 
-    plugin.register_schema_definition('network-interface-vlan-properties', {
+    plugin.register_schema_definition('NetworkInterfaceVlanProperties', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
@@ -857,11 +857,11 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('network-interface-lagg-properties', {
+    plugin.register_schema_definition('NetworkInterfaceLaggProperties', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
-            'protocol': {'$ref': 'network-aggregation-protocols'},
+            'protocol': {'$ref': 'NetworkAggregationProtocols'},
             'ports': {
                 'type': 'array',
                 'items': {'type': 'string'}
@@ -869,7 +869,7 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('network-interface-bridge-properties', {
+    plugin.register_schema_definition('NetworkInterfaceBridgeProperties', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
@@ -880,54 +880,54 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('network-interface-alias', {
+    plugin.register_schema_definition('NetworkInterfaceAlias', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
-            'type': {'$ref': 'network-interface-alias-type'},
-            'address': {'$ref': 'ip-address'},
+            'type': {'$ref': 'NetworkInterfaceAliasType'},
+            'address': {'$ref': 'IpAddress'},
             'netmask': {'type': 'integer'},
             'broadcast': {
-                'oneOf': [{'$ref': 'ipv4-address'}, {'type': 'null'}]
+                'oneOf': [{'$ref': 'Ipv4Address'}, {'type': 'null'}]
             }
         }
     })
 
-    plugin.register_schema_definition('network-interface-alias-type', {
+    plugin.register_schema_definition('NetworkInterfaceAliasType', {
         'type': 'string',
         'enum': ['INET', 'INET6']
     })
 
-    plugin.register_schema_definition('network-route', {
+    plugin.register_schema_definition('NetworkRoute', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
             'id': {'type': 'string'},
-            'type': {'$ref': 'network-route-type'},
-            'network': {'$ref': 'ip-address'},
+            'type': {'$ref': 'NetworkRouteType'},
+            'network': {'$ref': 'IpAddress'},
             'netmask': {'type': 'integer'},
-            'gateway': {'$ref': 'ip-address'}
+            'gateway': {'$ref': 'IpAddress'}
         }
     })
 
-    plugin.register_schema_definition('network-route-type', {
+    plugin.register_schema_definition('NetworkRouteType', {
         'type': 'string',
         'enum': ['INET', 'INET6']
     })
 
-    plugin.register_schema_definition('network-host', {
+    plugin.register_schema_definition('NetworkHost', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
             'id': {'type': 'string'},
             'addresses': {
                 'type': 'array',
-                'items': {'$ref': 'ip-address'}
+                'items': {'$ref': 'IpAddress'}
             }
         }
     })
 
-    plugin.register_schema_definition('network-config', {
+    plugin.register_schema_definition('NetworkConfig', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
@@ -937,15 +937,15 @@ def _init(dispatcher, plugin):
                 'type': 'object',
                 'additionalProperties': False,
                 'properties': {
-                    'ipv4': {'oneOf': [{'$ref': 'ipv4-address'}, {'type': 'null'}]},
-                    'ipv6': {'oneOf': [{'$ref': 'ipv6-address'}, {'type': 'null'}]}
+                    'ipv4': {'oneOf': [{'$ref': 'Ipv4Address'}, {'type': 'null'}]},
+                    'ipv6': {'oneOf': [{'$ref': 'Ipv6Address'}, {'type': 'null'}]}
                 }
             },
             'dns': {
                 'type': 'object',
                 'additionalProperties': False,
                 'properties': {
-                    'addresses': {'type': 'array', 'items': {'$ref': 'ip-address'}},
+                    'addresses': {'type': 'array', 'items': {'$ref': 'IpAddress'}},
                     'search': {'type': 'array', 'items': {'type': 'string'}}
                 }
             },
@@ -964,35 +964,13 @@ def _init(dispatcher, plugin):
                     'enabled': {'type': 'boolean'},
                     'addresses': {
                         'type': 'array',
-                        'items': {'$ref': 'ip-address'}
+                        'items': {'$ref': 'IpAddress'}
                     }
                 }
             }
         }
     })
 
-    plugin.register_schema_definition('network-status', {
-        'type': 'object',
-        'additionalProperties': False,
-        'properties': {
-            'gateway': {
-                'type': 'object',
-                'additionalProperties': False,
-                'properties': {
-                    'ipv4': {'oneOf': [{'$ref': 'ipv4-address'}, {'type': 'null'}]},
-                    'ipv6': {'oneOf': [{'$ref': 'ipv6-address'}, {'type': 'null'}]}
-                }
-            },
-            'dns': {
-                'type': 'object',
-                'additionalProperties': False,
-                'properties': {
-                    'addresses': {'type': 'array', 'items': {'$ref': 'ip-address'}},
-                    'search': {'type': 'array', 'items': {'type': 'string'}}
-                }
-            }
-        }
-    })
 
     plugin.register_provider('network.config', NetworkProvider)
     plugin.register_provider('network.interface', InterfaceProvider)

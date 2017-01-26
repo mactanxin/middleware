@@ -45,7 +45,7 @@ class DirectoryServiceProvider(Provider):
 
 
 class DirectoryProvider(Provider):
-    @query('directory')
+    @query('Directory')
     @generator
     def query(self, filter=None, params=None):
         def extend(directory):
@@ -62,7 +62,7 @@ class DirectoryProvider(Provider):
         )
 
 
-@accepts(h.ref('directoryservice-config'))
+@accepts(h.ref('DirectoryserviceConfig'))
 class DirectoryServicesConfigureTask(Task):
     @classmethod
     def early_describe(cls):
@@ -85,7 +85,7 @@ class DirectoryServicesConfigureTask(Task):
 
 
 @accepts(
-    h.ref('directory'),
+    h.ref('Directory'),
     h.required('name', 'type'),
     h.forbidden('immutable')
 )
@@ -153,7 +153,7 @@ class DirectoryServiceCreateTask(Task):
             self.datastore.delete('directories', self.id)
 
 
-@accepts(str, h.ref('directory'))
+@accepts(str, h.ref('Directory'))
 class DirectoryServiceUpdateTask(Task):
     @classmethod
     def early_describe(cls):
@@ -229,7 +229,7 @@ class DirectoryServiceDeleteTask(Task):
 
 
 def _init(dispatcher, plugin):
-    plugin.register_schema_definition('directoryservice-config', {
+    plugin.register_schema_definition('DirectoryserviceConfig', {
         'type': 'object',
         'properties': {
             'search_order': {
@@ -242,14 +242,14 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('directory-params', {
+    plugin.register_schema_definition('DirectoryParams', {
         'discriminator': '%type',
         'oneOf': [
-            {'$ref': '{0}-directory-params'.format(name)} for name in ('winbind', 'freeipa', 'ldap', 'nis')
+            {'$ref': '{0}DirectoryParams'.format(name)} for name in ('Winbind', 'Freeipa', 'Ldap', 'Nis')
         ]
     })
 
-    plugin.register_schema_definition('directory',  {
+    plugin.register_schema_definition('Directory',  {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
@@ -275,7 +275,7 @@ def _init(dispatcher, plugin):
                     {'type': 'integer'}
                 ]
             },
-            'parameters': {'$ref': 'directory-params'},
+            'parameters': {'$ref': 'DirectoryParams'},
             'status': {
                 'type': 'object',
                 'additionalProperties': False,

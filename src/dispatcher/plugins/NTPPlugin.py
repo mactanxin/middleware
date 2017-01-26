@@ -38,7 +38,7 @@ logger = logging.getLogger('NTPPlugin')
 
 @description("Provides access to NTP Servers configuration")
 class NTPServersProvider(Provider):
-    @query('ntp-server')
+    @query('NtpServer')
     @generator
     def query(self, filter=None, params=None):
         return self.datastore.query_stream('ntpservers', *(filter or []), **(params or {}))
@@ -78,7 +78,7 @@ class NTPServerSyncNowTask(Task):
 
 @description("Adds new NTP Server")
 @accepts(h.all_of(
-    h.ref('ntp-server'),
+    h.ref('NtpServer'),
     h.required('address'),
 ), bool)
 class NTPServerCreateTask(Task):
@@ -135,7 +135,7 @@ class NTPServerCreateTask(Task):
 
 
 @description("Updates NTP Server")
-@accepts(str, h.ref('ntp-server'), bool)
+@accepts(str, h.ref('NtpServer'), bool)
 class NTPServerUpdateTask(Task):
     @classmethod
     def early_describe(cls):
@@ -228,7 +228,7 @@ class NTPServerDeleteTask(Task):
 
 
 def _init(dispatcher, plugin):
-    plugin.register_schema_definition('ntp-server', {
+    plugin.register_schema_definition('NtpServer', {
         'type': 'object',
         'properties': {
             'id': {'type': 'string'},

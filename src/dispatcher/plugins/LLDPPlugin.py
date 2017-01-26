@@ -38,14 +38,14 @@ logger = logging.getLogger('LLDPPlugin')
 class LLDPProvider(Provider):
     @private
     @accepts()
-    @returns(h.ref('service-lldp'))
+    @returns(h.ref('ServiceLldp'))
     def get_config(self):
         return ConfigNode('service.lldp', self.configstore).__getstate__()
 
 
 @private
 @description('Configure LLDP service')
-@accepts(h.ref('service-lldp'))
+@accepts(h.ref('ServiceLldp'))
 class LLDPConfigureTask(Task):
     @classmethod
     def early_describe(cls):
@@ -85,11 +85,11 @@ def _depends():
 
 def _init(dispatcher, plugin):
     # Register schemas
-    plugin.register_schema_definition('service-lldp', {
+    plugin.register_schema_definition('ServiceLldp', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
-            'type': {'enum': ['service-lldp']},
+            'type': {'enum': ['ServiceLldp']},
             'enable': {'type': 'boolean'},
             'save_description': {'type': 'boolean'},
             'country_code': {'type': ['string', 'null']},

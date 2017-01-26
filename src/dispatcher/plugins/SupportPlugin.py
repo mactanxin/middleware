@@ -103,7 +103,7 @@ class SupportProvider(Provider):
 @description("Submits a new support ticket")
 @accepts(
     h.all_of(
-        h.ref('support-ticket'),
+        h.ref('SupportTicket'),
         h.required('subject', 'description', 'category', 'type', 'username', 'password'))
 )
 class SupportSubmitTask(Task):
@@ -193,7 +193,7 @@ def _depends():
 
 
 def _init(dispatcher, plugin):
-    plugin.register_schema_definition('support-ticket', {
+    plugin.register_schema_definition('SupportTicket', {
         'type': 'object',
         'properties': {
             'username': {'type': 'string'},

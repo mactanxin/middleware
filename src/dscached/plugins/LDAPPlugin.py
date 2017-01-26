@@ -65,7 +65,7 @@ class LDAPPlugin(DirectoryServicePlugin):
     @classmethod
     def normalize_parameters(cls, parameters):
         return normalize(parameters, {
-            '%type': 'ldap-directory-params',
+            '%type': 'LdapDirectoryParams',
             'user_suffix': 'ou=users',
             'group_suffix': 'ou=groups',
             'krb_principal': None,
@@ -323,16 +323,16 @@ class LDAPPlugin(DirectoryServicePlugin):
 def _init(context):
     context.register_plugin('ldap', LDAPPlugin)
 
-    context.register_schema('ldap-directory-params-encryption', {
+    context.register_schema('LdapDirectoryParamsEncryption', {
         'type': 'string',
         'enum': ['OFF', 'SSL', 'TLS']
     })
 
-    context.register_schema('ldap-directory-params', {
+    context.register_schema('LdapDirectoryParams', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
-            '%type': {'enum': ['ldap-directory-params']},
+            '%type': {'enum': ['LdapDirectoryParams']},
             'server': {'type': 'string'},
             'base_dn': {'type': 'string'},
             'bind_dn': {'type': ['string', 'null']},
@@ -340,12 +340,12 @@ def _init(context):
             'user_suffix': {'type': ['string', 'null']},
             'group_suffix': {'type': ['string', 'null']},
             'krb_principal': {'type': ['string', 'null']},
-            'encryption': {'$ref': 'ldap-directory-params-encryption'},
+            'encryption': {'$ref': 'LdapDirectoryParamsEncryption'},
             'certificate': {'type': ['string', 'null']},
             'verify_certificate': {'type': 'boolean'}
         }
     })
 
-    context.register_schema('ldap-directory-status', {
+    context.register_schema('LdapDirectoryStatus', {
 
     })

@@ -59,7 +59,7 @@ temp_pubkeys = []
 
 @description('Provides information about known FreeNAS peers')
 class PeerFreeNASProvider(Provider):
-    @query('peer')
+    @query('Peer')
     @generator
     def query(self, filter=None, params=None):
         return q.query(
@@ -71,7 +71,7 @@ class PeerFreeNASProvider(Provider):
 
     @private
     @accepts(str)
-    @returns(h.ref('peer-status'))
+    @returns(h.ref('PeerStatus'))
     def get_status(self, id):
         peer = self.dispatcher.call_sync('peer.query', [('id', '=', id), ('type', '=', 'freenas')], {'single': True})
         if not peer:
@@ -118,7 +118,7 @@ class PeerFreeNASProvider(Provider):
                 self.dispatcher.submit_task('peer.freenas.create', {
                     'type': 'freenas',
                     'credentials': {
-                        '%type': 'freenas-credentials',
+                        '%type': 'FreenasCredentials',
                         'address': address,
                         'port': port
                     }
@@ -178,7 +178,7 @@ class PeerFreeNASProvider(Provider):
 
 @description('Exchanges SSH keys with remote FreeNAS machine')
 @accepts(h.all_of(
-    h.ref('peer'),
+    h.ref('Peer'),
     h.required('type', 'credentials'),
     h.forbidden('name')
 ))
@@ -307,7 +307,7 @@ class FreeNASPeerCreateTask(Task):
                     raise TaskException(errno.EEXIST, 'Peer entry of {0} already exists at {1}'.format(hostname, remote))
 
                 peer['credentials'] = {
-                    '%type': 'freenas-credentials',
+                    '%type': 'FreenasCredentials',
                     'pubkey': remote_pub_key,
                     'hostkey': remote_host_key,
                     'port': port,
@@ -329,7 +329,7 @@ class FreeNASPeerCreateTask(Task):
                 peer['id'] = hostid
                 peer['name'] = remote_peer_name
                 peer['credentials'] = {
-                    '%type': 'freenas-credentials',
+                    '%type': 'FreenasCredentials',
                     'pubkey': local_pub_key,
                     'hostkey': local_host_key,
                     'port': local_ssh_config['port'],
@@ -358,7 +358,7 @@ class FreeNASPeerCreateTask(Task):
 
 @private
 @description('Creates FreeNAS peer entry in database')
-@accepts(h.ref('peer'), str, bool)
+@accepts(h.ref('Peer'), str, bool)
 class FreeNASPeerCreateLocalTask(Task):
     @classmethod
     def early_describe(cls):
@@ -498,7 +498,7 @@ class FreeNASPeerDeleteLocalTask(Task):
 
 @private
 @description('Updates FreeNAS peer entry in database')
-@accepts(str, h.ref('peer'))
+@accepts(str, h.ref('Peer'))
 class FreeNASPeerUpdateTask(Task):
     @classmethod
     def early_describe(cls):
@@ -631,10 +631,10 @@ def _init(dispatcher, plugin):
     auth_code_lifetime = dispatcher.configstore.get('peer.freenas.token_lifetime')
 
     # Register schemas
-    plugin.register_schema_definition('freenas-credentials', {
+    plugin.register_schema_definition('FreenasCredentials', {
         'type': 'object',
         'properties': {
-            '%type': {'enum': ['freenas-credentials']},
+            '%type': {'enum': ['FreenasCredentials']},
             'address': {'type': 'string'},
             'port': {'type': 'number'},
             'pubkey': {'type': 'string'},
@@ -644,10 +644,10 @@ def _init(dispatcher, plugin):
     })
 
     # Register schemas
-    plugin.register_schema_definition('freenas-initial-credentials', {
+    plugin.register_schema_definition('FreenasInitialCredentials', {
         'type': 'object',
         'properties': {
-            '%type': {'enum': ['freenas-initial-credentials']},
+            '%type': {'enum': ['FreenasInitialCredentials']},
             'username': {'type': ['string', 'null']},
             'password': {'type': ['string', 'null']},
             'auth_code': {'type': ['integer', 'null']},

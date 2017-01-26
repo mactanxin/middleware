@@ -41,14 +41,14 @@ logger = logging.getLogger('SSHPlugin')
 class SSHProvider(Provider):
     @private
     @accepts()
-    @returns(h.ref('service-sshd'))
+    @returns(h.ref('ServiceSshd'))
     def get_config(self):
         return exclude(ConfigNode('service.sshd', self.configstore).__getstate__(), 'keys')
 
 
 @private
 @description('Configure SSH service')
-@accepts(h.ref('service-sshd'))
+@accepts(h.ref('ServiceSshd'))
 class SSHConfigureTask(Task):
     @classmethod
     def early_describe(cls):
@@ -89,10 +89,10 @@ def _depends():
 
 def _init(dispatcher, plugin):
     # Register schemas
-    plugin.register_schema_definition('service-sshd', {
+    plugin.register_schema_definition('ServiceSshd', {
         'type': 'object',
         'properties': {
-            'type': {'enum': ['service-sshd']},
+            'type': {'enum': ['ServiceSshd']},
             'enable': {'type': 'boolean'},
             'port': {
                 'type': 'integer',
@@ -105,20 +105,20 @@ def _init(dispatcher, plugin):
             'allow_password_auth': {'type': 'boolean'},
             'allow_port_forwarding': {'type': 'boolean'},
             'compression': {'type': 'boolean'},
-            'sftp_log_level': {'$ref': 'service-sshd-sftploglevel'},
-            'sftp_log_facility': {'$ref': 'service-sshd-sftplogfacility'},
+            'sftp_log_level': {'$ref': 'ServiceSshdSftploglevel'},
+            'sftp_log_facility': {'$ref': 'ServiceSshdSftplogfacility'},
             'auxiliary': {'type': ['string', 'null']},
         },
         'additionalProperties': False,
     })
 
-    plugin.register_schema_definition('service-sshd-sftploglevel', {
+    plugin.register_schema_definition('ServiceSshdSftploglevel', {
         'type': 'string',
         'enum': ['QUIET', 'FATAL', 'ERROR', 'INFO',
                  'VERBOSE', 'DEBUG', 'DEBUG2', 'DEBUG3']
     })
 
-    plugin.register_schema_definition('service-sshd-sftplogfacility', {
+    plugin.register_schema_definition('ServiceSshdSftplogfacility', {
         'type': 'string',
         'enum': [ 'DAEMON', 'USER', 'AUTH', 'LOCAL0',
                   'LOCAL1', 'LOCAL2', 'LOCAL3', 'LOCAL4', 'LOCAL5', 'LOCAL6', 'LOCAL7']

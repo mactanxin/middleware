@@ -130,7 +130,7 @@ class ISCSIPortalProvider(Provider):
 
 
 @private
-@accepts(h.ref('share-iscsi'))
+@accepts(h.ref('ShareIscsi'))
 @description("Adds new iSCSI share")
 class CreateISCSIShareTask(Task):
     @classmethod
@@ -182,7 +182,7 @@ class CreateISCSIShareTask(Task):
 
 
 @private
-@accepts(str, h.ref('share-iscsi'))
+@accepts(str, h.ref('ShareIscsi'))
 @description("Updates existing iSCSI share")
 class UpdateISCSIShareTask(Task):
     @classmethod
@@ -245,7 +245,7 @@ class DeleteiSCSIShareTask(Task):
 
 
 @private
-@accepts(h.ref('share-iscsi'))
+@accepts(h.ref('ShareIscsi'))
 @description("Imports existing iSCSI share")
 class ImportiSCSIShareTask(CreateISCSIShareTask):
     @classmethod
@@ -263,7 +263,7 @@ class ImportiSCSIShareTask(CreateISCSIShareTask):
 
 
 @accepts(h.all_of(
-    h.ref('share-iscsi-target'),
+    h.ref('ShareIscsiTarget'),
     h.required('id')
 ))
 @description('Creates iSCSI share target')
@@ -301,7 +301,7 @@ class CreateISCSITargetTask(Task):
         return id
 
 
-@accepts(str, h.ref('share-iscsi-target'))
+@accepts(str, h.ref('ShareIscsiTarget'))
 @description('Updates iSCSI share target')
 class UpdateISCSITargetTask(Task):
     @classmethod
@@ -368,7 +368,7 @@ class DeleteISCSITargetTask(Task):
 
 @accepts(
     h.all_of(
-        h.ref('share-iscsi-auth'),
+        h.ref('ShareIscsiAuth'),
         h.required('type')
     )
 )
@@ -402,7 +402,7 @@ class CreateISCSIAuthGroupTask(Task):
         return id
 
 
-@accepts(str, h.ref('share-iscsi-auth'))
+@accepts(str, h.ref('ShareIscsiAuth'))
 @description('Updates iSCSI auth group')
 class UpdateISCSIAuthGroupTask(Task):
     @classmethod
@@ -456,7 +456,7 @@ class DeleteISCSIAuthGroupTask(Task):
         })
 
 
-@accepts(h.ref('share-iscsi-portal'))
+@accepts(h.ref('ShareIscsiPortal'))
 @description('Creates iSCSI portal')
 class CreateISCSIPortalTask(Task):
     @classmethod
@@ -490,7 +490,7 @@ class CreateISCSIPortalTask(Task):
         return id
 
 
-@accepts(str, h.ref('share-iscsi-portal'))
+@accepts(str, h.ref('ShareIscsiPortal'))
 @description('Updates iSCSI portal')
 class UpdateISCSIPortalTask(Task):
     @classmethod
@@ -567,16 +567,16 @@ def _metadata():
 
 
 def _init(dispatcher, plugin):
-    plugin.register_schema_definition('share-iscsi', {
+    plugin.register_schema_definition('ShareIscsi', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
-            '%type': {'enum': ['share-iscsi']},
+            '%type': {'enum': ['ShareIscsi']},
             'serial': {'type': 'string'},
             'ctl_lun': {'type': 'integer'},
             'naa': {'type': 'string'},
             'size': {'type': 'integer'},
-            'block_size': {'$ref': 'share-iscsi-blocksize'},
+            'block_size': {'$ref': 'ShareIscsiBlocksize'},
             'physical_block_size': {'type': 'boolean'},
             'available_space_threshold': {'type': 'integer'},
             'read_only': {'type': 'boolean'},
@@ -585,21 +585,21 @@ def _init(dispatcher, plugin):
             'vendor_id': {'type': ['string', 'null']},
             'product_id': {'type': ['string', 'null']},
             'device_id': {'type': ['string', 'null']},
-            'rpm': {'$ref': 'share-iscsi-rpm'}
+            'rpm': {'$ref': 'ShareIscsiRpm'}
         }
     })
 
-    plugin.register_schema_definition('share-iscsi-blocksize', {
+    plugin.register_schema_definition('ShareIscsiBlocksize', {
         'type': 'integer',
         'enum': [512, 1024, 2048, 4096]
     })
 
-    plugin.register_schema_definition('share-iscsi-rpm', {
+    plugin.register_schema_definition('ShareIscsiRpm', {
         'type': 'string',
         'enum': ['UNKNOWN', 'SSD', '5400', '7200', '10000', '15000']
     })
 
-    plugin.register_schema_definition('share-iscsi-target', {
+    plugin.register_schema_definition('ShareIscsiTarget', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
@@ -622,7 +622,7 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('share-iscsi-portal', {
+    plugin.register_schema_definition('ShareIscsiPortal', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
@@ -630,11 +630,11 @@ def _init(dispatcher, plugin):
             'tag': {'type': 'integer'},
             'description': {'type': 'string'},
             'discovery_auth_group': {'type': 'string'},
-            'listen': {'$ref': 'share-iscsi-portal-listen'}
+            'listen': {'$ref': 'ShareIscsiPortalListen'}
         }
     })
 
-    plugin.register_schema_definition('share-iscsi-portal-listen', {
+    plugin.register_schema_definition('ShareIscsiPortalListen', {
         'type': 'array',
         'items': {
             'type': 'object',
@@ -650,16 +650,16 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('share-iscsi-auth', {
+    plugin.register_schema_definition('ShareIscsiAuth', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
             'id': {'type': 'string'},
             'description': {'type': 'string'},
-            'type': {'$ref': 'share-iscsi-auth-type'},
+            'type': {'$ref': 'ShareIscsiAuthType'},
             'users': {
                 'type': ['array', 'null'],
-                'items': {'$ref': 'share-iscsi-user'}
+                'items': {'$ref': 'ShareIscsiUser'}
             },
             'initiators': {
                 'type': ['array', 'null'],
@@ -672,12 +672,12 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('share-iscsi-auth-type', {
+    plugin.register_schema_definition('ShareIscsiAuthType', {
         'type': 'string',
         'enum': ['NONE', 'DENY', 'CHAP', 'CHAP_MUTUAL']
     })
 
-    plugin.register_schema_definition('share-iscsi-user', {
+    plugin.register_schema_definition('ShareIscsiUser', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {

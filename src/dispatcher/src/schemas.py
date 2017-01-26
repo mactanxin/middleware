@@ -27,7 +27,7 @@
 
 
 def register_general_purpose_schemas(dispatcher):
-    dispatcher.register_schema_definition('ip-address', {
+    dispatcher.register_schema_definition('IpAddress', {
         'anyOf': [
             {
                 'type': 'string',
@@ -40,27 +40,27 @@ def register_general_purpose_schemas(dispatcher):
         ]
     })
 
-    dispatcher.register_schema_definition('ipv4-address', {
+    dispatcher.register_schema_definition('Ipv4Address', {
         'type': 'string',
         'format': 'ipv4'
     })
 
-    dispatcher.register_schema_definition('ipv6-address', {
+    dispatcher.register_schema_definition('Ipv6Address', {
         'type': 'string',
         'format': 'ipv6'
     })
 
-    dispatcher.register_schema_definition('iso-datetime', {
+    dispatcher.register_schema_definition('IsoDatetime', {
         'type': 'string',
         'format': 'date-time'
     })
 
-    dispatcher.register_schema_definition('email', {
+    dispatcher.register_schema_definition('Email', {
         'type': 'string',
         'format': 'email'
     })
 
-    dispatcher.register_schema_definition('validation-error', {
+    dispatcher.register_schema_definition('ValidationError', {
         'type': 'array',
         'items': {
             'type': 'object',
@@ -76,7 +76,7 @@ def register_general_purpose_schemas(dispatcher):
         }
     })
 
-    dispatcher.register_schema_definition('error', {
+    dispatcher.register_schema_definition('Error', {
         'type': 'object',
         'properties': {
             'type': {'type': 'string'},
@@ -86,13 +86,13 @@ def register_general_purpose_schemas(dispatcher):
             'extra': {
                 'oneOf': [
                     {'type': 'null'},
-                    {'$ref': 'validation-error'}
+                    {'$ref': 'ValidationError'}
                 ]
             }
         }
     })
 
-    dispatcher.register_schema_definition('rusage', {
+    dispatcher.register_schema_definition('Rusage', {
         'type': 'object',
         'properties': {
             'ru_oublock': {'type': 'number'},
@@ -114,7 +114,7 @@ def register_general_purpose_schemas(dispatcher):
         }
     })
 
-    dispatcher.register_schema_definition('task', {
+    dispatcher.register_schema_definition('Task', {
         'type': 'object',
         'properties': {
             'name': {'type': 'string'},
@@ -144,23 +144,23 @@ def register_general_purpose_schemas(dispatcher):
             'user': {'type': ['string', 'null']},
             'session': {'type': ['integer', 'null']},
             'resources': {'type': ['array', 'null']},
-            'created_at': {'$ref': 'iso-datetime'},
+            'created_at': {'$ref': 'IsoDatetime'},
             'started_at': {
                 'oneOf': [
                     {'type': 'null'},
-                    {'$ref': 'iso-datetime'}
+                    {'$ref': 'IsoDatetime'}
                 ]
             },
             'updated_at': {
                 'oneOf': [
                     {'type': 'null'},
-                    {'$ref': 'iso-datetime'}
+                    {'$ref': 'IsoDatetime'}
                 ]
             },
             'finished_at': {
                 'oneOf': [
                     {'type': 'null'},
-                    {'$ref': 'iso-datetime'}
+                    {'$ref': 'IsoDatetime'}
                 ]
             },
             'state': {

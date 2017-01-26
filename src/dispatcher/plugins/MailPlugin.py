@@ -47,11 +47,11 @@ logger = logging.getLogger('MailPlugin')
 @description("Provides Information about the mail configuration")
 class MailProvider(Provider):
 
-    @returns(h.ref('mail'))
+    @returns(h.ref('Mail'))
     def get_config(self):
         return ConfigNode('mail', self.configstore)
 
-    @accepts(h.ref('mail-message'), h.ref('mail'))
+    @accepts(h.ref('MailMessage'), h.ref('Mail'))
     def send(self, mailmessage, mail=None):
 
         if mail is None:
@@ -127,7 +127,7 @@ class MailProvider(Provider):
             raise RpcException(errno.EFAULT, 'Unexpected error')
 
 
-@accepts(h.ref('mail'))
+@accepts(h.ref('Mail'))
 @description('Updates mail configuration')
 class MailConfigureTask(Task):
     @classmethod
@@ -161,26 +161,26 @@ class MailConfigureTask(Task):
 
 
 def _init(dispatcher, plugin):
-    plugin.register_schema_definition('mail-encryption-type', {
+    plugin.register_schema_definition('MailEncryptionType', {
         'type': 'string',
         'enum': ['PLAIN', 'TLS', 'SSL'],
     })
 
-    plugin.register_schema_definition('mail', {
+    plugin.register_schema_definition('Mail', {
         'type': 'object',
         'properties': {
             'from': {'type': 'string'},
             'server': {'type': 'string'},
             'port': {'type': 'integer'},
             'auth': {'type': 'boolean'},
-            'encryption': {'$ref': 'mail-encryption-type'},
+            'encryption': {'$ref': 'MailEncryptionType'},
             'user': {'type': ['string', 'null']},
             'pass': {'type': ['string', 'null']},
         },
         'additionalProperties': False,
     })
 
-    plugin.register_schema_definition('mail-message', {
+    plugin.register_schema_definition('MailMessage', {
         'type': 'object',
         'properties': {
             'from': {'type': 'string'},

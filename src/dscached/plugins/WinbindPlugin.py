@@ -67,8 +67,8 @@ def yesno(val):
     return 'yes' if val else 'no'
 
 
-@params(h.ref('winbind-directory-params'))
-@status(h.ref('winbind-directory-status'))
+@params(h.ref('WinbindDirectoryParams'))
+@status(h.ref('WinbindDirectoryStatus'))
 class WinbindPlugin(DirectoryServicePlugin):
     def __init__(self, context):
         self.context = context
@@ -127,7 +127,7 @@ class WinbindPlugin(DirectoryServicePlugin):
     @staticmethod
     def normalize_parameters(parameters):
         return normalize(parameters, {
-            '%type': 'winbind-directory-params',
+            '%type': 'WinbindDirectoryParams',
             'realm': '',
             'username': 'Administrator',
             'password': None,
@@ -609,16 +609,16 @@ class WinbindPlugin(DirectoryServicePlugin):
 def _init(context):
     context.register_plugin('winbind', WinbindPlugin)
 
-    context.register_schema('winbind-directory-params-sasl-wrapping', {
+    context.register_schema('WinbindDirectoryParamsSaslWrapping', {
         'type': 'string',
         'enum': ['PLAIN', 'SIGN', 'SEAL']
     })
 
-    context.register_schema('winbind-directory-params', {
+    context.register_schema('WinbindDirectoryParams', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
-            '%type': {'enum': ['winbind-directory-params']},
+            '%type': {'enum': ['WinbindDirectoryParams']},
             'realm': {'type': 'string'},
             'username': {'type': ['string', 'null']},
             'password': {'type': ['string', 'null']},
@@ -627,15 +627,15 @@ def _init(context):
             'dc_address': {'type': ['string', 'null']},
             'gcs_address': {'type': ['string', 'null']},
             'allow_dns_updates': {'type': 'boolean'},
-            'sasl_wrapping': {'$ref': 'winbind-directory-params-sasl-wrapping'}
+            'sasl_wrapping': {'$ref': 'WinbindDirectoryParamsSaslWrapping'}
         }
     })
 
-    context.register_schema('winbind-directory-status', {
+    context.register_schema('WinbindDirectoryStatus', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
-            'type': {'enum': ['winbind-directory-status']},
+            'type': {'enum': ['WinbindDirectoryStatus']},
             'joined': {'type': 'boolean'},
             'domain_controller': {'type': 'string'},
             'server_time': {'type': 'datetime'}

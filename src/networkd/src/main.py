@@ -1070,62 +1070,62 @@ class Main(object):
         self.rtsock_thread.start()
 
     def register_schemas(self):
-        self.client.register_schema('network-aggregation-protocols', {
+        self.client.register_schema('NetworkAggregationProtocols', {
             'type': 'string',
             'enum': list(netif.AggregationProtocol.__members__.keys())
         })
 
-        self.client.register_schema('network-lagg-port-flags', {
+        self.client.register_schema('NetworkLaggPortFlags', {
             'type': 'array',
-            'items': {'$ref': 'network-lagg-port-flags-items'}
+            'items': {'$ref': 'NetworkLaggPortFlagsItems'}
         })
 
-        self.client.register_schema('network-lagg-port-flags-items', {
+        self.client.register_schema('NetworkLaggPortFlagsItems', {
             'type': 'string',
             'enum': list(netif.LaggPortFlags.__members__.keys())
         })
 
-        self.client.register_schema('network-interface-flags', {
+        self.client.register_schema('NetworkInterfaceFlags', {
             'type': 'array',
-            'items': {'$ref': 'network-interface-flags-items'}
+            'items': {'$ref': 'NetworkInterfaceFlagsItems'}
         })
 
-        self.client.register_schema('network-interface-flags-items', {
+        self.client.register_schema('NetworkInterfaceFlagsItems', {
             'type': 'string',
             'enum': list(netif.InterfaceFlags.__members__.keys())
         })
 
-        self.client.register_schema('network-interface-capabilities', {
+        self.client.register_schema('NetworkInterfaceCapabilities', {
             'type': 'array',
-            'items': {'$ref': 'network-interface-capabilities-items'}
+            'items': {'$ref': 'NetworkInterfaceCapabilitiesItems'}
         })
 
-        self.client.register_schema('network-interface-capabilities-items', {
+        self.client.register_schema('NetworkInterfaceCapabilitiesItems', {
             'type': 'string',
             'enum': list(netif.InterfaceCapability.__members__.keys())
         })
 
-        self.client.register_schema('network-interface-mediaopts', {
+        self.client.register_schema('NetworkInterfaceMediaopts', {
             'type': 'array',
-            'items': {'$ref': 'network-interface-mediaopts-items'}
+            'items': {'$ref': 'NetworkInterfaceMediaoptsItems'}
         })
 
-        self.client.register_schema('network-interface-mediaopts-items', {
+        self.client.register_schema('NetworkInterfaceMediaoptsItems', {
             'type': 'string',
             'enum': list(netif.InterfaceMediaOption.__members__.keys())
         })
 
-        self.client.register_schema('network-interface-nd6-flag', {
+        self.client.register_schema('NetworkInterfaceNd6Flag', {
             'type': 'array',
-            'items': {'$ref': 'network-interface-nd6-flag-items'}
+            'items': {'$ref': 'NetworkInterfaceNd6FlagItems'}
         })
 
-        self.client.register_schema('network-interface-nd6-flag-items', {
+        self.client.register_schema('NetworkInterfaceNd6FlagItems', {
             'type': 'string',
             'enum': list(netif.NeighborDiscoveryFlags.__members__.keys())
         })
 
-        self.client.register_schema('network-interface-type', {
+        self.client.register_schema('NetworkInterfaceType', {
             'type': 'string',
             'enum': [
                 'LOOPBACK',
@@ -1136,7 +1136,7 @@ class Main(object):
             ]
         })
 
-        self.client.register_schema('network-interface-dhcp-state', {
+        self.client.register_schema('NetworkInterfaceDhcpState', {
             'type': 'string',
             'enum': [
                 'INIT',
@@ -1150,29 +1150,29 @@ class Main(object):
             ]
         })
 
-        self.client.register_schema('network-interface-status', {
+        self.client.register_schema('NetworkInterfaceStatus', {
             'type': 'object',
             'properties': {
                 'name': {'type': 'string'},
-                'link_state': {'$ref': 'network-interface-status-linkstate'},
+                'link_state': {'$ref': 'NetworkInterfaceStatusLinkstate'},
                 'link_address': {'type': 'string'},
                 'mtu': {'type': 'integer'},
                 'media_type': {'type': 'string'},
                 'media_subtype': {'type': 'string'},
                 'active_media_type': {'type': 'string'},
                 'active_media_subtype': {'type': 'string'},
-                'media_options': {'$ref': 'network-interface-mediaopts'},
+                'media_options': {'$ref': 'NetworkInterfaceMediaopts'},
                 'supported_media': {
                     'type': 'array',
                     'items': {'type': 'string'}
                 },
                 'cloned': {'type': 'boolean'},
-                'capabilities': {'$ref': 'network-interface-capabilities'},
-                'flags': {'$ref': 'network-interface-flags'},
+                'capabilities': {'$ref': 'NetworkInterfaceCapabilities'},
+                'flags': {'$ref': 'NetworkInterfaceFlags'},
                 'dhcp': {
                     'type': 'object',
                     'properties': {
-                        'state': {'$ref': 'network-interface-dhcp-state'},
+                        'state': {'$ref': 'NetworkInterfaceDhcpState'},
                         'server_address': {'type': 'string'},
                         'server_name': {'type': 'string'},
                         'lease_starts_at': {'type': 'datetime'},
@@ -1181,11 +1181,11 @@ class Main(object):
                 },
                 'aliases': {
                     'type': 'array',
-                    'items': {'$ref': 'network-interface-alias'}
+                    'items': {'$ref': 'NetworkInterfaceAlias'}
                 },
                 'nd6_flags': {
                     'type': 'array',
-                    'items': {'$ref': 'network-interface-nd6-flag'}
+                    'items': {'$ref': 'NetworkInterfaceNd6Flag'}
                 },
                 'ports': {
                     'oneOf': [
@@ -1196,7 +1196,7 @@ class Main(object):
                                 'type': 'object',
                                 'properties': {
                                     'name': {'type': 'string'},
-                                    'flags': {'$ref': 'network-lagg-port-flags'}
+                                    'flags': {'$ref': 'NetworkLaggPortFlags'}
                                 }
                             }
                         }
@@ -1216,7 +1216,7 @@ class Main(object):
             }
         })
 
-        self.client.register_schema('network-interface-status-linkstate', {
+        self.client.register_schema('NetworkInterfaceStatusLinkstate', {
             'type': 'string',
             'enum': list(netif.InterfaceLinkState.__members__.keys())
         })

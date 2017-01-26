@@ -231,11 +231,11 @@ def _metadata():
 
 
 def _init(dispatcher, plugin):
-    plugin.register_schema_definition('backup-ssh', {
+    plugin.register_schema_definition('BackupSsh', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
-            '%type': {'enum': ['backup-ssh']},
+            '%type': {'enum': ['BackupSsh']},
             'peer': {'type': 'string'},
             'directory': {'type': 'string'}
         }

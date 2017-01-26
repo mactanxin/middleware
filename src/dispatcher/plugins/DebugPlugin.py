@@ -42,7 +42,7 @@ logger = logging.getLogger('DebugPlugin')
 
 
 class RemoteDebugProvider(Provider):
-    @returns(h.ref('remote-debug-status'))
+    @returns(h.ref('RemoteDebugStatus'))
     def get_status(self):
         return self.dispatcher.call_sync('debugd.management.status')
 
@@ -208,7 +208,7 @@ def collect_debug(dispatcher):
 
 
 def _init(dispatcher, plugin):
-    plugin.register_schema_definition('remote-debug-status', {
+    plugin.register_schema_definition('RemoteDebugStatus', {
         'type': 'object',
         'additionalProperties': False,
         'readOnly': True,

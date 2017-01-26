@@ -260,11 +260,11 @@ def _metadata():
 
 
 def _init(dispatcher, plugin):
-    plugin.register_schema_definition('backup-s3', {
+    plugin.register_schema_definition('BackupS3', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
-            '%type': {'enum': ['backup-s3']},
+            '%type': {'enum': ['BackupS3']},
             'peer': {'type': 'string'},
             'bucket': {'type': ['string', 'null']},
             'folder': {'type': ['string', 'null']}

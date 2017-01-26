@@ -55,7 +55,7 @@ class BootPoolProvider(Provider):
 
 @description("Provides information on Boot Environments")
 class BootEnvironmentsProvider(Provider):
-    @query('boot-environment')
+    @query('BootEnvironment')
     @generator
     def query(self, filter=None, params=None):
         return bootenvs.query(*(filter or []), stream=True, **(params or {}))
@@ -112,7 +112,7 @@ class BootEnvironmentActivate(Task):
 
 
 @description("Renames the given Boot Environment with the alternate name provieded")
-@accepts(str, h.ref('boot-environment'))
+@accepts(str, h.ref('BootEnvironment'))
 class BootEnvironmentUpdate(Task):
     @classmethod
     def early_describe(cls):
@@ -290,7 +290,7 @@ def _init(dispatcher, plugin):
     boot_pool_name = dispatcher.configstore.get('system.boot_pool_name')
     bootenvs = EventCacheStore(dispatcher, 'boot.environment')
 
-    plugin.register_schema_definition('boot-environment', {
+    plugin.register_schema_definition('BootEnvironment', {
         'type': 'object',
         'properties': {
             'id': {'type': 'string'},

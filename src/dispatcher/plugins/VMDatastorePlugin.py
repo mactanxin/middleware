@@ -35,7 +35,7 @@ from freenas.utils import query as q, first_or_default
 
 @description('Provides information about VM datastores')
 class DatastoreProvider(Provider):
-    @query('vm-datastore')
+    @query('VmDatastore')
     @generator
     def query(self, filter=None, params=None):
         drivers = self.supported_drivers()
@@ -159,7 +159,7 @@ class DatastoreProvider(Provider):
 
     @private
     @accepts(str, str)
-    @returns(h.ref('vm-datastore-path-type'))
+    @returns(h.ref('VmDatastorePathType'))
     def get_path_type(self, id, path):
         driver = self.get_driver(id)
         return self.dispatcher.call_sync('vm.datastore.{0}.get_path_type'.format(driver), id, normpath(path))
@@ -201,7 +201,7 @@ class DatastoreBaseTask(ProgressTask):
         return res
 
 
-@accepts(h.ref('vm-datastore'))
+@accepts(h.ref('VmDatastore'))
 @returns(str)
 @description('Creates a VM datastore')
 class DatastoreCreateTask(DatastoreBaseTask):
@@ -226,7 +226,7 @@ class DatastoreCreateTask(DatastoreBaseTask):
         return id
 
 
-@accepts(str, h.ref('vm-datastore'))
+@accepts(str, h.ref('VmDatastore'))
 @returns(str)
 @description('Updates a VM datastore')
 class DatastoreUpdateTask(DatastoreBaseTask):
@@ -643,26 +643,26 @@ def normpath(p):
 
 def _init(dispatcher, plugin):
     def update_datastore_properties_schema():
-        plugin.register_schema_definition('vm-datastore-properties', {
+        plugin.register_schema_definition('VmDatastoreProperties', {
             'discriminator': '%type',
             'oneOf': [
-                {'$ref': 'vm-datastore-properties-{0}'.format(name)}
+                {'$ref': 'VmDatastoreProperties{0}'.format(name.title())}
                 for name
                 in dispatcher.call_sync('vm.datastore.supported_drivers')
             ]
         })
 
-    plugin.register_schema_definition('vm-datastore-state', {
+    plugin.register_schema_definition('VmDatastoreState', {
         'type': 'string',
         'enum': ['ONLINE', 'OFFLINE']
     })
 
-    plugin.register_schema_definition('vm-datastore-path-type', {
+    plugin.register_schema_definition('VmDatastorePathType', {
         'type': 'string',
         'enum': ['BLOCK_DEVICE', 'DIRECTORY', 'FILE', 'SNAPSHOT']
     })
 
-    plugin.register_schema_definition('vm-datastore-capabilities', {
+    plugin.register_schema_definition('VmDatastoreCapabilities', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
@@ -671,16 +671,16 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('vm-datastore', {
+    plugin.register_schema_definition('VmDatastore', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
             'id': {'type': 'string'},
             'name': {'type': 'string'},
             'type': {'type': 'string'},
-            'state': {'$ref': 'vm-datastore-state'},
-            'capabilities': {'$ref': 'vm-datastore-capabilities'},
-            'properties': {'$ref': 'vm-datastore-properties'}
+            'state': {'$ref': 'VmDatastoreState'},
+            'capabilities': {'$ref': 'VmDatastoreCapabilities'},
+            'properties': {'$ref': 'VmDatastoreProperties'}
         }
     })
 

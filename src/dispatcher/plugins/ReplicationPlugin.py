@@ -75,7 +75,7 @@ class ReplicationAction(object):
 
 @description('Provides information about replication tasks')
 class ReplicationLinkProvider(Provider):
-    @query('replication')
+    @query('Replication')
     @generator
     def query(self, filter=None, params=None):
         def extend():
@@ -122,7 +122,7 @@ class ReplicationLinkProvider(Provider):
         return self.datastore.get_one('replication.links', ('name', '=', name))
 
     @private
-    @accepts(h.ref('replication'))
+    @accepts(h.ref('Replication'))
     @returns(h.tuple(bool, str))
     def get_replication_state(self, link):
         def check_partner(partner):
@@ -359,7 +359,7 @@ class ReplicationBaseTask(ProgressTask):
 
 @description("Sets up a replication link")
 @accepts(h.all_of(
-        h.ref('replication'),
+        h.ref('Replication'),
         h.required(
             'name', 'slave', 'master', 'datasets'
         )
@@ -468,7 +468,7 @@ class ReplicationCreateTask(ReplicationBaseTask):
 
 @private
 @description("Ensures slave datasets have been created. Checks if services names are available on slave.")
-@accepts(h.ref('replication'))
+@accepts(h.ref('Replication'))
 class ReplicationPrepareSlaveTask(ReplicationBaseTask):
     @classmethod
     def early_describe(cls):
@@ -647,7 +647,7 @@ class ReplicationDeleteTask(ReplicationBaseTask):
 
 
 @description("Update a replication link")
-@accepts(str, h.ref('replication'))
+@accepts(str, h.ref('Replication'))
 class ReplicationUpdateTask(ReplicationBaseTask):
     @classmethod
     def early_describe(cls):
@@ -1282,7 +1282,7 @@ class CalculateReplicationDeltaTask(Task):
         return actions, total_send_size
 
 
-@accepts(str, h.ref('replication-options'), h.one_of(None, h.array(h.ref('replication-transport-option'))), bool)
+@accepts(str, h.ref('ReplicationOptions'), h.one_of(None, h.array(h.ref('ReplicationTransportOption'))), bool)
 @description("Runs a dataset replication with the specified arguments")
 class ReplicateDatasetTask(ProgressTask):
     def __init__(self, dispatcher, datastore):
@@ -1504,7 +1504,7 @@ class ReplicateDatasetTask(ProgressTask):
 @private
 @description("Returns latest replication link of given name")
 @accepts(str)
-@returns(h.ref('replication'))
+@returns(h.ref('Replication'))
 class ReplicationGetLatestLinkTask(ReplicationBaseTask):
     @classmethod
     def early_describe(cls):
@@ -1561,7 +1561,7 @@ class ReplicationGetLatestLinkTask(ReplicationBaseTask):
 
 @private
 @description("Updates local replication link entry if provided entry is newer")
-@accepts(h.ref('replication'))
+@accepts(h.ref('Replication'))
 class ReplicationUpdateLinkTask(Task):
     @classmethod
     def early_describe(cls):
@@ -1656,7 +1656,7 @@ class ReplicationRoleUpdateTask(ReplicationBaseTask):
 
 @private
 @description("Checks if provided replication link would not conflict with other links")
-@accepts(h.ref('replication'))
+@accepts(h.ref('Replication'))
 class ReplicationCheckDatasetsTask(ReplicationBaseTask):
     @classmethod
     def early_describe(cls):
@@ -1763,7 +1763,7 @@ def _init(dispatcher, plugin):
     link_cache = CacheStore()
     current_state_cache = CacheStore()
 
-    plugin.register_schema_definition('replication-options', {
+    plugin.register_schema_definition('ReplicationOptions', {
         'type': 'object',
         'properties': {
             'remote': {'type': 'string'},
@@ -1778,7 +1778,7 @@ def _init(dispatcher, plugin):
         'additionalProperties': False,
     })
 
-    plugin.register_schema_definition('replication', {
+    plugin.register_schema_definition('Replication', {
         'type': 'object',
         'properties': {
             'id': {'type': 'string'},
@@ -1797,12 +1797,12 @@ def _init(dispatcher, plugin):
             'recursive': {'type': 'boolean'},
             'status': {
                 'type': 'array',
-                'items': {'$ref': 'replication-status'}
+                'items': {'$ref': 'ReplicationStatus'}
             },
-            'current_state': {'$ref': 'replication-runtime-state'},
+            'current_state': {'$ref': 'ReplicationRuntimeState'},
             'transport_options': {
                 'type': 'array',
-                'items': {'$ref': 'replication-transport-option'}
+                'items': {'$ref': 'ReplicationTransportOption'}
             },
             'snapshot_lifetime': {'type': 'number'},
             'followdelete': {'type': 'boolean'}
@@ -1810,7 +1810,7 @@ def _init(dispatcher, plugin):
         'additionalProperties': False,
     })
 
-    plugin.register_schema_definition('replication-status', {
+    plugin.register_schema_definition('ReplicationStatus', {
         'type': 'object',
         'properties': {
             'started_at': {'type': 'datetime'},
@@ -1823,7 +1823,7 @@ def _init(dispatcher, plugin):
         'additionalProperties': False,
     })
 
-    plugin.register_schema_definition('replication-runtime-state', {
+    plugin.register_schema_definition('ReplicationRuntimeState', {
         'type': 'object',
         'properties': {
             'created_at': {'type': 'datetime'},
@@ -1837,18 +1837,18 @@ def _init(dispatcher, plugin):
         'additionalProperties': False,
     })
 
-    plugin.register_schema_definition('snapshot-info', {
+    plugin.register_schema_definition('SnapshotInfo', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
             'name': {'type': 'string'},
             'created_at': {'type': 'string'},
             'uuid': {'type': ['string', 'null']},
-            'type': {'$ref': 'snapshot-info-type'}
+            'type': {'$ref': 'SnapshotInfoType'}
         }
     })
 
-    plugin.register_schema_definition('datasets-replication-pair', {
+    plugin.register_schema_definition('DatasetsReplicationPair', {
         'type': 'object',
         'properties': {
             'master': {'type': 'string'},
@@ -1857,43 +1857,43 @@ def _init(dispatcher, plugin):
         'additionalProperties': False
     })
 
-    plugin.register_schema_definition('snapshot-info-type', {
+    plugin.register_schema_definition('SnapshotInfoType', {
         'type': 'string',
         'enum': ['FILESYSTEM', 'VOLUME']
     })
 
-    plugin.register_schema_definition('compress-replication-transport-option', {
+    plugin.register_schema_definition('CompressReplicationTransportOption', {
         'type': 'object',
         'properties': {
-            '%type': {'enum': ['compress-replication-transport-option']},
-            'level': {'$ref': 'compress-plugin-level'}
+            '%type': {'enum': ['CompressReplicationTransportOption']},
+            'level': {'$ref': 'CompressPluginLevel'}
         },
         'additionalProperties': False
     })
 
-    plugin.register_schema_definition('encrypt-replication-transport-option', {
+    plugin.register_schema_definition('EncryptReplicationTransportOption', {
         'type': 'object',
         'properties': {
-            '%type': {'enum': ['encrypt-replication-transport-option']},
-            'type': {'$ref': 'encrypt-plugin-type'}
+            '%type': {'enum': ['EncryptReplicationTransportOption']},
+            'type': {'$ref': 'EncryptPluginType'}
         },
         'additionalProperties': False
     })
 
-    plugin.register_schema_definition('throttle-replication-transport-option', {
+    plugin.register_schema_definition('ThrottleReplicationTransportOption', {
         'type': 'object',
         'properties': {
-            '%type': {'enum': ['throttle-replication-transport-option']},
+            '%type': {'enum': ['ThrottleReplicationTransportOption']},
             'buffer_size': {'type': 'integer'}
         },
         'additionalProperties': False
     })
 
     # Register transport plugin schema
-    plugin.register_schema_definition('replication-transport-option', {
+    plugin.register_schema_definition('ReplicationTransportOption', {
         'discriminator': '%type',
         'oneOf': [
-            {'$ref': '{0}-replication-transport-option'.format(name)} for name in dispatcher.call_sync(
+            {'$ref': '{0}ReplicationTransportOption'.format(name.title())} for name in dispatcher.call_sync(
                 'replication.transport.plugin_types'
             )
         ]

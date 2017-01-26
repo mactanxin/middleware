@@ -86,11 +86,11 @@ class DeviceInfoProvider(Provider):
     @description("Returns list of devices from given class")
     @accepts(str)
     @returns(h.any_of(
-        h.ref('disk-device'),
-        h.ref('network-device'),
-        h.ref('cpu-device'),
-        h.ref('serial-port-device'),
-        h.ref('usb-device')
+        h.ref('DiskDevice'),
+        h.ref('NetworkDevice'),
+        h.ref('CpuDevice'),
+        h.ref('SerialPortDevice'),
+        h.ref('UsbDevice')
     ))
     def get_devices(self, dev_class):
         method = "_get_class_{0}".format(dev_class)
@@ -447,7 +447,7 @@ def _init(dispatcher, plugin):
             plugin.unregister_event_handler(
                 'service.started', on_service_started)
 
-    plugin.register_schema_definition('disk-device', {
+    plugin.register_schema_definition('DiskDevice', {
         'type': 'object',
         'properties': {
             'name': {'type': 'string'},
@@ -456,7 +456,7 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('network-device', {
+    plugin.register_schema_definition('NetworkDevice', {
         'type': 'object',
         'properties': {
             'name': {'type': 'string'},
@@ -464,7 +464,7 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('cpu-device', {
+    plugin.register_schema_definition('CpuDevice', {
         'type': 'object',
         'properties': {
             'name': {'type': 'string'},
@@ -472,7 +472,7 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('serial-port-device', {
+    plugin.register_schema_definition('SerialPortDevice', {
         'type': 'object',
         'properties': {
             'name': {'type': 'string'},
@@ -484,7 +484,7 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('usb-device', {
+    plugin.register_schema_definition('UsbDevice', {
         'type': 'object',
         'properties': {
             'bus': {'type': 'integer'},

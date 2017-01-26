@@ -38,14 +38,14 @@ logger = logging.getLogger('SNMPPlugin')
 @description('Provides info about SNMP service configuration')
 class SNMPProvider(Provider):
     @accepts()
-    @returns(h.ref('service-snmp'))
+    @returns(h.ref('ServiceSnmp'))
     def get_config(self):
         return ConfigNode('service.snmp', self.configstore).__getstate__()
 
 
 @private
 @description('Configure SNMP service')
-@accepts(h.ref('service-snmp'))
+@accepts(h.ref('ServiceSnmp'))
 class SNMPConfigureTask(Task):
     @classmethod
     def early_describe(cls):
@@ -109,10 +109,10 @@ def _depends():
 def _init(dispatcher, plugin):
 
     # Register schemas
-    plugin.register_schema_definition('service-snmp', {
+    plugin.register_schema_definition('ServiceSnmp', {
         'type': 'object',
         'properties': {
-            'type': {'enum': ['service-snmp']},
+            'type': {'enum': ['ServiceSnmp']},
             'enable': {'type': 'boolean'},
             'location': {'type': ['string', 'null']},
             'contact': {'type': ['string', 'null']},
@@ -120,20 +120,20 @@ def _init(dispatcher, plugin):
             'v3': {'type': 'boolean'},
             'v3_username': {'type': ['string', 'null']},
             'v3_password': {'type': ['string', 'null']},
-            'v3_auth_type': {'$ref': 'service-snmp-v3authtype'},
-            'v3_privacy_protocol': {'$ref': 'service-snmp-v3privacyprotocol'},
+            'v3_auth_type': {'$ref': 'ServiceSnmpV3authtype'},
+            'v3_privacy_protocol': {'$ref': 'ServiceSnmpV3privacyprotocol'},
             'v3_privacy_passphrase': {'type': ['string', 'null']},
             'auxiliary': {'type': ['string', 'null']},
         },
         'additionalProperties': False,
     })
 
-    plugin.register_schema_definition('service-snmp-v3authtype', {
+    plugin.register_schema_definition('ServiceSnmpV3authtype', {
         'type': 'string',
         'enum': ['MD5', 'SHA']
     })
 
-    plugin.register_schema_definition('service-snmp-v3privacyprotocol', {
+    plugin.register_schema_definition('ServiceSnmpV3privacyprotocol', {
         'type': 'string',
         'enum': ['AES', 'DES']
     })

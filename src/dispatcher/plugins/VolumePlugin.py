@@ -98,7 +98,7 @@ datasets = None
 
 @description("Provides access to volumes information")
 class VolumeProvider(Provider):
-    @query('volume')
+    @query('Volume')
     @generator
     def query(self, filter=None, params=None):
         def is_upgraded(pool):
@@ -199,7 +199,7 @@ class VolumeProvider(Provider):
         h.object(properties={
             'id': str,
             'name': str,
-            'topology': h.ref('zfs-topology'),
+            'topology': h.ref('ZfsTopology'),
             'disks': h.array(str),
             'status': str
         })
@@ -235,7 +235,7 @@ class VolumeProvider(Provider):
 
         return result
 
-    @returns(h.array(h.ref('importable-disk')))
+    @returns(h.array(h.ref('ImportableDisk')))
     def find_media(self):
         result = []
 
@@ -336,7 +336,7 @@ class VolumeProvider(Provider):
 
     @description("Returns dataset tree for given pool")
     @accepts(str)
-    @returns(h.ref('zfs-dataset'))
+    @returns(h.ref('ZfsDataset'))
     def get_dataset_tree(self, name):
         pool = self.dispatcher.call_sync(
             'zfs.pool.query',
@@ -367,7 +367,7 @@ class VolumeProvider(Provider):
 
     @description("Returns allocation of given disk")
     @accepts(h.array(str))
-    @returns(h.ref('disks-allocation'))
+    @returns(h.ref('DisksAllocation'))
     def get_disks_allocation(self, disks):
         ret = {}
         disks = [os.path.join('/dev', i) for i in disks]
@@ -403,7 +403,7 @@ class VolumeProvider(Provider):
         return ret
 
     @accepts(str, str)
-    @returns(h.ref('zfs-vdev'))
+    @returns(h.ref('ZfsVdev'))
     def vdev_by_guid(self, volume, guid):
         vdev = self.dispatcher.call_sync('zfs.pool.vdev_by_guid', volume, guid)
         if vdev:
@@ -415,7 +415,7 @@ class VolumeProvider(Provider):
         return vdev
 
     @accepts(str)
-    @returns(h.ref('volume-disk-label'))
+    @returns(h.ref('VolumeDiskLabel'))
     def get_disk_label(self, disk):
         dev = get_disk_gptid(self.dispatcher, disk)
         if not dev:
@@ -446,7 +446,7 @@ class VolumeProvider(Provider):
         return VOLUMES_ROOT
 
     @accepts()
-    @returns(h.ref('volume-vdev-recommendations'))
+    @returns(h.ref('VolumeVdevRecommendations'))
     def vdev_recommendations(self):
         return {
             "storage": {
@@ -469,7 +469,7 @@ class VolumeProvider(Provider):
 
 @description('Provides information about datasets')
 class DatasetProvider(Provider):
-    @query('volume-dataset')
+    @query('VolumeDataset')
     @generator
     def query(self, filter=None, params=None):
         return datasets.query(*(filter or []), stream=True, **(params or {}))
@@ -477,7 +477,7 @@ class DatasetProvider(Provider):
 
 @description('Provides information about snapshots')
 class SnapshotProvider(Provider):
-    @query('volume-snapshot')
+    @query('VolumeSnapshot')
     @generator
     def query(self, filter=None, params=None):
         return snapshots.query(*(filter or []), stream=True, **(params or {}))
@@ -486,11 +486,11 @@ class SnapshotProvider(Provider):
 @description("Creating a volume")
 @accepts(
     h.all_of(
-        h.ref('volume'),
+        h.ref('Volume'),
         h.required('id', 'topology')
     ),
     h.one_of(str, None),
-    h.one_of(h.ref('volume-dataset-properties'), None),
+    h.one_of(h.ref('VolumeDatasetProperties'), None),
 )
 class VolumeCreateTask(ProgressTask):
     @classmethod
@@ -844,7 +844,7 @@ class ExportedVolumeDestroyTask(Task):
 
 
 @description("Updates configuration of existing volume")
-@accepts(str, h.ref('volume'), h.one_of(str, None))
+@accepts(str, h.ref('Volume'), h.one_of(str, None))
 class VolumeUpdateTask(ProgressTask):
     @classmethod
     def early_describe(cls):
@@ -1143,7 +1143,7 @@ class VolumeUpdateTask(ProgressTask):
 
 
 @description("Imports previously exported volume")
-@accepts(str, h.one_of(str, None), h.object(), h.ref('volume-import-params'), h.one_of(str, None))
+@accepts(str, h.one_of(str, None), h.object(), h.ref('VolumeImportParams'), h.one_of(str, None))
 @returns(str)
 class VolumeImportTask(Task):
     @classmethod
@@ -2281,7 +2281,7 @@ class VolumeOnlineVdevTask(Task):
 
 @description("Creates a dataset in an existing volume")
 @accepts(h.all_of(
-    h.ref('volume-dataset'),
+    h.ref('VolumeDataset'),
     h.required('id', 'volume')
 ))
 class DatasetCreateTask(Task):
@@ -2414,7 +2414,7 @@ class DatasetDeleteTask(Task):
 
 
 @description("Configures/Updates an existing Dataset's properties")
-@accepts(str, h.ref('volume-dataset'), bool)
+@accepts(str, h.ref('VolumeDataset'), bool)
 class DatasetConfigureTask(Task):
     @classmethod
     def early_describe(cls):
@@ -2581,7 +2581,7 @@ class DatasetTemporaryUmountTask(Task):
 @description("Creates a snapshot")
 @accepts(
     h.all_of(
-        h.ref('volume-snapshot'),
+        h.ref('VolumeSnapshot'),
         h.one_of(
             h.required('dataset', 'name'),
             h.required('id')
@@ -2663,7 +2663,7 @@ class SnapshotDeleteTask(Task):
 
 @description("Updates configuration of specified snapshot")
 @accepts(str, h.all_of(
-    h.ref('volume-snapshot')
+    h.ref('VolumeSnapshot')
 ))
 class SnapshotConfigureTask(Task):
     @classmethod
@@ -3028,27 +3028,27 @@ def register_property_schemas(plugin):
     }
 
     for i, props in {
-        'volume': VOLUME_PROPERTIES,
-        'volume-dataset': DATASET_PROPERTIES,
-        'volume-snapshot': SNAPSHOT_PROPERTIES
+        'Volume': VOLUME_PROPERTIES,
+        'VolumeDataset': DATASET_PROPERTIES,
+        'VolumeSnapshot': SNAPSHOT_PROPERTIES
     }.items():
         for name, prop in props.items():
-            plugin.register_schema_definition('{0}-property-{1}-value'.format(i, name), prop)
-            plugin.register_schema_definition('{0}-property-{1}'.format(i, name), {
+            plugin.register_schema_definition('{0}Property{1}Value'.format(i, name), prop)
+            plugin.register_schema_definition('{0}Property{1}'.format(i, name), {
                 'type': 'object',
                 'additionalProperties': False,
                 'properties': {
-                    'source': {'$ref': 'volume-property-source'},
+                    'source': {'$ref': 'VolumePropertySource'},
                     'rawvalue': {'type': 'string', 'readOnly': True},
                     'value': {'type': ['string', 'null']},
-                    'parsed': {'$ref': '{0}-property-{1}-value'.format(i, name)}
+                    'parsed': {'$ref': '{0}Property{1}Value'.format(i, name)}
                 }
             })
 
-        plugin.register_schema_definition('{0}-properties'.format(i), {
+        plugin.register_schema_definition('{0}Properties'.format(i), {
             'type': 'object',
             'additionalProperties': False,
-            'properties': {name: {'$ref': '{0}-property-{1}'.format(i, name)} for name in props},
+            'properties': {name: {'$ref': '{0}Property{1}'.format(i, name)} for name in props},
         })
 
 
@@ -3293,7 +3293,7 @@ def _init(dispatcher, plugin):
                 if creation + lifetime <= ts:
                     dispatcher.call_task_sync('volume.snapshot.delete', snap['id'])
 
-    plugin.register_schema_definition('volume', {
+    plugin.register_schema_definition('Volume', {
         'type': 'object',
         'title': 'volume',
         'additionalProperties': False,
@@ -3313,13 +3313,13 @@ def _init(dispatcher, plugin):
                 'type': 'array',
                 'items': {'$type': 'string'}
             },
-            'topology': {'$ref': 'zfs-topology'},
+            'topology': {'$ref': 'ZfsTopology'},
             'scan': {'$ref': 'zfs-scan'},
             'mountpoint': {
                 'type': ['string', 'null'],
                 'readOnly': True
             },
-            'status': {'$ref': 'volume-status'},
+            'status': {'$ref': 'VolumeStatus'},
             'upgraded': {
                 'oneOf': [
                     {'type': 'boolean'},
@@ -3329,7 +3329,7 @@ def _init(dispatcher, plugin):
             },
             'key_encrypted': {'type': 'boolean'},
             'password_encrypted': {'type': 'boolean'},
-            'encryption': {'$ref': 'volume-encryption'},
+            'encryption': {'$ref': 'VolumeEncryption'},
             'auto_unlock': {
                 'oneOf': [
                     {'type': 'boolean'},
@@ -3338,7 +3338,7 @@ def _init(dispatcher, plugin):
             },
             'providers_presence': {
                 'oneOf': [
-                    {'$ref': 'volume-providerspresence'},
+                    {'$ref': 'VolumeProviderspresence'},
                     {'type': 'null'}
                 ],
                 'readOnly': True
@@ -3357,23 +3357,23 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('volume-status', {
+    plugin.register_schema_definition('VolumeStatus', {
         'type': 'string',
         'readOnly': True,
         'enum': ['UNAVAIL', 'UNKNOWN', 'LOCKED', 'ONLINE']
     })
 
-    plugin.register_schema_definition('volume-providerspresence', {
+    plugin.register_schema_definition('VolumeProviderspresence', {
         'type': 'string',
         'enum': ['ALL', 'PART', 'NONE']
     })
 
-    plugin.register_schema_definition('volume-property-source', {
+    plugin.register_schema_definition('VolumePropertySource', {
         'type': 'string',
         'enum': ['NONE', 'DEFAULT', 'LOCAL', 'INHERITED']
     })
 
-    plugin.register_schema_definition('volume-encryption', {
+    plugin.register_schema_definition('VolumeEncryption', {
         'type': 'object',
         'readOnly': True,
         'properties': {
@@ -3384,7 +3384,7 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('volume-dataset', {
+    plugin.register_schema_definition('VolumeDataset', {
         'type': 'object',
         'properties': {
             'id': {'type': 'string'},
@@ -3401,13 +3401,13 @@ def _init(dispatcher, plugin):
             },
             'mounted': {'type': 'boolean'},
             'type': {'allOf': [
-                {'$ref': 'volume-dataset-type'},
+                {'$ref': 'VolumeDatasetType'},
                 {'readOnly': True}
             ]},
             'volsize': {'type': ['integer', 'null']},
-            'properties': {'$ref': 'volume-dataset-properties'},
+            'properties': {'$ref': 'VolumeDatasetProperties'},
             'permissions': {'$ref': 'permissions'},
-            'permissions_type': {'$ref': 'volume-dataset-permissionstype'},
+            'permissions_type': {'$ref': 'VolumeDatasetPermissionstype'},
             'last_replicated_by': {'type': ['string', 'null']},
             'last_replicated_at': {'type': ['datetime', 'null']},
             'metadata': {
@@ -3417,17 +3417,17 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('volume-dataset-type', {
+    plugin.register_schema_definition('VolumeDatasetType', {
         'type': 'string',
         'enum': ['FILESYSTEM', 'VOLUME'],
     })
 
-    plugin.register_schema_definition('volume-dataset-permissionstype', {
+    plugin.register_schema_definition('VolumeDatasetPermissionstype', {
         'type': 'string',
         'enum': ['PERM', 'ACL']
     })
 
-    plugin.register_schema_definition('volume-snapshot', {
+    plugin.register_schema_definition('VolumeSnapshot', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
@@ -3438,7 +3438,7 @@ def _init(dispatcher, plugin):
             'replicable': {'type': 'boolean'},
             'hidden': {'type': 'boolean'},
             'lifetime': {'type': ['integer', 'null']},
-            'properties': {'$ref': 'volume-snapshot-properties'},
+            'properties': {'$ref': 'VolumeSnapshotProperties'},
             'holds': {'type': 'object'},
             'metadata': {
                 'type': 'object',
@@ -3447,7 +3447,7 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('volume-disk-label', {
+    plugin.register_schema_definition('VolumeDiskLabel', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
@@ -3459,24 +3459,24 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('disks-allocation', {
+    plugin.register_schema_definition('DisksAllocation', {
         'type': 'object',
         'additionalProperties': {
             'type': 'object',
             'additionalProperties': False,
             'properties': {
-                'type': {'$ref': 'disks-allocation-type'},
+                'type': {'$ref': 'DisksAllocationType'},
                 'name': {'type': 'string'}
             }
         }
     })
 
-    plugin.register_schema_definition('disks-allocation-type', {
+    plugin.register_schema_definition('DisksAllocationType', {
         'type': 'string',
         'enum': ['BOOT', 'VOLUME', 'EXPORTED_VOLUME', 'ISCSI'],
     })
 
-    plugin.register_schema_definition('importable-disk', {
+    plugin.register_schema_definition('ImportableDisk', {
         'type': 'object',
         'properties': {
             'path': {'type': 'string'},
@@ -3486,7 +3486,7 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('volume-import-params', {
+    plugin.register_schema_definition('VolumeImportParams', {
         'type': 'object',
         'properties': {
             'key': {'type': ['string', 'null']},
@@ -3498,7 +3498,7 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('volume-vdev-recommendation', {
+    plugin.register_schema_definition('VolumeVdevRecommendation', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
@@ -3507,7 +3507,7 @@ def _init(dispatcher, plugin):
         }
     })
 
-    plugin.register_schema_definition('volume-vdev-recommendations', {
+    plugin.register_schema_definition('VolumeVdevRecommendations', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
@@ -3515,27 +3515,27 @@ def _init(dispatcher, plugin):
                 'type': 'object',
                 'additionalProperties': False,
                 'properties': {
-                    'storage': {'$ref': 'volume-vdev-recommendation'},
-                    'redundancy': {'$ref': 'volume-vdev-recommendation'},
-                    'speed': {'$ref': 'volume-vdev-recommendation'},
+                    'storage': {'$ref': 'VolumeVdevRecommendation'},
+                    'redundancy': {'$ref': 'VolumeVdevRecommendation'},
+                    'speed': {'$ref': 'VolumeVdevRecommendation'},
                 }
             },
             'redundancy': {
                 'type': 'object',
                 'additionalProperties': False,
                 'properties': {
-                    'storage': {'$ref': 'volume-vdev-recommendation'},
-                    'redundancy': {'$ref': 'volume-vdev-recommendation'},
-                    'speed': {'$ref': 'volume-vdev-recommendation'},
+                    'storage': {'$ref': 'VolumeVdevRecommendation'},
+                    'redundancy': {'$ref': 'VolumeVdevRecommendation'},
+                    'speed': {'$ref': 'VolumeVdevRecommendation'},
                 }
             },
             'speed': {
                 'type': 'object',
                 'additionalProperties': False,
                 'properties': {
-                    'storage': {'$ref': 'volume-vdev-recommendation'},
-                    'redundancy': {'$ref': 'volume-vdev-recommendation'},
-                    'speed': {'$ref': 'volume-vdev-recommendation'},
+                    'storage': {'$ref': 'VolumeVdevRecommendation'},
+                    'redundancy': {'$ref': 'VolumeVdevRecommendation'},
+                    'speed': {'$ref': 'VolumeVdevRecommendation'},
                 }
             },
         }

@@ -56,7 +56,7 @@ nut_signal_descriptions = {
 class UPSProvider(Provider):
     @private
     @accepts()
-    @returns(h.ref('service-ups'))
+    @returns(h.ref('ServiceUps'))
     def get_config(self):
         return ConfigNode('service.ups', self.configstore).__getstate__()
 
@@ -108,7 +108,7 @@ class UPSProvider(Provider):
 
 @private
 @description('Configure UPS service')
-@accepts(h.ref('service-ups'))
+@accepts(h.ref('ServiceUps'))
 class UPSConfigureTask(Task):
     @classmethod
     def early_describe(cls):
@@ -183,19 +183,19 @@ def _init(dispatcher, plugin):
 
 
     # Register schemas
-    plugin.register_schema_definition('service-ups', {
+    plugin.register_schema_definition('ServiceUps', {
         'type': 'object',
         'properties': {
-            'type': {'enum': ['service-ups']},
+            'type': {'enum': ['ServiceUps']},
             'enable': {'type': 'boolean'},
-            'mode': {'$ref': 'service-ups-mode'},
+            'mode': {'$ref': 'ServiceUpsMode'},
             'identifier': {'type': 'string'},
             'remote_host': {'type': ['string', 'null']},
             'remote_port': {'type': 'integer'},
             'driver': {'type': ['string', 'null']},
             'driver_port': {'type': ['string', 'null']},
             'description': {'type': ['string', 'null']},
-            'shutdown_mode': {'$ref': 'service-ups-shutdownmode'},
+            'shutdown_mode': {'$ref': 'ServiceUpsShutdownmode'},
             'shutdown_timer': {'type': 'integer'},
             'monitor_user': {'type': 'string'},
             'monitor_password': {'type': 'string'},
@@ -208,11 +208,11 @@ def _init(dispatcher, plugin):
         'additionalProperties': False,
     })
 
-    plugin.register_schema_definition('service-ups-mode', {
+    plugin.register_schema_definition('ServiceUpsMode', {
         'type': 'string',
         'enum': ['MASTER', 'SLAVE']
     })
-    plugin.register_schema_definition('service-ups-shutdownmode', {
+    plugin.register_schema_definition('ServiceUpsShutdownmode', {
         'type': 'string',
         'enum': ['LOWBATT', 'BATT']
     })

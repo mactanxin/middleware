@@ -73,7 +73,7 @@ UNITS = {
 
 @description('Provides information about statistics')
 class StatProvider(Provider):
-    @query('statistic')
+    @query('Statistic')
     @generator
     def query(self, filter=None, params=None):
         stats = self.dispatcher.call_sync('statd.output.get_current_state')
@@ -88,7 +88,7 @@ class StatProvider(Provider):
         return self.dispatcher.call_sync('statd.output.get_data_sources_tree')
 
     @accepts(h.one_of(str, h.array(str)), h.ref('get-stats-params'))
-    @returns(h.ref('get-stats-result'))
+    @returns(h.ref('GetStatsResult'))
     def get_stats(self, data_source, params):
         return {
             'data': list(self.dispatcher.call_sync('statd.output.get_stats', data_source, params))
@@ -100,7 +100,7 @@ class StatProvider(Provider):
 
 @description('Provides information about CPU statistics')
 class CpuStatProvider(Provider):
-    @query('statistic')
+    @query('Statistic')
     @generator
     def query(self, filter=None, params=None):
         def extend(stat):
@@ -121,7 +121,7 @@ class CpuStatProvider(Provider):
 
 @description('Provides information about disk statistics')
 class DiskStatProvider(Provider):
-    @query('statistic')
+    @query('Statistic')
     @generator
     def query(self, filter=None, params=None):
         def extend(stat):
@@ -141,7 +141,7 @@ class DiskStatProvider(Provider):
 
 @description('Provides information about network statistics')
 class NetworkStatProvider(Provider):
-    @query('statistic')
+    @query('Statistic')
     @generator
     def query(self, filter=None, params=None):
         def extend(stat):
@@ -161,7 +161,7 @@ class NetworkStatProvider(Provider):
 
 @description('Provides information about system statistics')
 class SystemStatProvider(Provider):
-    @query('statistic')
+    @query('Statistic')
     @generator
     def query(self, filter=None, params=None):
         def extend(stat):
@@ -190,7 +190,7 @@ class SystemStatProvider(Provider):
         return q.query(stats, *(filter or []), stream=True, **(params or {}))
 
 
-@accepts(str, h.ref('statistic'))
+@accepts(str, h.ref('Statistic'))
 @description('Updates alert levels on a given statistic')
 class UpdateAlertTask(Task):
     @classmethod
@@ -257,7 +257,7 @@ def dash_to_underscore(name):
 
 
 def _init(dispatcher, plugin):
-    plugin.register_schema_definition('statistic', {
+    plugin.register_schema_definition('Statistic', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
@@ -265,10 +265,10 @@ def _init(dispatcher, plugin):
             'short_name': {'type': 'string'},
             'unit': {'type': 'string'},
             'last_value': {'type': ['integer', 'number', 'null']},
-            'alerts': {'$ref': 'statistic-alert'},
+            'alerts': {'$ref': 'StatisticAlert'},
         }
     })
-    plugin.register_schema_definition('statistic-alert', {
+    plugin.register_schema_definition('StatisticAlert', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {

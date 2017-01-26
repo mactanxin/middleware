@@ -40,7 +40,7 @@ class SessionProvider(Provider):
         return self.datastore.query_stream('sessions', *(filter or []), **(params or {}))
 
     @accepts()
-    @returns(h.array(h.ref('session')))
+    @returns(h.array(h.ref('Session')))
     @description("Returns the logged in and active user sessions" +
                  "Does not include the service sessions in this.")
     def get_live_user_sessions(self):
@@ -124,7 +124,7 @@ def _init(dispatcher, plugin):
             session['active'] = False
             dispatcher.datastore.update('session', session['id'], session)
 
-    plugin.register_schema_definition('session', {
+    plugin.register_schema_definition('Session', {
         'type': 'object',
         'properties': {
             'username': {'type': 'string'},

@@ -32,14 +32,14 @@ from task import Task, Provider, TaskDescription
 
 @description('Provides info about Consul service configuration')
 class ConsulProvider(Provider):
-    @returns(h.ref('service-consul'))
+    @returns(h.ref('ServiceConsul'))
     @private
     def get_config(self):
         return ConfigNode('service.consul', self.configstore).__getstate__()
 
 
 @description('Configures Consul service')
-@accepts(h.ref('service-consul'))
+@accepts(h.ref('ServiceConsul'))
 @private
 class ConsulConfigureTask(Task):
     @classmethod
@@ -60,11 +60,11 @@ class ConsulConfigureTask(Task):
 
 def _init(dispatcher, plugin):
     # Register schemas
-    plugin.register_schema_definition('service-consul', {
+    plugin.register_schema_definition('ServiceConsul', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
-            'type': {'enum': ['service-consul']},
+            'type': {'enum': ['ServiceConsul']},
             'bind_address': {'type': ['string', 'null']},
             'enable': {'type': 'boolean'},
             'datacenter': {'type': 'string'},

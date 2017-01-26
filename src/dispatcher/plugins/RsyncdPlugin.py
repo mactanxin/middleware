@@ -49,7 +49,7 @@ logger = logging.getLogger('RsyncdPlugin')
 class RsyncdProvider(Provider):
     @private
     @accepts()
-    @returns(h.ref('service-rsyncd'))
+    @returns(h.ref('ServiceRsyncd'))
     def get_config(self):
         return ConfigNode('service.rsyncd', self.configstore).__getstate__()
 
@@ -57,7 +57,7 @@ class RsyncdProvider(Provider):
 @description("Provides access to rsyncd modules database")
 class RsyncdModuleProvider(Provider):
     @description("Lists rsyncd modules present in the system")
-    @query('rsyncd-module')
+    @query('RsyncdModule')
     @generator
     def query(self, filter=None, params=None):
         return self.datastore.query_stream('rsyncd-module', *(filter or []), **(params or {}))
@@ -65,7 +65,7 @@ class RsyncdModuleProvider(Provider):
 
 @private
 @description('Configure Rsyncd service')
-@accepts(h.ref('service-rsyncd'))
+@accepts(h.ref('ServiceRsyncd'))
 class RsyncdConfigureTask(Task):
     @classmethod
     def early_describe(cls):
@@ -101,7 +101,7 @@ class RsyncdConfigureTask(Task):
 
 @description("Create a rsync module in the system")
 @accepts(h.all_of(
-    h.ref('rsyncd-module'),
+    h.ref('RsyncdModule'),
     h.required('name', 'path'),
 ))
 class RsyncdModuleCreateTask(Task):
@@ -142,7 +142,7 @@ class RsyncdModuleCreateTask(Task):
 
 @description("Update a rsync module in the system")
 @accepts(str, h.all_of(
-    h.ref('rsyncd-module'),
+    h.ref('RsyncdModule'),
 ))
 class RsyncdModuleUpdateTask(Task):
     @classmethod
@@ -235,7 +235,7 @@ def demote(user):
 
 @private
 @description("Runs an Rsync Copy Task with the specified arguments")
-@accepts(h.ref('rsync-copy'))
+@accepts(h.ref('RsyncCopy'))
 class RsyncCopyTask(ProgressTask):
     @classmethod
     def early_describe(cls):
@@ -449,10 +449,10 @@ def _depends():
 
 def _init(dispatcher, plugin):
     # Register schemas
-    plugin.register_schema_definition('service-rsyncd', {
+    plugin.register_schema_definition('ServiceRsyncd', {
         'type': 'object',
         'properties': {
-            'type': {'enum': ['service-rsyncd']},
+            'type': {'enum': ['ServiceRsyncd']},
             'enable': {'type': 'boolean'},
             'port': {
                 'type': 'integer',
@@ -464,14 +464,14 @@ def _init(dispatcher, plugin):
         'additionalProperties': False,
     })
 
-    plugin.register_schema_definition('rsyncd-module', {
+    plugin.register_schema_definition('RsyncdModule', {
         'type': 'object',
         'properties': {
             'id': {'type': 'string'},
             'name': {'type': 'string'},
             'description': {'type': ['string', 'null']},
             'path': {'type': 'string'},
-            'mode': {'$ref': 'rsyncd-module-mode'},
+            'mode': {'$ref': 'RsyncdModuleMode'},
             'max_connections': {'type': ['integer', 'null']},
             'user': {'type': 'string'},
             'group': {'type': 'string'},
@@ -488,12 +488,12 @@ def _init(dispatcher, plugin):
         'additionalProperties': False,
     })
 
-    plugin.register_schema_definition('rsyncd-module-mode', {
+    plugin.register_schema_definition('RsyncdModuleMode', {
         'type': 'string',
         'enum': ['READONLY', 'WRITEONLY', 'READWRITE']
     })
 
-    plugin.register_schema_definition('rsync-copy', {
+    plugin.register_schema_definition('RsyncCopy', {
         'type': 'object',
         'properties': {
             'user': {'type': 'string'},
@@ -502,8 +502,8 @@ def _init(dispatcher, plugin):
             'path': {'type': 'string'},
             'remote_path': {'type': 'string'},
             'remote_module': {'type': 'string'},
-            'rsync_direction': {'$ref': 'rsync-copy-rsyncdirection'},
-            'rsync_mode': {'$ref': 'rsync-copy-rsyncmode'},
+            'rsync_direction': {'$ref': 'RsyncCopyRsyncdirection'},
+            'rsync_mode': {'$ref': 'RsyncCopyRsyncmode'},
             'remote_ssh_port': {'type': ['integer', 'null']},
             'rsync_properties': {
                 'type': 'object',
@@ -529,12 +529,12 @@ def _init(dispatcher, plugin):
         'additionalProperties': False,
     })
 
-    plugin.register_schema_definition('rsync-copy-rsyncdirection', {
+    plugin.register_schema_definition('RsyncCopyRsyncdirection', {
         'type': 'string',
         'enum': ['PUSH', 'PULL']
     })
 
-    plugin.register_schema_definition('rsync-copy-rsyncmode', {
+    plugin.register_schema_definition('RsyncCopyRsyncmode', {
         'type': 'string',
         'enum': ['MODULE', 'SSH']
     })
