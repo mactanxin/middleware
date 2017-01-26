@@ -791,6 +791,60 @@ class VMCreateTask(VMBaseTask):
             if not template:
                 raise TaskException(errno.ENOENT, 'Template {0} not found'.format(vm['template'].get('name')))
 
+            if vm.get('guest_type') and vm['guest_type'] != template['guest_type']:
+                raise TaskException(errno.EPERM, 'Cannot change the guest type if the VM is created from template')
+
+            if vm['config'].get('bootloader') and vm['config']['bootloader'] != template['config']['bootloader']:
+                raise TaskException(errno.EPERM, 'Cannot change the bootloader if the VM is created from template')
+
+            if vm['config'].get('boot_directory') and vm['config']['boot_directory'] != template['config']['boot_directory']:
+                raise TaskException(errno.EPERM, 'Cannot change the boot directory if the VM is created from template')
+
+            if vm['config'].get('boot_device'):
+                if vm['config']['boot_device'] != template['config']['boot_device']:
+                    raise TaskException(errno.EPERM, 'Cannot change the boot device if the VM is created from template')
+                else:
+                    for device in template['devices']:
+                        if device['type'] == 'DISK' and 'source' in device['properties']:
+                            template_boot_device = device['properties']
+                            break
+                    else:
+                        template_boot_device = None
+
+                    for device in vm['devices']:
+                        if device['type'] == 'DISK' and 'source' in device['properties']:
+                            boot_device = device['properties']
+                            break
+                    else:
+                        boot_device = None
+
+                    if boot_device and template_boot_device and boot_device != template_boot_device:
+                        raise TaskException(
+                            errno.EPERM, 'Cannot change the boot partition properties if the VM is created from template'
+                        )
+
+                    if not boot_device:
+                        raise TaskException(
+                            errno.EPERM, 'OS disk device cannot be removed changed if the VM is created from template'
+                        )
+
+            if vm.get('devices'):
+                for device in template['devices']:
+                    if device['type'] == 'GRAPHICS':
+                        for vm_device in vm['devices']:
+                            if vm_device['type'] == 'GRAPHICS':
+                                if vm_device['properties'] != device['properties']:
+                                    raise TaskException(
+                                        errno.EPERM, 'Framebuffer settings cannot be changed if the VM is created from template'
+                                    )
+                                else:
+                                    break
+                        else:
+                            raise TaskException(
+                                errno.EPERM, 'Framebuffer device cannot be removed if the VM is created from template'
+                            )
+
+
             vm['template']['name'] = template['template']['name']
             template['template'].pop('readme', None)
 
