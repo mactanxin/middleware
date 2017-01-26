@@ -599,7 +599,7 @@ class DockerContainerCreateTask(DockerBaseTask):
 
 
 @description('Updates a Docker container')
-@accepts(str, h.ref('docker-container'))
+@accepts(str, h.ref('DockerContainer'))
 class DockerContainerUpdateTask(DockerBaseTask):
     @classmethod
     def early_describe(cls):
@@ -926,7 +926,7 @@ class DockerContainerCommitTask(DockerBaseTask):
 
 @description('Creates a Docker network')
 @accepts(h.all_of(
-    h.ref('docker-network'),
+    h.ref('DockerNetwork'),
     h.required('name')
 ))
 class DockerNetworkCreateTask(DockerBaseTask):
@@ -1488,7 +1488,7 @@ class DockerHostDeleteTask(ProgressTask):
 
 
 @private
-@accepts(str, h.ref('vm'))
+@accepts(str, h.ref('Vm'))
 @description('Updates Docker host resource')
 class DockerUpdateHostResourceTask(Task):
     @classmethod
@@ -1522,7 +1522,7 @@ class DockerUpdateHostResourceTask(Task):
 
 
 @private
-@accepts(str, h.ref('vm'))
+@accepts(str, h.ref('Vm'))
 @description('Reverts Docker host resource state')
 class DockerRollbackHostResourceTask(Task):
     @classmethod
@@ -1653,7 +1653,7 @@ class DockerCollectionDeleteTask(Task):
 
 
 @accepts(str, bool)
-@returns(h.array(h.ref('docker-hub-image')))
+@returns(h.array(h.ref('DockerHubImage')))
 @description('Returns a list of Docker images related to a saved collection')
 class DockerCollectionGetPresetsTask(ProgressTask):
     @classmethod
