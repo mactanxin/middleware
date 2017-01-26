@@ -103,8 +103,8 @@ class DockerContainerProvider(Provider):
     def query(self, filter=None, params=None):
 
         def extend(obj, hosts):
+            obj.update(containers_state.get(obj['id'], {'running': False}))
             obj.update({
-                'running': containers_state.get(obj['id'], False),
                 'reachable': obj['host'] in hosts,
                 'hub_url': 'https://hub.docker.com/r/{0}'.format(obj['image'].split(':')[0])
             })
@@ -630,6 +630,9 @@ class DockerContainerUpdateTask(DockerBaseTask):
 
         if 'running' in updated_fields:
             raise VerifyException(errno.EINVAL, 'Running parameter cannot be set')
+
+        if 'health' in updated_fields:
+            raise VerifyException(errno.EINVAL, 'Health parameter cannot be set')
 
         if 'web_ui_url' in updated_fields:
             raise VerifyException(errno.EINVAL, 'Web UI URL cannot be set')
@@ -1744,12 +1747,17 @@ def _init(dispatcher, plugin):
             if args['ids']:
                 for id in args['ids']:
                     if args['operation'] in ('create', 'update'):
-                        state = dispatcher.call_sync(
+                        state = list(dispatcher.call_sync(
                             CONTAINERS_QUERY,
                             [('id', '=', id)],
-                            {'single': True, 'select': 'running'}
-                        )
-                        containers_state.put(id, state)
+                            {'select': ('running', 'health')}
+                        ))
+                        if state:
+                            status = {
+                                'running': bool(state[0][0]),
+                                'health': state[0][1]
+                            }
+                            containers_state.put(id, status)
                     else:
                         containers_state.remove(id)
 
@@ -1763,7 +1771,7 @@ def _init(dispatcher, plugin):
                     })
                 else:
                     objs = dispatcher.call_sync(CONTAINERS_QUERY, [('id', 'in', args['ids'])])
-                    for obj in map(lambda o: exclude(o, 'running'), objs):
+                    for obj in map(lambda o: exclude(o, 'running', 'health'), objs):
                         if args['operation'] == 'create':
                             dispatcher.datastore.insert(collection, obj)
                         else:
@@ -1824,7 +1832,7 @@ def _init(dispatcher, plugin):
             created = []
             updated = []
             deleted = []
-            for obj in map(lambda o: exclude(o, 'running'), current):
+            for obj in map(lambda o: exclude(o, 'running', 'health'), current):
                 old_obj = first_or_default(lambda o: o['id'] == obj['id'], old)
                 if old_obj:
                     if obj != old_obj:
@@ -2039,6 +2047,7 @@ def _init(dispatcher, plugin):
             'expose_ports': {'type': 'boolean'},
             'autostart': {'type': 'boolean'},
             'running': {'type': 'boolean'},
+            'health': {'type': ['string', 'null']},
             'reachable': {'type': 'boolean'},
             'interactive': {'type': 'boolean'},
             'version': {'type': 'string'},
