@@ -296,7 +296,7 @@
             "system.hostuuid": null,
             "system.description": "",
             "system.tags": [],
-            "system.motd": "FreeNAS (c) 2009-2016, The FreeNAS Development Team\nAll rights reserved.\nFreeNAS is released under the modified BSD license.\nFor more information, documentation, help or support, go here:\nhttp://freenas.org\n",
+            "system.motd": "FreeNAS (c) 2009-2017, The FreeNAS Development Team\nAll rights reserved.\nFreeNAS is released under the modified BSD license.\nFor more information, documentation, help or support, go here:\nhttp://freenas.org\n",
             "system.shells": [
                 "/bin/sh",
                 "/bin/csh",

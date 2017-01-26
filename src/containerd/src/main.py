@@ -95,6 +95,10 @@ unrestricted_guest = True
 threadpool = ThreadPool(128)
 
 
+logging.getLogger('requests').setLevel(logging.WARNING)
+logging.getLogger('urllib').setLevel(logging.WARNING)
+
+
 def normalize_docker_labels(labels):
     normalize(labels, {
         'org.freenas.autostart': "false",
@@ -1495,6 +1499,7 @@ class DockerService(RpcService):
                     'names': names,
                     'command': container['Command'] if isinstance(container['Command'], list) else [container['Command']],
                     'running': details['State'].get('Running', False),
+                    'health': q.get(details, 'State.Health.Status'),
                     'host': host.vm.id,
                     'ports': list(get_docker_ports(details)),
                     'volumes': list(get_docker_volumes(details)),

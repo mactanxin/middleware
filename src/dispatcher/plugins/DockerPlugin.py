@@ -56,6 +56,8 @@ IMAGES_QUERY = 'containerd.docker.query_images'
 
 dockerfile_parser_logger = logging.getLogger('dockerfile_parse.parser')
 dockerfile_parser_logger.setLevel(logging.ERROR)
+logging.getLogger('requests').setLevel(logging.WARNING)
+logging.getLogger('urllib').setLevel(logging.WARNING)
 
 docker_names_pattern = '^[a-zA-Z0-9._-]*$'
 
@@ -103,8 +105,8 @@ class DockerContainerProvider(Provider):
     def query(self, filter=None, params=None):
 
         def extend(obj, hosts):
+            obj.update(containers_state.get(obj['id'], {'running': False}))
             obj.update({
-                'running': containers_state.get(obj['id'], False),
                 'reachable': obj['host'] in hosts,
                 'hub_url': 'https://hub.docker.com/r/{0}'.format(obj['image'].split(':')[0])
             })
@@ -213,9 +215,9 @@ class DockerImagesProvider(Provider):
 
     @description('Returns a list of docker images from a given collection')
     @returns(h.array(h.ref('DockerHubImage')))
-    @accepts(str)
+    @accepts(str, bool)
     @generator
-    def get_collection_images(self, collection='freenas'):
+    def get_collection_images(self, collection='freenas', force=False):
         def update_collection(c, q):
             parser = dockerfile_parse.DockerfileParser()
             items = []
@@ -274,7 +276,7 @@ class DockerImagesProvider(Provider):
         collection_data = collections.get(collection, {})
         time_since_last_update = now - collection_data.get('update_time', now)
 
-        if not collections.is_valid(collection) or time_since_last_update > self.throttle_period:
+        if force or not collections.is_valid(collection) or time_since_last_update > self.throttle_period:
             queue = Queue()
             gevent.spawn(update_collection, collection, queue)
             for i in queue:
@@ -630,6 +632,9 @@ class DockerContainerUpdateTask(DockerBaseTask):
 
         if 'running' in updated_fields:
             raise VerifyException(errno.EINVAL, 'Running parameter cannot be set')
+
+        if 'health' in updated_fields:
+            raise VerifyException(errno.EINVAL, 'Health parameter cannot be set')
 
         if 'web_ui_url' in updated_fields:
             raise VerifyException(errno.EINVAL, 'Web UI URL cannot be set')
@@ -1546,7 +1551,7 @@ class DockerCollectionDeleteTask(Task):
         })
 
 
-@accepts(str)
+@accepts(str, bool)
 @returns(h.array(h.ref('docker-hub-image')))
 @description('Returns a list of Docker images related to a saved collection')
 class DockerCollectionGetPresetsTask(ProgressTask):
@@ -1554,27 +1559,28 @@ class DockerCollectionGetPresetsTask(ProgressTask):
     def early_describe(cls):
         return 'Downloading Docker collection presets'
 
-    def describe(self, id):
+    def describe(self, id, force=False):
         collection = self.datastore.get_by_id('docker.collections', id)
         return TaskDescription('Downloading Docker collection {name} presets', name=collection.get(''))
 
-    def verify(self, id):
+    def verify(self, id, force=False):
         return ['docker']
 
-    def run(self, id):
+    def run(self, id, force=False):
         if not self.datastore.exists('docker.collections', ('id', '=', id)):
             raise TaskException(errno.ENOENT, 'Docker collection {0} not found'.format(id))
 
         result = []
         collection = self.datastore.get_by_id('docker.collections', id)
-        name = collection['collection']
+        name = collection['name']
+        cn_name = collection['collection']
 
         self.set_progress(0, 'Downloading {0} collection presets'.format(name))
 
         with dockerhub.DockerHub() as hub:
             collection_len = len([i for i in hub.get_repositories(name) if collection['match_expr'] in i['name']])
 
-        for i in self.dispatcher.call_sync('docker.collection.get_entries', id):
+        for i in self.dispatcher.call_sync('docker.image.get_collection_images', cn_name, force):
             result.append(i)
             self.set_progress((len(result) / collection_len) * 100, 'Downloading {0} collection presets'.format(name))
 
@@ -1744,12 +1750,17 @@ def _init(dispatcher, plugin):
             if args['ids']:
                 for id in args['ids']:
                     if args['operation'] in ('create', 'update'):
-                        state = dispatcher.call_sync(
+                        state = list(dispatcher.call_sync(
                             CONTAINERS_QUERY,
                             [('id', '=', id)],
-                            {'single': True, 'select': 'running'}
-                        )
-                        containers_state.put(id, state)
+                            {'select': ('running', 'health')}
+                        ))
+                        if state:
+                            status = {
+                                'running': bool(state[0][0]),
+                                'health': state[0][1]
+                            }
+                            containers_state.put(id, status)
                     else:
                         containers_state.remove(id)
 
@@ -1763,7 +1774,7 @@ def _init(dispatcher, plugin):
                     })
                 else:
                     objs = dispatcher.call_sync(CONTAINERS_QUERY, [('id', 'in', args['ids'])])
-                    for obj in map(lambda o: exclude(o, 'running'), objs):
+                    for obj in map(lambda o: exclude(o, 'running', 'health'), objs):
                         if args['operation'] == 'create':
                             dispatcher.datastore.insert(collection, obj)
                         else:
@@ -1810,7 +1821,7 @@ def _init(dispatcher, plugin):
             if default_collection and default_collection in args['ids']:
                 node.update({'default_collection': None})
 
-    def refresh_database_cache(collection, event, query, host_id=None):
+    def refresh_database_cache(collection, event, query, lock, host_id=None):
         filter = []
         if host_id:
             filter.append(('host', '=', host_id))
@@ -1818,13 +1829,13 @@ def _init(dispatcher, plugin):
             active_hosts = list(dispatcher.call_sync('docker.host.query', [('state', '=', 'UP')], {'select': 'id'}))
             filter.append(('host', 'in', active_hosts))
 
-        with containers_lock:
+        with lock:
             current = list(dispatcher.call_sync(query, filter))
             old = dispatcher.datastore.query(collection, *filter)
             created = []
             updated = []
             deleted = []
-            for obj in map(lambda o: exclude(o, 'running'), current):
+            for obj in map(lambda o: exclude(o, 'running', 'health'), current):
                 old_obj = first_or_default(lambda o: o['id'] == obj['id'], old)
                 if old_obj:
                     if obj != old_obj:
@@ -1859,10 +1870,10 @@ def _init(dispatcher, plugin):
                 })
 
     def refresh_networks(host_id=None):
-        refresh_database_cache('docker.networks', 'docker.network.changed', NETWORKS_QUERY, host_id)
+        refresh_database_cache('docker.networks', 'docker.network.changed', NETWORKS_QUERY, networks_lock, host_id)
 
     def refresh_containers(host_id=None):
-        refresh_database_cache('docker.containers', 'docker.container.changed', CONTAINERS_QUERY, host_id)
+        refresh_database_cache('docker.containers', 'docker.container.changed', CONTAINERS_QUERY, containers_lock, host_id)
 
     def sync_images(ids=None, host_id=None):
         filter = []
@@ -2039,6 +2050,7 @@ def _init(dispatcher, plugin):
             'expose_ports': {'type': 'boolean'},
             'autostart': {'type': 'boolean'},
             'running': {'type': 'boolean'},
+            'health': {'type': ['string', 'null']},
             'reachable': {'type': 'boolean'},
             'interactive': {'type': 'boolean'},
             'version': {'type': 'string'},
