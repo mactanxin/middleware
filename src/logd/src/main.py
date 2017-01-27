@@ -36,6 +36,7 @@ import signal
 import logging
 import itertools
 import time
+import errno
 import datastore
 from datetime import datetime
 from bsd import setproctitle
@@ -48,7 +49,7 @@ from freenas.utils import query as q
 
 
 FLUSH_INTERVAL = 180
-SYSLOG_PATTERN = re.compile(r'<(?P<priority>\d+)>(?P<timestamp>\w+ \d+ \d+:\d+:\d+) (?P<identifier>[\w\[\]]+): (?P<message>.*)')
+SYSLOG_PATTERN = re.compile(r'<(?P<priority>\d+)>(?P<syslog_timestamp>\w+ \d+ \d+:\d+:\d+) (?P<identifier>[\w\[\]]+): (?P<message>.*)')
 KLOG_PATTERN = re.compile(r'<(?P<priority>\d+)>(?P<message>.*)')
 PROC_PATTERN = re.compile(r'(?P<identifier>\w+)\[(?P<pid>\d+)\]')
 DEFAULT_SOCKET_ADDRESS = 'unix:///var/run/logd.sock'
@@ -64,7 +65,12 @@ def parse_priority(prio):
         return getattr(SyslogPriority, prio, SyslogPriority.INFO), None
 
     if isinstance(prio, int):
-        return SyslogPriority(int(prio) & 0x7), int(prio) << 3
+        try:
+            facility = SyslogFacility(int(prio & 0x03f8) >> 3)
+        except ValueError:
+            facility = SyslogFacility.LOCAL
+
+        return SyslogPriority(int(prio) & 0x7), facility
 
 
 class LoggingService(RpcService):
@@ -93,7 +99,15 @@ class LoggingService(RpcService):
             except OSError:
                 entry['identifier'] = 'unknown'
 
+        entry['source'] = 'rpc'
         self.context.push(entry)
+
+    @generator
+    def query_boots(self, filter=None, params=None):
+        if not self.context.datastore:
+            raise RpcException(errno.ENXIO, 'Datastore not initialized yet')
+
+        return self.context.datastore.query_stream('boots', *(filter or []), **(params or {}))
 
     @generator
     def query(self, filter=None, params=None):
@@ -104,6 +118,7 @@ class LoggingService(RpcService):
         return q.query(
             itertools.chain(ds_results, self.context.store),
             *(filter or []),
+            stream=True,
             **(params or {})
         )
 
@@ -165,7 +180,7 @@ class SyslogServer(object):
         m = m.groupdict()
         m.update({
             'priority': int(m['priority']),
-            'timestamp': datetime.strptime(m['timestamp'], '%b %d %H:%M:%S').replace(year=now.year),
+            'syslog_timestamp': datetime.strptime(m['syslog_timestamp'], '%b %d %H:%M:%S').replace(year=now.year),
             'source': 'syslog'
         })
 
@@ -202,10 +217,12 @@ class Context(object):
         self.seqno = 0
         self.rpc_server = Server(self)
         self.boot_id = str(uuid.uuid4())
+        self.exiting = False
         self.server = None
         self.servers = []
         self.klog_reader = None
         self.flush = False
+        self.flush_thread = None
         self.datastore = None
         self.started_at = datetime.utcnow()
         self.rpc = RpcContext()
@@ -215,6 +232,11 @@ class Context(object):
     def init_datastore(self):
         try:
             self.datastore = datastore.get_datastore(log=True)
+            self.datastore.insert('boots', {
+                'id': self.boot_id,
+                'booted_at': self.started_at,
+                'hostname': socket.gethostname()
+            })
         except datastore.DatastoreException as err:
             logging.error('Cannot initialize datastore: %s', str(err))
             sys.exit(1)
@@ -239,8 +261,8 @@ class Context(object):
         thread.start()
 
     def init_flush(self):
-        thread = threading.Thread(target=self.do_flush, name='Flush thread', daemon=True)
-        thread.start()
+        self.flush_thread = threading.Thread(target=self.do_flush, name='Flush thread')
+        self.flush_thread.start()
 
     def push(self, item):
         if not item:
@@ -254,7 +276,7 @@ class Context(object):
 
         if 'pid' in item:
             try:
-                job = get_job_by_pid(item, True)
+                job = get_job_by_pid(item['pid'], True)
                 item['service'] = job['Label']
             except ServicedException:
                 pass
@@ -266,7 +288,7 @@ class Context(object):
                 'seqno': self.seqno,
                 'boot_id': self.boot_id,
                 'priority': priority.name,
-                'facility': facility
+                'facility': facility.name if facility else None
             })
             self.store.append(item)
             self.seqno += 1
@@ -296,13 +318,15 @@ class Context(object):
                     for i in self.store:
                         self.datastore.insert('syslog', i)
 
-                    count = len(self.store)
                     self.store.clear()
 
-                logging.debug('Flushed {0} log items'.format(count))
+                if self.exiting:
+                    return
 
     def sigusr1(self, signo, frame):
         with self.cv:
+            logging.info('Flushing logs on signal')
+            self.flush = True
             self.cv.notify_all()
 
     def main(self):
@@ -312,8 +336,25 @@ class Context(object):
         self.init_rpc_server()
         self.init_flush()
         checkin()
-        signal.signal(signal.SIGUSR1, self.sigusr1)
-        signal.pause()
+        signal.signal(signal.SIGUSR1, signal.SIG_DFL)
+        while True:
+            sig = signal.sigwait([signal.SIGTERM, signal.SIGUSR1])
+            if sig == signal.SIGUSR1:
+                with self.cv:
+                    logging.info('Flushing logs on signal')
+                    self.flush = True
+                    self.cv.notify_all()
+
+                continue
+
+            if sig == signal.SIGTERM:
+                logging.info('Got SIGTERM, exiting')
+                with self.cv:
+                    self.exiting = True
+                    self.cv.notify_all()
+
+                self.flush_thread.join()
+                break
 
 
 if __name__ == '__main__':
