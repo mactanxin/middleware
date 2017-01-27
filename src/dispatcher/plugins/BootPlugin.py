@@ -48,7 +48,7 @@ bootenvs = None
 
 @description("Provides information on Boot pool")
 class BootPoolProvider(Provider):
-    @returns('zfs-pool')
+    @returns(h.ref('ZfsPool'))
     def get_config(self):
         return self.dispatcher.call_sync('zfs.pool.get_boot_pool')
 
