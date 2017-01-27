@@ -29,6 +29,7 @@ import time
 from datastore import DatastoreException
 from datetime import datetime
 from freenas.dispatcher.rpc import generator, description
+from freenas.dispatcher.client import Client
 from event import EventSource
 from task import Provider
 from debug import AttachDirectory
@@ -36,9 +37,13 @@ from debug import AttachDirectory
 
 @description('Provides information about system log')
 class SyslogProvider(Provider):
+    def initialize(self, context):
+        self.client = Client()
+        self.client.connect('unix:///var/run/logd.sock')
+
     @generator
     def query(self, filter=None, params=None):
-        return self.datastore.query_stream('syslog', *(filter or []), **(params or {}))
+        return self.client.call_sync('logd.logging.query', filter, params)
 
 
 def collect_debug(dispatcher):
