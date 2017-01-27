@@ -87,7 +87,7 @@ class StatProvider(Provider):
     def get_data_sources_tree(self):
         return self.dispatcher.call_sync('statd.output.get_data_sources_tree')
 
-    @accepts(h.one_of(str, h.array(str)), h.ref('get-stats-params'))
+    @accepts(h.one_of(str, h.array(str)), h.ref('GetStatsParams'))
     @returns(h.ref('GetStatsResult'))
     def get_stats(self, data_source, params):
         return {
