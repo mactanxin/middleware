@@ -551,12 +551,18 @@ class VMBaseTask(ProgressTask):
 
             else:
                 if properties['target_type'] == 'ZVOL':
-                    self.run_subtask_sync(
-                        'vm.datastore.block_device.create',
-                        vm['target'],
-                        properties['target_path'],
-                        properties['size']
+                    target_filesystem_path = self.dispatcher.call_sync(
+                        'vm.datastore.get_filesystem_path',
+                        datastore,
+                        properties['target_path']
                     )
+                    if not os.path.exists(target_filesystem_path):
+                        self.run_subtask_sync(
+                            'vm.datastore.block_device.create',
+                            vm['target'],
+                            properties['target_path'],
+                            properties['size']
+                        )
 
         if res['type'] == 'NIC':
             normalize(res['properties'], {
