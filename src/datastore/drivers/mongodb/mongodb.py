@@ -315,7 +315,7 @@ class MongodbDatastore(object):
             cur = cur.limit(limit)
 
         if reverse:
-            cur = reversed(cur)
+            cur = reversed(list(cur))
 
         if single:
             i = next(cur, None)
