@@ -268,6 +268,7 @@ class MongodbDatastore(object):
         offset = kwargs.pop('offset', None)
         single = kwargs.pop('single', False)
         count = kwargs.pop('count', False)
+        reverse = kwargs.pop('reverse', False)
         postprocess = kwargs.pop('callback', None)
         select = kwargs.pop('select', None)
 
@@ -312,6 +313,9 @@ class MongodbDatastore(object):
 
         if limit:
             cur = cur.limit(limit)
+
+        if reverse:
+            cur = reversed(cur)
 
         if single:
             i = next(cur, None)
