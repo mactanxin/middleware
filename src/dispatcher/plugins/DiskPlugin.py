@@ -848,12 +848,6 @@ class DiskGELIAttachTask(Task):
         else:
             raise TaskException(errno.EINVAL, 'Cannot get disk status for: {0}'.format(disk_info['path']))
 
-        if not data_partition_path:
-            data_partition_path = disk_status.get('path')
-
-        if not data_partition_path:
-            raise TaskException(errno.EINVAL, 'Cannot resolve encrypted partition path')
-
         with tempfile.NamedTemporaryFile('wb') as keyfile:
             with tempfile.NamedTemporaryFile('w') as passfile:
                 keyfile.write(key)
