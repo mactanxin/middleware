@@ -244,6 +244,8 @@ class Context(object):
     def init_rpc_server(self):
         self.server = Server(self)
         self.server.rpc = self.rpc
+        self.rpc.streaming_enabled = True
+        self.rpc.streaming_burst = 16
         self.server.streaming = True
         self.server.start(DEFAULT_SOCKET_ADDRESS, transport_options={'permissions': 0o666})
         thread = threading.Thread(target=self.server.serve_forever, name='RPC server thread', daemon=True)
