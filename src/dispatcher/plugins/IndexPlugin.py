@@ -206,7 +206,7 @@ def _init(dispatcher, plugin):
             'size': {'type': 'integer'},
             'uid': {'type': 'integer'},
             'gid': {'type': 'integer'},
-            'permissions': {'$ref': 'permissions'}
+            'permissions': {'$ref': 'Permissions'}
         }
     })
 

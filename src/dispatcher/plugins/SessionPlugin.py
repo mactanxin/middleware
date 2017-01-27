@@ -34,7 +34,7 @@ from freenas.utils import first_or_default
 
 @description("Provides Information about the current loggedin Session")
 class SessionProvider(Provider):
-    @query('session')
+    @query('Session')
     @generator
     def query(self, filter=None, params=None):
         return self.datastore.query_stream('sessions', *(filter or []), **(params or {}))

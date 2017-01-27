@@ -487,7 +487,7 @@ class DiskEraseTask(Task):
 @accepts(
     str,
     h.all_of(
-        h.ref('disk'),
+        h.ref('Disk'),
         h.no(h.required('name', 'serial', 'path', 'id', 'mediasize', 'status'))
     )
 )

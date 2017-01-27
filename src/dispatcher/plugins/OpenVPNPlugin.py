@@ -395,7 +395,7 @@ def _init(dispatcher, plugin):
             'server_bridge_range_begin': {'type': 'string'},
             'server_bridge_range_end': {'type': 'string'},
             'server_bridge_netmask': {'type': 'string'},
-            'server_bridge_ip': {'type': 'string', "format": "ip-address"},
+            'server_bridge_ip': {'type': 'string', "format": "IpAddress"},
             'psk_server_ip': {'type': 'string'},
             'psk_remote_ip': {'type': 'string'},
             'max_clients': {'type': 'integer'},

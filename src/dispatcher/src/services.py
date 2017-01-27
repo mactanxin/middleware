@@ -461,7 +461,7 @@ class TaskService(RpcService):
 
         task.set_env(key, value)
 
-    @query('task')
+    @query('Task')
     @generator
     def query(self, filter=None, params=None):
         def extend(t):

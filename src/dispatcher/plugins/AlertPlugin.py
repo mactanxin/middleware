@@ -54,7 +54,7 @@ pending_cancels = deque()
 
 @description('Provides access to the alert system')
 class AlertsProvider(Provider):
-    @query('alert')
+    @query('Alert')
     @generator
     def query(self, filter=None, params=None):
         return self.datastore.query_stream(

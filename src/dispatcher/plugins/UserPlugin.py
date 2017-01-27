@@ -859,7 +859,7 @@ def _init(dispatcher, plugin):
             'full_name': {'type': ['string', 'null']},
             'email': {
                 'oneOf': [
-                    {'$ref': 'email'},
+                    {'$ref': 'Email'},
                     {'type': 'null'}
                 ]
             },

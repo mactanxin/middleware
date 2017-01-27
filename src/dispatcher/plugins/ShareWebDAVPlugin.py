@@ -77,7 +77,7 @@ class WebDAVSharesProvider(Provider):
 
 @private
 @description("Adds new WebDAV share")
-@accepts(h.ref('share'))
+@accepts(h.ref('Share'))
 class CreateWebDAVShareTask(Task):
     @classmethod
     def early_describe(cls):
@@ -108,7 +108,7 @@ class CreateWebDAVShareTask(Task):
 
 @private
 @description("Updates existing WebDAV share")
-@accepts(str, h.ref('share'))
+@accepts(str, h.ref('Share'))
 class UpdateWebDAVShareTask(Task):
     @classmethod
     def early_describe(cls):
@@ -160,7 +160,7 @@ class DeleteWebDAVShareTask(Task):
 
 @private
 @description("Imports existing WebDAV share")
-@accepts(h.ref('share'))
+@accepts(h.ref('Share'))
 class ImportWebDAVShareTask(CreateWebDAVShareTask):
     @classmethod
     def early_describe(cls):

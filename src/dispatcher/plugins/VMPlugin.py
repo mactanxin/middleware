@@ -2429,7 +2429,7 @@ def _init(dispatcher, plugin):
             'id': {'type': 'string'},
             'name': {'type': 'string'},
             'description': {'type': 'string'},
-            'parent': {'$ref': 'vm'}
+            'parent': {'$ref': 'Vm'}
         }
     })
 

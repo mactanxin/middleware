@@ -163,11 +163,11 @@ def _init(dispatcher, plugin):
                 'maxLength': 20
             },
             'dhcp': {'type': 'boolean'},
-            'address': {'$ref': 'ipv4-address'},
+            'address': {'$ref': 'Ipv4Address'},
             'netmask': {'type': 'integer'},
             'gateway': {
                 'anyOf': [
-                    {'$ref': 'ipv4-address'},
+                    {'$ref': 'Ipv4Address'},
                     {'type': 'null'}
                 ]
             },

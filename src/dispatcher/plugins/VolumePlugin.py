@@ -3314,7 +3314,7 @@ def _init(dispatcher, plugin):
                 'items': {'$type': 'string'}
             },
             'topology': {'$ref': 'ZfsTopology'},
-            'scan': {'$ref': 'zfs-scan'},
+            'scan': {'$ref': 'ZfsScan'},
             'mountpoint': {
                 'type': ['string', 'null'],
                 'readOnly': True

@@ -35,7 +35,7 @@ PKGDB_FILE = '/var/db/pkg/local.sqlite'
 
 
 class SoftwarePackageProvider(Provider):
-    @query('software-package')
+    @query('SoftwarePackage')
     @generator
     def query(self, filter=None, params=None):
         def collect():
@@ -55,7 +55,7 @@ class SoftwarePackageProvider(Provider):
 
 
 def _init(dispatcher, plugin):
-    plugin.register_schema_definition('software-package', {
+    plugin.register_schema_definition('SoftwarePackage', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {

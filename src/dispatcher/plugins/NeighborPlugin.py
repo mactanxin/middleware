@@ -54,7 +54,7 @@ def _init(dispatcher, plugin):
             'id': {'type': 'string'},
             'hostname': {'type': 'string'},
             'description': {'type': ['string', 'null']},
-            'type': {'$ref': 'neighbod-type'},
+            'type': {'$ref': 'NeighbodType'},
             'source': {'type': 'string'},
             'address': {'type': 'string'},
             'online': {'type': 'boolean'},
