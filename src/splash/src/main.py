@@ -36,7 +36,8 @@ CRITICAL_JOBS = [
     'org.freebsd.devd',
     'org.freenas.datastore',
     'org.freenas.dispatcher',
-    'org.freenas.etcd'
+    'org.freenas.etcd',
+    'org.freenas.logd'
 ]
 
 
