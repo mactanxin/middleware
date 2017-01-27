@@ -82,6 +82,7 @@ LIB_DEPENDS+=		libgnutls.so:${PORTSDIR}/security/gnutls
 LIB_DEPENDS+=		libsunacl.so:${PORTSDIR}/sysutils/libsunacl
 # libdispatcherclient and libjansson
 LIB_DEPENDS+=		libdispatcherclient.so:${PORTSDIR}/freenas/libdispatcherclient \
+			liblogd.so:${PORTSDIR}/freenas/liblogd \
 			libjansson.so:${PORTSDIR}/devel/jansson
 # Libarchive
 BUILD_DEPENDS+=		libarchive>=3.1.2:${PORTSDIR}/archivers/libarchive
