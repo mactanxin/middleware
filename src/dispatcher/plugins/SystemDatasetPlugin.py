@@ -34,6 +34,7 @@ import logging
 import shutil
 import time
 import tempfile
+import signal
 import libzfs
 from bsd.copy import copytree
 from resources import Resource
@@ -474,6 +475,7 @@ def _init(dispatcher, plugin):
     logger.info('Starting log database')
     dispatcher.start_logdb()
     dispatcher.migrate_logdb()
+    dispatcher.call_sync('serviced.job.send_signal', 'org.freenas.logd', signal.SIGUSR1)
 
     plugin.attach_hook('volume.pre_destroy', volume_pre_destroy)
     plugin.attach_hook('volume.pre_detach', volume_pre_destroy)
