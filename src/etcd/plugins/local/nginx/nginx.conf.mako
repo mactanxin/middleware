@@ -17,7 +17,7 @@
 
 user www;
 pid /var/run/nginx.pid;
-error_log /var/log/nginx-error.log warn;
+error_log syslog:server=unix:/var/run/log warn;
 
 events {
     worker_connections 1024;
@@ -26,7 +26,7 @@ events {
 http {
     include mime.types;
     default_type application/octet-stream;
-    access_log /var/log/nginx-access.log combined;
+    access_log syslog:server=unix:/var/run/log combined;
 
     # reserve 1MB under the name 'proxied' to track uploads
     upload_progress proxied 1m;
