@@ -181,7 +181,7 @@ class ServiceInfoProvider(Provider):
         hook_rpc = svc.get('restart_rpc')
         if hook_rpc:
             try:
-                self.dispatcher.call_sync(hook_rpc)
+                self.dispatcher.call_sync(hook_rpc, timeout=300)
             except RpcException:
                 pass
             return
@@ -191,7 +191,7 @@ class ServiceInfoProvider(Provider):
             plists = [launchd] if isinstance(launchd, dict) else launchd
 
             for i in plists:
-                self.dispatcher.call_sync('serviced.job.restart', i['Label'])
+                self.dispatcher.call_sync('serviced.job.restart', i['Label'], timeout=300)
 
             return
 
