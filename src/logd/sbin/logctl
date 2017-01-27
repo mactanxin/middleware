@@ -30,9 +30,18 @@ import sys
 import argparse
 import json
 import signal
+import dateutil.parser
+import textwrap
+from datetime import datetime
 from threading import Lock
 from freenas.dispatcher.client import Client, sync
+from freenas.utils import to_timedelta, exclude, query as q
 
+
+EXCLUDE_VERBOSE_PROPS = (
+    'timestamp', 'priority', 'message', 'identifier', 'service', 'seqno',
+    'created_at', 'updated_at', 'boot_id', 'id'
+)
 
 COLOR_MAP = {
     'EMERG': 31,
@@ -58,7 +67,7 @@ def query(c, args, filter, params):
     return c.call_sync('logd.logging.query', filter, params)
 
 
-def output_entry(format, entry, colors=False):
+def output_entry(format, entry, colors=False, verbose=False):
     if format == 'json':
         print(json.dumps(entry, indent=4))
         print()
@@ -69,6 +78,18 @@ def output_entry(format, entry, colors=False):
             print('\033[{0}m'.format(COLOR_MAP.get(entry['priority'], 0)), end='')
 
         print('{timestamp:%Y-%m-%d %H:%M:%S} {identifier}: {message}'.format(**entry))
+        if verbose:
+            for k, v in entry.items():
+                if k in EXCLUDE_VERBOSE_PROPS:
+                    continue
+
+                if v is None:
+                    v = '<none>'
+
+                if isinstance(v, str) and '\n' in v:
+                    v = '\n' + textwrap.indent(v, '        ')
+
+                print('    {0}: {1}'.format(k, v))
 
         if colors:
             print('\033[0m', end='')
@@ -80,22 +101,25 @@ def main():
     parser.add_argument('--offline', action='store_true')
     parser.add_argument('--socket', default='unix:///var/run/logd.sock')
     parser.add_argument('--everything', action='store_true', default=False)
-    parser.add_argument('--get-boot-id')
-    parser.add_argument('--boot-id', default=None)
+    parser.add_argument('--get-boot-id', action='store_true')
+    parser.add_argument('--list-boots', action='store_true')
+    parser.add_argument('-b', '--boot-id', default=None)
     parser.add_argument('--ident', nargs='+', default=[])
     parser.add_argument('--service', nargs='+', default=[])
-    parser.add_argument('--prog')
+    parser.add_argument('--source', nargs='+', default=[])
     parser.add_argument('--pid', type=int, nargs='+', default=[])
     parser.add_argument('--prio', nargs='+')
     parser.add_argument('--since')
     parser.add_argument('--first')
     parser.add_argument('--last')
+    parser.add_argument('--no-debug', action='store_true')
     parser.add_argument('--key', nargs='+')
-    parser.add_argument('--limit', type=int)
+    parser.add_argument('-n', '--limit', type=int)
     parser.add_argument('--sef', action='store_true')
     parser.add_argument('--format', default='syslog')
-    parser.add_argument('--follow', action='store_true')
+    parser.add_argument('-f', '--follow', action='store_true')
     parser.add_argument('--no-colors', action='store_true')
+    parser.add_argument('-v', '--verbose', action='store_true')
     args = parser.parse_args()
     c = create_client(args.socket)
 
@@ -108,6 +132,13 @@ def main():
         print(boot_id)
         sys.exit(0)
 
+    if args.list_boots:
+        for b in c.call_sync('logd.logging.query_boots'):
+            print('{id}: started at {booted_at:%Y-%m-%d %H:%M:%S}, hostname {hostname}'.format(**b))
+
+        sys.exit(0)
+
+    now = datetime.utcnow()
     lock = Lock()
     filter = []
     params = {}
@@ -126,26 +157,42 @@ def main():
     for service in args.service:
         filter.append(('service', '=', service))
 
+    for source in args.source:
+        filter.append(('source', '=', source))
+
     for pid in args.pid:
         filter.append(('pid', '=', pid))
 
+    if args.last:
+        delta = to_timedelta(args.last)
+        filter.append(('timestamp', '>=', now - delta))
+
+    if args.since:
+        ts = dateutil.parser.parse(args.since)
+        filter.append(('timestamp', '>=', ts))
+
+    if args.no_debug:
+        filter.append(('priority', '!=', 'DEBUG'))
+
     if args.limit:
+        params['sort'] = '-timestamp'
+        params['reverse'] = True
         params['limit'] = args.limit
 
     if args.follow:
         @sync
         def on_message(msg):
+            nonlocal seqno
             with lock:
-                if msg['seqno'] <= seqno:
-                    return
-
-                output_entry(args.format, msg, not args.no_colors)
+                if msg['seqno'] > seqno and q.matches(msg, *filter):
+                    output_entry(args.format, msg, not args.no_colors, args.verbose)
+                    seqno = msg['seqno']
 
         c.register_event_handler('logd.logging.message', on_message)
 
     with lock:
         for i in query(c, args, filter, params):
-            output_entry(args.format, i, not args.no_colors)
+            output_entry(args.format, i, not args.no_colors, args.verbose)
             seqno = i['seqno']
 
     if args.follow:
