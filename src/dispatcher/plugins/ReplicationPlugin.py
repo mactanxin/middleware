@@ -1789,7 +1789,7 @@ def _init(dispatcher, plugin):
             'update_date': {'type': 'string'},
             'datasets': {
                 'type': 'array',
-                'items': {'$ref': 'datasets-replication-pair'}
+                'items': {'$ref': 'DatasetsReplicationPair'}
             },
             'bidirectional': {'type': 'boolean'},
             'auto_recover': {'type': 'boolean'},
