@@ -296,13 +296,13 @@ def _init(dispatcher, plugin):
             'guest_user': {'type': 'string'},
             'filemask': {
                 'oneOf': [
-                    {'$ref': 'unix-permissions'},
+                    {'$ref': 'UnixPermissions'},
                     {'type': 'null'}
                 ]
             },
             'dirmask': {
                 'oneOf': [
-                    {'$ref': 'unix-permissions'},
+                    {'$ref': 'UnixPermissions'},
                     {'type': 'null'}
                 ]
             },

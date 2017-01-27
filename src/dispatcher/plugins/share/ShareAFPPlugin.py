@@ -266,13 +266,13 @@ def _init(dispatcher, plugin):
             'afp3_privileges': {'type': 'boolean'},
             'smb_compatible': {'type': 'boolean'},
             'default_file_perms': {
-                'oneOf': [{'$ref': 'unix-permissions'}, {'type': 'null'}]
+                'oneOf': [{'$ref': 'UnixPermissions'}, {'type': 'null'}]
             },
             'default_directory_perms': {
-                'oneOf': [{'$ref': 'unix-permissions'}, {'type': 'null'}]
+                'oneOf': [{'$ref': 'UnixPermissions'}, {'type': 'null'}]
             },
             'default_umask': {
-                'oneOf': [{'$ref': 'unix-permissions'}, {'type': 'null'}]
+                'oneOf': [{'$ref': 'UnixPermissions'}, {'type': 'null'}]
             },
             'ro_users': {
                 'type': ['array', 'null'],

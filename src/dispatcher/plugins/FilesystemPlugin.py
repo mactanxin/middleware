@@ -46,7 +46,7 @@ from freenas.utils.permissions import modes_to_oct, get_type
 class FilesystemProvider(Provider):
     @description("Lists contents of given directory")
     @accepts(str)
-    @returns(h.array(h.ref('directory')))
+    @returns(h.array(h.ref('Directory')))
     def list_dir(self, path):
         result = []
         if not os.path.isdir(path):
@@ -234,7 +234,7 @@ class UploadFileTask(Task):
         return TaskStatus(percentage)
 
 
-@accepts(str, h.ref('permissions'), bool)
+@accepts(str, h.ref('Permissions'), bool)
 @description('Sets permissions')
 class SetPermissionsTask(Task):
     @classmethod
