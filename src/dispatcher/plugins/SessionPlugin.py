@@ -142,7 +142,7 @@ def _init(dispatcher, plugin):
         for i in dispatcher.datastore_log.query_stream('sessions', ('active', '=', True)):
             i['active'] = False
             i['ended_at'] = datetime.utcnow()
-            dispatcher.datastore.update('sessions', i['id'], i)
+            dispatcher.datastore_log.update('sessions', i['id'], i)
 
     plugin.register_provider('session', SessionProvider)
     plugin.register_event_type('session.changed')
