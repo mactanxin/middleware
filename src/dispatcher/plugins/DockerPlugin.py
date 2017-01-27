@@ -455,13 +455,6 @@ class DockerUpdateTask(Task):
         return ['docker']
 
     def run(self, updated_params):
-        if 'default_collection' in updated_params:
-            if not self.datastore.exists('docker.collections', ('id', '=', updated_params['default_collection'])):
-                raise TaskException(
-                    errno.ENOENT,
-                    'Containers collection {0} does not exist'.format(updated_params['default_collection'])
-                )
-
         node = ConfigNode('container.docker', self.configstore)
         node.update(updated_params)
         state = node.__getstate__()
@@ -1940,13 +1933,6 @@ def _init(dispatcher, plugin):
                             'ids': args['ids']
                         })
 
-    def on_collection_change(args):
-        if args['operation'] == 'delete':
-            node = ConfigNode('container.docker', dispatcher.configstore)
-            default_collection = node.__getstate__().get('default_collection')
-            if default_collection and default_collection in args['ids']:
-                node.update({'default_collection': None})
-
     def refresh_database_cache(collection, event, query, lock, host_id=None):
         filter = []
         if host_id:
@@ -2081,7 +2067,6 @@ def _init(dispatcher, plugin):
     plugin.register_event_handler('vm.changed', on_vm_change)
     plugin.register_event_handler('plugin.service_registered',
                                   lambda a: refresh_cache() if a['service-name'] == 'containerd.docker' else None)
-    plugin.register_event_handler('docker.collection.changed', on_collection_change)
 
     plugin.attach_hook('vm.pre_destroy', vm_pre_destroy)
 
@@ -2109,7 +2094,6 @@ def _init(dispatcher, plugin):
         'properties': {
             'default_host': {'type': ['string', 'null']},
             'api_forwarding': {'type': ['string', 'null']},
-            'default_collection': {'type': ['string', 'null']},
             'api_forwarding_enable': {'type': 'boolean'}
         }
     })
