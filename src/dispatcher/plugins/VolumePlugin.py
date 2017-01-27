@@ -3053,6 +3053,11 @@ def register_property_schemas(plugin):
         })
 
 
+def collect_debug(dispatcher):
+    yield AttachData('volume-query', dumps(list(dispatcher.call_sync('volume.query')), indent=4))
+    yield AttachData('volumes', dumps(list(dispatcher.datastore.query('volumes')), indent=4))
+
+
 def _depends():
     return ['DevdPlugin', 'ZfsPlugin', 'AlertPlugin', 'DiskPlugin']
 
@@ -3595,6 +3600,8 @@ def _init(dispatcher, plugin):
     plugin.register_event_type('volume.changed')
     plugin.register_event_type('volume.dataset.changed')
     plugin.register_event_type('volume.snapshot.changed')
+
+    plugin.register_debug_hook(collect_debug)
 
     for vol in dispatcher.call_sync('volume.query'):
         if vol.get('providers_presence', 'ALL') == 'NONE':
