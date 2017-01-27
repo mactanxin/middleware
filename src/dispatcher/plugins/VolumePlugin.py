@@ -37,7 +37,6 @@ import copy
 import bsd
 import bsd.kld
 import hashlib
-import json
 import time
 import uuid
 from datetime import datetime
@@ -60,6 +59,8 @@ from freenas.utils import include, exclude, normalize, chunks, yesno_to_bool, re
 from freenas.utils.copytree import count_files, copytree
 from cryptography.fernet import Fernet, InvalidToken
 from freenas.dispatcher.fd import FileDescriptor
+from freenas.dispatcher.jsonenc import loads, dumps
+from debug import AttachData
 
 
 VOLUME_LAYOUTS = {
@@ -2047,7 +2048,7 @@ class VolumeBackupKeysTask(Task):
             out_data[result['disk']] = result
 
         password = str(uuid.uuid4())
-        enc_data = fernet_encrypt(password, json.dumps(out_data).encode('utf-8'))
+        enc_data = fernet_encrypt(password, dumps(out_data).encode('utf-8'))
 
         with os.fdopen(fd.fd, 'wb') as out_file:
             out_file.write(enc_data)
@@ -2128,7 +2129,7 @@ class VolumeRestoreKeysTask(Task):
         except InvalidToken:
             raise TaskException(errno.EINVAL, 'Provided password do not match backup file')
 
-        data = json.loads(json_data.decode('utf-8'), 'utf-8')
+        data = loads(json_data.decode('utf-8'), 'utf-8')
 
         with self.dispatcher.get_lock('volumes'):
             subtasks = []
