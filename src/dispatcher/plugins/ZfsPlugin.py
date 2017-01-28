@@ -1880,6 +1880,10 @@ def _init(dispatcher, plugin):
         opts = {'cachefile': USER_CACHE_FILE}
 
         for pool in dispatcher.threaded(lambda: list(zfs.find_import(cachefile=USER_CACHE_FILE))):
+            volume = dispatcher.datastore.get_by_id('volumes', pool.name)
+            if volume and (volume.get('key_encrypted') or volume.get('password_encrypted')):
+                continue
+
             try:
                 logger.info('Importing pool {0} <{1}>'.format(pool.name, pool.guid))
                 dispatcher.threaded(zfs.import_pool, pool, pool.name, opts)
@@ -1897,6 +1901,10 @@ def _init(dispatcher, plugin):
         unimported_duplicate_pools = []
 
         for pool in dispatcher.threaded(lambda: list(zfs.find_import(search_paths=['/dev/gptid']))):
+            volume = dispatcher.datastore.get_by_id('volumes', pool.name)
+            if volume and (volume.get('key_encrypted') or volume.get('password_encrypted')):
+                continue
+
             if pool.guid in unimported_unique_pools:
                 # This means that the pool is prolly a duplicate
                 # Thus remove it from this dict of pools
@@ -1928,7 +1936,12 @@ def _init(dispatcher, plugin):
 
         # Finally, Importing the unique unimported pools that are present in
         # the database
-        for vol in dispatcher.datastore.query_stream('volumes'):
+        volumes = dispatcher.datastore.query_stream(
+            'volumes',
+            ('key_encrypted', '!=', True),
+            ('password_encrypted', '!=', True)
+        )
+        for vol in volumes:
             if int(vol['guid']) in unimported_unique_pools:
                 pool_to_import = unimported_unique_pools[int(vol['guid'])]
                 # Check if the volume name is also the same
