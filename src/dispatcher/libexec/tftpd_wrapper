@@ -29,16 +29,17 @@ import os
 from datastore import get_datastore
 from datastore.config import ConfigStore, ConfigNode
 from freenas.serviced import checkin
-from freenas.utils.permissions import perm_to_oct_string
+from freenas.utils.permissions import perm_to_oct_string, get_unix_permissions
 
 
 ds = get_datastore()
 cs = ConfigStore(ds)
 tftpd = ConfigNode('service.tftpd', cs).__getstate__()
 args = \
-    ['/usr/local/libexec/in.tftpd', '-u', tftpd['username'], '-U', perm_to_oct_string(tftpd['umask'])] +\
-    ['-a', str(tftpd['port'])] + (['-c'] if tftpd['allow_new_files'] else []) + \
-    tftpd['path']
+    ['/usr/local/libexec/in.tftpd', '-L', '-u', tftpd['username'], '-U', perm_to_oct_string(get_unix_permissions(tftpd['umask']))] +\
+    ['-a', '0.0.0.0:' + str(tftpd['port'])] + ['-a', '[::]:' + str(tftpd['port'])] + \
+    (['-c'] if tftpd['allow_new_files'] else []) + \
+    [tftpd['path']]
 
 checkin()
 os.execv('/usr/local/libexec/in.tftpd', args)
