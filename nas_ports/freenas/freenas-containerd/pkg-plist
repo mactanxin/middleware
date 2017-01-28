@@ -1,3 +1,2 @@
 etc/rc.d/containerd
 sbin/containerd
-share/containerd/virtio-win.iso
