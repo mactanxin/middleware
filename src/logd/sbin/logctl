@@ -179,27 +179,27 @@ def main():
         params['reverse'] = True
         params['limit'] = args.limit
 
-    if args.follow:
-        @sync
-        def on_message(msg):
-            nonlocal seqno
-            with lock:
-                if msg['seqno'] > seqno and q.matches(msg, *filter):
-                    output_entry(args.format, msg, not args.no_colors, args.verbose)
-                    seqno = msg['seqno']
+    try:
+        if args.follow:
+            @sync
+            def on_message(msg):
+                nonlocal seqno
+                with lock:
+                    if msg['seqno'] > seqno and q.matches(msg, *filter):
+                        output_entry(args.format, msg, not args.no_colors, args.verbose)
+                        seqno = msg['seqno']
 
-        c.register_event_handler('logd.logging.message', on_message)
+            c.register_event_handler('logd.logging.message', on_message)
 
-    with lock:
-        for i in query(c, args, filter, params):
-            output_entry(args.format, i, not args.no_colors, args.verbose)
-            seqno = i['seqno']
+        with lock:
+            for i in query(c, args, filter, params):
+                output_entry(args.format, i, not args.no_colors, args.verbose)
+                seqno = i['seqno']
 
-    if args.follow:
-        try:
+        if args.follow:
             signal.pause()
-        except KeyboardInterrupt:
-            pass
+    except KeyboardInterrupt:
+        pass
 
     c.disconnect()
 
