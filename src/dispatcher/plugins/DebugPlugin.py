@@ -163,10 +163,10 @@ class SaveDebugTask(ProgressTask):
         return ['system']
 
     def run(self, path):
-        file = open(path, 'wb+')
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC)
         self.run_subtask_sync(
             'debug.collect',
-            FileDescriptor(file.fileno()),
+            FileDescriptor(fd),
             progress_callback=lambda p, m, e=None: self.chunk_progress(0, 100, '', p, m, e)
         )
 
