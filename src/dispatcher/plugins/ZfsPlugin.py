@@ -728,6 +728,8 @@ class ZpoolImportTask(Task):
     def run(self, guid, name=None, properties=None):
         zfs = get_zfs()
         opts = properties or {}
+        opts['cachefile'] = USER_CACHE_FILE
+        
         try:
             if guid.isdigit():
                 pool = first_or_default(
