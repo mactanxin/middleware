@@ -10,6 +10,9 @@ VALID_CATEGORIES+= freenas
 MAINTAINER=	dev@ixsystems.com
 COMMENT=	FreeNAS service management daemon
 
+RUN_DEPENDS=	${PYTHON_PKGNAMEPREFIX}freenas.dispatcher>0:${PORTSDIR}/freenas/py-freenas.dispatcher \
+		${PYTHON_PKGNAMEPREFIX}logd>0:${PORTSDIR}/freenas/py-logd
+
 USES=		python
 USE_PYTHON=	py3kplist
 EXTRACT_ONLY=

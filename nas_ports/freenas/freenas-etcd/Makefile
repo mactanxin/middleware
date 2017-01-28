@@ -10,9 +10,10 @@ VALID_CATEGORIES+= freenas
 MAINTAINER=	dev@ixsystems.com
 COMMENT=	FreeNAS /etc filesystem daemon
 
-RUN_DEPENDS=	\
-		${PYTHON_PKGNAMEPREFIX}htpasswd>0:${PORTSDIR}/security/py-htpasswd \
-		${PYTHON_PKGNAMEPREFIX}mako>0:${PORTSDIR}/textproc/py-mako
+RUN_DEPENDS=	${PYTHON_PKGNAMEPREFIX}htpasswd>0:${PORTSDIR}/security/py-htpasswd \
+		${PYTHON_PKGNAMEPREFIX}mako>0:${PORTSDIR}/textproc/py-mako \
+		${PYTHON_PKGNAMEPREFIX}freenas.dispatcher>0:${PORTSDIR}/freenas/py-freenas.dispatcher \
+		${PYTHON_PKGNAMEPREFIX}logd>0:${PORTSDIR}/freenas/py-logd
 
 USES=		python
 USE_PYTHON=	py3kplist
