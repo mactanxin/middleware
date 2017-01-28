@@ -424,7 +424,8 @@ class Task(object):
                 self.error = error
 
             if self.state == TaskState.EXECUTING:
-                self.started_at = datetime.utcnow()
+                if not self.started_at:
+                    self.started_at = datetime.utcnow()
                 event['started_at'] = self.started_at
 
             if self.state == TaskState.FINISHED:
