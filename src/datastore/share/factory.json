@@ -76,7 +76,6 @@
             "service.smb.dos_charset": "CP437",
             "service.smb.unix_charset": "UTF-8",
             "service.smb.log_level": "MINIMUM",
-            "service.smb.syslog": false,
             "service.smb.local_master": false,
             "service.smb.domain_logons": false,
             "service.smb.time_server": false,
