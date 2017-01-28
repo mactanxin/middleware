@@ -1260,7 +1260,7 @@ class VolumeImportTask(Task):
             for vdev, _ in iterate_vdevs(new_topology):
                 vdev['disk_id'] = self.dispatcher.call_sync(
                     'disk.query',
-                    [('path', '=', vdev['path'])],
+                    [('status.data_partition_path', '=', vdev['path'])],
                     {'single': True, 'select': 'id'}
                 )
 
