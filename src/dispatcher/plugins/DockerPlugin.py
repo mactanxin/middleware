@@ -308,7 +308,7 @@ class DockerCollectionProvider(Provider):
     @query('docker-collection')
     @generator
     def query(self, filter=None, params=None):
-        return self.datastore_log.query_stream('docker.collections', *(filter or []), **(params or {}))
+        return self.datastore.query_stream('docker.collections', *(filter or []), **(params or {}))
 
     @description('Returns a list of Docker images related to a saved collection')
     @returns(h.array(h.ref('docker-hub-image')))
@@ -434,7 +434,7 @@ class DockerUpdateTask(Task):
 
     def run(self, updated_params):
         if 'default_collection' in updated_params:
-            if not self.datastore_log.exists('docker.collections', ('id', '=', updated_params['default_collection'])):
+            if not self.datastore.exists('docker.collections', ('id', '=', updated_params['default_collection'])):
                 raise TaskException(
                     errno.ENOENT,
                     'Containers collection {0} does not exist'.format(updated_params['default_collection'])
@@ -1499,7 +1499,7 @@ class DockerCollectionUpdateTask(Task):
         if 'name' in updated_params and self.datastore.exists('docker.collections', ('name', '=', collection['name'])):
             raise TaskException(errno.EEXIST, 'Docker collection {0} already exists'.format(collection['name']))
 
-        self.datastore_log.update('docker.collections', id, collection)
+        self.datastore.update('docker.collections', id, collection)
         self.dispatcher.dispatch_event('docker.collection.changed', {
             'operation': 'update',
             'ids': [id]
