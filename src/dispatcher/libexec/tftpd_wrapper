@@ -37,7 +37,7 @@ cs = ConfigStore(ds)
 tftpd = ConfigNode('service.tftpd', cs).__getstate__()
 args = \
     ['/usr/local/libexec/in.tftpd', '-L', '-u', tftpd['username'], '-U', perm_to_oct_string(get_unix_permissions(tftpd['umask']))] +\
-    ['-a', '0.0.0.0:' + str(tftpd['port'])] + ['-a', '[::]:' + str(tftpd['port'])] + \
+    ['-a', ':' + str(tftpd['port'])] + \
     (['-c'] if tftpd['allow_new_files'] else []) + \
     [tftpd['path']]
 
