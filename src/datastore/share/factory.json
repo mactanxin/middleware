@@ -1367,13 +1367,20 @@
     {
          "metadata": {
             "name": "tunables",
-            "migration": "keep",
+            "migration": "merge-preserve",
             "pkey-type": "uuid",
             "attributes": {
                 "type": "config"
             }
         },
         "data": {
+            "16d65fe7-e56e-11e6-afca-0cc47a3511b4": {
+                "type": "LOADER",
+                "var": "hw.mfi.allow_cam_disk_passthrough",
+                "value": "1",
+                "comment": "CAM passthrough for disks attached via mfi(4) controllers",
+                "enabled": true
+            }
         }
     },
     {
