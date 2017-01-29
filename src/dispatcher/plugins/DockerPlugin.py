@@ -120,7 +120,7 @@ class DockerContainerProvider(Provider):
         reachable_hosts = list(self.dispatcher.call_sync('docker.host.query', [('state', '=', 'UP')], {'select': 'id'}))
 
         return q.query(
-            self.datastore.query_stream('docker.containers', callback=lambda o: extend(o, reachable_hosts)),
+            self.datastore_log.query_stream('docker.containers', callback=lambda o: extend(o, reachable_hosts)),
             *(filter or []),
             stream=True,
             **(params or {})
@@ -165,7 +165,7 @@ class DockerNetworkProvider(Provider):
             filter = hide_builtin_networks
 
         return q.query(
-            self.datastore.query_stream('docker.networks'),
+            self.datastore_log.query_stream('docker.networks'),
             *(filter or []),
             stream=True,
             **(params or {})
@@ -328,9 +328,7 @@ class DockerCollectionProvider(Provider):
     @query('DockerCollection')
     @generator
     def query(self, filter=None, params=None):
-        return self.datastore.query_stream(
-            'docker.collections', *(filter or []), **(params or {})
-        )
+        return self.datastore_log.query_stream('docker.collections', *(filter or []), **(params or {}))
 
     @description('Returns a list of Docker images related to a saved collection')
     @returns(h.array(h.ref('DockerHubImage')))
@@ -509,7 +507,7 @@ class DockerContainerCreateTask(DockerBaseTask):
             return ['docker']
 
     def run(self, container):
-        if self.datastore.exists('docker.containers', ('names.0', '=', container['names'][0])):
+        if self.datastore_log.exists('docker.containers', ('names.0', '=', container['names'][0])):
             raise TaskException(errno.EEXIST, 'Docker container {0} already exists'.format(container['names'][0]))
 
         self.set_progress(0, 'Checking Docker host state')
@@ -604,11 +602,11 @@ class DockerContainerUpdateTask(DockerBaseTask):
         return 'Updating a Docker container'
 
     def describe(self, id, updated_fields):
-        container = self.datastore.get_by_id('docker.containers', id)
+        container = self.datastore_log.get_by_id('docker.containers', id)
         return TaskDescription('Updating Docker container {name}', name=q.get(container, 'names.0', ''))
 
     def verify(self, id, updated_fields):
-        container = self.datastore.get_by_id('docker.containers', id) or {}
+        container = self.datastore_log.get_by_id('docker.containers', id) or {}
         host = self.datastore.get_by_id('vms', container.get('host')) or {}
         hostname = host.get('name')
 
@@ -643,7 +641,7 @@ class DockerContainerUpdateTask(DockerBaseTask):
             return ['docker']
 
     def run(self, id, updated_fields):
-        if not self.datastore.exists('docker.containers', ('id', '=', id)):
+        if not self.datastore_log.exists('docker.containers', ('id', '=', id)):
             raise TaskException(errno.ENOENT, 'Docker container {0} does not exist'.format(id))
 
         container = self.dispatcher.call_sync('docker.container.query', [('id', '=', id)], {'single': True})
@@ -689,7 +687,7 @@ class DockerContainerDeleteTask(DockerBaseTask):
             return ['docker']
 
     def run(self, id):
-        if not self.datastore.exists('docker.containers', ('id', '=', id)):
+        if not self.datastore_log.exists('docker.containers', ('id', '=', id)):
             raise TaskException(errno.ENOENT, 'Docker container {0} does not exist'.format(id))
 
         try:
@@ -697,7 +695,7 @@ class DockerContainerDeleteTask(DockerBaseTask):
         except RpcException:
             name, host_name = self.get_container_name_and_vm_name(id)
 
-            self.datastore.delete('docker.containers', id)
+            self.datastore_log.delete('docker.containers', id)
             self.dispatcher.dispatch_event('docker.container.changed', {
                 'operation': 'delete',
                 'ids': [id]
@@ -747,7 +745,7 @@ class DockerContainerStartTask(DockerBaseTask):
             return ['docker']
 
     def run(self, id):
-        if not self.datastore.exists('docker.containers', ('id', '=', id)):
+        if not self.datastore_log.exists('docker.containers', ('id', '=', id)):
             raise TaskException(errno.ENOENT, 'Docker container {0} does not exist'.format(id))
 
         try:
@@ -793,7 +791,7 @@ class DockerContainerStopTask(Task):
             return ['docker']
 
     def run(self, id):
-        if not self.datastore.exists('docker.containers', ('id', '=', id)):
+        if not self.datastore_log.exists('docker.containers', ('id', '=', id)):
             raise TaskException(errno.ENOENT, 'Docker container {0} does not exist'.format(id))
 
         self.dispatcher.exec_and_wait_for_event(
@@ -813,7 +811,7 @@ class DockerContainerCloneTask(DockerBaseTask):
         return 'Cloning a Docker container'
 
     def describe(self, id, new_name):
-        container = self.datastore.get_by_id('docker.containers', id)
+        container = self.datastore_log.get_by_id('docker.containers', id)
         return TaskDescription(
             'Cloning Docker container {name} to {new_name}',
             name=q.get(container, 'names.0', ''),
@@ -821,7 +819,7 @@ class DockerContainerCloneTask(DockerBaseTask):
         )
 
     def verify(self, id, new_name):
-        container = self.datastore.get_by_id('docker.containers', id) or {}
+        container = self.datastore_log.get_by_id('docker.containers', id) or {}
         host = self.datastore.get_by_id('vms', container.get('host')) or {}
         hostname = host.get('name')
 
@@ -831,10 +829,10 @@ class DockerContainerCloneTask(DockerBaseTask):
             return ['docker']
 
     def run(self, id, new_name):
-        if not self.datastore.exists('docker.containers', ('id', '=', id)):
+        if not self.datastore_log.exists('docker.containers', ('id', '=', id)):
             raise TaskException(errno.ENOENT, 'Docker container {0} does not exist'.format(id))
 
-        if self.datastore.exists('docker.containers', ('names.0', '=', new_name)):
+        if self.datastore_log.exists('docker.containers', ('names.0', '=', new_name)):
             raise TaskException(errno.EEXIST, 'Docker container {0} already exists'.format(new_name))
 
         container = self.dispatcher.call_sync('docker.container.query', [('id', '=', id)], {'single': True})
@@ -875,7 +873,7 @@ class DockerContainerCommitTask(DockerBaseTask):
         return TaskDescription('Committing the Docker image {name}', name=name)
 
     def verify(self, id, name, tag=None):
-        container = self.datastore.get_by_id('docker.containers', id) or {}
+        container = self.datastore_log.get_by_id('docker.containers', id) or {}
         host = self.datastore.get_by_id('vms', container.get('host')) or {}
         hostname = host.get('name')
 
@@ -885,7 +883,7 @@ class DockerContainerCommitTask(DockerBaseTask):
             return ['docker']
 
     def run(self, id, name, tag=None):
-        if not self.datastore.exists('docker.containers', ('id', '=', id)):
+        if not self.datastore_log.exists('docker.containers', ('id', '=', id)):
             raise TaskException(errno.ENOENT, 'Docker container {0} does not exist'.format(id))
 
         if self.dispatcher.call_sync('docker.image.query', [('names.0', '=', name)], {'count': True}):
@@ -951,7 +949,7 @@ class DockerNetworkCreateTask(DockerBaseTask):
             return ['docker']
 
     def run(self, network):
-        if self.datastore.exists('docker.networks', ('name', '=', network['name'])):
+        if self.datastore_log.exists('docker.networks', ('name', '=', network['name'])):
             raise TaskException(errno.EEXIST, 'Docker network {0} already exists'.format(network['name']))
 
         normalize(network, {
@@ -1044,7 +1042,7 @@ class DockerNetworkDeleteTask(DockerBaseTask):
         except RpcException:
             name, host_name = self.get_network_name_and_vm_name(id)
 
-            self.datastore.delete('docker.networks', id)
+            self.datastore_log.delete('docker.networks', id)
             self.dispatcher.dispatch_event('docker.network.changed', {
                 'operation': 'delete',
                 'ids': [id]
@@ -1102,7 +1100,7 @@ class DockerNetworkConnectTask(DockerBaseTask):
 
     def run(self, container_ids, network_id):
         for id in container_ids:
-            if not self.datastore.exists('docker.containers', ('id', '=', id)):
+            if not self.datastore_log.exists('docker.containers', ('id', '=', id)):
                 raise TaskException(errno.ENOENT, 'Docker container {0} not found'.format(id))
 
         network = self.dispatcher.call_sync('docker.network.query', [('id', '=', network_id)], {'single': True})
@@ -1885,7 +1883,7 @@ def _init(dispatcher, plugin):
 
                 if args['operation'] == 'delete':
                     for i in args['ids']:
-                        dispatcher.datastore.delete(collection, i)
+                        dispatcher.datastore_log.delete(collection, i)
 
                     dispatcher.dispatch_event(event, {
                         'operation': 'delete',
@@ -1895,9 +1893,9 @@ def _init(dispatcher, plugin):
                     objs = dispatcher.call_sync(CONTAINERS_QUERY, [('id', 'in', args['ids'])])
                     for obj in map(lambda o: exclude(o, 'running', 'health'), objs):
                         if args['operation'] == 'create':
-                            dispatcher.datastore.insert(collection, obj)
+                            dispatcher.datastore_log.insert(collection, obj)
                         else:
-                            dispatcher.datastore.update(collection, obj['id'], obj)
+                            dispatcher.datastore_log.update(collection, obj['id'], obj)
 
                         dispatcher.dispatch_event(event, {
                             'operation': args['operation'],
@@ -1914,7 +1912,7 @@ def _init(dispatcher, plugin):
             if args['ids']:
                 if args['operation'] == 'delete':
                     for i in args['ids']:
-                        dispatcher.datastore.delete(collection, i)
+                        dispatcher.datastore_log.delete(collection, i)
 
                     dispatcher.dispatch_event(event, {
                         'operation': 'delete',
@@ -1924,9 +1922,9 @@ def _init(dispatcher, plugin):
                     objs = dispatcher.call_sync(NETWORKS_QUERY, [('id', 'in', args['ids'])])
                     for obj in objs:
                         if args['operation'] == 'create':
-                            dispatcher.datastore.insert(collection, obj)
+                            dispatcher.datastore_log.insert(collection, obj)
                         else:
-                            dispatcher.datastore.update(collection, obj['id'], obj)
+                            dispatcher.datastore_log.update(collection, obj['id'], obj)
 
                         dispatcher.dispatch_event(event, {
                             'operation': args['operation'],
@@ -1943,7 +1941,7 @@ def _init(dispatcher, plugin):
 
         with lock:
             current = list(dispatcher.call_sync(query, filter))
-            old = dispatcher.datastore.query(collection, *filter)
+            old = dispatcher.datastore_log.query(collection, *filter)
             created = []
             updated = []
             deleted = []
@@ -1951,16 +1949,16 @@ def _init(dispatcher, plugin):
                 old_obj = first_or_default(lambda o: o['id'] == obj['id'], old)
                 if old_obj:
                     if obj != old_obj:
-                        dispatcher.datastore.update(collection, obj['id'], obj)
+                        dispatcher.datastore_log.update(collection, obj['id'], obj)
                         updated.append(obj['id'])
 
                 else:
-                    dispatcher.datastore.insert(collection, obj)
+                    dispatcher.datastore_log.insert(collection, obj)
                     created.append(obj['id'])
 
             for obj in old:
                 if not first_or_default(lambda o: o['id'] == obj['id'], current):
-                    dispatcher.datastore.delete(collection, obj['id'])
+                    dispatcher.datastore_log.delete(collection, obj['id'])
                     deleted.append(obj['id'])
 
             if created:

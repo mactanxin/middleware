@@ -3284,6 +3284,12 @@ def _init(dispatcher, plugin):
                     dispatcher.call_task_sync('zfs.pool.import', vol['guid'])
                     dispatcher.call_task_sync('zfs.mount', vol['id'], True)
 
+    def on_server_ready(args):
+        for vol in dispatcher.call_sync('volume.query'):
+            if vol.get('providers_presence', 'ALL') == 'NONE':
+                if vol.get('auto_unlock') and vol.get('key_encrypted') and not vol.get('password_encrypted'):
+                    dispatcher.call_task_sync('volume.unlock', vol['id'])
+
     def scrub_snapshots():
         interval = dispatcher.configstore.get('middleware.snapshot_scrub_interval')
         while True:
@@ -3596,27 +3602,13 @@ def _init(dispatcher, plugin):
     plugin.register_event_handler('entity-subscriber.zfs.pool.changed', on_pool_change)
     plugin.register_event_handler('zfs.pool.vdev_state_changed', on_vdev_state_change)
     plugin.register_event_handler('disk.attached', on_disk_attached)
+    plugin.register_event_handler('server.ready', on_server_ready)
 
     plugin.register_event_type('volume.changed')
     plugin.register_event_type('volume.dataset.changed')
     plugin.register_event_type('volume.snapshot.changed')
 
     plugin.register_debug_hook(collect_debug)
-
-    for vol in dispatcher.call_sync('volume.query'):
-        if vol.get('providers_presence', 'ALL') == 'NONE':
-            if vol.get('auto_unlock') and vol.get('key_encrypted') and not vol.get('password_encrypted'):
-                dispatcher.call_task_sync('volume.unlock', vol['id'])
-            else:
-                continue
-
-        try:
-            dispatcher.call_task_sync('zfs.mount', vol['id'], True)
-
-            # XXX: check mountpoint property and correct if needed
-        except TaskException as err:
-            if err.code != errno.EBUSY:
-                logger.warning('Cannot mount volume {0}: {1}'.format(vol['id'], str(err)))
 
     for pool in dispatcher.call_sync('zfs.pool.query'):
         if dispatcher.datastore.exists('volumes', ('id', '=', pool['id'])):

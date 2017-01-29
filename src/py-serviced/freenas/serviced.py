@@ -25,12 +25,14 @@
 #
 #####################################################################
 
+from threading import Lock
 from freenas.dispatcher.client import Client
 from freenas.dispatcher.rpc import RpcException
 
 
 SERVICED_SOCKET = 'unix:///var/run/serviced.sock'
 _client = Client()
+_lock = Lock()
 
 
 class ServicedException(RpcException):
@@ -38,35 +40,48 @@ class ServicedException(RpcException):
 
 
 def checkin():
-    try:
-        _client.connect(SERVICED_SOCKET)
-        result = _client.call_sync('serviced.job.checkin')
-        _client.disconnect()
-    except RpcException as err:
-        raise ServicedException(err.code, err.message, err.extra)
-    else:
-        return result
+    with _lock:
+        try:
+            _client.connect(SERVICED_SOCKET)
+            return _client.call_sync('serviced.job.checkin')
+        except RpcException as err:
+            raise ServicedException(err.code, err.message, err.extra)
+        finally:
+            _client.disconnect()
 
 
 def push_status(status):
-    try:
-        _client.connect(SERVICED_SOCKET)
-        result = _client.call_sync('serviced.job.push_status', status)
-        _client.disconnect()
-    except RpcException as err:
-        raise ServicedException(err.code, err.message, err.extra)
-    else:
-        return result
+    with _lock:
+        try:
+            _client.connect(SERVICED_SOCKET)
+            return _client.call_sync('serviced.job.push_status', status)
+        except RpcException as err:
+            raise ServicedException(err.code, err.message, err.extra)
+        finally:
+            _client.disconnect()
 
 
 def subscribe(callback):
-    try:
-        _client.connect(SERVICED_SOCKET)
-        _client.on_event(callback)
-    except RpcException as err:
-        raise ServicedException(err.code, err.message, err.extra)
+    with _lock:
+        try:
+            _client.connect(SERVICED_SOCKET)
+            _client.on_event(callback)
+        except RpcException as err:
+            raise ServicedException(err.code, err.message, err.extra)
+
+
+def get_job_by_pid(pid, fuzzy=False):
+    with _lock:
+        try:
+            _client.connect(SERVICED_SOCKET)
+            return _client.call_sync('serviced.job.get_by_pid', pid, fuzzy)
+        except RpcException as err:
+            raise ServicedException(err.code, err.message, err.extra)
+        finally:
+            _client.disconnect()
 
 
 def unsubscribe():
-    _client.on_event = None
-    _client.disconnect()
+    with _lock:
+        _client.on_event = None
+        _client.disconnect()

@@ -44,7 +44,7 @@ checksum fetch:
 	${ECHO_CMD} ${.TARGET} not needed because building direct
 
 do-build:
-	(cat ${WRKSRC}/share/factory.json | ${LOCALBASE}/bin/jq . || (${ECHO_CMD} "Why you haz no validate thiz factory.json!? No donuts for you!" && ${FALSE}))
+	(cat ${WRKSRC}/share/factory.json | ${LOCALBASE}/bin/jq . || (${ECHO_CMD} "Why yuo haz no validate thiz factory.json!? No donuts for yuo!" && ${FALSE}))
 
 do-install:
 	${MAKE} -C ${WRKSRC} install STAGEDIR=${STAGEDIR} PREFIX=${PREFIX} PYTHON=${PYTHON_CMD}

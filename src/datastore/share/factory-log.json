@@ -1,0 +1,111 @@
+[
+    {
+        "metadata": {
+            "name": "sessions",
+            "migration": "keep",
+            "pkey-type": "uuid",
+            "attributes": {
+                "type": "log"
+            }
+        },
+        "data": {
+        }
+    },
+    {
+        "metadata": {
+            "name": "tasks",
+            "migration": "keep",
+            "pkey-type": "serial",
+            "attributes": {
+                "type": "log"
+            }
+        },
+        "data": {
+        }
+    },
+    {
+        "metadata": {
+            "name": "backup.runs",
+            "migration": "keep",
+            "pkey-type": "integer",
+            "attributes": {
+                "type": "log"
+            }
+        },
+        "data": {
+        }
+    },
+    {
+        "metadata": {
+            "name": "fileindex",
+            "migration": "keep",
+            "pkey-type": "uuid",
+            "attributes": {
+                "type": "log"
+            }
+        },
+        "data": {
+        }
+    },
+    {
+        "metadata": {
+            "name": "schedulerd.runs",
+            "migration": "keep",
+            "pkey-type": "uuid",
+            "attributes": {
+                "type": "log"
+            }
+        },
+        "data": {
+        }
+    },
+        {
+        "metadata": {
+            "name": "docker.containers",
+            "migration": "keep",
+            "pkey-type": "uuid",
+            "attributes": {
+                "type": "log"
+            }
+        },
+        "data": {
+        }
+    },
+    {
+        "metadata": {
+            "name": "docker.networks",
+            "migration": "keep",
+            "pkey-type": "uuid",
+            "attributes": {
+                "type": "log"
+            }
+        },
+        "data": {
+        }
+    },
+        {
+        "metadata": {
+            "name": "syslog",
+            "migration": "keep",
+            "pkey-type": "uuid",
+            "attributes": {
+                "type": "log",
+                "cap": 8589934592
+            }
+        },
+        "data": {
+        }
+    },
+    {
+        "metadata": {
+            "name": "boots",
+            "migration": "keep",
+            "pkey-type": "uuid",
+            "attributes": {
+                "type": "log"
+            }
+        },
+        "data": {
+        }
+    }
+]

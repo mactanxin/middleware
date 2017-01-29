@@ -53,7 +53,7 @@ def init_datastore(filename):
     global ds
 
     try:
-        ds = datastore.get_datastore(filename)
+        ds = datastore.get_datastore(filename, log=True)
     except datastore.DatastoreException as err:
         print("Cannot initialize datastore: {0}".format(str(err)), file=sys.stderr)
         sys.exit(1)

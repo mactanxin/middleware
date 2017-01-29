@@ -76,7 +76,6 @@
             "service.smb.dos_charset": "CP437",
             "service.smb.unix_charset": "UTF-8",
             "service.smb.log_level": "MINIMUM",
-            "service.smb.syslog": false,
             "service.smb.local_master": false,
             "service.smb.domain_logons": false,
             "service.smb.time_server": false,
@@ -315,7 +314,6 @@
             "system.dataset.pool": "freenas-boot",
             "system.dataset.id": null,
             "system.dataset.services": [
-                "syslog",
                 "fnstatd",
                 "smb"
             ],
@@ -392,12 +390,6 @@
     },
     {
         "data": {
-            "5973ed86-1bc4-41a6-a70e-530d6843ba5b": {
-                "dependencies": [
-                    "file:local/syslog-ng.conf"
-                ],
-                "name": "syslog"
-            },
             "0b8b01d5-91b4-4dee-9720-4d65d56f513e": {
                 "dependencies": [
                     "file:local/smbusers"
@@ -697,20 +689,6 @@
                 },
                 "builtin": true,
                 "name": "vmtoolsd"
-            },
-            "77c31bda-a90a-495a-8d58-0063981eec67": {
-                "launchd": {
-                    "Label": "org.syslog-ng.syslog-ng",
-                    "RunAtLoad": true,
-                    "Requires": ["etc"],
-                    "Provides": ["logging"],
-                    "ProgramArguments": [
-                        "/usr/local/sbin/syslog-ng",
-                        "-F"
-                    ]
-                },
-                "builtin": true,
-                "name": "syslog"
             },
             "dfc8c5c9-6825-43b3-bdfa-45466d0f77d1": {
                 "launchd": {
@@ -1245,18 +1223,6 @@
     },
     {
         "metadata": {
-            "name": "schedulerd.runs",
-            "migration": "keep",
-            "pkey-type": "uuid",
-            "attributes": {
-                "type": "log"
-            }
-        },
-        "data": {
-        }
-    },
-    {
-        "metadata": {
             "name": "volumes",
             "migration": "keep",
             "pkey-type": "native",
@@ -1274,30 +1240,6 @@
             "pkey-type": "uuid",
             "attributes": {
                 "type": "config"
-            }
-        },
-        "data": {
-        }
-    },
-    {
-        "metadata": {
-            "name": "docker.containers",
-            "migration": "keep",
-            "pkey-type": "uuid",
-            "attributes": {
-                "type": "log"
-            }
-        },
-        "data": {
-        }
-    },
-    {
-        "metadata": {
-            "name": "docker.networks",
-            "migration": "keep",
-            "pkey-type": "uuid",
-            "attributes": {
-                "type": "log"
             }
         },
         "data": {
@@ -1423,13 +1365,20 @@
     {
          "metadata": {
             "name": "tunables",
-            "migration": "keep",
+            "migration": "merge-preserve",
             "pkey-type": "uuid",
             "attributes": {
                 "type": "config"
             }
         },
         "data": {
+            "16d65fe7-e56e-11e6-afca-0cc47a3511b4": {
+                "type": "LOADER",
+                "var": "hw.mfi.allow_cam_disk_passthrough",
+                "value": "1",
+                "comment": "CAM passthrough for disks attached via mfi(4) controllers",
+                "enabled": true
+            }
         }
     },
     {
@@ -1654,26 +1603,6 @@
                     "timezone": "America/Los_Angeles"
                 }
             },
-            "291082fa-c16f-11e6-866b-000c2921ac63": {
-                "name": "newsyslog",
-                "task": "calendar_task.command",
-                "args": ["root", "/usr/sbin/newsyslog"],
-                "enabled": true,
-                "hidden": true,
-                "protected": false,
-                "next_run_time": 1,
-                "schedule": {
-                    "year": "*",
-                    "month": "*",
-                    "day": "*",
-                    "week": "*",
-                    "day_of_week": "*",
-                    "hour": "*",
-                    "minute": "0",
-                    "second": "0",
-                    "timezone": "America/Los_Angeles"
-                }
-            },
             "7b48426c-c16f-11e6-866b-000c2921ac63": {
                 "name": "adjkerntz",
                 "task": "calendar_task.command",
@@ -1814,36 +1743,11 @@
     },
     {
         "metadata": {
-            "name": "syslog",
-            "migration": "keep",
-            "pkey-type": "uuid",
-            "attributes": {
-                "type": "log",
-                "cap": 8589934592
-            }
-        },
-        "data": {
-        }
-    },
-    {
-        "metadata": {
             "name": "backup",
             "migration": "keep",
             "pkey-type": "uuid",
             "attributes": {
                 "type": "config"
-            }
-        },
-        "data": {
-        }
-    },
-    {
-        "metadata": {
-            "name": "backup.runs",
-            "migration": "keep",
-            "pkey-type": "integer",
-            "attributes": {
-                "type": "log"
             }
         },
         "data": {
@@ -1909,18 +1813,6 @@
                 "unique_indexes": [
                     ["name"]
                 ]
-            }
-        },
-        "data": {
-        }
-    },
-    {
-        "metadata": {
-            "name": "fileindex",
-            "migration": "keep",
-            "pkey-type": "uuid",
-            "attributes": {
-                "type": "log"
             }
         },
         "data": {

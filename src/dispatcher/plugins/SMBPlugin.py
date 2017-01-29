@@ -170,10 +170,7 @@ def configure_params(smb, ad=False):
         conf['deadtime'] = '15'
         conf['max log size'] = '51200'
         conf['max open files'] = str(int(get_sysctl('kern.maxfilesperproc')) - 25)
-
-        if smb['syslog']:
-            conf['syslog only'] = 'yes'
-            conf['syslog'] = '1'
+        conf['logging'] = 'logd@10'
 
         if 'filemask' in smb:
             if smb['filemask'] is not None:
@@ -289,7 +286,6 @@ def _init(dispatcher, plugin):
             'dos_charset': {'$ref': 'ServiceSmbDoscharset'},
             'unix_charset': {'$ref': 'ServiceSmbUnixcharset'},
             'log_level': {'$ref': 'ServiceSmbLoglevel'},
-            'syslog': {'type': 'boolean'},
             'local_master': {'type': 'boolean'},
             'domain_logons': {'type': 'boolean'},
             'time_server': {'type': 'boolean'},

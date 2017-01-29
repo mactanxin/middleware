@@ -1,0 +1,3 @@
+etc/serviced.d/org.freenas.logd.json
+sbin/logd
+sbin/logctl

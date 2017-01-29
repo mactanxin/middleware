@@ -226,6 +226,7 @@ class Job(object):
                         0o600
                     )
 
+                os.dup2(os.open('/dev/null', os.O_RDONLY), sys.stdin.fileno())
                 os.dup2(self.stdout_fd, sys.stdout.fileno())
                 os.dup2(self.stderr_fd, sys.stderr.fileno())
 
@@ -247,7 +248,7 @@ class Job(object):
                 try:
                     os.execvpe(self.program, self.program_arguments, env)
                 except:
-                    sys.exit(254)
+                    os._exit(254)
 
             self.logger.debug('Started as PID {0}'.format(pid))
             self.pid = pid
@@ -280,6 +281,12 @@ class Job(object):
 
             if not self.cv.wait_for(lambda: self.state == JobState.STOPPED, self.exit_timeout):
                 self.logger.error('Unkillable process {0}'.format(self.pid))
+
+    def send_signal(self, signo):
+        if not self.pid:
+            return
+
+        os.kill(self.pid, signo)
 
     def checkin(self):
         with self.cv:
@@ -490,6 +497,14 @@ class JobService(RpcService):
         self.stop(name_or_id, True)
         self.start(name_or_id, True)
 
+    def send_signal(self, name_or_id, signo):
+        with self.context.lock:
+            job = first_or_default(lambda j: j.label == name_or_id or j.id == name_or_id, self.context.jobs.values())
+            if not job:
+                raise RpcException(errno.ENOENT, 'Job {0} not found'.format(name_or_id))
+
+        job.send_signal(signo)
+
     def get(self, name_or_id):
         with self.context.lock:
             job = first_or_default(lambda j: j.label == name_or_id or j.id == name_or_id, self.context.jobs.values())
@@ -511,7 +526,7 @@ class JobService(RpcService):
 
             job = first_or_default(fuzzy_match if fuzzy else match, self.context.jobs.values())
             if not job:
-                raise RpcException(errno.ENOENT, 'Job {0} not found'.format(name_or_id))
+                raise RpcException(errno.ENOENT, 'Job for PID {0} not found'.format(pid))
 
         return job.__getstate__()
 
@@ -694,7 +709,7 @@ class Context(object):
         parser.add_argument('-s', metavar='SOCKET', default=DEFAULT_SOCKET_ADDRESS, help='Socket address to listen on')
         args = parser.parse_args()
 
-        configure_logging('/var/log/serviced.log', 'DEBUG')
+        configure_logging('/var/log/serviced.log', 'DEBUG', file=True)
         bsd.setproctitle('serviced')
         self.logger.info('Started')
         self.init_server(args.s)

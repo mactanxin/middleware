@@ -53,9 +53,15 @@ class ServiceInfoProvider(Provider):
             entry = {
                 'id': i['id'],
                 'name': i['name'],
+                'labels': None,
                 'state': state,
                 'error': error
             }
+
+            if 'launchd' in i:
+                launchd = i['launchd']
+                jobs = [launchd] if isinstance(launchd, dict) else launchd
+                entry['labels'] = [j['Label'] for j in jobs]
 
             if pid is not None:
                 entry['pid'] = pid
@@ -175,7 +181,7 @@ class ServiceInfoProvider(Provider):
         hook_rpc = svc.get('restart_rpc')
         if hook_rpc:
             try:
-                self.dispatcher.call_sync(hook_rpc)
+                self.dispatcher.call_sync(hook_rpc, timeout=300)
             except RpcException:
                 pass
             return
@@ -185,7 +191,7 @@ class ServiceInfoProvider(Provider):
             plists = [launchd] if isinstance(launchd, dict) else launchd
 
             for i in plists:
-                self.dispatcher.call_sync('serviced.job.restart', i['Label'])
+                self.dispatcher.call_sync('serviced.job.restart', i['Label'], timeout=300)
 
             return
 
@@ -516,6 +522,10 @@ def _init(dispatcher, plugin):
             'pid': {
                 'type': ['array', 'null'],
                 'items': {'type': 'integer'}
+            },
+            'labels': {
+                'type': ['array', 'null'],
+                'items': {'type': 'string'}
             },
             'builtin': {'type': 'boolean'},
             'state': {'$ref': 'ServiceState'},

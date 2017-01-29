@@ -17,7 +17,8 @@
 
 user www;
 pid /var/run/nginx.pid;
-error_log /var/log/nginx-error.log warn;
+error_log /dev/null emerg;
+error_log syslog:server=unix:/var/run/log,nohostname warn;
 
 events {
     worker_connections 1024;
@@ -26,7 +27,7 @@ events {
 http {
     include mime.types;
     default_type application/octet-stream;
-    access_log /var/log/nginx-access.log combined;
+    access_log syslog:server=unix:/var/run/log,nohostname combined;
 
     # reserve 1MB under the name 'proxied' to track uploads
     upload_progress proxied 1m;
@@ -36,7 +37,7 @@ http {
     keepalive_timeout 65;
 
     client_body_temp_path /var/tmp/firmware;
-\
+
     server {
 % if config.get("service.nginx.http.enable"):
     % for addr in listen_addresses:

@@ -263,7 +263,7 @@ class Main(object):
         parser = argparse.ArgumentParser()
         parser.add_argument('-c', metavar='CONFIG', default=DEFAULT_CONFIGFILE, help='Middleware config file')
         args = parser.parse_args()
-        configure_logging('/var/log/alertd.log', 'DEBUG')
+        configure_logging('alertd', 'DEBUG')
 
         setproctitle('alertd')
         self.config = args.c

@@ -32,6 +32,7 @@ import copy
 import os
 import sys
 import re
+import collections
 import fnmatch
 import json
 import datetime
@@ -75,13 +76,13 @@ from services import (
     ManagementService, DebugService, EventService, TaskService,
     PluginService, ShellService, LockService
 )
-from event import sync
 from schemas import register_general_purpose_schemas
 from balancer import Balancer
 from auth import PasswordAuthenticator, TokenStore, Token, User, Service
 from freenas.utils import FaultTolerantLogHandler, load_module_from_file, serialize_exception
 from freenas.utils.trace_logger import TraceLogger, TRACE
 from freenas.serviced import checkin, push_status
+from freenas.logd import LogdLogHandler
 
 DEFAULT_CONFIGFILE = '/usr/local/etc/middleware.conf'
 LOGGING_FORMAT = '%(asctime)s %(levelname)s %(filename)s:%(lineno)d %(message)s'
@@ -340,6 +341,7 @@ class Dispatcher(object):
         self.rpc = None
         self.balancer = None
         self.datastore = None
+        self.datastore_log = None
         self.configfile = None
         self.configstore = None
         self.config = None
@@ -360,18 +362,11 @@ class Dispatcher(object):
 
     def init(self):
         self.logger.info('Initializing')
-        self.logger.info('Starting log database')
-        self.start_logdb()
 
         self.datastore = get_datastore(self.configfile)
         self.configstore = ConfigStore(self.datastore)
 
-        self.migrate_logdb()
-
         self.logger.info('Connected to datastore')
-        self.require_collection('events', 'serial', type='log')
-        self.require_collection('sessions', 'serial', type='log')
-        self.require_collection('logs', 'uuid', type='log')
 
         self.balancer = Balancer(self)
         self.auth = PasswordAuthenticator(self)
@@ -405,6 +400,7 @@ class Dispatcher(object):
         self.started_at = time.time()
         self.balancer.start()
         self.ready.set()
+        self.logger.info('Server is ready')
         self.dispatch_event('server.ready', {
             'description': 'Server is completely loaded and ready to use.',
         })
@@ -541,19 +537,6 @@ class Dispatcher(object):
             return
 
         self.dispatch_event("server.plugin.loaded", {"name": os.path.basename(path)})
-
-    def __on_service_started(self, args):
-        if args['name'] == 'syslog':
-            try:
-                self.__init_syslog()
-                self.unregister_event_handler('service.started', self.__on_service_started)
-            except IOError as err:
-                self.logger.warning('Cannot initialize syslog: %s', str(err))
-
-    def __init_syslog(self):
-        handler = logging.handlers.SysLogHandler('/var/run/log', facility='local3')
-        logging.root.setLevel(logging.DEBUG)
-        logging.root.addHandler(handler)
 
     def set_syslog_level(self, level):
         if level == 'TRACE':
@@ -850,9 +833,11 @@ class Dispatcher(object):
 
     def start_logdb(self):
         self.logdb_proc = subprocess.Popen(['/usr/local/sbin/dswatch', 'datastore-log'], preexec_fn=os.setpgrp)
+        self.datastore_log = get_datastore(self.configfile, log=True)
+        self.emit_event('server.logdb_ready', {})
 
     def migrate_logdb(self):
-        FACTORY_FILE = '/usr/local/share/datastore/factory.json'
+        FACTORY_FILE = '/usr/local/share/datastore/factory-log.json'
         MIGRATIONS_DIR = '/usr/local/share/datastore/migrations'
 
         self.logger.info('Migrating log database')
@@ -860,7 +845,7 @@ class Dispatcher(object):
         try:
             with open(FACTORY_FILE, 'r') as fd:
                 dump = json.load(fd)
-                migrate_db(self.datastore, dump, MIGRATIONS_DIR, ['log'])
+                migrate_db(self.datastore_log, dump, MIGRATIONS_DIR, ['log'])
         except IOError as err:
             self.logger.warning('Cannot open factory.json: {0}'.format(str(err)))
         except ValueError as err:
@@ -1178,13 +1163,14 @@ class DispatcherConnection(ServerConnection):
         super(DispatcherConnection, self).on_rpc_call(id, data)
 
     def open_session(self):
-        self.session_id = self.dispatcher.datastore.insert('sessions', {
-            'started_at': datetime.datetime.utcnow(),
-            'address': self.client_address,
-            'resource': self.resource,
-            'active': True,
-            'username': self.user.name
-        })
+        if self.dispatcher.datastore_log:
+            self.session_id = self.dispatcher.datastore_log.insert('sessions', {
+                'started_at': datetime.datetime.utcnow(),
+                'address': self.client_address,
+                'resource': self.resource,
+                'active': True,
+                'username': self.user.name
+            })
 
         self.dispatcher.dispatch_event('session.changed', {
             'operation': 'create',
@@ -1192,11 +1178,11 @@ class DispatcherConnection(ServerConnection):
         })
 
     def close_session(self):
-        if self.session_id:
-            session = self.dispatcher.datastore.get_by_id('sessions', self.session_id)
+        if self.session_id and self.dispatcher.datastore_log:
+            session = self.dispatcher.datastore_log.get_by_id('sessions', self.session_id)
             session['active'] = False
             session['ended_at'] = datetime.datetime.utcnow()
-            self.dispatcher.datastore.update('sessions', self.session_id, session)
+            self.dispatcher.datastore_log.update('sessions', self.session_id, session)
             self.dispatcher.dispatch_event('session.changed', {
                 'operation': 'update',
                 'ids': [self.session_id]
@@ -1575,6 +1561,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--log-level', type=str, metavar='LOG_LEVEL', default='INFO', help="Logging level")
     parser.add_argument('--log-file', type=str, metavar='LOG_FILE', help="Log to file")
+    parser.add_argument('--syslog', action='store_true', help="Log to syslog")
+    parser.add_argument('--logd', action='store_true', help="Log to logd")
     parser.add_argument('-s', type=int, metavar='PORT', default=8180, help="Run debug frontend server on port")
     parser.add_argument('-p', type=int, metavar='PORT', default=5000, help="WebSockets server port")
     parser.add_argument('-u', type=str, metavar='PATH', default='/var/run/dispatcher.sock', help="Unix domain server path")
@@ -1585,11 +1573,24 @@ def main():
     logging.setLoggerClass(TraceLogger)
     logging.basicConfig(
         level=logging.getLevelName(args.log_level),
-        format=LOGGING_FORMAT)
+        format=LOGGING_FORMAT
+    )
 
     if args.log_file:
         handler = FaultTolerantLogHandler(args.log_file)
         handler.setFormatter(logging.Formatter(LOGGING_FORMAT))
+        logging.root.removeHandler(logging.root.handlers[0])
+        logging.root.addHandler(handler)
+
+    if args.syslog:
+        handler = logging.handlers.SysLogHandler('/var/run/log', facility='local3')
+        handler.setLevel(logging.DEBUG)
+        logging.root.removeHandler(logging.root.handlers[0])
+        logging.root.addHandler(handler)
+
+    if args.logd:
+        handler = LogdLogHandler(ident='dispatcher')
+        handler.setLevel(logging.DEBUG)
         logging.root.removeHandler(logging.root.handlers[0])
         logging.root.addHandler(handler)
 

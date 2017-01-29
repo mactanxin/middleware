@@ -964,7 +964,7 @@ class Main(object):
         parser.add_argument('-c', metavar='CONFIG', default=DEFAULT_CONFIGFILE, help='Middleware config file')
         parser.add_argument('-s', metavar='SOCKET', default=DEFAULT_SOCKET_ADDRESS, help='Socket address to listen on')
         args = parser.parse_args()
-        configure_logging('/var/log/dscached.log', 'DEBUG')
+        configure_logging('dscached', 'DEBUG')
 
         setproctitle('dscached')
         self.config = args.c

@@ -434,7 +434,6 @@ def collect_debug(dispatcher):
     yield AttachCommandOutput('devinfo', ['/usr/sbin/devinfo', '-rv'])
 
 
-
 def _depends():
     return ['ServiceManagePlugin']
 

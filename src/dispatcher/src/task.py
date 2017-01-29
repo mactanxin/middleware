@@ -274,8 +274,18 @@ class TaskDescription(object):
 class Provider(RpcService):
     def initialize(self, context):
         self.dispatcher = context.dispatcher
-        self.datastore = self.dispatcher.datastore
-        self.configstore = self.dispatcher.configstore
+
+    @property
+    def datastore(self):
+        return self.dispatcher.datastore
+
+    @property
+    def datastore_log(self):
+        return self.dispatcher.datastore_log
+
+    @property
+    def configstore(self):
+        return self.dispatcher.configstore
 
 
 def metadata(**d):

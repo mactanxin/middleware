@@ -1228,7 +1228,7 @@ class Main(object):
         parser = argparse.ArgumentParser()
         parser.add_argument('-c', metavar='CONFIG', default=DEFAULT_CONFIGFILE, help='Middleware config file')
         args = parser.parse_args()
-        configure_logging('/var/log/networkd.log', 'DEBUG')
+        configure_logging('networkd', 'DEBUG')
         setproctitle('networkd')
         self.config = args.c
         self.init_datastore()

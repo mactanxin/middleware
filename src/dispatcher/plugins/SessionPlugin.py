@@ -37,10 +37,11 @@ class SessionProvider(Provider):
     @query('Session')
     @generator
     def query(self, filter=None, params=None):
-        return self.datastore.query_stream('sessions', *(filter or []), **(params or {}))
+        return self.datastore_log.query_stream('sessions', *(filter or []), **(params or {}))
 
     @accepts()
     @returns(h.array(h.ref('Session')))
+    @generator
     @description("Returns the logged in and active user sessions" +
                  "Does not include the service sessions in this.")
     def get_live_user_sessions(self):
@@ -53,7 +54,7 @@ class SessionProvider(Provider):
                 if hasattr(conn.user, 'uid'):
                     live_user_session_ids.append(conn.session_id)
 
-        return self.datastore.query('sessions', ('id', 'in', live_user_session_ids))
+        return self.datastore_log.query_stream('sessions', ('id', 'in', live_user_session_ids))
 
     @pass_sender
     @returns(int)
@@ -137,12 +138,14 @@ def _init(dispatcher, plugin):
     })
 
     # Mark all orphaned sessions as inactive
-    for i in dispatcher.datastore.query_stream('sessions', ('active', '=', True)):
-        i['active'] = False
-        i['ended_at'] = datetime.utcnow()
-        dispatcher.datastore.update('sessions', i['id'], i)
+    def on_server_ready(args):
+        for i in dispatcher.datastore_log.query_stream('sessions', ('active', '=', True)):
+            i['active'] = False
+            i['ended_at'] = datetime.utcnow()
+            dispatcher.datastore_log.update('sessions', i['id'], i)
 
     plugin.register_provider('session', SessionProvider)
     plugin.register_event_type('session.changed')
     plugin.register_event_type('session.message')
+    plugin.register_event_handler('server.ready', on_server_ready)
     plugin.register_event_handler('system.pam.event', pam_event)

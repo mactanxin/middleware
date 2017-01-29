@@ -61,9 +61,7 @@ def auto_retry(fn):
 class MongodbDatastore(object):
     def __init__(self):
         self.conn_db = None
-        self.conn_log = None
         self.db = None
-        self.log_db = None
         self.connected = False
         self.operators_table = {
             '>': '$gt',
@@ -93,10 +91,6 @@ class MongodbDatastore(object):
     @property
     def client(self):
         return self.conn_db
-
-    @property
-    def client_log(self):
-        return self.conn_log
 
     def _predicate(self, *args):
         if len(args) == 2:
@@ -145,27 +139,15 @@ class MongodbDatastore(object):
         if not c:
             raise DatastoreException('Collection {0} not found'.format(collection))
 
-        typ = c['attributes'].get('type', 'config')
-
-        if typ == 'log':
-            return self.log_db[collection]
-
         return self.db[collection]
 
-    def connect(self, dsn, dsn_log, database='freenas'):
+    def connect(self, dsn, database='freenas'):
         self.conn_db = MongoClient(dsn)
         self.db = self.conn_db[database]
-
-        if dsn_log:
-            self.conn_log = MongoClient(dsn_log, connect=False)
-            self.log_db = self.conn_log[database]
-
         self.connected = True
 
     def close(self):
         self.conn_db.close()
-        if self.conn_log:
-            self.conn_log.close()
 
     @auto_retry
     def collection_create(self, name, pkey_type='uuid', attributes=None):
@@ -286,6 +268,7 @@ class MongodbDatastore(object):
         offset = kwargs.pop('offset', None)
         single = kwargs.pop('single', False)
         count = kwargs.pop('count', False)
+        reverse = kwargs.pop('reverse', False)
         postprocess = kwargs.pop('callback', None)
         select = kwargs.pop('select', None)
 
@@ -299,7 +282,7 @@ class MongodbDatastore(object):
                 obj = fn(obj) if fn else obj
 
                 if isinstance(select, (list, tuple)):
-                    return [get(obj, i) for i in select]
+                    return (get(obj, i) for i in select)
 
                 if isinstance(select, str):
                     return get(obj, select)
@@ -330,6 +313,9 @@ class MongodbDatastore(object):
 
         if limit:
             cur = cur.limit(limit)
+
+        if reverse:
+            cur = reversed(list(cur))
 
         if single:
             i = next(cur, None)
@@ -471,16 +457,8 @@ class MongodbDatastore(object):
         db = self._get_db(collection)
         db.delete_one({'_id': pkey})
 
-    def lock(self, data=True, log=False):
-        if data:
-            self.conn_db.fsync(lock=True)
+    def lock(self):
+        self.conn_db.fsync(lock=True)
 
-        if log:
-            self.conn_log.fsync(lock=True)
-
-    def unlock(self, data=True, log=False):
-        if data:
-            self.conn_db.unlock()
-
-        if log:
-            self.conn_log.unlock()
+    def unlock(self):
+        self.conn_db.unlock()

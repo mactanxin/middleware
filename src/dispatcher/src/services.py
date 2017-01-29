@@ -224,11 +224,7 @@ class DebugService(RpcService):
 
 class EventService(RpcService):
     def initialize(self, context):
-        self.__datastore = context.dispatcher.datastore
         self.__dispatcher = context.dispatcher
-
-    def query(self, filter=None, params=None):
-        return self.__datastore.query('events', *(filter or []), **(params or {}))
 
     @pass_sender
     def get_my_subscriptions(self, sender):
@@ -379,7 +375,6 @@ class PluginService(RpcService):
 class TaskService(RpcService):
     def initialize(self, context):
         self.__dispatcher = context.dispatcher
-        self.__datastore = context.dispatcher.datastore
         self.__balancer = context.dispatcher.balancer
 
     @pass_sender
@@ -402,7 +397,7 @@ class TaskService(RpcService):
         return tid, url_list
 
     def status(self, id):
-        t = self.__datastore.get_by_id('tasks', id)
+        t = self.__dispatcher.datastore_log.get_by_id('tasks', id)
         task = self.__balancer.get_task(id)
 
         if task and task.progress:
@@ -478,7 +473,7 @@ class TaskService(RpcService):
 
             return t
 
-        return self.__datastore.query_stream('tasks', *(filter or []), callback=extend, **(params or {}))
+        return self.__dispatcher.datastore_log.query_stream('tasks', *(filter or []), callback=extend, **(params or {}))
 
     @private
     @pass_sender

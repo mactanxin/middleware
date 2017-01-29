@@ -282,7 +282,7 @@ class Context(object):
         parser.add_argument('-c', metavar='CONFIG', default=DEFAULT_CONFIGFILE, help='Middleware config file')
         parser.add_argument('-f', action='store_true', default=False, help='Run in foreground')
         args = parser.parse_args()
-        configure_logging('/var/log/schedulerd.log', 'DEBUG')
+        configure_logging('schedulerd', 'DEBUG')
         setproctitle('schedulerd')
         self.config = args.c
         self.init_datastore()

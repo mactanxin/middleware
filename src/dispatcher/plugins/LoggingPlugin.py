@@ -29,6 +29,7 @@ import time
 from datastore import DatastoreException
 from datetime import datetime
 from freenas.dispatcher.rpc import generator, description
+from freenas.dispatcher.client import Client
 from event import EventSource
 from task import Provider
 from debug import AttachDirectory
@@ -36,31 +37,13 @@ from debug import AttachDirectory
 
 @description('Provides information about system log')
 class SyslogProvider(Provider):
+    def initialize(self, context):
+        self.client = Client()
+        self.client.connect('unix:///var/run/logd.sock')
+
     @generator
     def query(self, filter=None, params=None):
-        return self.datastore.query_stream('syslog', *(filter or []), **(params or {}))
-
-
-class SyslogEventSource(EventSource):
-    def __init__(self, dispatcher):
-        super(SyslogEventSource, self).__init__(dispatcher)
-        self.register_event_type("syslog.changed")
-
-    def run(self):
-        # Initial call to obtain cursor
-        cursor = self.datastore.listen('syslog', ('created_at', '>=', datetime.utcnow()))
-
-        while True:
-            try:
-                for i in self.datastore.tail(cursor):
-                    self.dispatcher.dispatch_event('syslog.changed', {
-                        'operation': 'create',
-                        'ids': [i['id']]
-                    })
-            except DatastoreException:
-                pass
-
-            time.sleep(1)
+        return self.client.call_sync('logd.logging.query', filter, params)
 
 
 def collect_debug(dispatcher):
@@ -69,6 +52,5 @@ def collect_debug(dispatcher):
 
 
 def _init(dispatcher, plugin):
-    plugin.register_event_source('syslog', SyslogEventSource)
     plugin.register_provider('syslog', SyslogProvider)
     plugin.register_debug_hook(collect_debug)
