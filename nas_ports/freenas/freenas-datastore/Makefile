@@ -32,7 +32,8 @@ RUN_DEPENDS=	${PYTHON_PKGNAMEPREFIX}pymongo>0:${PORTSDIR}/databases/pymongo \
 .endif
 
 RUN_DEPENDS+=	\
-	${PYTHON_PKGNAMEPREFIX}argh>0:${PORTSDIR}/devel/py-argh
+	${PYTHON_PKGNAMEPREFIX}argh>0:${PORTSDIR}/devel/py-argh \
+	${PYTHON_PKGNAMEPREFIX}ucl>0:${PORTSDIR}/textproc/py-ucl
 
 EXTRACT_ONLY=
 

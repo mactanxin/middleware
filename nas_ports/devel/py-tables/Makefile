@@ -19,8 +19,7 @@ BUILD_DEPENDS=	${PYNUMPY} \
 		${LOCALBASE}/bin/cython:${PORTSDIR}/lang/cython \
 		${PYTHON_PKGNAMEPREFIX}numexpr>=1.4.1:${PORTSDIR}/math/py-numexpr
 LIB_DEPENDS=	libhdf5.so:${PORTSDIR}/science/hdf5 \
-		liblzo2.so:${PORTSDIR}/archivers/lzo2 \
-		libucl.so:${PORTSDIR}/archivers/ucl
+		liblzo2.so:${PORTSDIR}/archivers/lzo2
 RUN_DEPENDS:=	${BUILD_DEPENDS}
 
 USES=		fortran python
