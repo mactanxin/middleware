@@ -68,7 +68,7 @@ class LogdLogHandler(logging.Handler):
         }
 
         if record.exc_info:
-            item['exception'] = '\n'.join(traceback.format_exc(record.exc_info))
+            item['exception'] = '\n'.join(traceback.format_exception(*record.exc_info))
 
         self.client.call_sync('logd.logging.push', item)
 
