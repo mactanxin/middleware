@@ -601,6 +601,31 @@
         }
     },
     {
+        "uid": 302,
+        "full_name": "Netdata Service",
+        "shell": "/usr/sbin/nologin",
+        "id": "c4d63cbb-cebc-409e-81fd-4512d218db7a",
+        "password_disabled": false,
+        "group": "4dc00bc1-ec9c-45f5-a53d-fb431554321f",
+        "locked": false,
+        "username": "netdata",
+        "nthash": null,
+        "email": null,
+        "sshpubkey": null,
+        "updated_at": {
+            "$date": "2017-01-29 22:21:49.909000"
+        },
+        "builtin": true,
+        "attributes": {},
+        "sudo": false,
+        "groups": [],
+        "home": "/var/tmp/netdata",
+        "unixhash": "*",
+        "created_at": {
+            "$date": "2017-01-29 22:21:49.909000"
+        }
+    },
+    {
         "uid": 469,
         "full_name": "Consul Daemon",
         "shell": "/usr/sbin/nologin",
