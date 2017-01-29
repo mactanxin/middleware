@@ -226,6 +226,7 @@ class Job(object):
                         0o600
                     )
 
+                os.dup2(os.open('/dev/null', os.O_RDONLY), sys.stdin.fileno())
                 os.dup2(self.stdout_fd, sys.stdout.fileno())
                 os.dup2(self.stderr_fd, sys.stderr.fileno())
 
