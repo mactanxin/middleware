@@ -53,6 +53,7 @@ from freenas.dispatcher.rpc import RpcService, RpcException, accepts, returns, g
 from datastore import DatastoreException, get_datastore
 from ringbuffer import MemoryRingBuffer, PersistentRingBuffer
 from freenas.utils.debug import DebugService
+from freenas.utils.trace_logger import TRACE
 from freenas.utils import configure_logging, to_timedelta, materialized_paths_to_tree
 from freenas.serviced import checkin
 
@@ -102,7 +103,7 @@ class DataSourceConfig(object):
         self.ds_schema = datastore.get_by_id('statd.schemas', self.ds_obj['schema'])
         self.buckets = [DataSourceBucket(idx, i) for idx, i in enumerate(self.ds_schema['buckets'])]
         self.primary_bucket = self.buckets[0]
-        self.logger.debug('Created {0} using schema {1}, {2} buckets'.format(
+        self.logger.log(TRACE, 'Created {0} using schema {1}, {2} buckets'.format(
             name,
             self.ds_obj['schema'],
             len(self.buckets))
@@ -145,7 +146,7 @@ class DataSource(object):
             table = self.context.request_table('{0}#b{1}'.format(self.name, idx))
             buckets.append(PersistentRingBuffer(table, b.intervals_count))
 
-        self.logger.debug('Created {0} buckets'.format(len(buckets)))
+        self.logger.log(TRACE, 'Created {0} buckets'.format(len(buckets)))
         return buckets
 
     def submit(self, timestamp, value):
