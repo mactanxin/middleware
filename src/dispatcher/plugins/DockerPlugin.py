@@ -328,7 +328,7 @@ class DockerCollectionProvider(Provider):
     @query('DockerCollection')
     @generator
     def query(self, filter=None, params=None):
-        return self.datastore_log.query_stream('docker.collections', *(filter or []), **(params or {}))
+        return self.datastore.query_stream('docker.collections', *(filter or []), **(params or {}))
 
     @description('Returns a list of Docker images related to a saved collection')
     @returns(h.array(h.ref('DockerHubImage')))
