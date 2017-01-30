@@ -27,7 +27,8 @@ events {
 http {
     include mime.types;
     default_type application/octet-stream;
-    access_log syslog:server=unix:/var/run/log,nohostname combined;
+    log_format slim '$remote_addr "$request" $status "$http_referer" "$http_user_agent"';
+    access_log syslog:server=unix:/var/run/log,nohostname slim;
 
     # reserve 1MB under the name 'proxied' to track uploads
     upload_progress proxied 1m;
