@@ -3,11 +3,11 @@
 
     def unique_networks():
         for s in dispatcher.call_sync("share.query", [("type", "=", "nfs"), ("enabled", "=", True)]):
-            if not s.get('hosts'):
+            if not s['properties'].get('hosts'):
                 yield s, None
                 continue
 
-            for h in s['hosts']:
+            for h in s['properties']['hosts']:
                 yield s, h
 
     def opts(share, network):
@@ -31,14 +31,12 @@
                 result.append('-maproot={maproot_user}:{maproot_group}'.format(**properties))
             else:
                 result.append('-maproot={maproot_user}'.format(**properties))
-        if properties.get('hosts'):
-            result.append(' '.join(properties['hosts']))
 
         if network:
             if '/' in network:
                 result.append('-network={0}'.format(network))
             else:
-                result.append(host)
+                result.append(network)
 
         return ' '.join(result)
 %>\
