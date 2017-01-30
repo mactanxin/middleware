@@ -14,7 +14,8 @@ COMMENT=	FreeNAS common Python modules
 BUILD_DEPENDS=  ${LOCALBASE}/bin/cython:${PORTSDIR}/lang/cython
 RUN_DEPENDS=	\
 		${PYTHON_PKGNAMEPREFIX}dateutil>0:${PORTSDIR}/devel/py-dateutil \
-		${PYTHON_PKGNAMEPREFIX}six>0:${PORTSDIR}/devel/py-six
+		${PYTHON_PKGNAMEPREFIX}six>0:${PORTSDIR}/devel/py-six \
+		${PYTHON_PKGNAMEPREFIX}msgpack-python>0:${PORTSDIR}/devel/py-msgpack-python
 
 USES=		python
 USE_PYTHON=	autoplist distutils

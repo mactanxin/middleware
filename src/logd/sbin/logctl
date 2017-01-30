@@ -32,14 +32,16 @@ import json
 import signal
 import dateutil.parser
 import textwrap
+import msgpack
 from datetime import datetime
 from threading import Lock
 from freenas.dispatcher.client import Client, sync
 from freenas.utils import to_timedelta, exclude, query as q
+from freenas.utils.msgpack import default, ext_hook
 
 
 EXCLUDE_VERBOSE_PROPS = (
-    'timestamp', 'priority', 'message', 'identifier', 'service', 'seqno',
+    'timestamp', 'message', 'identifier', 'service', 'seqno',
     'created_at', 'updated_at', 'boot_id', 'id'
 )
 
@@ -63,6 +65,11 @@ def query(c, args, filter, params):
         from datastore import get_datastore
         ds = get_datastore(log=True)
         return ds.query('syslog', *filter, **params)
+
+    if args.input:
+        f = open(args.input, 'rb')
+        unpacker = msgpack.Unpacker(f, encoding='utf-8', ext_hook=ext_hook)
+        return unpacker
 
     return c.call_sync('logd.logging.query', filter, params)
 
@@ -100,6 +107,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--offline', action='store_true')
     parser.add_argument('--socket', default='unix:///var/run/logd.sock')
+    parser.add_argument('--input')
     parser.add_argument('--everything', action='store_true', default=False)
     parser.add_argument('--get-boot-id', action='store_true')
     parser.add_argument('--list-boots', action='store_true')
@@ -116,12 +124,16 @@ def main():
     parser.add_argument('--key', nargs='+')
     parser.add_argument('-n', '--limit', type=int)
     parser.add_argument('--sef', action='store_true')
+    parser.add_argument('--dump', default='-')
     parser.add_argument('--format', default='syslog')
     parser.add_argument('-f', '--follow', action='store_true')
     parser.add_argument('--no-colors', action='store_true')
     parser.add_argument('-v', '--verbose', action='store_true')
     args = parser.parse_args()
-    c = create_client(args.socket)
+    c = None
+
+    if not args.input:
+        c = create_client(args.socket)
 
     if args.sef:
         print('NO', file=sys.stderr)
@@ -144,7 +156,7 @@ def main():
     params = {}
     seqno = -1
 
-    if not args.everything and not args.boot_id:
+    if not args.everything and not args.boot_id and not args.input:
         boot_id = c.call_sync('logd.logging.get_boot_id')
         filter.append(('boot_id', '=', boot_id))
 
@@ -179,6 +191,10 @@ def main():
         params['reverse'] = True
         params['limit'] = args.limit
 
+    if args.dump:
+        packer = msgpack.Packer(default=default, use_bin_type=True)
+        out = open(sys.stdout.fileno() if args.dump == '-' else args.dump, 'wb')
+
     try:
         if args.follow:
             @sync
@@ -186,6 +202,11 @@ def main():
                 nonlocal seqno
                 with lock:
                     if msg['seqno'] > seqno and q.matches(msg, *filter):
+                        if args.dump:
+                            out.write(packer.pack(i))
+                            out.flush()
+                            return
+
                         output_entry(args.format, msg, not args.no_colors, args.verbose)
                         seqno = msg['seqno']
 
@@ -193,6 +214,11 @@ def main():
 
         with lock:
             for i in query(c, args, filter, params):
+                if args.dump:
+                    out.write(packer.pack(i))
+                    out.flush()
+                    continue
+
                 output_entry(args.format, i, not args.no_colors, args.verbose)
                 seqno = i['seqno']
 
@@ -201,7 +227,11 @@ def main():
     except KeyboardInterrupt:
         pass
 
-    c.disconnect()
+    if args.dump:
+        out.close()
+
+    if c:
+        c.disconnect()
 
 
 if __name__ == '__main__':
