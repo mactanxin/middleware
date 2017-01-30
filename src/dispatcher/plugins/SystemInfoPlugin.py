@@ -296,7 +296,6 @@ class SystemGeneralConfigureTask(Task):
         try:
             self.dispatcher.call_sync('etcd.generation.generate_group', 'localtime')
             if syslog_changed:
-                self.dispatcher.call_sync('etcd.generation.generate_group', 'syslog')
                 self.dispatcher.call_sync('service.reload', 'syslog')
         except RpcException as e:
             raise TaskException(
