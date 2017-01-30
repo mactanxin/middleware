@@ -49,6 +49,7 @@ from freenas.utils import query as q
 
 
 FLUSH_INTERVAL = 180
+RCVBUF_MINSIZE = 80 * 1024  # same as in syslogd
 SYSLOG_PATTERN = re.compile(r'<(?P<priority>\d+)>(?P<syslog_timestamp>\w+ \d+ \d+:\d+:\d+) (?P<identifier>[\w\[\]]+): (?P<message>.*)')
 KLOG_PATTERN = re.compile(r'<(?P<priority>\d+)>(?P<message>.*)')
 PROC_PATTERN = re.compile(r'(?P<identifier>\w+)\[(?P<pid>\d+)\]')
@@ -168,6 +169,7 @@ class SyslogServer(object):
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM, 0)
         self.sock.bind(self.path)
         os.chmod(self.path, self.perms)
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, RCVBUF_MINSIZE)
         self.thread = threading.Thread(target=self.serve, daemon=True)
         self.thread.start()
 
