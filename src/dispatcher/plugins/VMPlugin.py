@@ -2487,7 +2487,6 @@ def _init(dispatcher, plugin):
         'enum': ['BRIDGED', 'NAT', 'HOSTONLY', 'MANAGEMENT']
     })
 
-
     plugin.register_schema_definition('VmDeviceDiskTargetType', {
         'type': 'string',
         'enum': ['ZVOL', 'FILE', 'DISK']
