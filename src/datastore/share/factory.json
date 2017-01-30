@@ -602,7 +602,7 @@
                     {
                         "RunAtLoad": true,
                         "Label": "org.samba.smbd",
-                        "Requires": ["logging"],
+                        "Requires": ["logging", "accounts"],
                         "ProgramArguments": [
                             "/usr/local/sbin/smbd",
                             "--foreground",
@@ -612,7 +612,7 @@
                     {
                         "RunAtLoad": true,
                         "Label": "org.samba.nmbd",
-                        "Requires": ["logging"],
+                        "Requires": ["logging", "accounts"],
                         "ProgramArguments": [
                             "/usr/local/sbin/nmbd",
                             "--foreground",
@@ -622,7 +622,7 @@
                     {
                         "RunAtLoad": true,
                         "Label": "org.samba.winbindd",
-                        "Requires": ["logging"],
+                        "Requires": ["logging", "accounts"],
                         "ProgramArguments": [
                             "/usr/local/sbin/winbindd",
                             "--foreground",
