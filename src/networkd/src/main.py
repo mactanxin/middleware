@@ -48,7 +48,7 @@ from freenas.dispatcher.client import Client, ClientError
 from freenas.dispatcher.rpc import RpcService, RpcException, private, generator
 from freenas.utils.debug import DebugService
 from freenas.utils import configure_logging, first_or_default
-from freenas.serviced import checkin
+from freenas.serviced import checkin, push_status
 from functools import reduce
 
 
@@ -465,7 +465,9 @@ class ConfigurationService(RpcService):
             return
 
         for i in self.datastore.query('network.interfaces', sort='cloned'):
-            self.logger.info('Configuring interface {0}...'.format(i['id']))
+            msg = 'Configuring interface {0}...'.format(i['id'])
+            self.logger.info(msg)
+            push_status(msg)
             try:
                 yield from self.configure_interface(i['id'], False)
             except BaseException as e:
