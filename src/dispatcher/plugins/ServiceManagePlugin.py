@@ -153,14 +153,21 @@ class ServiceInfoProvider(Provider):
     @private
     @accepts(str)
     def reload(self, service):
-        svc = self.query([('name', '=', service)], {'single': True})
+        svc = self.datastore.get_one('service_definitions', ('name', '=', service))
+        status = self.query([('name', '=', service)], {'single': True})
         if not svc:
             raise RpcException(errno.ENOENT, 'Service {0} not found'.format(service))
 
-        if svc['state'] != 'RUNNING':
+        if status['state'] != 'RUNNING':
             return
 
-        if svc['pid']:
+        if svc.get('auto_enable'):
+            for i in self.datastore.query('service_definitions', ('dependencies', 'contains', svc['name'])):
+                self.reload(i['name'])
+
+            return
+
+        if status.get('pid'):
             for p in svc['pid']:
                 try:
                     os.kill(p, signal.SIGHUP)
