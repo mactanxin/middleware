@@ -657,7 +657,7 @@ class Balancer(object):
 
     def verify_subtask(self, parent, name, args):
         clazz = self.dispatcher.tasks[name]
-        instance = clazz(self.dispatcher, self.dispatcher.datastore)
+        instance = clazz(self.dispatcher)
         return instance.verify(*args)
 
     def run_subtask(self, parent, name, args, env=None):
