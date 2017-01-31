@@ -303,8 +303,8 @@ class ScanStatusTaskMixin(object):
 @description("Scrubs ZFS pool")
 @accepts(str, int)
 class ZpoolScrubTask(ProgressTask, ScanStatusTaskMixin):
-    def __init__(self, dispatcher, datastore):
-        super(ZpoolScrubTask, self).__init__(dispatcher, datastore)
+    def __init__(self, dispatcher):
+        super(ZpoolScrubTask, self).__init__(dispatcher)
         self.pool = None
         self.abort_flag = False
 

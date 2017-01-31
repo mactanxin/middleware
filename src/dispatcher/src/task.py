@@ -47,10 +47,11 @@ class TaskState(object):
 class Task(object):
     SUCCESS = (0, "Success")
 
-    def __init__(self, dispatcher, datastore):
-        self.dispatcher = dispatcher
-        self.datastore = datastore
-        self.configstore = ConfigStore(datastore)
+    def __init__(self, context):
+        self.dispatcher = context
+        self.datastore = context.datastore
+        self.datastore_log = context.datastore_log
+        self.configstore = context.configstore
         self.logger = logging.getLogger(self.__class__.__name__)
         self.subtasks = []
         self.progress_callbacks = {}
@@ -148,8 +149,8 @@ class Task(object):
 
 
 class ProgressTask(Task):
-    def __init__(self, dispatcher, datastore):
-        super(ProgressTask, self).__init__(dispatcher, datastore)
+    def __init__(self, dispatcher):
+        super(ProgressTask, self).__init__(dispatcher)
         self.progress = 0
         self.message = 'EXECUTING...'
 

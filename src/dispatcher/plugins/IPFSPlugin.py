@@ -203,8 +203,8 @@ class IPFSConfigureTask(Task):
 
 
 class IPFSBaseTask(Task):
-    def __init__(self, dispatcher, datastore, method):
-        super(IPFSBaseTask, self).__init__(dispatcher, datastore)
+    def __init__(self, dispatcher, method):
+        super(IPFSBaseTask, self).__init__(dispatcher)
         self._method = method
 
     def describe(self, *args):
@@ -225,8 +225,8 @@ class IPFSBaseTask(Task):
 
 
 def ipfs_task_factory(method):
-    def __init__(self, dispatcher, datastore):
-        IPFSBaseTask.__init__(self, dispatcher, datastore, method)
+    def __init__(self, dispatcher):
+        IPFSBaseTask.__init__(self, dispatcher, method)
 
     def early_describe():
         return ipfs_tasks[method]['early_describe']

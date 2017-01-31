@@ -66,8 +66,11 @@ def serialize_error(err):
 
 
 class DispatcherWrapper(object):
-    def __init__(self, dispatcher):
-        self.dispatcher = dispatcher
+    def __init__(self, context):
+        self.dispatcher = context.conn
+        self.datastore = context.datastore
+        self.datastore_log = context.datastore_log
+        self.configstore = context.configstore
 
     def run_hook(self, name, args):
         return self.dispatcher.call_sync('task.run_hook', name, args, timeout=300)
@@ -244,10 +247,8 @@ class Context(object):
                 fds = list(self.collect_fds(task['args']))
 
                 try:
-                    dispatcher = DispatcherWrapper(self.conn)
-                    self.instance = getattr(module, task['class'])(dispatcher, self.datastore)
-                    self.instance.configstore = self.configstore
-                    self.instance.datastore_log = self.datastore_log
+                    dispatcher = DispatcherWrapper(self)
+                    self.instance = getattr(module, task['class'])(dispatcher)
                     self.instance.user = task['user']
                     self.instance.environment = task['environment']
                     self.running.set()

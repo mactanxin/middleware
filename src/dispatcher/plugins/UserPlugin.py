@@ -198,8 +198,8 @@ class GroupProvider(Provider):
     )
 ))
 class UserCreateTask(Task):
-    def __init__(self, dispatcher, datastore):
-        super(UserCreateTask, self).__init__(dispatcher, datastore)
+    def __init__(self, dispatcher):
+        super(UserCreateTask, self).__init__(dispatcher)
         self.id = None
         self.created_group = False
 
@@ -480,8 +480,8 @@ class UserDeleteTask(Task):
     )
 )
 class UserUpdateTask(Task):
-    def __init__(self, dispatcher, datastore):
-        super(UserUpdateTask, self).__init__(dispatcher, datastore)
+    def __init__(self, dispatcher):
+        super(UserUpdateTask, self).__init__(dispatcher)
         self.original_user = None
 
     @classmethod

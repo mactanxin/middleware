@@ -667,7 +667,7 @@ class Balancer(object):
         task.clazz = self.dispatcher.tasks[name]
         task.hooks = self.dispatcher.task_hooks.get(name, {})
         task.args = args
-        task.instance = task.clazz(self.dispatcher, self.dispatcher.datastore)
+        task.instance = task.clazz(self.dispatcher)
         task.instance.verify(*task.args)
         task.description = task.instance.describe(*task.args)
         task.id = self.dispatcher.datastore_log.insert("tasks", task)
@@ -772,7 +772,7 @@ class Balancer(object):
                     ))
                     raise ValidationException(extra=errors)
 
-                task.instance = task.clazz(self.dispatcher, self.dispatcher.datastore)
+                task.instance = task.clazz(self.dispatcher)
                 task.resources = task.instance.verify(*task.args)
                 task.description = task.instance.describe(*task.args)
 

@@ -522,8 +522,8 @@ class SystemTimeConfigureTask(Task):
 @accepts(h.any_of(int, None))
 @description("Reboots the System")
 class SystemRebootTask(Task):
-    def __init__(self, dispatcher, datastore):
-        super(SystemRebootTask, self).__init__(dispatcher, datastore)
+    def __init__(self, dispatcher):
+        super(SystemRebootTask, self).__init__(dispatcher)
         self.finish_event = Event()
         self.abort_flag = False
 

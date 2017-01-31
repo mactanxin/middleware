@@ -402,8 +402,8 @@ class VMConfigUpdateTask(Task):
 
 
 class VMBaseTask(ProgressTask):
-    def __init__(self, dispatcher, datastore):
-        super(VMBaseTask, self).__init__(dispatcher, datastore)
+    def __init__(self, dispatcher):
+        super(VMBaseTask, self).__init__(dispatcher)
         self.vm_root_dir = None
 
     def init_root_dir(self, vm):
@@ -787,8 +787,8 @@ class VMBaseTask(ProgressTask):
 ))
 @description('Creates a VM')
 class VMCreateTask(VMBaseTask):
-    def __init__(self, dispatcher, datastore):
-        super(VMCreateTask, self).__init__(dispatcher, datastore)
+    def __init__(self, dispatcher):
+        super(VMCreateTask, self).__init__(dispatcher)
         self.id = None
 
     @classmethod

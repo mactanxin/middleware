@@ -402,8 +402,8 @@ class DiskInstallBootloaderTask(Task):
 @description("Erases the given Disk with erasure method specified (default: QUICK)")
 @accepts(str, h.ref('DiskEraseMethod'))
 class DiskEraseTask(Task):
-    def __init__(self, dispatcher, datastore):
-        super(DiskEraseTask, self).__init__(dispatcher, datastore)
+    def __init__(self, dispatcher):
+        super(DiskEraseTask, self).__init__(dispatcher)
         self.started = False
         self.mediasize = 0
         self.remaining = 0

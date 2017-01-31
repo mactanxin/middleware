@@ -1285,8 +1285,8 @@ class CalculateReplicationDeltaTask(Task):
 @accepts(str, h.ref('ReplicationOptions'), h.one_of(None, h.array(h.ref('ReplicationTransportOption'))), bool)
 @description("Runs a dataset replication with the specified arguments")
 class ReplicateDatasetTask(ProgressTask):
-    def __init__(self, dispatcher, datastore):
-        super(ReplicateDatasetTask, self).__init__(dispatcher, datastore)
+    def __init__(self, dispatcher):
+        super(ReplicateDatasetTask, self).__init__(dispatcher)
         self.rd_fd = None
         self.wr_fd = None
         self.aborted = False

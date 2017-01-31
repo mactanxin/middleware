@@ -219,8 +219,8 @@ class SystemDatasetProvider(Provider):
 @description("Updates .system dataset configuration")
 @accepts(str)
 class SystemDatasetConfigure(ProgressTask):
-    def __init__(self, dispatcher, datastore):
-        super(SystemDatasetConfigure, self).__init__(dispatcher, datastore)
+    def __init__(self, dispatcher):
+        super(SystemDatasetConfigure, self).__init__(dispatcher)
         self.id = None
         self.src_pool = None
         self.services = []

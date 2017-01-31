@@ -197,9 +197,6 @@ class DatastoreProvider(Provider):
 
 
 class DatastoreBaseTask(ProgressTask):
-    def __init__(self, dispatcher, datastore):
-        super(DatastoreBaseTask, self).__init__(dispatcher, datastore)
-
     def get_driver_and_check_capabilities(self, id, clones=False, snapshots=False):
         ds = self.dispatcher.call_sync('vm.datastore.query', [('id', '=', id)], {'single': True})
         if not ds:

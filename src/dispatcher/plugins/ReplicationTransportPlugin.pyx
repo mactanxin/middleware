@@ -220,8 +220,8 @@ class TransportProvider(Provider):
 
 
 class TransportBase(ProgressTask):
-    def __init__(self, dispatcher, datastore):
-        super(TransportBase, self).__init__(dispatcher, datastore)
+    def __init__(self, dispatcher):
+        super(TransportBase, self).__init__(dispatcher)
         self.running = True
         self.estimated_size = 0
         self.done = 0
@@ -264,8 +264,8 @@ class TransportBase(ProgressTask):
     )
 )
 class TransportSendTask(TransportBase):
-    def __init__(self, dispatcher, datastore):
-        super(TransportSendTask, self).__init__(dispatcher, datastore)
+    def __init__(self, dispatcher):
+        super(TransportSendTask, self).__init__(dispatcher)
         self.finished = AsyncResult()
         self.addr = None
         self.aborted = False
@@ -562,8 +562,8 @@ class TransportSendTask(TransportBase):
 @description('Receive side of replication transport layer')
 @accepts(h.ref('ReplicationTransport'))
 class TransportReceiveTask(TransportBase):
-    def __init__(self, dispatcher, datastore):
-        super(TransportReceiveTask, self).__init__(dispatcher, datastore)
+    def __init__(self, dispatcher):
+        super(TransportReceiveTask, self).__init__(dispatcher)
         self.addr = None
         self.aborted = False
         self.fds = []
@@ -791,8 +791,8 @@ class TransportReceiveTask(TransportBase):
 @description('Compress the input stream and pass it to the output')
 @accepts(h.ref('CompressReplicationTransportPlugin'))
 class TransportCompressTask(Task):
-    def __init__(self, dispatcher, datastore):
-        super(TransportCompressTask, self).__init__(dispatcher, datastore)
+    def __init__(self, dispatcher):
+        super(TransportCompressTask, self).__init__(dispatcher)
         self.fds = []
         self.aborted = False
 
@@ -914,8 +914,8 @@ class TransportCompressTask(Task):
 @description('Decompress the input stream and pass it to the output')
 @accepts(h.ref('CompressReplicationTransportPlugin'))
 class TransportDecompressTask(Task):
-    def __init__(self, dispatcher, datastore):
-        super(TransportDecompressTask, self).__init__(dispatcher, datastore)
+    def __init__(self, dispatcher):
+        super(TransportDecompressTask, self).__init__(dispatcher)
         self.fds = []
         self.aborted = False
 
@@ -1033,8 +1033,8 @@ class TransportDecompressTask(Task):
 @description('Encrypt the input stream and pass it to the output')
 @accepts(h.ref('EncryptReplicationTransportPlugin'))
 class TransportEncryptTask(Task):
-    def __init__(self, dispatcher, datastore):
-        super(TransportEncryptTask, self).__init__(dispatcher, datastore)
+    def __init__(self, dispatcher):
+        super(TransportEncryptTask, self).__init__(dispatcher)
         self.fds = []
         self.aborted = False
 
@@ -1296,8 +1296,8 @@ class TransportEncryptTask(Task):
 @description('Decrypt the input stream and pass it to the output')
 @accepts(h.ref('EncryptReplicationTransportPlugin'))
 class TransportDecryptTask(Task):
-    def __init__(self, dispatcher, datastore):
-        super(TransportDecryptTask, self).__init__(dispatcher, datastore)
+    def __init__(self, dispatcher):
+        super(TransportDecryptTask, self).__init__(dispatcher)
         self.fds = []
         self.aborted = False
 
@@ -1536,8 +1536,8 @@ class TransportDecryptTask(Task):
 @description('Limit throughput to one buffer size per second')
 @accepts(h.ref('ThrottleReplicationTransportPlugin'))
 class TransportThrottleTask(Task):
-    def __init__(self, dispatcher, datastore):
-        super(TransportThrottleTask, self).__init__(dispatcher, datastore)
+    def __init__(self, dispatcher):
+        super(TransportThrottleTask, self).__init__(dispatcher)
         self.fds = []
         self.aborted = False
 
