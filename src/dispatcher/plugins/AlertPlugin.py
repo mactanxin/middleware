@@ -194,6 +194,14 @@ class AlertsProvider(Provider):
         return self.datastore.query('alert.classes')
 
 
+    @description("Returns list of registered alert severities")
+    @accepts()
+    @returns(h.array(str))
+    def get_alert_severities(self):
+        alert_classes = self.get_alert_classes()
+        return {alert_class['severity'] for alert_class in alert_classes}
+
+
 @description('Provides access to the alerts filters')
 class AlertsFiltersProvider(Provider):
     @query('AlertFilter')
