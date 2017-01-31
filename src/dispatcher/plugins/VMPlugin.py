@@ -550,16 +550,24 @@ class VMBaseTask(ProgressTask):
                     )
 
             else:
-                if properties['target_type'] == 'ZVOL':
-                    target_filesystem_path = self.dispatcher.call_sync(
-                        'vm.datastore.get_filesystem_path',
-                        datastore,
-                        properties['target_path']
-                    )
+                target_filesystem_path = self.dispatcher.call_sync(
+                    'vm.datastore.get_filesystem_path',
+                    datastore,
+                    properties['target_path']
+                )
+                if properties['target_type'] == 'BLOCK':
                     if not os.path.exists(target_filesystem_path):
                         self.run_subtask_sync(
                             'vm.datastore.block_device.create',
                             vm['target'],
+                            properties['target_path'],
+                            properties['size']
+                        )
+                elif properties['target_type'] == 'FILE':
+                    if properties['size'] or not os.path.exists(target_filesystem_path):
+                        self.run_subtask_sync(
+                            'vm.datastore.local.block_device.create',
+                            datastore,
                             properties['target_path'],
                             properties['size']
                         )
@@ -680,6 +688,19 @@ class VMBaseTask(ProgressTask):
                             old_properties['target_path'],
                             new_properties['target_path']
                         )
+                elif new_properties['target_type'] == 'FILE':
+                    target_filesystem_path = self.dispatcher.call_sync(
+                        'vm.datastore.get_filesystem_path',
+                        vm['target'],
+                        new_properties['target_path']
+                    )
+                    if new_properties['size'] or not os.path.exists(target_filesystem_path):
+                        self.run_subtask_sync(
+                            'vm.datastore.local.block_device.create',
+                            vm['target'],
+                            new_properties['target_path'],
+                            new_properties.get('size', 0)
+                        )
 
             elif old_properties['target_type'] in ('DISK', 'FILE'):
                 if new_properties['target_type'] == 'BLOCK':
@@ -702,6 +723,20 @@ class VMBaseTask(ProgressTask):
                             vm['target'],
                             new_properties['target_path'],
                             new_properties['size']
+                        )
+
+                elif new_properties['target_type'] == 'FILE':
+                    target_filesystem_path = self.dispatcher.call_sync(
+                        'vm.datastore.get_filesystem_path',
+                        vm['target'],
+                        new_properties['target_path']
+                    )
+                    if new_properties['size'] or not os.path.exists(target_filesystem_path):
+                        self.run_subtask_sync(
+                            'vm.datastore.local.block_device.create',
+                            vm['target'],
+                            new_properties['target_path'],
+                            new_properties.get('size', 0)
                         )
 
         if new_res['type'] == 'NIC':
