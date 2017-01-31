@@ -66,6 +66,30 @@ class DatastoreProvider(Provider):
 
         return result
 
+    @description('Lists disks or files or block devices')
+    @accepts(h.ref('VmDatastorePathType'), h.one_of(str, None), str)
+    @returns(h.array(h.ref('VmDatastoreItem')))
+    def list(self, type, datastore_id=None, root_path='/'):
+        if type == 'DISK':
+            available_disks_paths = self.dispatcher.call_sync('volume.get_available_disks')
+            available_disks = self.dispatcher.call_sync(
+                'disk.query',
+                [('path', 'in', available_disks_paths)],
+                {'select': ('id', 'status.description', 'mediasize')}
+            )
+            return [{'path': p, 'size': s, 'description': d, 'type': type} for p, d, s in available_disks]
+
+        if not datastore_id:
+            raise RpcException(errno.EINVAL, 'Datastore ID has to be specified for BLOCK and FILE path types')
+
+        driver = self.get_driver(datastore_id)
+        return self.dispatcher.call_sync(
+            'vm.datastore.{0}.list'.format(driver),
+            type,
+            datastore_id,
+            normpath(root_path)
+        )
+
     @private
     @accepts(str)
     @returns(str)
@@ -659,7 +683,7 @@ def _init(dispatcher, plugin):
 
     plugin.register_schema_definition('VmDatastorePathType', {
         'type': 'string',
-        'enum': ['BLOCK_DEVICE', 'DIRECTORY', 'FILE', 'SNAPSHOT']
+        'enum': ['BLOCK', 'DIRECTORY', 'FILE', 'SNAPSHOT', 'DISK']
     })
 
     plugin.register_schema_definition('VmDatastoreCapabilities', {
@@ -681,6 +705,17 @@ def _init(dispatcher, plugin):
             'state': {'$ref': 'VmDatastoreState'},
             'capabilities': {'$ref': 'VmDatastoreCapabilities'},
             'properties': {'$ref': 'VmDatastoreProperties'}
+        }
+    })
+
+    plugin.register_schema_definition('VmDatastoreItem', {
+        'type': 'object',
+        'additionalProperties': False,
+        'properties': {
+            'path': {'type': 'string'},
+            'type': {'$ref': 'VmDatastorePathType'},
+            'size': {'type': 'integer'},
+            'description': {'type': ['string', 'null']},
         }
     })
 

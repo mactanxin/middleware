@@ -43,6 +43,13 @@ class NFSDatastoreProvider(Provider):
         return
 
     @private
+    @description('Lists files or block devices')
+    @accepts(h.ref('VmDatastorePathType'), str, str)
+    @returns(h.array(h.ref('VmDatastoreItem')))
+    def list(self, type, datastore_id, root_path):
+        return self.dispatcher.call_sync('vm.datastore.local.list', type, datastore_id, root_path)
+
+    @private
     @accepts(str, str)
     @returns(str)
     @description('Converts remote NFS VM datastore path to local filesystem path')

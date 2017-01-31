@@ -46,6 +46,31 @@ class VolumeDatastoreProvider(Provider):
             }
 
     @private
+    @description('Lists files or ZVOLs')
+    @accepts(h.ref('VmDatastorePathType'), str, str)
+    @returns(h.array(h.ref('VmDatastoreItem')))
+    def list(self, type, datastore_id, root_path):
+        result = []
+        if type == 'BLOCK':
+            dataset = os.path.join(datastore_id, root_path)
+
+            zvols = self.dispatcher.call_sync(
+                'volume.dataset.query',
+                [('id', '~', f'^{dataset}/((?!/).)*$'), ('type', '=', 'VOLUME')],
+                {'select': ('id', 'volsize')}
+            )
+            for zvol, size in zvols:
+                result.append({
+                    'path': '/' + '/'.join(zvol.split('/')[1:]),
+                    'type': 'BLOCK',
+                    'size': size,
+                    'description': ''
+                })
+
+        result.extend(self.dispatcher.call_sync('vm.datastore.local.list', type, datastore_id, root_path))
+        return result
+
+    @private
     @accepts(str, str)
     @returns(str)
     @description('Converts dataset path to local filesystem path')

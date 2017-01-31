@@ -43,6 +43,31 @@ class LocalDatastoreProvider(Provider):
         return
 
     @private
+    @description('Lists files or block devices')
+    @accepts(h.ref('VmDatastorePathType'), str, str)
+    @returns(h.array(h.ref('VmDatastoreItem')))
+    def list(self, type, datastore_id, root_path):
+        path = self.dispatcher.call_sync('vm.datastore.get_filesystem_path', datastore_id, root_path)
+        if not os.path.isdir(path):
+            raise RpcException(errno.EINVAL, f'Selected path {root_path} is not a directory')
+
+        result = []
+        for i in os.listdir(path):
+            abs_path = os.path.join(path, i)
+            is_dir = os.path.isdir(abs_path)
+            if not is_dir and type != 'FILE':
+                continue
+
+            result.append({
+                'path': os.path.join('/', root_path, i),
+                'type': 'DIRECTORY' if is_dir else 'FILE',
+                'size': os.stat(abs_path).st_size,
+                'description': ''
+            })
+
+        return result
+
+    @private
     @accepts(str, str)
     @returns(str)
     @description('Converts VM datastore path to local filesystem path')
