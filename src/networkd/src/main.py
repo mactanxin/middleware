@@ -404,6 +404,10 @@ class ConfigurationService(RpcService):
 
         return None
 
+    def get_route(self, address):
+        rt = netif.RoutingTable()
+        return rt.get(ipaddress.ip_address(address))
+
     def wait_for_default_interface(self, timeout=None):
         with self.context.cv:
             return self.context.cv.wait_for(lambda: self.context.default_interface, timeout=timeout)
