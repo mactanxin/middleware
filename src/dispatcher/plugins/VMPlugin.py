@@ -519,7 +519,7 @@ class VMBaseTask(ProgressTask):
             datastore = vm['target']
             normalize(properties, {
                 'mode': 'AHCI',
-                'target_type': 'ZVOL',
+                'target_type': 'BLOCK',
                 'target_path': res['name'],
                 'size': 0
             })
@@ -662,8 +662,8 @@ class VMBaseTask(ProgressTask):
                 new_properties['destination'] = None
 
         if new_res['type'] == 'DISK':
-            if old_properties['target_type'] == 'ZVOL':
-                if new_properties['target_type'] == 'ZVOL':
+            if old_properties['target_type'] == 'BLOCK':
+                if new_properties['target_type'] == 'BLOCK':
                     if old_properties['size'] != new_properties['size']:
                         self.run_subtask_sync(
                             'vm.datastore.block_device.resize',
@@ -682,7 +682,7 @@ class VMBaseTask(ProgressTask):
                         )
 
             elif old_properties['target_type'] in ('DISK', 'FILE'):
-                if new_properties['target_type'] == 'ZVOL':
+                if new_properties['target_type'] == 'BLOCK':
                     new_properties['target_path'] = os.path.join(vm_root_dir, new_properties['target_path'])
                     target_exists = self.dispatcher.call_sync(
                         'vm.datastore.directory_exists',
@@ -2489,7 +2489,7 @@ def _init(dispatcher, plugin):
 
     plugin.register_schema_definition('VmDeviceDiskTargetType', {
         'type': 'string',
-        'enum': ['ZVOL', 'FILE', 'DISK']
+        'enum': ['BLOCK', 'FILE', 'DISK']
     })
 
     plugin.register_schema_definition('VmDeviceDisk', {
