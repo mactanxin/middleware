@@ -28,20 +28,22 @@
 
 import sys
 import argparse
-import json
 import signal
 import dateutil.parser
 import textwrap
+import pytz
+import tzlocal
 import msgpack
 from datetime import datetime
 from threading import Lock
 from freenas.dispatcher.client import Client, sync
-from freenas.utils import to_timedelta, exclude, query as q
+from freenas.dispatcher.jsonenc import dumps
+from freenas.utils import to_timedelta, query as q
 from freenas.utils.msgpack import default, ext_hook
 
 
 EXCLUDE_VERBOSE_PROPS = (
-    'timestamp', 'message', 'identifier', 'service', 'seqno',
+    'timestamp', 'message', 'identifier', 'seqno',
     'created_at', 'updated_at', 'boot_id', 'id'
 )
 
@@ -74,15 +76,18 @@ def query(c, args, filter, params):
     return c.call_sync('logd.logging.query', filter, params)
 
 
-def output_entry(format, entry, colors=False, verbose=False):
+def output_entry(format, entry, colors=False, verbose=False, utc=False):
     if format == 'json':
-        print(json.dumps(entry, indent=4))
-        print()
+        print(dumps(entry, indent=4))
         return
 
     if format == 'syslog':
         if colors:
             print('\033[{0}m'.format(COLOR_MAP.get(entry['priority'], 0)), end='')
+
+        if not utc:
+            ts = entry['timestamp'].replace(tzinfo=pytz.utc)
+            entry['timestamp'] = ts.astimezone(tzlocal.get_localzone())
 
         print('{timestamp:%Y-%m-%d %H:%M:%S} {identifier}: {message}'.format(**entry))
         if verbose:
@@ -108,6 +113,7 @@ def main():
     parser.add_argument('--offline', action='store_true')
     parser.add_argument('--socket', default='unix:///var/run/logd.sock')
     parser.add_argument('--input')
+    parser.add_argument('--output', default='-')
     parser.add_argument('--everything', action='store_true', default=False)
     parser.add_argument('--get-boot-id', action='store_true')
     parser.add_argument('--list-boots', action='store_true')
@@ -124,11 +130,12 @@ def main():
     parser.add_argument('--key', nargs='+')
     parser.add_argument('-n', '--limit', type=int)
     parser.add_argument('--sef', action='store_true')
-    parser.add_argument('--dump', default='-')
+    parser.add_argument('--dump')
     parser.add_argument('--format', default='syslog')
     parser.add_argument('-f', '--follow', action='store_true')
-    parser.add_argument('--no-colors', action='store_true')
     parser.add_argument('-v', '--verbose', action='store_true')
+    parser.add_argument('--no-colors', action='store_true')
+    parser.add_argument('--utc', action='store_true')
     args = parser.parse_args()
     c = None
 
@@ -156,12 +163,15 @@ def main():
     params = {}
     seqno = -1
 
-    if not args.everything and not args.boot_id and not args.input:
+    if not args.everything and not args.last and not args.since and not args.boot_id and not args.input:
         boot_id = c.call_sync('logd.logging.get_boot_id')
         filter.append(('boot_id', '=', boot_id))
 
-    if args.boot_id:
+    elif args.boot_id:
         filter.append(('boot_id', '=', args.boot_id))
+
+    else:
+        filter.append(('boot_id', '!=', None))
 
     for ident in args.ident:
         filter.append(('identifier', '=', ident))
@@ -193,7 +203,7 @@ def main():
 
     if args.dump:
         packer = msgpack.Packer(default=default, use_bin_type=True)
-        out = open(sys.stdout.fileno() if args.dump == '-' else args.dump, 'wb')
+        out = open(sys.stdout.fileno() if args.output == '-' else args.output, 'wb')
 
     try:
         if args.follow:
@@ -207,7 +217,7 @@ def main():
                             out.flush()
                             return
 
-                        output_entry(args.format, msg, not args.no_colors, args.verbose)
+                        output_entry(args.format, msg, not args.no_colors, args.verbose, args.utc)
                         seqno = msg['seqno']
 
             c.register_event_handler('logd.logging.message', on_message)
@@ -219,7 +229,7 @@ def main():
                     out.flush()
                     continue
 
-                output_entry(args.format, i, not args.no_colors, args.verbose)
+                output_entry(args.format, i, not args.no_colors, args.verbose, args.utc)
                 seqno = i['seqno']
 
         if args.follow:
