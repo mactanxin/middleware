@@ -135,8 +135,12 @@ class VMProvider(Provider):
             target_type = q.get(device, 'properties.target_type')
             target_path = q.get(device, 'properties.target_path')
 
-            if target_type in ('DISK', 'FILE'):
-                return target_path
+            if target_type == 'DISK':
+                return self.dispatcher.call_sync(
+                    'disk.query',
+                    [('id', '=', target_path)],
+                    {'single': True, 'select': 'path'}
+                )
 
             return return_path(vm['target'], os.path.join(VM_ROOT, vm['name'], target_path))
 
