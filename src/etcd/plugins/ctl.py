@@ -136,7 +136,7 @@ def generate_targets(context):
                     'name': lun['name']
                 }
 
-        result['iqn.iqn.2005-10.org.freenas.ctl.port{0}'.format(i['number'])] = {
+        result['iqn.2005-10.org.freenas.virtio-port{0}'.format(i['number'])] = {
             'port': 'ioctl/{0}'.format(i['number']),
             'lun': list(gen(i['luns']))
         }
