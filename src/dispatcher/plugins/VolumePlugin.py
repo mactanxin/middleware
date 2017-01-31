@@ -3418,7 +3418,7 @@ def _init(dispatcher, plugin):
             ]},
             'volsize': {'type': ['integer', 'null']},
             'properties': {'$ref': 'VolumeDatasetProperties'},
-            'permissions': {'$ref': 'permissions'},
+            'permissions': {'$ref': 'Permissions'},
             'permissions_type': {'$ref': 'VolumeDatasetPermissionsType'},
             'last_replicated_by': {'type': ['string', 'null']},
             'last_replicated_at': {'type': ['datetime', 'null']},
