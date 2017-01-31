@@ -171,7 +171,7 @@ class VolumeDatastoreProvider(Provider):
         )
         if ds_type:
             if ds_type == 'VOLUME':
-                return 'BLOCK_DEVICE'
+                return 'BLOCK'
             return 'DIRECTORY'
 
         if self.dispatcher.call_sync('volume.snapshot.query', [('id', '=', zfs_path)], {'count': True}):

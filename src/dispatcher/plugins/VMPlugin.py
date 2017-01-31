@@ -1199,7 +1199,7 @@ class VMDeleteTask(Task):
                         continue
 
                     type = 'directory'
-                    if self.dispatcher.call_sync('vm.datastore.get_path_type', datastore, path) == 'BLOCK_DEVICE':
+                    if self.dispatcher.call_sync('vm.datastore.get_path_type', datastore, path) == 'BLOCK':
                         type = 'block_device'
 
                     snap_sources.append((type, source))
