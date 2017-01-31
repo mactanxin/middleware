@@ -141,6 +141,7 @@ class Context(object):
         self.service = TaskProxyService(self)
         self.task = queue.Queue(1)
         self.datastore = None
+        self.datastore_log = None
         self.configstore = None
         self.conn = None
         self.instance = None
@@ -208,6 +209,7 @@ class Context(object):
         configure_logging('taskworker#{0}'.format(index), logging.DEBUG)
 
         self.datastore = get_datastore()
+        self.datastore_log = get_datastore(log=True)
         self.configstore = ConfigStore(self.datastore)
         self.conn = Client()
         self.conn.connect('unix:')
@@ -245,6 +247,7 @@ class Context(object):
                     dispatcher = DispatcherWrapper(self.conn)
                     self.instance = getattr(module, task['class'])(dispatcher, self.datastore)
                     self.instance.configstore = self.configstore
+                    self.instance.datastore_log = self.datastore_log
                     self.instance.user = task['user']
                     self.instance.environment = task['environment']
                     self.running.set()
