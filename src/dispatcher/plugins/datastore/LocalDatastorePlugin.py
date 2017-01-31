@@ -107,7 +107,7 @@ class LocalDatastoreProvider(Provider):
         if os.path.isdir(path):
             return 'DIRECTORY'
 
-        return 'BLOCK_DEVICE'
+        return 'FILE'
 
     @private
     @accepts(str, str)
