@@ -189,7 +189,7 @@ class VolumeDatastoreProvider(Provider):
         dataset = os.path.join(id, path)
         matching_datasets = self.dispatcher.call_sync(
             'volume.dataset.query',
-            [('id', '~', f'^{dataset}')],
+            [('id', '~', f'^{dataset}(/.*)?$')],
             {'select': 'id'}
         )
         return ['/' + '/'.join(d.split('/')[1:]) for d in matching_datasets]
