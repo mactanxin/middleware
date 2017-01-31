@@ -2492,7 +2492,8 @@ def _init(dispatcher, plugin):
                     {'$ref': 'VmDeviceCdrom'},
                     {'$ref': 'VmDeviceVolume'},
                     {'$ref': 'VmDeviceGraphics'},
-                    {'$ref': 'VmDeviceUsb'}
+                    {'$ref': 'VmDeviceUsb'},
+                    {'$ref': 'VmDeviceScsi'}
                 ]
             }
         },
@@ -2501,7 +2502,7 @@ def _init(dispatcher, plugin):
 
     plugin.register_schema_definition('VmDeviceType', {
         'type': 'string',
-        'enum': ['DISK', 'CDROM', 'NIC', 'VOLUME', 'GRAPHICS', 'USB']
+        'enum': ['DISK', 'CDROM', 'NIC', 'VOLUME', 'GRAPHICS', 'USB', 'SCSI']
     })
 
     plugin.register_schema_definition('VmDeviceNic', {
@@ -2638,6 +2639,16 @@ def _init(dispatcher, plugin):
     plugin.register_schema_definition('VmDeviceUsbDevice', {
         'type': 'string',
         'enum': ['tablet']
+    })
+
+    plugin.register_schema_definition('VmDeviceScsi', {
+        'type': 'object',
+        'additionalProperties': False,
+        'properties': {
+            '%type': {'enum': ['VmDeviceScsi']},
+            'port': {'type': 'integer'},
+        },
+        'required': ['port']
     })
 
     plugin.register_schema_definition('VmConfig', {

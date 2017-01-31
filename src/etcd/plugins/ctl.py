@@ -124,6 +124,23 @@ def generate_targets(context):
             'lun': list(map(generate_lun, enumerate(context.datastore.query('simulator.disks', ('online', '=', True)))))
         }
 
+    for i in context.datastore.query('vm.scsi_ports'):
+        def gen(entries):
+            for l in entries:
+                lun = context.datastore.get_by_id('share', l['lun_id'])
+                if not lun:
+                    continue
+
+                yield {
+                    'number': l['number'],
+                    'name': lun['name']
+                }
+
+        result['iqn.iqn.2005-10.org.freenas.ctl.port{0}'.format(i['number'])] = {
+            'port': 'ioctl/{0}'.format(i['number']),
+            'lun': list(gen(i['luns']))
+        }
+
     for i in context.datastore.query('iscsi.targets'):
         target = {
             'lun': i['extents'],
