@@ -34,6 +34,7 @@ import netif
 import bsd
 import logging
 import time
+import signal
 
 from threading import Event, Thread
 from datastore import DatastoreException
@@ -296,7 +297,7 @@ class SystemGeneralConfigureTask(Task):
         try:
             self.dispatcher.call_sync('etcd.generation.generate_group', 'localtime')
             if syslog_changed:
-                self.dispatcher.call_sync('service.reload', 'syslog')
+                self.dispatcher.call_sync('serviced.job.send_signal', 'org.freenas.logd', signal.SIGHUP)
         except RpcException as e:
             raise TaskException(
                 errno.ENXIO,
