@@ -51,26 +51,26 @@ class LogdLogHandler(logging.Handler):
         self.client.connect(self.address)
 
     def emit(self, record):
-        if not self.client.connected:
-            self.client.connect(self.address)
-
-        item = {
-            'timestamp': datetime.utcfromtimestamp(record.created),
-            'priority': PRIORITY_MAP.get(record.levelno, 'INFO'),
-            'message': record.getMessage(),
-            'identifier': self.ident,
-            'thread': record.threadName,
-            'tid': record.thread,
-            'module_name': record.name,
-            'source_language': 'python',
-            'source_file': record.pathname,
-            'source_line': record.lineno,
-        }
-
-        if record.exc_info:
-            item['exception'] = '\n'.join(traceback.format_exception(*record.exc_info))
-
         try:
+            if not self.client.connected:
+                self.client.connect(self.address)
+
+            item = {
+                'timestamp': datetime.utcfromtimestamp(record.created),
+                'priority': PRIORITY_MAP.get(record.levelno, 'INFO'),
+                'message': record.getMessage(),
+                'identifier': self.ident,
+                'thread': record.threadName,
+                'tid': record.thread,
+                'module_name': record.name,
+                'source_language': 'python',
+                'source_file': record.pathname,
+                'source_line': record.lineno,
+            }
+
+            if record.exc_info:
+                item['exception'] = '\n'.join(traceback.format_exception(*record.exc_info))
+
             self.client.call_sync('logd.logging.push', item, timeout=20)
         except:
             self.handleError(record)
