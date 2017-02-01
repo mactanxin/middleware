@@ -65,6 +65,7 @@ def subscribe(callback):
     with _lock:
         try:
             _client.connect(SERVICED_SOCKET)
+            _client.subscribe_events('serviced.*')
             _client.on_event(callback)
         except RpcException as err:
             raise ServicedException(err.code, err.message, err.extra)
