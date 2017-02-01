@@ -338,7 +338,6 @@ def _init(dispatcher, plugin):
         'enum': list(LogLevel.__members__.keys())
     })
 
-
     plugin.register_schema_definition('ServiceSmbMinprotocol', {
         'type': 'string',
         'enum': PROTOCOLS
