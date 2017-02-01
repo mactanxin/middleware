@@ -128,7 +128,7 @@ def populate_user_obj(user, fn10_groups, fn9_user, fn9_groups, fn9_grpmem):
         'password_disabled': bool(fn9_user['bsdusr_password_disabled']),
         'locked': bool(fn9_user['bsdusr_locked']),
         'shell': fn9_user['bsdusr_shell'],
-        'home': fn9_user['bsdusr_home'],
+        # 'home': fn9_user['bsdusr_home'],
         'sudo': bool(fn9_user['bsdusr_sudo']),
         'email': fn9_user['bsdusr_email'],
         'lmhash': lmhash,
@@ -172,8 +172,12 @@ class AccountsMigrateTask(Task):
         fn10_root_user = self.dispatcher.call_sync(
             'user.query', [('uid', '=', 0)], {"single": True}
         )
-        del fn10_root_user['builtin']
         fn10_root_user = populate_user_obj(fn10_root_user, fn10_groups, root_user, groups, grp_membership)
+        del fn10_root_user['builtin']
+        del fn10_root_user['home']
+        del fn10_root_user['uid']
+        del fn10_root_user['username']
+        del fn10_root_user['locked']
         self.run_subtask_sync('user.update', fn10_root_user['id'], fn10_root_user)
 
         # Now rest of the users can be looped upon
