@@ -29,7 +29,7 @@ import errno
 import ipaddress
 import logging
 import os
-from freenas.dispatcher.rpc import RpcException, description, accepts, returns, generator
+from freenas.dispatcher.rpc import RpcException, description, accepts, returns, generator, pass_sender
 from freenas.dispatcher.rpc import SchemaHelper as h
 from freenas.utils import normalize, query as q
 from datastore.config import ConfigNode
@@ -71,6 +71,13 @@ class NetworkProvider(Provider):
                     ips.append(aliases['address'])
 
         return list(set(ips))
+
+    @pass_sender
+    @returns(str)
+    def get_client_interface(self, sender):
+        address, _ = sender.client_address.split(',')
+        route = self.dispatcher.call_sync('networkd.configuration.get_route', address)
+        return route['interface']
 
 
 @description("Provides access to network interface settings")
