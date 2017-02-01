@@ -40,6 +40,7 @@ import dateutil.tz
 import tables
 import signal
 import time
+import collections
 import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
@@ -47,6 +48,7 @@ import gevent
 import gevent.socket
 import gevent.threadpool
 from bsd import setproctitle
+from gevent.lock import RLock
 from gevent.server import StreamServer
 from freenas.dispatcher.client import Client, ClientError
 from freenas.dispatcher.rpc import RpcService, RpcException, accepts, returns, generator
@@ -165,7 +167,7 @@ class DataSource(object):
             change = value - self.last_value
 
         if value is not None and self.events_enabled:
-            self.context.client.emit_event('statd.{0}.pulse'.format(self.name), {
+            self.context.push_event('statd.{0}.pulse'.format(self.name), {
                 'value': value,
                 'change': change,
                 'nolog': True
@@ -430,6 +432,8 @@ class Main(object):
         self.hdf = None
         self.hdf_group = None
         self.config = None
+        self.event_queue = collections.deque()
+        self.event_lock = RLock()
         self.logger = logging.getLogger('statd')
         self.data_sources = {}
 
@@ -539,8 +543,20 @@ class Main(object):
         self.client.disconnect()
         sys.exit(0)
 
-    def dispatcher_error(self, error):
-        self.die()
+    def push_event(self, name, args):
+        with self.event_lock:
+            self.event_queue.append({
+                'name': name,
+                'args': args
+            })
+
+    def event_worker(self):
+        while True:
+            time.sleep(1)
+            with self.event_lock:
+                if self.event_queue and self.client.connected:
+                    self.client.send_event_burst(list(self.event_queue))
+                    self.event_queue.clear()
 
     def checkin(self):
         checkin()
@@ -556,6 +572,7 @@ class Main(object):
         gevent.signal(signal.SIGQUIT, self.die)
         gevent.signal(signal.SIGTERM, self.die)
         gevent.signal(signal.SIGINT, self.die)
+        gevent.spawn(self.event_worker)
 
         self.server = InputServer(self)
         self.config = args.c
