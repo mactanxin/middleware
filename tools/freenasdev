@@ -131,7 +131,7 @@ freenasrsync_migrate93() {
 	myrsyncnodel ${REPO_PARENT_PATH}/freenas-migrate93/sbin/ "root@${1}":/usr/local/sbin/
 
 	# rsync the MigrationPlugin
-	myrsyncnodel ${REPO_PARENT_PATH}/middleware/src/dispatcher/plugins/MigrationPlugin "root@${1}":/usr/local/lib/dispatcher/plugins/
+	myrsyncnodel ${REPO_PARENT_PATH}/middleware/src/dispatcher/plugins/MigrationPlugin.py "root@${1}":/usr/local/lib/dispatcher/plugins/
 }
 
 freenasrsync() {
