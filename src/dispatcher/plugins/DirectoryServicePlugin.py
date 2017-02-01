@@ -78,6 +78,10 @@ class DirectoryServicesConfigureTask(Task):
         node = ConfigNode('directory', self.configstore)
         node.update(updated_params)
 
+        self.emit_event('directoryservice.changed', {
+            'operation': 'update'
+        })
+
         try:
             self.dispatcher.call_sync('dscached.management.reload_config')
         except RpcException as e:
@@ -294,6 +298,7 @@ def _init(dispatcher, plugin):
     plugin.register_provider('directoryservice', DirectoryServiceProvider)
     plugin.register_provider('directory', DirectoryProvider)
     plugin.register_event_type('directory.changed')
+    plugin.register_event_type('directoryservice.changed')
     plugin.register_task_handler('directory.create', DirectoryServiceCreateTask)
     plugin.register_task_handler('directory.update', DirectoryServiceUpdateTask)
     plugin.register_task_handler('directory.delete', DirectoryServiceDeleteTask)
