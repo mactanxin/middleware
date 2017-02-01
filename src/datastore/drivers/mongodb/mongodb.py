@@ -282,7 +282,7 @@ class MongodbDatastore(object):
                 obj = fn(obj) if fn else obj
 
                 if isinstance(select, (list, tuple)):
-                    return (get(obj, i) for i in select)
+                    return [get(obj, i) for i in select]
 
                 if isinstance(select, str):
                     return get(obj, select)
