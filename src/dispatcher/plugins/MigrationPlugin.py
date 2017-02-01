@@ -144,7 +144,7 @@ class AccountsMigrateTask(Task):
     def early_describe(cls):
         return "Migration of FreeNAS 9.x users and grups to 10.x"
 
-    def descrive(self):
+    def describe(self):
         return TaskDescription("Migration of FreeNAS 9.x users and groups to 10.x")
 
     def run(self):
@@ -198,7 +198,7 @@ class NetworkMigrateTask(Task):
     def early_describe(cls):
         return "Migration of FreeNAS 9.x network settings to 10.x"
 
-    def descrive(self):
+    def describe(self):
         return TaskDescription("Migration of FreeNAS 9.x network settings to 10.x")
 
     def run(self):
