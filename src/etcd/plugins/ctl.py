@@ -127,7 +127,7 @@ def generate_targets(context):
     for i in context.datastore.query('vm.scsi_ports'):
         def gen(entries):
             for l in entries:
-                lun = context.datastore.get_by_id('share', l['lun_id'])
+                lun = context.datastore.get_by_id('shares', l['lun_id'])
                 if not lun:
                     continue
 
