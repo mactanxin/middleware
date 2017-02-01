@@ -85,9 +85,9 @@ def populate_user_obj(user, fn10_groups, fn9_user, fn9_groups, fn9_grpmem):
     try:
         grp = q.query(
             fn10_groups,
-            ('bsdgrp_gid', '=', fn9_groups[fn9_user['bsdusr_group_id']]['bsdgrp_gid']),
+            ('gid', '=', fn9_groups[fn9_user['bsdusr_group_id']]['bsdgrp_gid']),
             single=True
-        )
+        )['id']
     except:
         logger.debug(
             'Got exception whilst trying to lookup group for user: {0}'.format(fn9_user),
@@ -110,7 +110,7 @@ def populate_user_obj(user, fn10_groups, fn9_user, fn9_groups, fn9_grpmem):
             fn9_groups[item['bsdgrpmember_group_id']]['bsdgrp_gid']
             for item in fn9_grpmem.values() if item['bsdgrpmember_user_id'] == fn9_user['id']
         ]
-        aux_groups = q.query(fn10_groups, ('gid', 'in', aux_groups), select=['id'])
+        aux_groups = [item[0] for item in q.query(fn10_groups, ('gid', 'in', aux_groups), select=['id'])]
     except:
         logger.debug(
             'Got exception whilst trying to populate aux groups for user: {0}'.format(fn9_user),
@@ -124,7 +124,7 @@ def populate_user_obj(user, fn10_groups, fn9_user, fn9_groups, fn9_grpmem):
         'group': grp,
         'groups': aux_groups,
         'unixhash': fn9_user['bsdusr_unixhash'],
-        'fullname': fn9_user['bsdusr_full_name'],
+        'full_name': fn9_user['bsdusr_full_name'],
         'password_disabled': bool(fn9_user['bsdusr_password_disabled']),
         'locked': bool(fn9_user['bsdusr_locked']),
         'shell': fn9_user['bsdusr_shell'],
