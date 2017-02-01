@@ -802,6 +802,52 @@ class DockerContainerStopTask(Task):
         )
 
 
+@description('Retarts a Docker container')
+@accepts(str)
+class DockerContainerRestartTask(DockerBaseTask):
+    @classmethod
+    def early_describe(cls):
+        return 'Restarting container'
+
+    def describe(self, id):
+        name = self.dispatcher.call_sync(
+            'docker.container.query', [('id', '=', id)], {'single': True, 'select': 'names.0'}
+        )
+        return TaskDescription('Retarting container {name}', name=name or id)
+
+    def verify(self, id):
+        hostname = None
+        try:
+            hostname = self.dispatcher.call_sync('containerd.docker.host_name_by_container_id', id)
+        except RpcException:
+            pass
+
+        if hostname:
+            return ['docker:{0}'.format(hostname)]
+        else:
+            return ['docker']
+
+    def run(self, id):
+        if not self.datastore_log.exists('docker.containers', ('id', '=', id)):
+            raise TaskException(errno.ENOENT, 'Docker container {0} does not exist'.format(id))
+
+        try:
+            self.dispatcher.call_sync('containerd.docker.host_name_by_container_id', id)
+        except RpcException:
+            name, host_name = self.get_container_name_and_vm_name(id)
+            raise TaskException(
+                errno.EINVAL,
+                'Docker Host {0} is currently unreachable. Cannot restart {1} container'.format(host_name or '', name)
+            )
+
+        self.dispatcher.exec_and_wait_for_event(
+            'docker.container.changed',
+            lambda args: args['operation'] == 'update' and id in args['ids'],
+            lambda: self.dispatcher.call_sync('containerd.docker.restart', id),
+            600
+        )
+
+
 @description('Clones a Docker container')
 @accepts(str, str)
 @returns(str)
@@ -2069,6 +2115,7 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('docker.container.delete', DockerContainerDeleteTask)
     plugin.register_task_handler('docker.container.start', DockerContainerStartTask)
     plugin.register_task_handler('docker.container.stop', DockerContainerStopTask)
+    plugin.register_task_handler('docker.container.restart', DockerContainerRestartTask)
     plugin.register_task_handler('docker.container.clone', DockerContainerCloneTask)
     plugin.register_task_handler('docker.container.commit', DockerContainerCommitTask)
 
