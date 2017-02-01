@@ -1269,6 +1269,7 @@ class ShellConnection(WebSocketApplication, EventEmitter):
         self.logger.info('Opening shell %s...', shell)
         env = os.environ.copy()
         env['TERM'] = 'xterm'
+        env['LANG'] = 'en_US.UTF-8'
         env['PATH'] = '/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin'
 
         try:
