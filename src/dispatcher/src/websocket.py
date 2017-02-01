@@ -70,17 +70,21 @@ class ServerApplication(WebSocketApplication):
         self.ws.close()
 
     def send(self, message, fds):
+        if self.ws.closed:
+            return
+
         try:
             self.ws.send(message)
-        except WebSocketError:
-            self.close()
+        except WebSocketError as err:
+            pass
 
     def on_open(self):
         self.conn = self.parent.on_connection(self)
         self.conn.on_open()
 
     def on_message(self, message):
-        self.conn.on_message(message)
+        if message is not None:
+            self.conn.on_message(message)
 
     def on_close(self, reason):
         self.conn.on_close(reason)
