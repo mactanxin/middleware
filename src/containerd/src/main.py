@@ -1143,7 +1143,11 @@ class ContainerConsole(object):
         self.logger.debug('Opening console to {0}'.format(self.name))
 
         def write(data):
-            self.scrollback.push(data)
+            if data == b'':
+                data = StopIteration
+            else:
+                self.scrollback.push(data)
+
             try:
                 for i in self.console_queues:
                     i.put(data, block=False)
@@ -1170,15 +1174,15 @@ class ContainerConsole(object):
 
                 if fd_o in r:
                     ch = self.stdout.read(1024)
+                    write(ch)
                     if ch == b'':
                         return
-                    write(ch)
 
                 if fd_e in r:
                     ch = gevent.os.tp_read(fd_e)
+                    write(ch)
                     if ch == b'':
                         return
-                    write(ch)
 
             except (OSError, ValueError):
                 return
@@ -1963,6 +1967,8 @@ class ConsoleConnection(WebSocketApplication, EventEmitter):
                 except WebSocketError as err:
                     self.logger.info('WebSocket connection terminated: {0}'.format(str(err)))
                     return
+
+            self.ws.close()
 
         def write_worker():
             for i in self.inq:
