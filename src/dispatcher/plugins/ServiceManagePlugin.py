@@ -161,14 +161,12 @@ class ServiceInfoProvider(Provider):
         if status['state'] != 'RUNNING':
             return
 
-        if svc.get('auto_enable'):
-            for i in self.datastore.query('service_definitions', ('dependencies', 'contains', svc['name'])):
+        if svc.get('dependencies'):
+            for i in self.datastore.query('service_definitions', ('id', 'in', svc['dependencies'])):
                 self.reload(i['name'])
 
-            return
-
         if status.get('pid'):
-            for p in svc['pid']:
+            for p in status['pid']:
                 try:
                     os.kill(p, signal.SIGHUP)
                 except ProcessLookupError:
