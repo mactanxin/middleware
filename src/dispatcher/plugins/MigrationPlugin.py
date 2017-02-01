@@ -31,7 +31,7 @@ import logging
 import sqlite3
 import datetime
 from time import sleep
-from freenas.utils import from query as q
+from freenas.utils import query as q
 from freenas.dispatcher.rpc import (
     RpcException,
     SchemaHelper as h,
@@ -188,6 +188,18 @@ class AccountsMigrateTask(Task):
             self.join_subtasks(*user_subtasks)
 
 
+@description("Network migration task")
+class NetworkMigrateTask(Task):
+    @classmethod()
+    def early_describe(cls):
+        return "Migration of FreeNAS 9.x network settings to 10.x"
+
+    def descrive(self):
+        return TaskDescription("Migration of FreeNAS 9.x network settings to 10.x")
+
+    def run(self):
+        pass
+
 @description("Master top level migration task for 9.x to 10.x")
 class MasterMigrateTask(ProgressTask):
     @classmethod
@@ -262,6 +274,8 @@ def _init(dispatcher, plugin):
     })
 
     plugin.register_task_handler('migration.mastermigrate', MasterMigrateTask)
+    plugin.register_task_handler('migration.accountsmigrate', AccountsMigrateTask)
+    plugin.register_task_handler('migration.networkmigrate', NetworkMigrateTask)
 
     plugin.register_event_type('migration.status')
 
