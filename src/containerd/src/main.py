@@ -360,6 +360,15 @@ class VirtualMachine(object):
             if i['type'] == 'USB':
                 xhci_devices[i['properties']['device']] = i.get('config')
 
+            if i['type'] == 'SCSI':
+                properties = i['properties']
+                args += ['-s', '{0}:0,virtio-scsi,dev=/dev/cam/ctl{1}.0,iid={2}'.format(
+                    index,
+                    properties['port'],
+                    properties['initiator_id'] or 7
+                )]
+                index += 1
+
         if xhci_devices:
             args += ['-s', '{0}:0,xhci,{1}'.format(index, ','.join(xhci_devices.keys()))]
             index += 1
