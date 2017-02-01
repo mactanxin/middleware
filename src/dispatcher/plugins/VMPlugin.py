@@ -2647,6 +2647,7 @@ def _init(dispatcher, plugin):
         'properties': {
             '%type': {'enum': ['VmDeviceScsi']},
             'port': {'type': 'integer'},
+            'initiator_id': {'type': 'integer'}
         },
         'required': ['port']
     })
