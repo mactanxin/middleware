@@ -1076,7 +1076,7 @@ class DockerNetworkDeleteTask(DockerBaseTask):
             raise TaskException(errno.ENOENT, 'Docker network {0} does not exist'.format(id))
 
         if containers:
-            raise TaskException(errno.EINVAL, 'Cannot delete network "{0}" with connected containers'.format(name))
+            self.run_subtask_sync('docker.network.disconnect', containers, id)
 
         try:
             self.dispatcher.call_sync('containerd.docker.host_name_by_network_id', id)
