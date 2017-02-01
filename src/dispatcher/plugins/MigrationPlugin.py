@@ -85,7 +85,7 @@ def populate_user_obj(user, fn10_groups, fn9_user, fn9_groups, fn9_grpmem):
     try:
         grp = q.query(
             fn10_groups,
-            ('bsdgrp_gid', '=', groups[root_user['bsdusr_group_id']]['bsdgrp_gid']),
+            ('bsdgrp_gid', '=', fn9_groups[fn9_user['bsdusr_group_id']]['bsdgrp_gid']),
             single=True
         )
     except:
@@ -140,7 +140,7 @@ def populate_user_obj(user, fn10_groups, fn9_user, fn9_groups, fn9_grpmem):
 
 @description("Accounts (users and groups) migration task")
 class AccountsMigrateTask(Task):
-    @classmethod()
+    @classmethod
     def early_describe(cls):
         return "Migration of FreeNAS 9.x users and grups to 10.x"
 
@@ -190,7 +190,7 @@ class AccountsMigrateTask(Task):
 
 @description("Network migration task")
 class NetworkMigrateTask(Task):
-    @classmethod()
+    @classmethod
     def early_describe(cls):
         return "Migration of FreeNAS 9.x network settings to 10.x"
 
@@ -199,6 +199,7 @@ class NetworkMigrateTask(Task):
 
     def run(self):
         pass
+
 
 @description("Master top level migration task for 9.x to 10.x")
 class MasterMigrateTask(ProgressTask):
