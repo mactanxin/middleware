@@ -130,11 +130,8 @@ freenasrsync_migrate93() {
 	myrsyncnodel ${REPO_PARENT_PATH}/freenas-migrate93/ "root@${1}":/usr/local/lib/migrate93/ --exclude sbin
 	myrsyncnodel ${REPO_PARENT_PATH}/freenas-migrate93/sbin/ "root@${1}":/usr/local/sbin/
 
-	# rsync the dispatcher plugins and such too since the MigrationPlugin lives in there
-	myrsync ${REPO_PARENT_PATH}/middleware/src/dispatcher/ "root@${1}":/usr/local/lib/dispatcher/ --exclude-from="${REPO_PARENT_PATH}/middleware/tools/dispatcher_rsync_exclude_list.txt"
-	myrsyncnodel ${REPO_PARENT_PATH}/middleware/src/dispatcher/src/frontend/static/ "root@${1}":/usr/local/lib/dispatcher/src/frontend/static/
-	# Fix perms, set executable bits, and such
-	ssh root@${1} '/bin/chmod 555 /usr/local/sbin/migrate93 && /bin/rm /data/freenas-v1.db.done'
+	# rsync the MigrationPlugin
+	myrsyncnodel ${REPO_PARENT_PATH}/middleware/src/dispatcher/plugins/MigrationPlugin "root@${1}":/usr/local/lib/dispatcher/plugins/
 }
 
 freenasrsync() {
