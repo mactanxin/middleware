@@ -98,7 +98,7 @@ class CollectDebugTask(ProgressTask):
             except OSError as err:
                 self.add_warning(TaskWarning(
                     err.errno,
-                    '{0}: Cannot file {1}, Error: {2}'.format(plugin, cmd['path'], err.strerror)
+                    '{0}: Cannot add file {1}, error: {2}'.format(plugin, cmd['path'], err.strerror)
                 ))
                 logger.error(
                     "Error occured when adding {0} to the tarfile for plugin: {1}".format(cmd['path'], plugin),
