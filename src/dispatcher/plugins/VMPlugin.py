@@ -877,7 +877,6 @@ class VMCreateTask(VMBaseTask):
                             errno.EPERM, 'GRAPHICS device cannot be removed if the VM is created from template'
                         )
 
-
             self.run_subtask_sync(
                 'vm.cache.update',
                 vm['template']['name'],
