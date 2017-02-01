@@ -996,6 +996,47 @@ class DockerNetworkCreateTask(DockerBaseTask):
             self.run_subtask_sync('docker.network.connect', network.get('containers'), netid)
 
 
+@description('Updates a Docker network')
+@accepts(str, h.ref('DockerNetwork'))
+class DockerNetworkUpdateTask(DockerBaseTask):
+    @classmethod
+    def early_describe(cls):
+        return 'Updating a Docker network'
+
+    def describe(self, id, updated_fields):
+        network = self.datastore_log.get_by_id('docker.networks', id)
+        return TaskDescription('Updating Docker network {name}', name=q.get(network, 'name', ''))
+
+    def verify(self, id, updated_fields):
+        network = self.datastore_log.get_by_id('docker.networks', id) or {}
+        host = self.datastore.get_by_id('vms', network.get('host')) or {}
+        hostname = host.get('name')
+
+        if hostname:
+            return ['docker:{0}'.format(hostname)]
+        else:
+            return ['docker']
+
+    def run(self, id, updated_fields):
+        if not self.datastore_log.exists('docker.networks', ('id', '=', id)):
+            raise TaskException(errno.ENOENT, 'Docker network {0} does not exist'.format(id))
+
+        network = self.dispatcher.call_sync('docker.network.query', [('id', '=', id)], {'single': True})
+        network.update(updated_fields)
+
+        self.set_progress(0, 'Deleting old network')
+        self.run_subtask_sync(
+            'docker.network.delete',
+            id,
+            progress_callback=lambda p, m, e: self.chunk_progress(0, 50, 'Deleting the old network:', p, m, e)
+        )
+        self.run_subtask_sync(
+            'docker.network.create',
+            network,
+            progress_callback=lambda p, m, e: self.chunk_progress(50, 100, 'Recreating the network', p, m, e)
+        )
+
+
 @description('Deletes a Docker network')
 @accepts(str)
 class DockerNetworkDeleteTask(DockerBaseTask):
@@ -2032,6 +2073,7 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('docker.container.commit', DockerContainerCommitTask)
 
     plugin.register_task_handler('docker.network.create', DockerNetworkCreateTask)
+    plugin.register_task_handler('docker.network.update', DockerNetworkUpdateTask)
     plugin.register_task_handler('docker.network.delete', DockerNetworkDeleteTask)
     plugin.register_task_handler('docker.network.connect', DockerNetworkConnectTask)
     plugin.register_task_handler('docker.network.disconnect', DockerNetworkDisconnectTask)
