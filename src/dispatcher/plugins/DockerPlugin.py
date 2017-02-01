@@ -1201,7 +1201,7 @@ class DockerNetworkDisconnectTask(DockerBaseTask):
 
     def run(self, container_ids, network_id):
         for id in container_ids:
-            if not self.datastore.exists('docker.containers', ('id', '=', id)):
+            if not self.datastore_log.exists('docker.containers', ('id', '=', id)):
                 raise TaskException(errno.ENOENT, 'Docker container {0} does not exist'.format(id))
 
         network = self.dispatcher.call_sync('docker.network.query', [('id', '=', network_id)], {'single': True})
