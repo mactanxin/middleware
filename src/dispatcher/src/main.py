@@ -788,7 +788,7 @@ class Dispatcher(object):
         return ServerLockProxy(self, name)
 
     def report_error(self, message, exception):
-        self.logger.debug('Reporting error: {0}'.format(message))
+        self.logger.debug('Reporting error: {0} exception:{1}'.format(message, exception))
 
         try:
             os.makedirs('/var/tmp/crash', exist_ok=True)
