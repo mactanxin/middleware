@@ -1975,11 +1975,19 @@ def _init(dispatcher, plugin):
                         ' as {0}'.format(pool_to_import.name)
                     )
 
-            # Try to clear errors if there are any
+            # Try to correct cachefile and clear errors if there are any
             try:
-                z = get_zfs()
-                pool = z.get(vol['id'])
-                dispatcher.threaded(pool.clear)
+                def doit():
+                    z = get_zfs()
+                    pool = z.get(vol['id'])
+                    pool.clear()
+                    cachefile = pool.properties['cachefile']
+                    if cachefile.source == libzfs.PropertySource.DEFAULT:
+                        cachefile.value = USER_CACHE_FILE
+                        ds = zfs.get_dataset(pool.name)
+                        ds.mount_recursive()
+
+                dispatcher.threaded(doit)
             except libzfs.ZFSException:
                 pass
 
