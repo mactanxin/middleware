@@ -74,12 +74,19 @@ class CollectDebugTask(ProgressTask):
 
         if cmd['type'] == 'AttachCommandOutput':
             try:
-                out, err = system(*cmd['command'], shell=cmd['shell'])
-                content = out + '\n' + err + '\n'
+                out, err = system(*cmd['command'], shell=cmd['shell'], decode=cmd['decode'])
+                if isinstance(out, str):
+                    content = out + '\n' + err + '\n'
+                else:
+                    content = out + b'\n' + err + b'\n'
             except SubprocessException as err:
-                content = 'Exit code: {0}\nstdout:\n{1}stderr:\n{2}'.format(
-                    err.returncode, err.out, err.err
-                )
+                if isinstance(err.out, str):
+                    content = 'Exit code: {0}\nstdout:\n{1}\nstderr:\n{2}'.format(
+                        err.returncode, err.out, err.err
+                    )
+                else:
+                    content = b'Exit code: ' + str(err.returncode).encode('utf-8') + b'\nstdout:\n' + err.out
+                    content += b'\nstderr:\n' + err.err
 
             info = tarfile.TarInfo(os.path.join(plugin, cmd['name']))
             info.size = len(content)
