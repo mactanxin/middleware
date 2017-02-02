@@ -70,7 +70,7 @@ class ManagementService(RpcService):
             schedule = {f.name: f for f in job.trigger.fields}
             schedule['timezone'] = job.trigger.timezone
 
-            last_run = self.context.datastore.query(
+            last_run = self.context.datastore_log.query(
                 'schedulerd.runs',
                 ('job_id', '=', job.id),
                 sort='created_at',
@@ -78,7 +78,7 @@ class ManagementService(RpcService):
             )
 
             if last_run:
-                last_task = self.context.datastore.get_by_id('tasks', last_run['task_id'])
+                last_task = self.context.datastore_log.get_by_id('tasks', last_run['task_id'])
 
             return {
                 'id': job.id,
@@ -199,6 +199,7 @@ class Context(object):
         self.logger = logging.getLogger('schedulerd')
         self.config = None
         self.datastore = None
+        self.datastore_log = None
         self.configstore = None
         self.client = None
         self.scheduler = None
@@ -207,6 +208,7 @@ class Context(object):
     def init_datastore(self):
         try:
             self.datastore = get_datastore(self.config)
+            self.datastore_log = get_datastore(self.config, log=True)
         except DatastoreException as err:
             self.logger.error('Cannot initialize datastore: %s', str(err))
             sys.exit(1)
@@ -266,7 +268,7 @@ class Context(object):
                 self.logger.error('Failed to emit alert', exc_info=True)
 
         del self.active_tasks[kwargs['id']]
-        self.datastore.insert('schedulerd.runs', {
+        self.datastore_log.insert('schedulerd.runs', {
             'job_id': kwargs['id'],
             'task_id': result['id']
         })
