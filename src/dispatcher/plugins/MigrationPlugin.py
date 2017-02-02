@@ -27,6 +27,8 @@
 
 import os
 import sys
+import re
+import ipaddress
 import logging
 import sqlite3
 import datetime
@@ -54,6 +56,34 @@ NOGROUP_ID = '8980c534-6a71-4bfb-bc72-54cbd5a186db'
 # We need to set this env var before any migrate93 based imports
 os.environ['93_DATABASE_PATH'] = FREENAS93_DATABASE_PATH
 from migrate93.src.utils import run_syncdb
+
+
+LAGG_PROTOCOL_MAP = {
+    'failover': 'FAILOVER',
+    'fec': 'ETHERCHANNEL',
+    'lacp': 'LACP',
+    'loadbalance': 'LOADBALANCE',
+    'roundrobin': 'ROUNDROBIN',
+    'none': 'NONE'
+}
+
+
+MEDIAOPT_MAP = {
+    'full-duplex': 'FDX',
+    'half-duplex': 'HDX'
+}
+
+
+CAPABILITY_MAP = {
+    'rxcsum': ('RXCSUM',),
+    'txcsum': ('TXCSUM',),
+    'rxcsum6': ('RXCSUM_IPV6',),
+    'txcsum6': ('TXCSUM_IPV6',),
+    'tso': ('TSO4', 'TSO6'),
+    'tso4': ('TSO4',),
+    'tso6': ('TSO6',),
+    'lro': ('LRO',)
+}
 
 
 def get_table(query_string, dictionary=True):
@@ -202,7 +232,157 @@ class NetworkMigrateTask(Task):
         return TaskDescription("Migration of FreeNAS 9.x network settings to 10.x")
 
     def run(self):
-        pass
+        # Lets first get all the fn9 network config data we need
+        fn9_globalconf = get_table('select * from network_globalconfiguration', dictionary=False)[0]
+        fn9_interfaces = get_table('select * from network_interfaces')
+        fn9_aliases = get_table('select * from network_alias')
+        fn9_lagg_interfaces = get_table('select * from network_lagginterface')
+        fn9_lagg_membership = get_table('select * from network_lagginterfacemembers')
+        fn9_static_routes = get_table('select * from network_staticroute')
+        fn9_vlan = get_table('select * from network_vlan')
+
+        # Now get the fn10 data on netowrk config and interfaces (needed to update interfaces, etc)
+        fn10_interfaces = list(self.dispatcher.call_sync('network.interface.query'))
+
+        # Now start with the conversion logic
+
+        # Migrating regular network interfaces
+        interfaces_subtasks = []
+        for fn9_iface in fn9_interfaces.values():
+            fn10_iface = q.query(
+                fn10_interfaces, ('id', '=', fn9_iface['int_interface']), single=True
+            )
+            if fn10_iface:
+                del fn10_iface['id']
+                del fn10_iface['status']
+            else:
+                fn10_iface = {
+                    'enabled': True,
+                }
+            aliases = []
+            if fn9_iface['int_ipv4address']:
+                aliases.append({
+                    'type': 'INET',
+                    'address': fn9_iface['int_ipv4address'],
+                    'netmask': int(fn9_iface['int_v4netmaskbit'])
+                })
+            if fn9_iface['int_ipv6address']:
+                aliases.append({
+                    'type': 'INET6',
+                    'address': fn9_iface['int_ipv6address'],
+                    'netmask': int(fn9_iface['int_v6netmaskbit'])
+                })
+            # # TODO: Fix below code to work
+            # for alias in fn9_aliases.values():
+            #     if alias['alias_v4address']:
+            #         aliases.append({
+            #             'type': 'INET',
+            #             'address': alias['alias_v4address'],
+            #             'netmask': int(alias['alias_v4netmaskbit'])
+            #         })
+
+            #     if alias.alias_v6address:
+            #         aliases.append({
+            #             'type': 'INET6',
+            #             'address': alias['alias_v6address'],
+            #             'netmask': int(alias['alias_v6netmaskbit'])
+            #         })
+
+            fn10_iface.upate({
+                'name': fn9_iface['int_name'],
+                'dhcp': fn9_iface['int_dhcp'],
+                'aliases': aliases
+            })
+            m = re.search(r'mtu (\d+)', fn9_iface['int_options'])
+            if m:
+                fn10_iface['mtu'] = int(m.group(1))
+
+            m = re.search(r'media (\w+)', fn9_iface['int_options'])
+            if m:
+                fn10_iface['media'] = m.group(1)
+
+            m = re.search(r'mediaopt (\w+)', fn9_iface['int_options'])
+            if m:
+                opt = m.group(1)
+                if opt in MEDIAOPT_MAP:
+                    fn10_iface['mediaopts'] = [MEDIAOPT_MAP[opt]]
+
+            # Try to read capabilities
+            for k, v in CAPABILITY_MAP.items():
+                if '-{0}'.format(k) in fn9_iface['int_options']:
+                    l = fn10_iface.setdefault('capabilities', {}).setdefault('del', [])
+                    l += v
+                elif k in fn9_iface['int_options']:
+                    l = fn10_iface.setdefault('capabilities', {}).setdefault('add', [])
+                    l += v
+            interfaces_subtasks.append(self.run_subtask('network.interface.create', fn10_iface))
+
+        # TODO: Migrate LAGG interfaces
+        # for key, value in fn9_lagg_interfaces
+
+        # TODO: Migrate VLANs
+        # for key, value in fn9_vlan:
+        #     pass
+
+        if interfaces_subtasks:
+            self.join_subtasks(*interfaces_subtasks)
+
+        # Migrating hosts database
+        host_subtasks = []
+        for line in fn9_globalconf['gc_hosts'].split('\n'):
+            line = line.strip()
+            if line:
+                ip, *names = line.split(' ')
+                host_subtasks.extend([
+                    self.run_subtask('network.host.create', {'id': name, 'addresses': [ip]})
+                    for name in names
+                ])
+
+        if host_subtasks:
+            self.join_subtasks(*host_subtasks)
+
+        # Migrating static routes
+        route_subtasks = []
+        for route in fn9_static_routes.values():
+            try:
+                net = ipaddress.ip_network(route['sr_destination'])
+            except ValueError as e:
+                logger.debug("Invalid network {0}: {1}".format(route['sr_destination'], e))
+                continue
+
+            route_subtasks.append(self.run_subtask('network.route.create', {
+                'id': route['sr_description'],
+                'type': 'INET',
+                'network': str(net.network_address),
+                'netmask': net.prefixlen,
+                'gateway': route['sr_gateway'],
+            }))
+
+        if route_subtasks:
+            self.join_subtasks(*route_subtasks)
+
+        # Finally migrate the global network config
+        self.run_subtask_sync(
+            'network.config.update',
+            {
+                'autoconfigure': bool(fn9_interfaces),
+                'http_proxy': fn9_globalconf['gc_httpproxy'] or None,
+                'gateway': {
+                    'ipv4': fn9_globalconf['gc_ipv4gateway'] or None,
+                    'ipv6': fn9_globalconf['gc_ipv6gateway'] or None
+                },
+                'dns': {
+                    'addresses': [
+                        fn9_globalconf['gc_nameserver' + x] for x in ['1', '2', '3']
+                        if fn9_globalconf['gc_nameserver' + x]
+                    ]
+                },
+                'netwait': {
+                    'enabled': bool(fn9_globalconf['gc_netwait_enabled']),
+                    'addresses': list(filter(None, fn9_globalconf['gc_netwait_ip'].split(' ')))
+                }
+            }
+        )
 
 
 @description("Master top level migration task for 9.x to 10.x")
