@@ -618,7 +618,7 @@ class Balancer(object):
                 rfd, wfd = os.pipe()
                 token = self.dispatcher.token_store.issue_token(FileToken(
                     user=sender.user,
-                    lifetime=60,
+                    lifetime=600,
                     direction='upload',
                     file=FileObjectPosix(wfd, 'wb', close=True),
                     name=str(uuid.uuid4()),
@@ -645,7 +645,7 @@ class Balancer(object):
                 url_list.append("/dispatcher/filedownload?token={0}".format(
                     self.dispatcher.token_store.issue_token(FileToken(
                         user=sender.user,
-                        lifetime=60,
+                        lifetime=600,
                         direction='download',
                         file=FileObjectPosix(rfd, 'rb', close=True),
                         name=args[idx]
