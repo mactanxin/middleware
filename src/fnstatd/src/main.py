@@ -366,10 +366,10 @@ class OutputService(RpcService):
             end = local_to_utc(end)
 
         if type(data_source) is str:
-            if data_source not in self.context.data_sources:
+            ds = self.context.data_sources.get(data_source)
+            if not ds:
                 raise RpcException(errno.ENOENT, 'Data source {0} not found'.format(data_source))
 
-            ds = self.context.data_sources[data_source]
             df = ds.query(start, end, frequency)
             for i in range(len(df)):
                 yield str(df[i])
@@ -379,10 +379,10 @@ class OutputService(RpcService):
         if type(data_source) is list:
             final = pd.DataFrame()
             for ds_name in data_source:
-                if ds_name not in self.context.data_sources:
+                ds = self.context.data_sources.get(ds_name)
+                if not ds:
                     raise RpcException(errno.ENOENT, 'Data source {0} not found'.format(ds_name))
 
-                ds = self.context.data_sources[ds_name]
                 final[ds_name] = ds.query(start, end, frequency)
 
             for i in range(len(final)):
