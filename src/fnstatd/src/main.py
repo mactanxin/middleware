@@ -60,6 +60,7 @@ from freenas.utils import configure_logging, to_timedelta, materialized_paths_to
 from freenas.serviced import checkin
 
 
+EVENT_RE = re.compile(r'^statd\.(.*)\.pulse$')
 DEFAULT_CONFIGFILE = '/usr/local/etc/middleware.conf'
 DEFAULT_DBFILE = 'stats.hdf'
 threadpool = gevent.threadpool.ThreadPool(5)
@@ -296,7 +297,7 @@ class OutputService(RpcService):
         self.context = context
 
     def enable(self, event):
-        m = re.match('^statd\.(.*)\.pulse$', event)
+        m = EVENT_RE.match(event)
         if not m:
             return
 
@@ -309,7 +310,7 @@ class OutputService(RpcService):
         ds.events_enabled = True
 
     def disable(self, event):
-        m = re.match('^statd\.(.*)\.pulse$', event)
+        m = EVENT_RE.match(event)
         if not m:
             return
 
