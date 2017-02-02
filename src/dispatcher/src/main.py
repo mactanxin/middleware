@@ -560,18 +560,17 @@ class Dispatcher(object):
                 for conn in srv.connections:
                     conn.outgoing_events.put((name, args))
 
-        if name in self.event_handlers:
-            for h in self.event_handlers[name]:
-                def wrapper(handler, name):
-                    try:
-                        self.logger.log(TRACE, 'Calling event handler {0} for event {1}'.format(handler, name))
-                        handler(args)
-                    except BaseException:
-                        self.logger.exception('Event handler for event %s failed', name)
+        for h in self.event_handlers.get(name, []):
+            def wrapper(handler, name):
+                try:
+                    self.logger.log(TRACE, 'Calling event handler {0} for event {1}'.format(handler, name))
+                    handler(args)
+                except BaseException:
+                    self.logger.exception('Event handler for event %s failed', name)
 
-                greenlet = gevent.spawn(wrapper, h, name)
-                if getattr(h, 'sync', False):
-                    greenlet.join()
+            greenlet = gevent.spawn(wrapper, h, name)
+            if getattr(h, 'sync', False):
+                greenlet.join()
 
     def emit_event(self, name, args):
         return self.dispatch_event(name, args)

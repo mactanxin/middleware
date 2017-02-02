@@ -475,14 +475,15 @@ class Main(object):
         return alert_config
 
     def get_data_source(self, name):
-        if name not in list(self.data_sources.keys()):
+        try:
+            return self.data_sources[name]
+        except KeyError:
             config = DataSourceConfig(self.datastore, name)
             alert_config = self.init_alert_config(name)
             ds = DataSource(self, name, config, alert_config)
             self.data_sources[name] = ds
             self.client.call_sync('plugin.register_event_type', 'statd.output', 'statd.{0}.pulse'.format(name))
-
-        return self.data_sources[name]
+            return ds
 
     def register_schemas(self):
         self.client.register_schema('GetStatsParams', {
