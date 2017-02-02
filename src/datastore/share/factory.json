@@ -1127,7 +1127,7 @@
             "default": {
                 "buckets": [
                     {
-                        "retention": "8h",
+                        "retention": "4h",
                         "interval": "10s"
                     },
                     {
