@@ -1289,7 +1289,7 @@ class ShellConnection(WebSocketApplication, EventEmitter):
 
         def write_worker():
             for i in self.inq:
-                tp_write(self.master, i)
+                tp_write(self.master, i.encode('utf-8'))
 
         def callback(watcher):
             watcher.stop()
