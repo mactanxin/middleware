@@ -54,7 +54,7 @@ import traceback
 import websocket  # do not remove - we import it only for side effects
 
 import gevent
-from bsd import setproctitle
+from bsd import setproctitle, fnmatch as cfnmatch
 from io import UnsupportedOperation
 from pyee import EventEmitter
 from gevent.threadpool import ThreadPool
@@ -106,7 +106,7 @@ def trace_log(message, *args):
 
 def match_event(name, pat):
     if isinstance(pat, str):
-        return fnmatch.fnmatch(name, pat)
+        return cfnmatch(name, pat)
 
     if isinstance(pat, re._pattern_type):
         return pat.match(name) is not None
