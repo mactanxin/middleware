@@ -75,9 +75,9 @@ class DatastoreProvider(Provider):
             available_disks = self.dispatcher.call_sync(
                 'disk.query',
                 [('path', 'in', available_disks_paths)],
-                {'select': ('id', 'status.description', 'mediasize')}
+                {'select': ('id', 'path', 'status.description', 'mediasize')}
             )
-            return [{'path': p, 'size': s, 'description': d, 'type': type} for p, d, s in available_disks]
+            return [{'path': i, 'size': s, 'description': '{} {}'.format(p, d), 'type': type} for i, p, d, s in available_disks]
 
         if not datastore_id:
             raise RpcException(errno.EINVAL, 'Datastore ID has to be specified for BLOCK and FILE path types')
