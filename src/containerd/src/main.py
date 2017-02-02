@@ -2253,10 +2253,6 @@ class Main(object):
     def init_dhcp(self):
         pass
 
-    def init_ec2(self):
-        self.ec2 = EC2MetadataServer(self)
-        self.ec2.start()
-
     def vm_by_mgmt_mac(self, mac):
         for i in self.vms.values():
             for tapmac in i.tap_interfaces.values():
@@ -2376,7 +2372,6 @@ class Main(object):
         self.config = args.c
         self.init_datastore()
         self.init_dispatcher()
-        self.init_ec2()
         gevent.spawn(self.init_autostart)
         self.logger.info('Started')
 
