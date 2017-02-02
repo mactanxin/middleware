@@ -361,6 +361,12 @@ class NetworkMigrateTask(Task):
         if route_subtasks:
             self.join_subtasks(*route_subtasks)
 
+        # Set the system hostname
+        self.run_subtask_sync(
+            'system.general.update',
+            {'hostname': fn9_globalconf['gc_hostname'] + '.' + fn9_globalconf['gc_domain']}
+        )
+
         # Finally migrate the global network config
         self.run_subtask_sync(
             'network.config.update',
