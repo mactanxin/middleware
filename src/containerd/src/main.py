@@ -1506,6 +1506,7 @@ class DockerService(RpcService):
                 presets = self.labels_to_presets(labels)
                 settings = []
                 web_ui_url = None
+                command = q.get(details, 'Config.Cmd', [])
                 if presets:
                     for i in presets.get('settings', []):
                         settings.append({
@@ -1519,7 +1520,7 @@ class DockerService(RpcService):
                     'image_id': container['ImageID'],
                     'name': names[0],
                     'names': names,
-                    'command': container['Command'] if isinstance(container['Command'], list) else [container['Command']],
+                    'command': command if isinstance(command, list) else [command],
                     'running': details['State'].get('Running', False),
                     'health': q.get(details, 'State.Health.Status'),
                     'host': host.vm.id,
