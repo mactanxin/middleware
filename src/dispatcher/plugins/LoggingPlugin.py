@@ -25,14 +25,10 @@
 #
 #####################################################################
 
-import time
-from datastore import DatastoreException
-from datetime import datetime
 from freenas.dispatcher.rpc import generator, description
 from freenas.dispatcher.client import Client
-from event import EventSource
 from task import Provider
-from debug import AttachDirectory
+from debug import AttachDirectory, AttachCommandOutput
 
 
 @description('Provides information about system log')
@@ -49,6 +45,7 @@ class SyslogProvider(Provider):
 def collect_debug(dispatcher):
     yield AttachDirectory('var-log', '/var/log')
     yield AttachDirectory('var-tmp', '/var/tmp')
+    yield AttachCommandOutput('system-log', ['/usr/local/sbin/logctl', '--last', '7d', '--dump'], decode=False)
 
 
 def _init(dispatcher, plugin):
