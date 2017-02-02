@@ -423,6 +423,9 @@ class MasterMigrateTask(ProgressTask):
             }
         )
 
+    def verify(self):
+        return ['system']
+
     def run(self):
         logger.debug('Starting migration from 9.x database to 10.x')
         self.migration_progess(0, 'Starting migration from 9.x database to 10.x')
