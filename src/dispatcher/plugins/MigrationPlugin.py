@@ -255,8 +255,8 @@ class NetworkMigrateTask(Task):
                 fn10_interfaces, ('id', '=', fn9_iface['int_interface']), single=True
             )
             if fn10_iface:
-                del fn10_iface['id']
                 del fn10_iface['status']
+                del fn10_iface['type']
             else:
                 self.add_warning(TaskWarning(
                     errno.EINVAL,
@@ -321,7 +321,9 @@ class NetworkMigrateTask(Task):
                 elif k in fn9_iface['int_options']:
                     l = fn10_iface.setdefault('capabilities', {}).setdefault('add', [])
                     l += v
-            interfaces_subtasks.append(self.run_subtask('network.interface.create', fn10_iface))
+            interfaces_subtasks.append(self.run_subtask(
+                'network.interface.update', fn10_iface.pop('id'), fn10_iface
+            ))
 
         # TODO: Migrate LAGG interfaces
         # for key, value in fn9_lagg_interfaces
