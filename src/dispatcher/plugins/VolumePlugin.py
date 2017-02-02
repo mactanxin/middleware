@@ -353,7 +353,7 @@ class VolumeProvider(Provider):
     @accepts()
     @returns(h.array(str))
     def get_available_disks(self):
-        disks = set([d['path'] for d in self.dispatcher.call_sync('disk.query')])
+        disks = set([d['path'] for d in self.dispatcher.call_sync('disk.query', [('online', '=', True)])])
         for pool in self.dispatcher.call_sync('zfs.pool.query'):
             for dev in self.dispatcher.call_sync('zfs.pool.get_disks', pool['id']):
                 try:
