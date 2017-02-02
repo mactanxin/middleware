@@ -401,6 +401,11 @@ class NetworkMigrateTask(Task):
 
 @description("Master top level migration task for 9.x to 10.x")
 class MasterMigrateTask(ProgressTask):
+    def __init__(self, dispatcher):
+        super(MasterMigrateTask, self).__init__(dispatcher)
+        self.status = 'STARTED'
+        self.apps_migrated = []
+
     @classmethod
     def early_describe(cls):
         return "Migration of FreeNAS 9.x settings to 10"
@@ -408,40 +413,45 @@ class MasterMigrateTask(ProgressTask):
     def describe(self):
         return TaskDescription("Migration of FreeNAS 9.x settings to 10")
 
-    def run(self):
-        logger.debug("Starting migration from 9.x database to 10")
+    def migration_progess(self, progress, message):
+        self.set_progress(progress, message)
         self.dispatcher.dispatch_event(
             'migration.status',
             {
-                'apps_migrated': [],
-                'status': 'STARTED'
+                'apps_migrated': self.apps_migrated,
+                'status': self.status
             }
         )
+
+    def run(self):
+        logger.debug('Starting migration from 9.x database to 10.x')
+        self.migration_progess(0, 'Starting migration from 9.x database to 10.x')
+
         # bring the 9.x database up to date with the latest 9.x version
         run_syncdb()
-        self.dispatcher.dispatch_event(
-            'migration.status',
-            {
-                'apps_migrated': ['accounts', 'network'],
-                'status': 'RUNNING'
-            }
+
+        self.status = 'RUNNING'
+
+        self.migration_progess(0, 'Migrating account app: users and groups')
+        self.run_subtask_sync('migration.accountsmigrate')
+        self.apps_migrated.append('accounts')
+
+        self.migration_progess(
+            10, 'Migrating netwrok app: network config, interfaces, vlans, bridges, and laggs'
         )
-        # for now put a dummy sleep here
-        sleep(10)
+        self.run_subtask_sync('migration.networkmigrate')
+        self.apps_migrated.append('network')
+
         # If we reached till here migration must have succeeded
         # so lets rename the databse
         os.rename(FREENAS93_DATABASE_PATH, "{0}.done".format(FREENAS93_DATABASE_PATH))
-        # send out finished event
-        self.dispatcher.dispatch_event(
-            'migration.status',
-            {
-                'apps_migrated': [
-                    'accounts', 'network', 'directoryservice', 'support', 'services', 'sharing',
-                    'storage', 'system', 'tasks'
-                ],
-                'status': 'FINISHED'
-            }
-        )
+
+        self.apps_migrated = [
+            'accounts', 'network', 'directoryservice', 'support', 'services', 'sharing', 'storage',
+            'system', 'tasks'
+        ]
+        self.status = 'FINISHED'
+        self.migration_progess(100, 'Migration of FreeNAS 9.x database config and settings done')
 
 
 def _depends():
