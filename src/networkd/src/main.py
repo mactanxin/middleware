@@ -679,7 +679,7 @@ class ConfigurationService(RpcService):
                         iface.delete_port(port)
 
                     for port in lagg['ports']:
-                        if port in new_ports:
+                        if port not in old_ports:
                             iface.add_port(port)
 
             # Configure member interfaces for a bridge
