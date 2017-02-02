@@ -56,17 +56,19 @@ class AttachDirectory(object):
 
 
 class AttachCommandOutput(object):
-    def __init__(self, name, command, shell=False):
+    def __init__(self, name, command, shell=False, decode=True):
         self.name = name
         self.command = command
         self.shell = shell
+        self.decode = decode
 
     def __getstate__(self):
         return {
             'type': 'AttachCommandOutput',
             'name': self.name,
             'command': self.command,
-            'shell': self.shell
+            'shell': self.shell,
+            'decode': self.decode
         }
 
 
