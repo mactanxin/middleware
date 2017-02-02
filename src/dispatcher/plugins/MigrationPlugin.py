@@ -32,6 +32,7 @@ import ipaddress
 import logging
 import sqlite3
 import datetime
+import errno
 from time import sleep
 from freenas.utils import query as q
 from freenas.dispatcher.rpc import (
@@ -45,6 +46,7 @@ from task import (
     Task,
     ProgressTask,
     TaskException,
+    TaskWarning,
     TaskDescription,
     VerifyException
 )
@@ -256,9 +258,13 @@ class NetworkMigrateTask(Task):
                 del fn10_iface['id']
                 del fn10_iface['status']
             else:
-                fn10_iface = {
-                    'enabled': True,
-                }
+                self.add_warning(TaskWarning(
+                    errno.EINVAL,
+                    'Skipping FreeNAS 9.x netwrok interface: {0} as it is not found'.format(
+                        fn9_iface['int_interface']
+                    )
+                ))
+                continue
             aliases = []
             if fn9_iface['int_ipv4address']:
                 aliases.append({
@@ -288,7 +294,7 @@ class NetworkMigrateTask(Task):
             #             'netmask': int(alias['alias_v6netmaskbit'])
             #         })
 
-            fn10_iface.upate({
+            fn10_iface.update({
                 'name': fn9_iface['int_name'],
                 'dhcp': fn9_iface['int_dhcp'],
                 'aliases': aliases
