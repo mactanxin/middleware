@@ -46,6 +46,8 @@ def system(*args, **kwargs):
     if stdin:
         stdin = stdin.encode('utf-8')
 
+    decode = kwargs.pop('decode', True)
+
     proc = subprocess.Popen(
         [a.encode('utf-8') for a in args], stderr=subprocess.PIPE, shell=sh,
         stdout=subprocess.PIPE, close_fds=True,
@@ -55,17 +57,21 @@ def system(*args, **kwargs):
 
     logger.debug("Running command: %s", ' '.join(args))
 
+    if decode:
+        out = out.decode('utf-8')
+        err = err.decode('utf-8')
+
     if proc.returncode != 0:
         logger.log(
             TRACE,
             "Command %s failed, return code %d, stderr output: %s",
             ' '.join(args),
             proc.returncode,
-            err.decode('utf-8')
+            err
         )
-        raise SubprocessException(proc.returncode, out.decode('utf-8'), err.decode('utf-8'))
+        raise SubprocessException(proc.returncode, out, err)
 
-    return out.decode('utf8'), err.decode('utf8')
+    return out, err
 
 
 # Only use this for running background processes
