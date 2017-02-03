@@ -39,7 +39,7 @@
         "metadata": {
             "name": "fileindex",
             "migration": "keep",
-            "pkey-type": "uuid",
+            "pkey-type": "integer",
             "attributes": {
                 "type": "log"
             }
