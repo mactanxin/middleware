@@ -813,7 +813,7 @@ class DockerContainerRestartTask(DockerBaseTask):
         name = self.dispatcher.call_sync(
             'docker.container.query', [('id', '=', id)], {'single': True, 'select': 'names.0'}
         )
-        return TaskDescription('Retarting container {name}', name=name or id)
+        return TaskDescription('Restarting container {name}', name=name or id)
 
     def verify(self, id):
         hostname = None
