@@ -1998,7 +1998,9 @@ class ConsoleConnection(WebSocketApplication, EventEmitter):
             return
 
         if not self.authenticated:
-            message = json.loads(message.decode('utf8'))
+            if isinstance(message, bytes):
+                message = message.decode('utf-8')
+            message = json.loads(message)
 
             if type(message) is not dict:
                 return
@@ -2036,6 +2038,9 @@ class ConsoleConnection(WebSocketApplication, EventEmitter):
 
             gevent.spawn(self.worker)
             return
+
+        if isinstance(message, str):
+            message = message.encode('utf-8')
 
         for i in message:
             i = bytes([i])
