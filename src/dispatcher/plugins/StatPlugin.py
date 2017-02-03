@@ -126,9 +126,11 @@ class DiskStatProvider(Provider):
     def query(self, filter=None, params=None):
         def extend(stat):
             split_name = stat['name'].split('.', 3)
-            stat['short_name'] = dash_to_underscore(
-                split_name[1] + '-' + split_name[3] + '-' + split_name[2].split('_', 2)[1]
-            )
+            short_name = f'{split_name[1]}_{split_name[3]}'
+            if '_' in split_name[2]:
+                short_name += '_{}'.format(split_name[2].split('_')[-1])
+
+            stat['short_name'] = dash_to_underscore(short_name)
 
             normalize_values(stat)
             return stat
