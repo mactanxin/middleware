@@ -670,29 +670,31 @@ class VirtualMachine(object):
                         close_fds=True
                     )
 
-                if self.config['bootloader'] not in ['UEFI', 'UEFI_CSM']:
-                    out, err = self.bhyve_process.communicate()
-                    self.bhyve_process.wait()
-                    self.logger.debug('bhyveload: {0}'.format(out))
+            if self.config['bootloader'] not in ['UEFI', 'UEFI_CSM']:
+                out, err = self.bhyve_process.communicate()
+                self.bhyve_process.wait()
+                self.logger.debug('bhyveload: {0}'.format(out))
 
-                self.logger.debug('Starting bhyve...')
-                args = self.build_args()
-                env = self.build_env()
+            if not self.bhyve_process.returncode:
+                with self.run_lock:
+                    self.logger.debug('Starting bhyve...')
+                    args = self.build_args()
+                    env = self.build_env()
 
-                self.set_state(VirtualMachineState.RUNNING)
-                self.bhyve_process = subprocess.Popen(
-                    args,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    close_fds=True,
-                    env=env
-                )
+                    self.set_state(VirtualMachineState.RUNNING)
+                    self.bhyve_process = subprocess.Popen(
+                        args,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        close_fds=True,
+                        env=env
+                    )
 
-                # Now it's time to start vmtools worker, because bhyve should be running now
-                self.vmtools_thread = gevent.spawn(self.vmtools_worker)
-                self.output_thread = gevent.spawn(self.output_worker)
+                    # Now it's time to start vmtools worker, because bhyve should be running now
+                    self.vmtools_thread = gevent.spawn(self.vmtools_worker)
+                    self.output_thread = gevent.spawn(self.output_worker)
 
-            self.bhyve_process.wait()
+                self.bhyve_process.wait()
 
             # not yet - broken in gevent
             # while True:
