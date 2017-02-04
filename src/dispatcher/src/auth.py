@@ -249,4 +249,4 @@ class TokenStore(object):
             self.tokens.pop(token)
 
     def revoke_token(self, token_id):
-        self.tokens.pop(token_id)
+        self.tokens.pop(token_id, None)
