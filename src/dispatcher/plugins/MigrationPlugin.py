@@ -436,7 +436,6 @@ class MasterMigrateTask(ProgressTask):
         return ['system']
 
     def run(self):
-        logger.debug('Starting migration from 9.x database to 10.x')
         self.migration_progess(0, 'Starting migration from 9.x database to 10.x')
 
         # bring the 9.x database up to date with the latest 9.x version
@@ -481,6 +480,10 @@ def _depends():
 
 def _init(dispatcher, plugin):
 
+    def start_migration(args):
+        logger.debug('Starting migration from 9.x database to 10.x')
+        dispatcher.call_task_sync('migration.mastermigrate')
+
     plugin.register_schema_definition('migration-status', {
         'type': 'object',
         'properties': {
@@ -501,7 +504,7 @@ def _init(dispatcher, plugin):
     plugin.register_event_type('migration.status')
 
     if os.path.exists(FREENAS93_DATABASE_PATH):
-        dispatcher.call_task_sync('migration.mastermigrate')
+        plugin.register_event_handler('service.ready', start_migration)
     else:
         dispatcher.dispatch_event(
             'migration.status',
@@ -510,3 +513,4 @@ def _init(dispatcher, plugin):
                 'status': 'NOT_NEEDED'
             }
         )
+        push_status('MigrationPlugin: Migration not needed')
