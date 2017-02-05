@@ -576,6 +576,31 @@
         }
     },
     {
+        "uid": 122,
+        "full_name": "Zabbix user",
+        "shell": "/usr/sbin/nologin",
+        "id": "b67d53d7-ebd2-11e6-afca-0cc47a3511b4",
+        "password_disabled": false,
+        "group": "d31d1ab6-ebd2-11e6-afca-0cc47a3511b4",
+        "locked": false,
+        "username": "zabbix",
+        "nthash": null,
+        "email": null,
+        "sshpubkey": null,
+        "updated_at": {
+            "$date": "2016-03-08 22:21:49.910000"
+        },
+        "builtin": true,
+        "attributes": {},
+        "sudo": false,
+        "groups": [],
+        "home": "/var/empty",
+        "unixhash": "*",
+        "created_at": {
+            "$date": "2016-03-08 22:21:49.910000"
+        }
+    },
+    {
         "uid": 142,
         "full_name": "Ladvd User",
         "shell": "/usr/sbin/nologin",

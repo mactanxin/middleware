@@ -423,6 +423,20 @@
         "created_at": {
             "$date": "2016-03-08 22:21:50.012000"
         },
+        "name": "zabbix",
+        "builtin": true,
+        "updated_at": {
+            "$date": "2016-03-08 22:21:50.012000"
+        },
+        "gid": 122,
+        "members": [],
+        "id": "d31d1ab6-ebd2-11e6-afca-0cc47a3511b4",
+        "sudo": false
+    },
+    {
+        "created_at": {
+            "$date": "2016-03-08 22:21:50.012000"
+        },
         "name": "ladvd",
         "builtin": true,
         "updated_at": {
