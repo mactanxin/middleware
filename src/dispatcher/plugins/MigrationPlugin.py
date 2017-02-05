@@ -433,7 +433,7 @@ class MasterMigrateTask(ProgressTask):
         )
 
     def verify(self):
-        return ['system']
+        return ['root']
 
     def run(self):
         self.migration_progess(0, 'Starting migration from 9.x database to 10.x')
