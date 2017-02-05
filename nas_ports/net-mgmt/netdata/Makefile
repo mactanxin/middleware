@@ -40,9 +40,6 @@ PLIST_SUB+=	NETDATA_CACHE=${NETDATA_CACHE} \
 USE_RC_SUBR=	${PORTNAME}
 SUB_FILES=	${PORTNAME}.conf.sample
 
-USERS=		netdata
-GROUPS=		netdata
-
 post-patch:
 	@${REINPLACE_CMD} -e 's|%%NETDATA_CACHE%%|${NETDATA_CACHE}|g' \
 	    ${PATCH_WRKSRC}/configure.ac
