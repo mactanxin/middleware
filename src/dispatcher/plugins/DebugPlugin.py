@@ -33,7 +33,7 @@ import logging
 from freenas.dispatcher.rpc import RpcException, SchemaHelper as h, description, accepts, returns, private
 from freenas.dispatcher.fd import FileDescriptor
 from lib.system import system, SubprocessException
-from debug import AttachCommandOutput
+from debug import AttachCommandOutput, AttachDirectory
 from task import (
     Provider, Task, ProgressTask, TaskWarning, TaskDescription, ValidationException, TaskException
 )
@@ -48,17 +48,17 @@ class RemoteDebugProvider(Provider):
 
 
 @private
-@accepts(FileDescriptor, bool)
+@accepts(FileDescriptor, bool, bool)
 @description('Collects debug information')
 class CollectDebugTask(ProgressTask):
     @classmethod
     def early_describe(cls):
         return 'Collecting debug data'
 
-    def describe(self, fd, include_cores=False):
+    def describe(self, fd, logs=True, cores=False):
         return TaskDescription('Collecting debug data')
 
-    def verify(self, fd, include_cores=False):
+    def verify(self, fd, logs=True, cores=False):
         return ['system']
 
     def process_hook(self, cmd, plugin, tar):
@@ -112,7 +112,7 @@ class CollectDebugTask(ProgressTask):
                     exc_info=True
                 )
 
-    def run(self, fd, include_cores=False):
+    def run(self, fd, logs=True, cores=False):
         try:
             with os.fdopen(fd.fd, 'wb') as f:
                 with tarfile.open(fileobj=f, mode='w:gz', dereference=True) as tar:
@@ -122,7 +122,7 @@ class CollectDebugTask(ProgressTask):
 
                     # Iterate over plugins
                     for plugin in plugins:
-                        self.set_progress(done / total * 100, 'Collecting debug info for {0}'.format(plugin))
+                        self.set_progress(done / total * 80, 'Collecting debug info for {0}'.format(plugin))
                         try:
                             hooks = self.dispatcher.call_sync('management.collect_debug', plugin, timeout=600)
                         except RpcException as err:
@@ -136,8 +136,19 @@ class CollectDebugTask(ProgressTask):
 
                         done += 1
 
-                    # If include_cores was set, attach stuff from /var/db/system/cores
-                    if include_cores:
+                    if logs:
+                        hook = {
+                            'type': 'AttachCommandOutput',
+                            'name': 'system-log',
+                            'command': ['/usr/local/sbin/logctl', '--last', '3d', '--dump'],
+                            'shell': False,
+                            'decode': False
+                        }
+
+                        self.set_progress(90, 'Collecting logs')
+                        self.process_hook(hook, 'Logs', tar)
+
+                    if cores:
                         hook = {
                             'type': 'AttachDirectory',
                             'name': 'cores',
@@ -145,6 +156,7 @@ class CollectDebugTask(ProgressTask):
                             'recursive': True
                         }
 
+                        self.set_progress(95, 'Collecting core files')
                         self.process_hook(hook, 'UserCores', tar)
 
         except BrokenPipeError as err:
@@ -211,6 +223,7 @@ class RemoteDebugDisconnectTask(Task):
 
 
 def collect_debug(dispatcher):
+    yield AttachDirectory('textdumps', '/data/crash')
     yield AttachCommandOutput('dsprinttask', ['/usr/local/sbin/dsprinttask', '--last', '100'])
 
 

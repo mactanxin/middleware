@@ -45,7 +45,6 @@ class SyslogProvider(Provider):
 def collect_debug(dispatcher):
     yield AttachDirectory('var-log', '/var/log')
     yield AttachDirectory('var-tmp', '/var/tmp')
-    yield AttachCommandOutput('system-log', ['/usr/local/sbin/logctl', '--last', '3d', '--dump'], decode=False)
 
 
 def _init(dispatcher, plugin):

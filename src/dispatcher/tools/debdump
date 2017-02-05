@@ -36,6 +36,8 @@ logger = logging.getLogger('DEBUG DUMP')
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('path', help='Target path for the debug file')
+    parser.add_argument('--nologs', action='store_true', help='Skip collecting logs')
+    parser.add_argument('--cores', action='store_true', help='Collect core files')
     parser.add_argument('--force', action='store_true', help='Force target path creation')
 
     args = parser.parse_args()
@@ -61,7 +63,7 @@ if __name__ == '__main__':
     client = Client()
     client.connect('unix:')
     client.login_service('debug_dump')
-    result = client.call_task_sync('debug.save_to_file', path)
+    result = client.call_task_sync('debug.save_to_file', path, not args.nologs, args.cores)
     client.disconnect()
 
     if result['state'] != 'FINISHED':

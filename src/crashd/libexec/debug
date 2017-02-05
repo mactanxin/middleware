@@ -29,4 +29,4 @@
 import os
 
 
-os.execv('/usr/local/sbin/debdump', ['/usr/local/sbin/debdump', 'debug.tar.gz'])
+os.execv('/usr/local/sbin/debdump', ['/usr/local/sbin/debdump', '--nologs', 'debug.tar.gz'])
