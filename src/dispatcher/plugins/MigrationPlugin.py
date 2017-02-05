@@ -376,6 +376,10 @@ class NetworkMigrateTask(Task):
         )
 
         # Finally migrate the global network config
+        gc_nameservers = [
+            fn9_globalconf['gc_nameserver' + x] for x in ['1', '2', '3']
+            if fn9_globalconf['gc_nameserver' + x]
+        ]
         self.run_subtask_sync(
             'network.config.update',
             {
@@ -385,11 +389,12 @@ class NetworkMigrateTask(Task):
                     'ipv4': fn9_globalconf['gc_ipv4gateway'] or None,
                     'ipv6': fn9_globalconf['gc_ipv6gateway'] or None
                 },
-                'dns': {
-                    'addresses': [
-                        fn9_globalconf['gc_nameserver' + x] for x in ['1', '2', '3']
-                        if fn9_globalconf['gc_nameserver' + x]
-                    ]
+                'dns': {'addresses': gc_nameservers},
+                'dhcp': {
+                    'assign_gateway': not bool(
+                        fn9_globalconf['gc_ipv4gateway'] or fn9_globalconf['gc_ipv6gateway']
+                    ),
+                    'assign_dns': not bool(gc_nameservers)
                 },
                 'netwait': {
                     'enabled': bool(fn9_globalconf['gc_netwait_enabled']),
