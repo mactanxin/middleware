@@ -33,7 +33,7 @@ import logging
 import sqlite3
 import datetime
 import errno
-from time import sleep
+from freenas.serviced import push_status
 from freenas.utils import query as q
 from freenas.dispatcher.rpc import (
     RpcException,
@@ -47,8 +47,7 @@ from task import (
     ProgressTask,
     TaskException,
     TaskWarning,
-    TaskDescription,
-    VerifyException
+    TaskDescription
 )
 
 logger = logging.getLogger('MigrationPlugin')
@@ -426,6 +425,11 @@ class MasterMigrateTask(ProgressTask):
                 'apps_migrated': self.apps_migrated,
                 'status': self.status
             }
+        )
+        push_status(
+            'MigrationPlugin: status: {0}, apps migrated: {1}'.format(
+                self.status, ', '.join(self.apps_migrated)
+            )
         )
 
     def verify(self):
