@@ -77,7 +77,6 @@ from freenas.utils import bool_to_truefalse, truefalse_to_bool, normalize, first
 from freenas.serviced import checkin
 from vnc import app
 from mgmt import ManagementNetwork
-from ec2 import EC2MetadataServer
 from proxy import ReverseProxyServer
 
 
