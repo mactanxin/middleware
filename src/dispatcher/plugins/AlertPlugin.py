@@ -193,7 +193,6 @@ class AlertsProvider(Provider):
     def get_alert_classes(self):
         return self.datastore.query('alert.classes')
 
-
     @description("Returns list of registered alert severities")
     @accepts()
     @returns(h.array(str))
@@ -215,7 +214,8 @@ class AlertsFiltersProvider(Provider):
 @description("Creates an Alert Filter")
 @accepts(h.all_of(
     h.ref('AlertFilter'),
-    h.required('id', 'emitter', 'parameters')
+    h.forbidden('id'),
+    h.required('emitter', 'class', 'parameters')
 ))
 class AlertFilterCreateTask(Task):
     @classmethod
@@ -241,15 +241,14 @@ class AlertFilterCreateTask(Task):
 
 
 @description("Deletes the specified Alert Filter")
-@accepts(str)
+@accepts(int)
 class AlertFilterDeleteTask(Task):
     @classmethod
     def early_describe(cls):
         return 'Deleting alert filter'
 
     def describe(self, id):
-        alertfilter = self.datastore.get_by_id('alert.filters', id)
-        return TaskDescription('Deleting alert filter {name}', name=alertfilter.get('name', id) if alertfilter else id)
+        return TaskDescription('Deleting alert filter {name}', name=str(id))
 
     def verify(self, id):
 
@@ -278,15 +277,14 @@ class AlertFilterDeleteTask(Task):
 
 
 @description("Updates the specified Alert Filter")
-@accepts(str, h.ref('AlertFilter'))
+@accepts(int, h.ref('AlertFilter'))
 class AlertFilterUpdateTask(Task):
     @classmethod
     def early_describe(cls):
         return 'Updating alert filter'
 
     def describe(self, id, updated_fields):
-        alertfilter = self.datastore.get_by_id('alert.filters', id)
-        return TaskDescription('Updating alert filter {name}', name=alertfilter.get('name', id) if alertfilter else id)
+        return TaskDescription('Updating alert filter {name}', name=str(id))
 
     def verify(self, id, updated_fields):
         return []
@@ -368,7 +366,10 @@ def _init(dispatcher, plugin):
             'active': {'type': 'boolean'},
             'dismissed': {'type': 'boolean'},
             'one_shot': {'type': 'boolean'},
-            'send_count': {'type': 'integer'}
+            'send_count': {'type': 'integer'},
+            'properties': {
+                'type' : 'object'
+            }
         },
         'additionalProperties': False
     })
@@ -394,6 +395,8 @@ def _init(dispatcher, plugin):
         'type': 'object',
         'properties': {
             'id': {'type': 'string'},
+            'index': {'type': 'integer'},
+            'class': {'$ref': 'AlertClassId'},
             'emitter': {'type': 'string'},
             'parameters': {
                 'discriminator': '%type',
@@ -407,13 +410,7 @@ def _init(dispatcher, plugin):
                     'type': 'object',
                     'additionalProperties': False,
                     'properties': {
-                        'property': {
-                            'type': 'string',
-                            'enum': [
-                                'class', 'type', 'subtype', 'target', 'description',
-                                'severity', 'active', 'dismissed'
-                            ]
-                        },
+                        'property': {'type': 'string'},
                         'operator': {
                             'type': 'string',
                             'enum': ['==', '!=', '<=', '>=', '>', '<', '~']
