@@ -61,6 +61,7 @@ VM_OUI = '02:a0:98'  # NetApp
 VM_ROOT = '/vm'
 CACHE_ROOT = '/.vm_cache'
 BLOCKSIZE = 65536
+MAX_VM_TOOLS_FILE_SIZE = 102400
 
 
 logger = logging.getLogger(__name__)
@@ -244,6 +245,10 @@ class VMProvider(Provider):
     @accepts(str, str)
     def guest_get(self, id, path):
         return self.dispatcher.call_sync('containerd.management.call_vmtools', id, 'file.get', path)
+
+    @accepts(str, str, bytes)
+    def guest_put(self, id, path, file):
+        return self.dispatcher.call_sync('containerd.management.call_vmtools', id, 'file.put', path, file)
 
     @accepts(str, str, h.array(str))
     def guest_exec(self, id, cmd, args):
@@ -2297,6 +2302,87 @@ class VMIPFSTemplateFetchTask(ProgressTask):
         return template_name
 
 
+@accepts(str, str, str)
+@description("Copying files between VM's or host and guest system")
+class VMToolsCopyFileTask(Task):
+    @classmethod
+    def early_describe(cls):
+        return "Copying files between VM's or host and guest system"
+
+    def describe(self, vm_id, source_file, dest_file):
+        return TaskDescription("Copying files between VM's or host and guest system")
+
+    def verify(self, vm_id, source_file, dest_file):
+        return []
+
+    def run(self, vm_id, source_file, dest_file):
+        try:
+            source_type, source_file_path = source_file.split(':', maxsplit=1)
+            dest_type, dest_file_path = dest_file.split(':', maxsplit=1)
+        except ValueError:
+            raise TaskException(errno.EINVAL, "Invalid syntax")
+
+        if source_type =='host' and dest_type == 'guest':
+            if os.path.exists(source_file_path):
+                if os.stat(source_file_path).st_size > MAX_VM_TOOLS_FILE_SIZE:
+                    raise TaskException(errno.EINVAL, "Provided file is too big in size")
+
+                with open(source_file_path, 'rb') as f:
+                    buffer = f.read()
+
+                self.dispatcher.call_sync('vm.guest_put', vm_id, dest_file_path, buffer, timeout=10)
+
+            else:
+                raise TaskException(errno.EINVAL, "Provided file does not exists")
+
+        elif source_type == 'guest' and dest_type == 'host':
+            try:
+                buffer = self.dispatcher.call_sync('vm.guest_get', vm_id, source_file_path, timeout=10)
+            except RpcException:
+                 raise TaskException(errno.EINVAL, "Provided file does not exists or it's to big in size ")
+
+            if buffer:
+                with open(dest_file_path, 'wb') as f:
+                    f.write(buffer)
+
+            else:
+                raise TaskException(errno.EINVAL, "Provided file does not exists or it's to big in size ")
+        
+        else:
+            if source_type == 'guest':
+                vm_prefix = self.dispatcher.call_sync('vm.query', [('name', '=', dest_type)], {'single': True})
+                if vm_prefix:
+                    try:
+                        buffer = self.dispatcher.call_sync('vm.guest_get', vm_id, source_file_path, timeout=10)
+                    except RpcException:
+                        raise TaskException(errno.EINVAL, "Provided file does not exists or it's to big in size ")
+
+                    if buffer:
+                        self.dispatcher.call_sync('vm.guest_put', vm_prefix['id'], dest_file_path, buffer, timeout=10)
+                    else:
+                        raise TaskException(errno.EINVAL, "Provided file does not exists or it's to big in size ")
+                else:
+                    raise TaskException(errno.EINVAL, "Destination host does not exists ")
+
+            elif dest_type == 'guest':
+                vm_prefix = self.dispatcher.call_sync('vm.query', [('name', '=', source_type)], {'single': True})
+                if vm_prefix:
+                    try:
+                        buffer = self.dispatcher.call_sync('vm.guest_get', vm_prefix['id'], source_file_path, timeout=10)
+                    except RpcException:
+                        raise TaskException(errno.EINVAL, "Provided file does not exists or it's to big in size ")
+
+                    if buffer:
+                        self.dispatcher.call_sync('vm.guest_put', vm_id, dest_file_path, buffer, timeout=10)
+                    else:
+                        raise TaskException(errno.EINVAL, "Provided file does not exists or it's to big in size ")
+                else:
+                    raise TaskException(errno.EINVAL, "Destination host does not exists ")
+
+            else:
+                raise TaskException(errno.EINVAL, "Invalid syntax")
+
+
 @accepts(str)
 @description('Deletes VM template images and VM template itself')
 class VMTemplateDeleteTask(ProgressTask):
@@ -2753,6 +2839,7 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('vm.template.delete', VMTemplateDeleteTask)
     plugin.register_task_handler('vm.template.ipfs.fetch', VMIPFSTemplateFetchTask)
     plugin.register_task_handler('vm.config.update', VMConfigUpdateTask)
+    plugin.register_task_handler('vm.tools.copy', VMToolsCopyFileTask)
 
     plugin.register_hook('vm.pre_destroy')
 
