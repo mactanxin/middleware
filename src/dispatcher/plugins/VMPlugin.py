@@ -396,7 +396,9 @@ class VMConfigUpdateTask(Task):
     def run(self, updated_fields):
         node = ConfigNode('container', self.configstore)
         node.update(updated_fields)
-        self.add_warning(TaskWarning(errno.EBUSY, 'Changes will be effective on next reboot'))
+        if first_or_default(lambda k: k != 'additional_templates', updated_fields):
+            self.add_warning(TaskWarning(errno.EBUSY, 'Changes will be effective on next reboot'))
+
         if 'additional_templates' in updated_fields:
             with self.dispatcher.get_lock('vm_templates'):
                 valid_sources = updated_fields['additional_templates'] + ['github', 'ipfs']
@@ -404,6 +406,8 @@ class VMConfigUpdateTask(Task):
                 for t in os.listdir(templates_dir):
                     if t not in valid_sources:
                         shutil.rmtree(os.path.join(templates_dir, t))
+
+                self.run_subtask_sync('vm.template.fetch')
 
 
 class VMBaseTask(ProgressTask):
