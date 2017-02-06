@@ -3,7 +3,7 @@
         "metadata": {
             "name": "sessions",
             "migration": "keep",
-            "pkey-type": "uuid",
+            "pkey-type": "integer",
             "attributes": {
                 "type": "log"
             }
@@ -39,7 +39,7 @@
         "metadata": {
             "name": "fileindex",
             "migration": "keep",
-            "pkey-type": "integer",
+            "pkey-type": "uuid",
             "attributes": {
                 "type": "log"
             }
