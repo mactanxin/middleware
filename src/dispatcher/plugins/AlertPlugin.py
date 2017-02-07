@@ -229,6 +229,19 @@ class AlertFilterCreateTask(Task):
         return []
 
     def run(self, alertfilter):
+        computed_index = self.datastore.query('alert.filters', count=True) + 1
+        index = min(alertfilter.get('index', computed_index), computed_index)
+        alertfilter['index'] = index
+
+        # Reindex all following filters
+        for i in list(self.datastore.query('alert.filters', ('index', '>=', index))):
+            i['index'] += 1
+            self.datastore.update('alert.filters', i['id'], i)
+            self.dispatcher.dispatch_event('alert.filter.changed', {
+                'operation': 'update',
+                'ids': [i['id']]
+            })
+
         id = self.datastore.insert('alert.filters', alertfilter)
         normalize(alertfilter, {
             'predicates': []
@@ -251,17 +264,13 @@ class AlertFilterDeleteTask(Task):
         return TaskDescription('Deleting alert filter {name}', name=str(id))
 
     def verify(self, id):
-
-        alertfilter = self.datastore.get_by_id('alert.filters', id)
-        if alertfilter is None:
-            raise VerifyException(
-                errno.ENOENT,
-                'Alert filter with ID {0} does not exist'.format(id)
-            )
-
         return []
 
     def run(self, id):
+        alertfilter = self.datastore.get_by_id('alert.filters', id)
+        if not alertfilter:
+            raise RpcException(errno.ENOENT, 'Alert filter doesn\'t exist')
+
         try:
             self.datastore.delete('alert.filters', id)
         except DatastoreException as e:
@@ -274,6 +283,15 @@ class AlertFilterDeleteTask(Task):
             'operation': 'delete',
             'ids': [id]
         })
+
+        # Reindex all following filters
+        for i in list(self.datastore.query('alert.filters', ('index', '>', alertfilter['index']))):
+            i['index'] -= 1
+            self.datastore.update('alert.filters', i['id'], i)
+            self.dispatcher.dispatch_event('alert.filter.changed', {
+                'operation': 'update',
+                'ids': [i['id']]
+            })
 
 
 @description("Updates the specified Alert Filter")
@@ -290,8 +308,32 @@ class AlertFilterUpdateTask(Task):
         return []
 
     def run(self, id, updated_fields):
+        alertfilter = self.datastore.get_by_id('alert.filters', id)
+        if not alertfilter:
+            raise RpcException(errno.ENOENT, 'Alert filter doesn\'t exist')
+
+        if 'index' in updated_fields:
+            computed_index = self.datastore.query('alert.filters', count=True)
+            new_index = min(updated_fields['index'], computed_index)
+            updated_fields['index'] = new_index
+
+            for i in list(self.datastore.query('alert.filters', ('index', '>', alertfilter['index']))):
+                i['index'] -= 1
+                self.datastore.update('alert.filters', i['id'], i)
+                self.dispatcher.dispatch_event('alert.filter.changed', {
+                    'operation': 'update',
+                    'ids': [i['id']]
+                })
+
+            for i in list(self.datastore.query('alert.filters', ('index', '>=', new_index))):
+                i['index'] += 1
+                self.datastore.update('alert.filters', i['id'], i)
+                self.dispatcher.dispatch_event('alert.filter.changed', {
+                    'operation': 'update',
+                    'ids': [i['id']]
+                })
+
         try:
-            alertfilter = self.datastore.get_by_id('alert.filters', id)
             alertfilter.update(updated_fields)
             self.datastore.update('alert.filters', id, alertfilter)
         except DatastoreException as e:
