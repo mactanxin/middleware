@@ -34,6 +34,8 @@ import logging
 from task import Task, Provider, TaskDescription, TaskWarning, ProgressTask
 from freenas.dispatcher.fd import FileDescriptor
 from freenas.dispatcher.rpc import RpcException, description, generator, accepts
+from freenas.utils import query as q
+from freenas.utils.lazy import lazy
 
 
 logger = logging.getLogger('TestPlugin')
@@ -56,6 +58,19 @@ class TestProvider(Provider):
 
     def rpcerror(self):
         raise RpcException(errno.EINVAL, 'Testing if parameter', 'This is in the extra paramaeter')
+
+    def lazy_query(self, filter=None, params=None):
+        def extend(obj):
+            def doit():
+                time.sleep(1)
+                return 'I am so slow: {0}'.format(obj['id'])
+
+            obj['fast_value'] = obj['id'] * 5
+            obj['slow_value'] = lazy(doit)
+            return obj
+
+        gen = ({'id': i} for i in range(0, 10))
+        return q.query(gen, *(filter or []), callback=extend, **(params or {}))
 
 
 @description('Downloads tests')
