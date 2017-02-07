@@ -1564,7 +1564,7 @@
         "metadata": {
             "name": "alert.filters",
             "migration": "keep",
-            "pkey-type": "native",
+            "pkey-type": "uuid",
             "attributes": {
                 "type": "config"
             }

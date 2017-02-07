@@ -187,13 +187,16 @@ class Main(object):
 
     def emit_alert(self, alert):
         self.logger.debug('Emitting alert <id:{0}> (class {1})'.format(alert['id'], alert['class']))
-        for i in self.datastore.query('alert.filters'):
-            for predicate in i.get('predicates', []):
-                if predicate['operator'] not in operators_table:
+        for i in self.datastore.query('alert.filters', ('or', [
+            ('class', '=', None),
+            ('class', '=', alert['class'])
+        ])):
+            for pr in i.get('predicates', []):
+                if pr['operator'] not in operators_table:
                     continue
 
                 try:
-                    if not operators_table[predicate['operator']](alert[predicate['property']], predicate['value']):
+                    if not operators_table[pr['operator']](alert.properties.get(pr['property']), pr['value']):
                         break
                 except:
                     continue
@@ -206,7 +209,8 @@ class Main(object):
 
                     self.logger.debug('Alert <id:{0}> matched filter {1}'.format(alert['id'], i['id']))
                     if alert['send_count'] > 0:
-                        emitter.emit_again(alert, i['parameters'])
+                        if not alert['one_shot']:
+                            emitter.emit_again(alert, i['parameters'])
                     else:
                         emitter.emit_first(alert, i['parameters'])
                 except BaseException as err:
@@ -220,10 +224,6 @@ class Main(object):
 
         alert['send_count'] += 1
         alert['last_emitted_at'] = datetime.utcnow()
-
-        if alert['one_shot']:
-            alert['active'] = False
-
         self.datastore.update('alerts', alert['id'], alert)
 
     def cancel_alert(self, alert):

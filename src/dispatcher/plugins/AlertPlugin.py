@@ -81,6 +81,9 @@ class AlertsProvider(Provider):
         if alert['dismissed']:
             raise RpcException(errno.ENOENT, 'Alert {0} is already dismissed'.format(id))
 
+        if alert['one_shot']:
+            alert['active'] = False
+
         alert.update({
             'dismissed': True,
             'dismissed_at': datetime.utcnow()
@@ -193,7 +196,6 @@ class AlertsProvider(Provider):
     def get_alert_classes(self):
         return self.datastore.query('alert.classes')
 
-
     @description("Returns list of registered alert severities")
     @accepts()
     @returns(h.array(str))
@@ -215,7 +217,8 @@ class AlertsFiltersProvider(Provider):
 @description("Creates an Alert Filter")
 @accepts(h.all_of(
     h.ref('AlertFilter'),
-    h.required('id', 'emitter', 'parameters')
+    h.forbidden('id'),
+    h.required('emitter', 'parameters')
 ))
 class AlertFilterCreateTask(Task):
     @classmethod
@@ -226,14 +229,28 @@ class AlertFilterCreateTask(Task):
         return TaskDescription('Creating alert filter {name}', name=alertfilter.get('name', '') if alertfilter else '')
 
     def verify(self, alertfilter):
-        return []
+        return ['system']
 
     def run(self, alertfilter):
-        id = self.datastore.insert('alert.filters', alertfilter)
         normalize(alertfilter, {
+            'class': None,
             'predicates': []
         })
 
+        computed_index = self.datastore.query('alert.filters', count=True) + 1
+        index = min(alertfilter.get('index', computed_index), computed_index)
+        alertfilter['index'] = index
+
+        # Reindex all following filters
+        for i in list(self.datastore.query('alert.filters', ('index', '>=', index))):
+            i['index'] += 1
+            self.datastore.update('alert.filters', i['id'], i)
+            self.dispatcher.dispatch_event('alert.filter.changed', {
+                'operation': 'update',
+                'ids': [i['id']]
+            })
+
+        id = self.datastore.insert('alert.filters', alertfilter)
         self.dispatcher.dispatch_event('alert.filter.changed', {
             'operation': 'create',
             'ids': [id]
@@ -241,28 +258,23 @@ class AlertFilterCreateTask(Task):
 
 
 @description("Deletes the specified Alert Filter")
-@accepts(str)
+@accepts(int)
 class AlertFilterDeleteTask(Task):
     @classmethod
     def early_describe(cls):
         return 'Deleting alert filter'
 
     def describe(self, id):
-        alertfilter = self.datastore.get_by_id('alert.filters', id)
-        return TaskDescription('Deleting alert filter {name}', name=alertfilter.get('name', id) if alertfilter else id)
+        return TaskDescription('Deleting alert filter {name}', name=str(id))
 
     def verify(self, id):
-
-        alertfilter = self.datastore.get_by_id('alert.filters', id)
-        if alertfilter is None:
-            raise VerifyException(
-                errno.ENOENT,
-                'Alert filter with ID {0} does not exist'.format(id)
-            )
-
-        return []
+        return ['system']
 
     def run(self, id):
+        alertfilter = self.datastore.get_by_id('alert.filters', id)
+        if not alertfilter:
+            raise RpcException(errno.ENOENT, 'Alert filter doesn\'t exist')
+
         try:
             self.datastore.delete('alert.filters', id)
         except DatastoreException as e:
@@ -276,24 +288,56 @@ class AlertFilterDeleteTask(Task):
             'ids': [id]
         })
 
+        # Reindex all following filters
+        for i in list(self.datastore.query('alert.filters', ('index', '>', alertfilter['index']))):
+            i['index'] -= 1
+            self.datastore.update('alert.filters', i['id'], i)
+            self.dispatcher.dispatch_event('alert.filter.changed', {
+                'operation': 'update',
+                'ids': [i['id']]
+            })
+
 
 @description("Updates the specified Alert Filter")
-@accepts(str, h.ref('AlertFilter'))
+@accepts(int, h.ref('AlertFilter'))
 class AlertFilterUpdateTask(Task):
     @classmethod
     def early_describe(cls):
         return 'Updating alert filter'
 
     def describe(self, id, updated_fields):
-        alertfilter = self.datastore.get_by_id('alert.filters', id)
-        return TaskDescription('Updating alert filter {name}', name=alertfilter.get('name', id) if alertfilter else id)
+        return TaskDescription('Updating alert filter {name}', name=str(id))
 
     def verify(self, id, updated_fields):
-        return []
+        return ['system']
 
     def run(self, id, updated_fields):
+        alertfilter = self.datastore.get_by_id('alert.filters', id)
+        if not alertfilter:
+            raise RpcException(errno.ENOENT, 'Alert filter doesn\'t exist')
+
+        if 'index' in updated_fields:
+            computed_index = self.datastore.query('alert.filters', count=True)
+            new_index = min(updated_fields['index'], computed_index)
+            updated_fields['index'] = new_index
+
+            for i in list(self.datastore.query('alert.filters', ('index', '>', alertfilter['index']))):
+                i['index'] -= 1
+                self.datastore.update('alert.filters', i['id'], i)
+                self.dispatcher.dispatch_event('alert.filter.changed', {
+                    'operation': 'update',
+                    'ids': [i['id']]
+                })
+
+            for i in list(self.datastore.query('alert.filters', ('index', '>=', new_index))):
+                i['index'] += 1
+                self.datastore.update('alert.filters', i['id'], i)
+                self.dispatcher.dispatch_event('alert.filter.changed', {
+                    'operation': 'update',
+                    'ids': [i['id']]
+                })
+
         try:
-            alertfilter = self.datastore.get_by_id('alert.filters', id)
             alertfilter.update(updated_fields)
             self.datastore.update('alert.filters', id, alertfilter)
         except DatastoreException as e:
@@ -368,7 +412,10 @@ def _init(dispatcher, plugin):
             'active': {'type': 'boolean'},
             'dismissed': {'type': 'boolean'},
             'one_shot': {'type': 'boolean'},
-            'send_count': {'type': 'integer'}
+            'send_count': {'type': 'integer'},
+            'properties': {
+                'type' : 'object'
+            }
         },
         'additionalProperties': False
     })
@@ -394,6 +441,8 @@ def _init(dispatcher, plugin):
         'type': 'object',
         'properties': {
             'id': {'type': 'string'},
+            'index': {'type': 'integer'},
+            'class': {'$ref': 'AlertClassId'},
             'emitter': {'type': 'string'},
             'parameters': {
                 'discriminator': '%type',
@@ -407,13 +456,7 @@ def _init(dispatcher, plugin):
                     'type': 'object',
                     'additionalProperties': False,
                     'properties': {
-                        'property': {
-                            'type': 'string',
-                            'enum': [
-                                'class', 'type', 'subtype', 'target', 'description',
-                                'severity', 'active', 'dismissed'
-                            ]
-                        },
+                        'property': {'type': 'string'},
                         'operator': {
                             'type': 'string',
                             'enum': ['==', '!=', '<=', '>=', '>', '<', '~']
