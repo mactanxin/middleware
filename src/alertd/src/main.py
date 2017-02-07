@@ -187,13 +187,16 @@ class Main(object):
 
     def emit_alert(self, alert):
         self.logger.debug('Emitting alert <id:{0}> (class {1})'.format(alert['id'], alert['class']))
-        for i in self.datastore.query('alert.filters'):
-            for predicate in i.get('predicates', []):
-                if predicate['operator'] not in operators_table:
+        for i in self.datastore.query('alert.filters', ('or', [
+            ('class', '=', None),
+            ('class', '=', alert['class'])
+        ])):
+            for pr in i.get('predicates', []):
+                if pr['operator'] not in operators_table:
                     continue
 
                 try:
-                    if not operators_table[predicate['operator']](alert[predicate['property']], predicate['value']):
+                    if not operators_table[pr['operator']](alert.properties.get(pr['property']), pr['value']):
                         break
                 except:
                     continue
