@@ -38,7 +38,7 @@ class VolumeDatastoreProvider(Provider):
     @private
     @generator
     def discover(self):
-        for vol in self.dispatcher.call_sync('volume.query', [('status', '=', 'ONLINE')]):
+        for vol in self.dispatcher.call_sync('volume.query'):
             yield {
                 'id': vol['id'],
                 'name': vol['id'],
