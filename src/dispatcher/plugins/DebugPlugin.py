@@ -163,17 +163,17 @@ class CollectDebugTask(ProgressTask):
             raise TaskException(errno.EPIPE, 'The download timed out') from err
 
 
-@accepts(str)
+@accepts(str, bool, bool)
 @description('Saves debug information in a gzip format to file specified by user')
 class SaveDebugTask(ProgressTask):
     @classmethod
     def early_describe(cls):
         return 'Saving debug data to file in gzip format'
 
-    def describe(self, path):
+    def describe(self, path, logs=True, cores=False):
         return TaskDescription('Saving debug data to file: {filepath} in gzip format', filepath=path)
 
-    def verify(self, path):
+    def verify(self, path, logs=True, cores=False):
         errors = ValidationException()
         if path in [None, ''] or path.isspace():
             errors.add((0, 'path'), 'The Path is required', code=errno.EINVAL)
@@ -181,11 +181,13 @@ class SaveDebugTask(ProgressTask):
             raise errors
         return ['system']
 
-    def run(self, path):
+    def run(self, path, logs=True, cores=False):
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC)
         self.run_subtask_sync(
             'debug.collect',
             FileDescriptor(fd),
+            logs,
+            cores,
             progress_callback=lambda p, m, e=None: self.chunk_progress(0, 100, '', p, m, e)
         )
 
