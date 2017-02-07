@@ -326,7 +326,10 @@ class VMTemplateProvider(Provider):
         datastores = self.dispatcher.call_sync('vm.datastore.query', [], {'select': 'id'})
         cache_dirs = []
         for d in datastores:
-            cache_dirs.append((d, self.dispatcher.call_sync('vm.datastore.get_filesystem_path', d, CACHE_ROOT)))
+            try:
+                cache_dirs.append((d, self.dispatcher.call_sync('vm.datastore.get_filesystem_path', d, CACHE_ROOT)))
+            except RpcException:
+                pass
 
         templates = []
         for root, dirs, files in os.walk(templates_dir):
