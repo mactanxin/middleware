@@ -41,21 +41,25 @@ class SubprocessException(Exception):
 
 
 def system(*args, **kwargs):
-    sh = kwargs["shell"] if "shell" in kwargs else False
+    sh = kwargs.pop("shell", False)
+    decode = kwargs.pop('decode', True)
     stdin = kwargs.pop('stdin', None)
+    merge_stderr = kwargs.pop('merge_stderr', False)
+
     if stdin:
         stdin = stdin.encode('utf-8')
 
-    decode = kwargs.pop('decode', True)
-
     proc = subprocess.Popen(
-        [a.encode('utf-8') for a in args], stderr=subprocess.PIPE, shell=sh,
-        stdout=subprocess.PIPE, close_fds=True,
-        stdin=subprocess.PIPE if stdin else None
+        [a.encode('utf-8') for a in args],
+        stdin=subprocess.PIPE if stdin else None,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT if merge_stderr else subprocess.PIPE,
+        close_fds=True,
+        shell=sh
     )
-    out, err = proc.communicate(input=stdin)
 
-    logger.debug("Running command: %s", ' '.join(args))
+    out, err = proc.communicate(input=stdin)
+    logger.log(TRACE, "Running command: %s", ' '.join(args))
 
     if decode:
         out = out.decode('utf-8')
