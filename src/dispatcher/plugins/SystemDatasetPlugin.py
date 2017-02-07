@@ -476,6 +476,7 @@ def _init(dispatcher, plugin):
     dispatcher.start_logdb()
     dispatcher.migrate_logdb()
     dispatcher.call_sync('serviced.job.send_signal', 'org.freenas.logd', signal.SIGUSR1)
+    dispatcher.logdb_ready = True
 
     plugin.attach_hook('volume.pre_destroy', volume_pre_destroy)
     plugin.attach_hook('volume.pre_detach', volume_pre_destroy)

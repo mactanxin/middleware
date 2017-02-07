@@ -358,6 +358,7 @@ class Dispatcher(object):
         self.port = 0
         self.file_ws_connectios = None
         self.logdb_proc = None
+        self.logdb_ready = False
         self.threadpool = ThreadPool(20)
         self.load_disabled_plugins = kwargs.get('load_disabled', False)
 
@@ -1163,7 +1164,7 @@ class DispatcherConnection(ServerConnection):
         super(DispatcherConnection, self).on_rpc_call(id, data)
 
     def open_session(self):
-        if self.dispatcher.datastore_log:
+        if self.dispatcher.logdb_ready:
             self.session_id = self.dispatcher.datastore_log.insert('sessions', {
                 'started_at': datetime.datetime.utcnow(),
                 'address': self.client_address,
@@ -1178,7 +1179,7 @@ class DispatcherConnection(ServerConnection):
         })
 
     def close_session(self):
-        if self.session_id and self.dispatcher.datastore_log:
+        if self.session_id and self.dispatcher.logdb_ready:
             session = self.dispatcher.datastore_log.get_by_id('sessions', self.session_id)
             session['active'] = False
             session['ended_at'] = datetime.datetime.utcnow()
