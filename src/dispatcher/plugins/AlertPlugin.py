@@ -215,7 +215,7 @@ class AlertsFiltersProvider(Provider):
 @accepts(h.all_of(
     h.ref('AlertFilter'),
     h.forbidden('id'),
-    h.required('emitter', 'class', 'parameters')
+    h.required('emitter', 'parameters')
 ))
 class AlertFilterCreateTask(Task):
     @classmethod
@@ -229,6 +229,11 @@ class AlertFilterCreateTask(Task):
         return ['system']
 
     def run(self, alertfilter):
+        normalize(alertfilter, {
+            'class': None,
+            'predicates': []
+        })
+
         computed_index = self.datastore.query('alert.filters', count=True) + 1
         index = min(alertfilter.get('index', computed_index), computed_index)
         alertfilter['index'] = index
@@ -243,10 +248,6 @@ class AlertFilterCreateTask(Task):
             })
 
         id = self.datastore.insert('alert.filters', alertfilter)
-        normalize(alertfilter, {
-            'predicates': []
-        })
-
         self.dispatcher.dispatch_event('alert.filter.changed', {
             'operation': 'create',
             'ids': [id]
