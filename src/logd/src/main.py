@@ -46,6 +46,7 @@ from freenas.dispatcher.server import Server
 from freenas.dispatcher.rpc import RpcContext, RpcService, RpcException, generator, get_sender
 from freenas.serviced import ServicedException, checkin, get_job_by_pid
 from freenas.utils import query as q
+from freenas.utils.debug import DebugService
 
 
 FLUSH_INTERVAL = 180
@@ -229,6 +230,7 @@ class Context(object):
         self.started_at = datetime.utcnow()
         self.rpc = RpcContext()
         self.rpc.register_service_instance('logd.logging', LoggingService(self))
+        self.rpc.register_service_instance('logd.debug', DebugService())
         self.cv = threading.Condition()
 
     def init_datastore(self):
