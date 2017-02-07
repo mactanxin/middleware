@@ -81,6 +81,9 @@ class AlertsProvider(Provider):
         if alert['dismissed']:
             raise RpcException(errno.ENOENT, 'Alert {0} is already dismissed'.format(id))
 
+        if alert['one_shot']:
+            alert['active'] = False
+
         alert.update({
             'dismissed': True,
             'dismissed_at': datetime.utcnow()
