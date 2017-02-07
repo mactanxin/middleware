@@ -457,14 +457,13 @@ class SystemUIConfigureTask(Task):
 
         webui_protocol = props.get('webui_protocol', [])
         if webui_protocol:
-            self.configstore.set(
-                'service.nginx.http.enable',
-                True if 'HTTP' in webui_protocol else False,
-            )
-            self.configstore.set(
-                'service.nginx.https.enable',
-                True if 'HTTPS' in webui_protocol else False,
-            )
+            http_enable = 'HTTP' in webui_protocol
+            https_enable = 'HTTPS' in webui_protocol
+            self.configstore.set('service.nginx.http.enable', http_enable)
+            if https_enable and not self.configstore.get('service.nginx.https.certificate'):
+                raise TaskException(errno.EINVAL, 'Cannot enable HTTPS for WebUI, certificate not specified')
+            self.configstore.set('service.nginx.https.enable', https_enable)
+
         if 'webui_listen' in props:
             self.configstore.set('service.nginx.listen', props['webui_listen'])
 
@@ -476,10 +475,6 @@ class SystemUIConfigureTask(Task):
 
         if 'webui_https_port' in props:
             self.configstore.set('service.nginx.https.port', props['webui_https_port'])
-
-        if self.configstore.get('service.nginx.https.enable', False) and not self.configstore.get(
-                'service.nginx.https.certificate', False):
-            raise TaskException(errno.EINVAL, 'HTTPS protocol specified for UI without certificate')
 
         try:
             self.dispatcher.call_sync('etcd.generation.generate_group', 'nginx')
