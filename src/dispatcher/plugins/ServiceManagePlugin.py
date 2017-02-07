@@ -37,6 +37,7 @@ from freenas.dispatcher.rpc import RpcException, description, accepts, private, 
 from freenas.dispatcher.rpc import SchemaHelper as h
 from datastore.config import ConfigNode
 from freenas.utils import extend as extend_dict, first_or_default, query as q
+from freenas.utils.lazy import lazy
 
 
 logger = logging.getLogger('ServiceManagePlugin')
@@ -49,13 +50,13 @@ class ServiceInfoProvider(Provider):
     @generator
     def query(self, filter=None, params=None):
         def extend(i):
-            state, error, pid = get_status(self.dispatcher, self.datastore, i)
+            lazy_status = lazy(get_status, self.dispatcher, self.datastore, i)
             entry = {
                 'id': i['id'],
                 'name': i['name'],
                 'labels': None,
-                'state': state,
-                'error': error
+                'state': lazy(lambda: lazy_status()[0]),
+                'error': lazy(lambda: lazy_status()[1]),
             }
 
             if 'launchd' in i:
@@ -63,11 +64,9 @@ class ServiceInfoProvider(Provider):
                 jobs = [launchd] if isinstance(launchd, dict) else launchd
                 entry['labels'] = [j['Label'] for j in jobs]
 
-            if pid is not None:
-                entry['pid'] = pid
-
+            entry['pid'] = lazy(lambda: lazy_status()[2]),
             entry['builtin'] = i['builtin']
-            entry['config'] = self.get_service_config(i['id'])
+            entry['config'] = lazy(self.get_service_config, i['id'])
             return entry
 
         return q.query(

@@ -1649,6 +1649,7 @@ def _init(dispatcher, plugin):
                     except libzfs.ZFSException:
                         pass
 
+                changed = {}
                 for key, i in datasets.itervalid():
                     def doit():
                         props = i['properties']
@@ -1664,9 +1665,11 @@ def _init(dispatcher, plugin):
 
                     try:
                         if dispatcher.threaded(doit):
-                            datasets.put(key, i)
+                            changed[key] = i
                     except libzfs.ZFSException:
                         pass
+
+                datasets.update(**changed)
 
     plugin.register_schema_definition('ZfsVdev', {
         'type': 'object',

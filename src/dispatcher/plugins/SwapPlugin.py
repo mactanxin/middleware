@@ -53,11 +53,11 @@ class SwapProvider(Provider):
 
 def get_available_disks(dispatcher):
     disks = []
-    for i in dispatcher.call_sync('volume.query'):
+    for i in dispatcher.call_sync('volume.query', [], {'select': 'id'}):
         try:
-            disks += dispatcher.call_sync('volume.get_volume_disks', i['id'])
+            disks += dispatcher.call_sync('volume.get_volume_disks', i)
         except RpcException as err:
-            logger.warning('Cannot get disks from volume {0}: {1}'.format(i['id'], str(err)))
+            logger.warning('Cannot get disks from volume {0}: {1}'.format(i, str(err)))
             continue
 
     return disks

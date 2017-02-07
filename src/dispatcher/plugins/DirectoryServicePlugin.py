@@ -31,7 +31,7 @@ import contextlib
 from datastore.config import ConfigNode
 from freenas.dispatcher.rpc import RpcException, accepts, returns, SchemaHelper as h, generator
 from task import Provider, Task, TaskDescription, TaskException, query
-from freenas.utils import query as q
+from freenas.utils.lazy import lazy
 
 
 from freenas.utils import normalize, query as q
@@ -49,9 +49,7 @@ class DirectoryProvider(Provider):
     @generator
     def query(self, filter=None, params=None):
         def extend(directory):
-            with contextlib.suppress(RpcException):
-                directory['status'] = self.dispatcher.call_sync('dscached.management.get_status', directory['id'])
-
+            directory['status'] = lazy(self.dispatcher.call_sync, 'dscached.management.get_status', directory['id'])
             return directory
 
         return q.query(

@@ -31,6 +31,7 @@ from freenas.dispatcher.rpc import description, accepts, returns, private
 from freenas.dispatcher.rpc import SchemaHelper as h, generator
 from task import Task, TaskException, TaskDescription, VerifyException, Provider, RpcException, query, TaskWarning
 from freenas.utils import normalize, in_directory, remove_unchanged, query as q
+from freenas.utils.lazy import lazy
 from utils import split_dataset, save_config, load_config, delete_config
 
 
@@ -40,18 +41,19 @@ class SharesProvider(Provider):
     @generator
     def query(self, filter=None, params=None):
         def extend(share):
-            perms = None
             path = None
-
             try:
                 path = self.translate_path(share['id'])
-                if share['target_type'] in ('DIRECTORY', 'DATASET', 'FILE'):
-                    perms = self.dispatcher.call_sync('filesystem.stat', path)
             except RpcException:
                 pass
 
+            def get_perms():
+                if share['target_type'] in ('DIRECTORY', 'DATASET', 'FILE'):
+                    perms = self.dispatcher.call_sync('filesystem.stat', path)
+                    return perms['permissions']
+
             share['filesystem_path'] = path
-            share['permissions'] = perms['permissions'] if perms else None
+            share['permissions'] = lazy(get_perms)
             return share
 
         return q.query(
