@@ -617,7 +617,7 @@ class VolumeCreateTask(ProgressTask):
                 )
 
             pool = self.dispatcher.call_sync('zfs.pool.query', [('name', '=', name)], {'single': True})
-            id = self.datastore.insert('volumes', {
+            self.datastore.insert('volumes', {
                 'id': name,
                 'guid': str(pool['guid']),
                 'type': type,
