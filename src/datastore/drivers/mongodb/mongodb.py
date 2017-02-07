@@ -239,7 +239,7 @@ class MongodbDatastore(object):
     def collection_set_pkey_type(self, name, type):
         item = self.db['collections'].find_one({"_id": name})
         item['pkey-type'] = type
-        self.db['collections'].update({'_id': name}, item)
+        self.db['collections'].replace_one({'_id': name}, item)
 
     @auto_retry
     def collection_get_next_pkey(self, name, prefix):
