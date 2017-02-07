@@ -29,7 +29,7 @@ import os
 import errno
 import logging
 import signal
-from task import Task, Provider, TaskException, TaskDescription, ValidationException, query
+from task import Task, ProgressTask, Provider, TaskException, TaskDescription, ValidationException, query
 from debug import AttachFile, AttachData, AttachCommandOutput
 from resources import Resource
 from freenas.dispatcher.jsonenc import dumps
@@ -294,7 +294,7 @@ class ServiceManageTask(Task):
     h.ref('Service'),
     h.forbidden('id', 'name', 'builtin', 'pid', 'state')
 ))
-class UpdateServiceConfigTask(Task):
+class UpdateServiceConfigTask(ProgressTask):
     @classmethod
     def early_describe(cls):
         return 'Updating service configuration'
