@@ -1,3 +1,4 @@
+#
 # Copyright 2015 iXsystems, Inc.
 # All rights reserved
 #
@@ -162,7 +163,8 @@ class DCConfigureTask(ProgressTask):
                 )
             finally:
                 vm_config = self.dispatcher.call_sync(
-                    'vm.query', [('id', '=', dc['vm_id'] if dc.get('vm_id') else node['vm_id'])],
+                    'vm.query',
+                    [('id', '=', dc.get('vm_id', node['vm_id']))],
                     {'select': 'config', 'single': True}
                 )
                 if not node['enable'] and vm_config['autostart']:
