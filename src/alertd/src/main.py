@@ -209,7 +209,8 @@ class Main(object):
 
                     self.logger.debug('Alert <id:{0}> matched filter {1}'.format(alert['id'], i['id']))
                     if alert['send_count'] > 0:
-                        emitter.emit_again(alert, i['parameters'])
+                        if not alert['one_shot']:
+                            emitter.emit_again(alert, i['parameters'])
                     else:
                         emitter.emit_first(alert, i['parameters'])
                 except BaseException as err:
@@ -223,10 +224,6 @@ class Main(object):
 
         alert['send_count'] += 1
         alert['last_emitted_at'] = datetime.utcnow()
-
-        if alert['one_shot']:
-            alert['active'] = False
-
         self.datastore.update('alerts', alert['id'], alert)
 
     def cancel_alert(self, alert):
