@@ -345,7 +345,12 @@ class UpdateServiceConfigTask(Task):
                 new_err.propagate(err, [0], [1, 'config'])
                 raise new_err
 
-            result = self.run_subtask_sync(service_def['task'], updated_config)
+            result = self.run_subtask_sync(
+                service_def['task'],
+                updated_config,
+                progress_callback=self.set_progress
+            )
+
             restart = result == 'RESTART'
             reload = result == 'RELOAD'
 
