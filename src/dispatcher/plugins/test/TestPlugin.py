@@ -65,8 +65,16 @@ class TestProvider(Provider):
                 time.sleep(1)
                 return 'I am so slow: {0}'.format(obj['id'])
 
+            def doit2():
+                time.sleep(1)
+                return {
+                    'foo': obj['id'] + 1,
+                    'bar': obj['id'] + 2
+                }
+
             obj['fast_value'] = obj['id'] * 5
             obj['slow_value'] = lazy(doit)
+            obj['composite_slow_value'] = lazy(doit2)
             return obj
 
         gen = ({'id': i} for i in range(0, 10))
