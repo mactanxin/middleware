@@ -49,7 +49,7 @@ from datastore.config import ConfigNode
 from freenas.dispatcher.jsonenc import loads, dumps
 from freenas.dispatcher.rpc import RpcException, generator
 from freenas.dispatcher.rpc import SchemaHelper as h, description, accepts, returns, private
-from freenas.utils import first_or_default, normalize, deep_update, process_template, in_directory, \
+from freenas.utils import first_or_default, normalize, deep_update, process_template, in_directory
 from freenas.utils import sha256, exclude, query as q
 from utils import save_config, load_config, delete_config
 from freenas.utils.decorators import throttle

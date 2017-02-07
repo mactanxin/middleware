@@ -38,10 +38,10 @@ class VolumeDatastoreProvider(Provider):
     @private
     @generator
     def discover(self):
-        for vol in self.dispatcher.call_sync('volume.query'):
+        for vol in self.dispatcher.call_sync('volume.query', [], {'select': 'id'}):
             yield {
-                'id': vol['id'],
-                'name': vol['id'],
+                'id': vol,
+                'name': vol,
                 'type': 'volume'
             }
 
