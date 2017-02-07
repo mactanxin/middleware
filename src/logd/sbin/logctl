@@ -32,6 +32,7 @@ import signal
 import dateutil.parser
 import textwrap
 import pytz
+import pytz.exceptions
 import tzlocal
 import msgpack
 from datetime import datetime
@@ -86,8 +87,11 @@ def output_entry(format, entry, colors=False, verbose=False, utc=False):
             print('\033[{0}m'.format(COLOR_MAP.get(entry['priority'], 0)), end='')
 
         if not utc:
-            ts = entry['timestamp'].replace(tzinfo=pytz.utc)
-            entry['timestamp'] = ts.astimezone(tzlocal.get_localzone())
+            try:
+                ts = entry['timestamp'].replace(tzinfo=pytz.utc)
+                entry['timestamp'] = ts.astimezone(tzlocal.get_localzone())
+            except pytz.exceptions.UnknownTimeZoneError:
+                pass
 
         print('{timestamp:%Y-%m-%d %H:%M:%S} {identifier}: {message}'.format(**entry))
         if verbose:
