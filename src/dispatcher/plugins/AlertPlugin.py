@@ -226,7 +226,7 @@ class AlertFilterCreateTask(Task):
         return TaskDescription('Creating alert filter {name}', name=alertfilter.get('name', '') if alertfilter else '')
 
     def verify(self, alertfilter):
-        return []
+        return ['system']
 
     def run(self, alertfilter):
         computed_index = self.datastore.query('alert.filters', count=True) + 1
@@ -264,7 +264,7 @@ class AlertFilterDeleteTask(Task):
         return TaskDescription('Deleting alert filter {name}', name=str(id))
 
     def verify(self, id):
-        return []
+        return ['system']
 
     def run(self, id):
         alertfilter = self.datastore.get_by_id('alert.filters', id)
@@ -305,7 +305,7 @@ class AlertFilterUpdateTask(Task):
         return TaskDescription('Updating alert filter {name}', name=str(id))
 
     def verify(self, id, updated_fields):
-        return []
+        return ['system']
 
     def run(self, id, updated_fields):
         alertfilter = self.datastore.get_by_id('alert.filters', id)
