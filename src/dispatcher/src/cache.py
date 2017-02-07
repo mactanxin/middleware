@@ -58,10 +58,6 @@ class CacheStore(object):
                 self.store[key] = item
                 return True
 
-    def put_many(self, items):
-        for k, d in items:
-            self.put(k, d)
-
     def update(self, **kwargs):
         with self.lock:
             items = {}
