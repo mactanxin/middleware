@@ -57,6 +57,7 @@ from utils import first_or_default, load_config
 from datastore import DuplicateKeyException
 from freenas.utils import include, exclude, normalize, chunks, yesno_to_bool, remove_unchanged, query as q
 from freenas.utils.copytree import count_files, copytree
+from freenas.utils.lazy import lazy, unlazy
 from cryptography.fernet import Fernet, InvalidToken
 from freenas.dispatcher.fd import FileDescriptor
 from freenas.dispatcher.jsonenc import loads, dumps
@@ -119,27 +120,31 @@ class VolumeProvider(Provider):
             if not config:
                 vol['status'] = 'LOCKED' if encrypted else 'UNKNOWN'
             else:
-                topology = config['groups']
-                for vdev, _ in iterate_vdevs(topology):
-                    disk_info = self.dispatcher.call_sync(
-                        'disk.query',
-                        [('status.data_partition_path', '=', vdev['path'])],
-                        {'single': True, 'select': ('id', 'path')}
-                    )
-                    if not disk_info:
-                        if encrypted:
-                            topology = vol['topology']
-                            break
-                    else:
-                        vdev['disk_id'], vdev['path'] = disk_info
+                @lazy
+                def collect_topology():
+                    topology = config['groups']
+                    for vdev, _ in iterate_vdevs(topology):
+                        disk_info = self.dispatcher.call_sync(
+                            'disk.query',
+                            [('status.data_partition_path', '=', vdev['path'])],
+                            {'single': True, 'select': ('id', 'path')}
+                        )
+                        if not disk_info:
+                            if encrypted:
+                                topology = vol['topology']
+                                break
+                        else:
+                            vdev['disk_id'], vdev['path'] = disk_info
+
+                    return topology
 
                 vol.update({
                     'rname': 'zpool:{0}'.format(vol['id']),
                     'description': None,
                     'mountpoint': None,
                     'upgraded': None,
-                    'disks': list(get_disk_ids(topology)),
-                    'topology': topology,
+                    'disks': lazy(lambda: list(get_disk_ids(unlazy(collect_topology)))),
+                    'topology': collect_topology,
                     'root_vdev': config['root_vdev'],
                     'status': 'LOCKED' if encrypted and config['status'] == 'UNAVAIL' else config['status'],
                     'scan': config['scan'],
