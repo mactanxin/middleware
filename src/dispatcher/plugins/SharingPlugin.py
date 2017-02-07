@@ -49,11 +49,8 @@ class SharesProvider(Provider):
 
             def get_perms():
                 if share['target_type'] in ('DIRECTORY', 'DATASET', 'FILE'):
-                    try:
-                        perms = self.dispatcher.call_sync('filesystem.stat', path)
-                        return perms['permissions']
-                    except RpcException:
-                        pass
+                    perms = self.dispatcher.call_sync('filesystem.stat', path)
+                    return perms['permissions']
 
             share['filesystem_path'] = path
             share['permissions'] = lazy(get_perms)
