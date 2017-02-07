@@ -645,6 +645,24 @@ def _init(dispatcher, plugin):
         os.environ['TZ'] = args.get('timezone')
         time.tzset()
 
+    def on_certificate_change(args):
+        if args.get('operation') != 'delete':
+            return
+
+        webui_certid = dispatcher.configstore.get('service.nginx.https.certificate')
+        if not webui_certid:
+            return
+
+        for id in args.get('ids', []):
+            if id == webui_certid:
+                logger.warning('Clearing the WebUI Certificate field and switching to HTTP only')
+                dispatcher.call_task_sync(
+                    'system.ui.update',
+                    {'webui_https_certificate': None, 'webui_protocol': ['HTTP']}
+                )
+                dispatcher.call_sync('service.restart', 'nginx')
+                return
+
     # Register schemas
     plugin.register_schema_definition('SystemAdvanced', {
         'type': 'object',
@@ -745,6 +763,7 @@ def _init(dispatcher, plugin):
     # Register event handlers
     plugin.register_event_handler('system.hostname.change', on_hostname_change)
     plugin.register_event_handler('system.timezone.change', on_system_timezone_change)
+    plugin.register_event_handler('crypto.certificate.changed', on_certificate_change)
 
     # Register Event Types
     plugin.register_event_type('system.general.changed')
