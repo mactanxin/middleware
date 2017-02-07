@@ -46,15 +46,21 @@ class CacheStore(object):
 
     def put(self, key, data):
         with self.lock:
-            item = self.store[key] if key in self.store else self.CacheItem()
-            item.data = data
-            item.valid.set()
-
-            if key not in self.store:
+            try:
+                item = self.store[key]
+                item.data = data
+                item.valid.set()
+                return False
+            except KeyError:
+                item = self.CacheItem()
+                item.data = data
+                item.valid.set()
                 self.store[key] = item
                 return True
 
-            return False
+    def put_many(self, items):
+        for k, d in items:
+            self.put(k, d)
 
     def update(self, **kwargs):
         with self.lock:
@@ -105,19 +111,21 @@ class CacheStore(object):
 
     def remove(self, key):
         with self.lock:
-            if key in self.store:
+            try:
                 del self.store[key]
                 return True
-
-            return False
+            except KeyError:
+                return False
 
     def remove_many(self, keys):
         with self.lock:
             removed = []
             for key in keys:
-                if key in self.store:
+                try:
                     del self.store[key]
                     removed.append(key)
+                except KeyError:
+                    pass
 
             return removed
 
