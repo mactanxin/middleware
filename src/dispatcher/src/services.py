@@ -117,8 +117,10 @@ class ManagementService(RpcService):
 
     def start_logdb(self):
         self.dispatcher.start_logdb()
+        self.dispatcher.logdb_ready = True
 
     def stop_logdb(self):
+        self.dispatcher.logdb_ready = False
         self.dispatcher.stop_logdb()
 
     def collect_debug(self, plugin_name):
