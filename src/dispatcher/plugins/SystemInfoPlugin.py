@@ -438,6 +438,23 @@ class SystemUIConfigureTask(Task):
         return ['system']
 
     def run(self, props):
+        if 'webui_https_certificate' in props:
+            if not props.get('webui_https_certificate'):
+                self.configstore.set('service.nginx.https.certificate', None)
+            else:
+                name, cert, key = self.dispatcher.call_sync(
+                    'crypto.certificate.query',
+                    [('type', '!=', 'CERT_CSR'), ('id', '=', props['webui_https_certificate'])],
+                    {'select': ['name', 'certificate', 'privatekey'], 'single': True}
+                )
+                if not cert:
+                    raise TaskException(errno.ENOENT, 'Certificate id : {0} does not exist'.format(
+                        props['webui_https_certificate']))
+                if not key:
+                    raise TaskException(errno.ENOENT, 'Private key for certificate : {0} does not exist'.format(name))
+
+                self.configstore.set('service.nginx.https.certificate', props['webui_https_certificate'])
+
         webui_protocol = props.get('webui_protocol', [])
         if webui_protocol:
             self.configstore.set(
@@ -456,15 +473,6 @@ class SystemUIConfigureTask(Task):
 
         if 'webui_http_redirect_https' in props:
             self.configstore.set('service.nginx.http.redirect_https', props['webui_http_redirect_https'])
-
-        if 'webui_https_certificate' in props:
-            if not self.dispatcher.call_sync('crypto.certificate.query',
-                                            [('type', '!=', 'CERT_CSR'), ('id', '=', props['webui_https_certificate'])],
-                                             {'count': True}):
-                raise TaskException(errno.ENOENT, 'Certificate id : {0} does not exist'.format(
-                    props['webui_https_certificate']))
-            else:
-                self.configstore.set('service.nginx.https.certificate', props['webui_https_certificate'])
 
         if 'webui_https_port' in props:
             self.configstore.set('service.nginx.https.port', props['webui_https_port'])
