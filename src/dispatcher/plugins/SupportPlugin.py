@@ -151,11 +151,11 @@ class SupportSubmitTask(Task):
                 raise TaskException(errno.EINVAL, 'ticket failed (0}: {1}'.format(r.status_code, r.text))
 
             ticketid = proxy_response.get('ticketnum')
-            debug_file_name = os.path.join(
-                DEFAULT_DEBUG_DUMP_DIR, version + '_' + time.strftime('%Y%m%d%H%M%S') + '.tar.gz'
-            )
 
             if data['debug']:
+                debug_file_name = os.path.join(
+                    DEFAULT_DEBUG_DUMP_DIR, version + '_' + time.strftime('%Y%m%d%H%M%S') + '.tar.gz'
+                )
                 self.run_subtask_sync('debug.save_to_file', debug_file_name)
                 if ticket.get('attachments'):
                     ticket['attachments'].append(debug_file_name)
@@ -184,6 +184,9 @@ class SupportSubmitTask(Task):
             raise TaskException(errno.ETIMEDOUT, 'Connection timed out: {0}'.format(str(e)))
         except RpcException as e:
             raise TaskException(errno.ENXIO, 'Cannot submit support ticket: {0}'.format(str(e)))
+        finally:
+            if data['debug'] and os.path.exists(debug_file_name):
+                os.remove(debug_file_name)
 
         return ticketid, proxy_response.get('message')
 
