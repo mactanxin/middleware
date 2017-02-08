@@ -674,26 +674,29 @@ class VirtualMachine(object):
                 self.bhyve_process.wait()
                 self.logger.debug('bhyveload: {0}'.format(out))
 
-            if not self.bhyve_process.returncode:
-                with self.run_lock:
-                    self.logger.debug('Starting bhyve...')
-                    args = self.build_args()
-                    env = self.build_env()
+            if self.bhyve_process and self.bhyve_process.returncode != 0:
+                self.set_state(VirtualMachineState.STOPPED)
+                return
 
-                    self.set_state(VirtualMachineState.RUNNING)
-                    self.bhyve_process = subprocess.Popen(
-                        args,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.STDOUT,
-                        close_fds=True,
-                        env=env
-                    )
+            with self.run_lock:
+                self.logger.debug('Starting bhyve...')
+                args = self.build_args()
+                env = self.build_env()
 
-                    # Now it's time to start vmtools worker, because bhyve should be running now
-                    self.vmtools_thread = gevent.spawn(self.vmtools_worker)
-                    self.output_thread = gevent.spawn(self.output_worker)
+                self.set_state(VirtualMachineState.RUNNING)
+                self.bhyve_process = subprocess.Popen(
+                    args,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    close_fds=True,
+                    env=env
+                )
 
-                self.bhyve_process.wait()
+                # Now it's time to start vmtools worker, because bhyve should be running now
+                self.vmtools_thread = gevent.spawn(self.vmtools_worker)
+                self.output_thread = gevent.spawn(self.output_worker)
+
+            self.bhyve_process.wait()
 
             # not yet - broken in gevent
             # while True:
