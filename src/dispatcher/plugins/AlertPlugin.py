@@ -414,7 +414,7 @@ def _init(dispatcher, plugin):
             'one_shot': {'type': 'boolean'},
             'send_count': {'type': 'integer'},
             'properties': {
-                'type' : 'object'
+                'type': 'object'
             }
         },
         'additionalProperties': False
