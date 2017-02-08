@@ -63,7 +63,8 @@ def system(*args, **kwargs):
 
     if decode:
         out = out.decode('utf-8')
-        err = err.decode('utf-8')
+        if err:
+            err = err.decode('utf-8')
 
     if proc.returncode != 0:
         logger.log(
@@ -71,7 +72,7 @@ def system(*args, **kwargs):
             "Command %s failed, return code %d, stderr output: %s",
             ' '.join(args),
             proc.returncode,
-            err
+            err or out
         )
         raise SubprocessException(proc.returncode, out, err)
 
