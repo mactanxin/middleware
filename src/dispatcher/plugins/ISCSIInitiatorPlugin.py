@@ -124,7 +124,7 @@ class ISCSITargetUpdateTask(Task):
 
         ctx = iscsi.ISCSIInitiator()
         session = first_or_default(lambda s: s.config.target == target['name'], ctx.sessions)
-        session = iscsi_convert_session(target, session)
+        session = iscsi_convert_session(target, session.config)
         if session.id:
             ctx.modify_session(session)
         else:
