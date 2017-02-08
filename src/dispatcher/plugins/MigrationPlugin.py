@@ -35,6 +35,8 @@ import datetime
 import errno
 from freenas.serviced import push_status
 from freenas.utils import query as q
+from bsd import geom
+from lxml import etree
 from freenas.dispatcher.rpc import (
     RpcException,
     SchemaHelper as h,
@@ -57,6 +59,7 @@ NOGROUP_ID = '8980c534-6a71-4bfb-bc72-54cbd5a186db'
 # We need to set this env var before any migrate93 based imports
 os.environ['93_DATABASE_PATH'] = FREENAS93_DATABASE_PATH
 from migrate93.src.utils import run_syncdb
+from migrate93.freenasUI.middleware.notifier import notifier
 
 
 LAGG_PROTOCOL_MAP = {
@@ -403,6 +406,148 @@ class NetworkMigrateTask(Task):
         )
 
 
+@description("Storage volume migration task")
+class VolumeMigrateTask(Task):
+    def __init__(self, dispatcher):
+        super(VolumeMigrateTask, self).__init__(dispatcher)
+        self.__confxml = None
+        self._notifier = notifier()
+
+    @classmethod
+    def early_describe(cls):
+        return "Migration of FreeNAS 9.x storage volumes (pools)"
+
+    def describe(self):
+        return TaskDescription("Migration of FreeNAS 9.x storage volumes (pools)")
+
+    def _geom_confxml(self):
+        if self.__confxml is None:
+            self.__confxml = etree.fromstring(notifier().sysctl('kern.geom.confxml'))
+        return self.__confxml
+
+    def identifier_to_device(self, ident):
+
+        if not ident:
+            return None
+
+        doc = self._geom_confxml()
+
+        search = re.search(r'\{(?P<type>.+?)\}(?P<value>.+)', ident)
+        if not search:
+            return None
+
+        tp = search.group("type")
+        value = search.group("value")
+
+        if tp == 'uuid':
+            search = doc.xpath("//class[name = 'PART']/geom//config[rawuuid = '%s']/../../name" % value)
+            if len(search) > 0:
+                for entry in search:
+                    if not entry.text.startswith('label'):
+                        return entry.text
+            return None
+
+        elif tp == 'label':
+            search = doc.xpath("//class[name = 'LABEL']/geom//provider[name = '%s']/../name" % value)
+            if len(search) > 0:
+                return search[0].text
+            return None
+
+        elif tp == 'serial':
+            for devname in self.__get_disks():
+                serial = self._notifier.serial_from_device(devname)
+                if serial == value:
+                    return devname
+            return None
+
+        elif tp == 'devicename':
+            search = doc.xpath("//class[name = 'DEV']/geom[name = '%s']" % value)
+            if len(search) > 0:
+                return value
+            return None
+
+    def device_to_identifier(name, serial=None):
+        gdisk = geom.geom_by_name('DISK', name)
+        if not gdisk:
+            return None
+
+        if 'lunid' in gdisk.provider.config:
+            return "lunid:{0}".format(gdisk.provider.config['lunid'])
+
+        if serial:
+            return "serial:{0}".format(serial)
+
+        gpart = geom.geom_by_name('PART', name)
+        if gpart:
+            for i in gpart.providers:
+                if i.config['type'] in ('freebsd-zfs', 'freebsd-ufs'):
+                    return "uuid:{0}".format(i.config['rawuuid'])
+
+        glabel = geom.geom_by_name('LABEL', name)
+        if glabel and glabel.provider:
+            return "label:{0}".format(glabel.provider.name)
+
+        return "devicename:{0}".format(os.path.join('/dev', name))
+
+    def run(self):
+
+        # Migrate disk settings
+        disk_subtasks = []
+        fn9_disks = get_table('select * from storage_disk', dictionary=False)
+        fn10_disks = self.dispatcher.call_sync('disk.query')
+
+        for fn9_disk in fn9_disks:
+            dev = self.identifier_to_device(fn9_disk['disk_identifier'])
+            if not dev:
+                self.add_warning(TaskWarning(
+                    errno.EINVAL,
+                    'Identifier to device failed for {0}, skipping'.format(
+                        fn9_disk['disk_identifier']
+                    )
+                ))
+                continue
+            newident = self.device_to_identifier(dev, serial=(fn9_disk['disk_serial'] or None))
+            if not newident:
+                self.add_warning(TaskWarning('Failed to convert {0} to id, skipping'.format(dev)))
+                continue
+
+            fn10_disk = None
+            try:
+                fn10_disk = q.query(fn10_disks, ('id', '=', newident), single=True)
+            finally:
+                if fn10_disk is None:
+                    self.add_warning(TaskWarning(
+                        'Failed to lookup id: {0} for fn9 disk id: {1}, skipping'.format(
+                            newident, dev
+                        )
+                    ))
+                continue
+
+            del fn10_disk['name']
+            del fn10_disk['serial']
+            del fn10_disk['path']
+            del fn10_disk['mediasize']
+            del fn10_disk['status']
+            fn10_disk.update({
+                'smart': fn9_disk['disk_togglesmart'],
+                'smart_options': fn9_disk['disk_smartoptions'],
+                'standby_mode': None if fn9_disk['disk_hddstandby'] == 'Always On' else int(fn9_disk['disk_hddstandby']),
+                'acoustic_level': fn9_disk['disk_acousticlevel'].upper(),
+                'apm_mode': None if fn9_disk['disk_advpowermgmt'] == 'Disabled' else int(fn9_disk['disk_advpowermgmt'])
+            })
+            disk_subtasks.append(self.run_subtask('disk.update', fn10_disk.pop('id'), fn10_disk))
+
+        if disk_subtasks:
+            self.join_subtasks(*disk_subtasks)
+
+        # Importing fn9 volumes
+        volume_subtaks = []
+        fn9_volumes = get_table('select * from storage_volume')
+        fn10_volumes = self.dispatcher.call_sync
+        for fn9_volume in fn9_volumes.values():
+            fn10_volume = q.query(fn10_volumes)
+
+
 @description("Master top level migration task for 9.x to 10.x")
 class MasterMigrateTask(ProgressTask):
     def __init__(self, dispatcher):
@@ -500,6 +645,7 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('migration.mastermigrate', MasterMigrateTask)
     plugin.register_task_handler('migration.accountsmigrate', AccountsMigrateTask)
     plugin.register_task_handler('migration.networkmigrate', NetworkMigrateTask)
+    plugin.register_task_handler('migration.volumemigrate', VolumeMigrateTask)
 
     plugin.register_event_type('migration.status')
 
