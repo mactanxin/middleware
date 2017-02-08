@@ -51,7 +51,7 @@ from freenas.utils.debug import DebugService
 
 FLUSH_INTERVAL = 180
 RCVBUF_MINSIZE = 80 * 1024  # same as in syslogd
-SYSLOG_PATTERN = re.compile(r'<(?P<priority>\d+)>(?P<syslog_timestamp>\w+ \d+ \d+:\d+:\d+) (?P<identifier>[\w\[\]]+): (?P<message>.*)')
+SYSLOG_PATTERN = re.compile(r'<(?P<priority>\d+)>(?P<syslog_timestamp>\w+\s+\d+\s+\d+:\d+:\d+) (?P<identifier>[\w\[\]]+): (?P<message>.*)')
 KLOG_PATTERN = re.compile(r'<(?P<priority>\d+)>(?P<message>.*)')
 PROC_PATTERN = re.compile(r'(?P<identifier>\w+)\[(?P<pid>\d+)\]')
 DEFAULT_SOCKET_ADDRESS = 'unix:///var/run/logd.sock'
