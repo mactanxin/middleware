@@ -512,15 +512,14 @@ class VolumeMigrateTask(Task):
                 continue
 
             fn10_disk = None
-            try:
-                fn10_disk = q.query(fn10_disks, ('id', '=', newident), single=True)
-            finally:
-                if fn10_disk is None:
-                    self.add_warning(TaskWarning(
-                        'Failed to lookup id: {0} for fn9 disk id: {1}, skipping'.format(
-                            newident, dev
-                        )
-                    ))
+            fn10_disk = q.query(fn10_disks, ('id', '=', newident), single=True)
+
+            if fn10_disk is None:
+                self.add_warning(TaskWarning(
+                    'Failed to lookup id: {0} for fn9 disk id: {1}, skipping'.format(
+                        newident, dev
+                    )
+                ))
                 continue
 
             del fn10_disk['name']
