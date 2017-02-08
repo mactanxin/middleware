@@ -1,9 +1,11 @@
 plugins/ReplicationTransportPlugin.so
-src/frontend/static
+src/frontend/static/middleware.js
+etc
 libexec
 tests
+oldtests
 tools
 Makefile
 requirements.txt
+setup.py
 setup_plugins.py
-etc
