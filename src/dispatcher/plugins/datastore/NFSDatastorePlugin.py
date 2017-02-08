@@ -28,11 +28,14 @@
 import os
 import bsd
 import errno
-import contextlib
+import logging
 from lib.system import system
 from task import Task, TaskDescription, Provider
 from freenas.dispatcher.rpc import SchemaHelper as h
 from freenas.dispatcher.rpc import RpcException, private, accepts, returns, generator, description
+
+
+logger = logging.getLogger(__name__)
 
 
 @description('Provides information about NFS VM datastores')
@@ -200,8 +203,10 @@ def mount(name, properties):
 
 
 def umount(name):
-    with contextlib.suppress(OSError):
+    try:
         bsd.unmount(os.path.join('/nfs', name))
+    except OSError as err:
+        logger.warning('Cannot unmount {0}: {1}'.format(name, err))
 
 
 def _depends():
@@ -244,4 +249,4 @@ def _init(dispatcher, plugin):
         for i in dispatcher.datastore.query('vm.datastores', ('type', '=', 'nfs')):
             mount(i['name'], i['properties'])
 
-    dispatcher.register_event_handler_once('network.changed', init)
+    dispatcher.register_event_handler_once('server.ready', init)
