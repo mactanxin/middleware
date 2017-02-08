@@ -745,39 +745,32 @@ class Dispatcher(object):
 
     def test_or_wait_for_event(self, event, match_fn, initial_condition_fn, timeout=None):
         done = Event()
-        self.event_delivery_lock.acquire()
+        with self.event_delivery_lock:
+            if initial_condition_fn():
+                return
 
-        if initial_condition_fn():
-            self.event_delivery_lock.release()
-            return
+            def handler(args):
+                if match_fn(args):
+                    self.logger.debug("Test or wait condition satisfied for event {0}".format(event))
+                    done.set()
 
-        def handler(args):
-            if match_fn(args):
-                self.logger.debug("Test or wait condition satisfied for event {0}".format(event))
-                done.set()
+            self.register_event_handler(event, handler)
 
-        self.register_event_handler(event, handler)
-        self.event_delivery_lock.release()
         done.wait(timeout=timeout)
         self.unregister_event_handler(event, handler)
 
     def exec_and_wait_for_event(self, event, match_fn, fn, timeout=None):
         done = Event()
-        self.event_delivery_lock.acquire()
-
-        try:
+        with self.event_delivery_lock:
             fn()
-        except:
-            self.event_delivery_lock.release()
-            raise
 
-        def handler(args):
-            if match_fn(args):
-                self.logger.debug("Exec and wait condition satisfied for event {0}".format(event))
-                done.set()
+            def handler(args):
+                if match_fn(args):
+                    self.logger.debug("Exec and wait condition satisfied for event {0}".format(event))
+                    done.set()
 
-        self.register_event_handler(event, handler)
-        self.event_delivery_lock.release()
+            self.register_event_handler(event, handler)
+
         done.wait(timeout=timeout)
         self.unregister_event_handler(event, handler)
 
