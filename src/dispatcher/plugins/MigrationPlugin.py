@@ -38,13 +38,7 @@ from freenas.serviced import push_status
 from freenas.utils import query as q
 from bsd import geom
 from lxml import etree
-from freenas.dispatcher.rpc import (
-    RpcException,
-    SchemaHelper as h,
-    accepts,
-    description,
-    returns
-)
+from freenas.dispatcher.rpc import RpcException, description
 from task import (
     Task,
     ProgressTask,
@@ -54,14 +48,15 @@ from task import (
 )
 
 logger = logging.getLogger('MigrationPlugin')
-sys.path.append('/usr/local/lib')
+sys.path.append('/usr/local/lib/migrate93')
 FREENAS93_DATABASE_PATH = '/data/freenas-v1.db'
-NOGROUP_ID = '8980c534-6a71-4bfb-bc72-54cbd5a186db'
 # We need to set this env var before any migrate93 based imports
 os.environ['93_DATABASE_PATH'] = FREENAS93_DATABASE_PATH
-from migrate93.freenasUI.middleware.notifier import notifier
+from freenasUI.middleware.notifier import notifier
 
 
+# Here we define all the constants
+NOGROUP_ID = '8980c534-6a71-4bfb-bc72-54cbd5a186db'
 LAGG_PROTOCOL_MAP = {
     'failover': 'FAILOVER',
     'fec': 'ETHERCHANNEL',
