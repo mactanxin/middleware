@@ -25,16 +25,16 @@
 #
 #####################################################################
 
-
 import time
 import copy
 import uuid
 import dateutil.parser
-from datetime import datetime
-from pymongo import MongoClient
+import bson
 import pymongo
 import pymongo.errors
 import pymongo.cursor
+from datetime import datetime
+from pymongo import MongoClient
 from six import string_types
 from datastore import DatastoreException, DuplicateKeyException
 from freenas.utils.query import get
@@ -396,7 +396,15 @@ class MongodbDatastore(object):
         while True:
             if autopkey:
                 if pkey_type in ('serial', 'integer'):
-                    ret = self._get_db(collection).find_one(sort=[('_id', pymongo.DESCENDING)])
+                    ret = self._get_db(collection).find_one(
+                        {
+                            '$or': [
+                                {'_id': {'$type': 16}},  # BSON int32
+                                {'_id': {'$type': 18}}   # BSON int64
+                            ]
+                        },
+                        sort=[('_id', pymongo.DESCENDING)]
+                    )
                     pkey = ret['_id'] + 1 if ret else 1
                 elif pkey_type == 'uuid':
                     pkey = str(uuid.uuid4())
