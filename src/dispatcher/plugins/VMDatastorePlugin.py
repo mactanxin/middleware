@@ -46,7 +46,7 @@ class DatastoreProvider(Provider):
 
         def doit():
             for i in drivers:
-                with contextlib.suppress(BaseException):
+                with contextlib.suppress(Exception):
                     for d in self.dispatcher.call_sync('vm.datastore.{0}.discover'.format(i)):
                         yield extend(d)
 
