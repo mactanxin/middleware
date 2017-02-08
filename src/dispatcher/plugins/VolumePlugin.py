@@ -166,7 +166,7 @@ class VolumeProvider(Provider):
             if encrypted is True:
                 online = 0
                 offline = 0
-                for vdev, _ in get_disks(vol['topology']):
+                for vdev, _ in get_disks(unlazy(vol['topology'])):
                     try:
                         vdev_conf = self.dispatcher.call_sync('disk.get_disk_config', vdev)
                         if vdev_conf.get('encrypted', False) is True:
@@ -3377,7 +3377,7 @@ def _init(dispatcher, plugin):
     plugin.register_schema_definition('VolumeStatus', {
         'type': 'string',
         'readOnly': True,
-        'enum': ['UNAVAIL', 'UNKNOWN', 'LOCKED', 'ONLINE']
+        'enum': ['UNAVAIL', 'UNKNOWN', 'LOCKED', 'DEGRADED', 'ONLINE']
     })
 
     plugin.register_schema_definition('VolumeProvidersPresence', {
