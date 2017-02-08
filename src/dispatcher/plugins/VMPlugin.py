@@ -854,6 +854,7 @@ class VMCreateTask(VMBaseTask):
 
             vm['template']['name'] = template['template']['name']
             template['template'].pop('readme', None)
+            template['config'].pop('minmemsize', None)
 
             result = {}
             for key in vm:
@@ -891,6 +892,13 @@ class VMCreateTask(VMBaseTask):
                             errno.EPERM, 'GRAPHICS device cannot be removed if the VM is created from template'
                         )
 
+            if template['config'].get('minmemsize'):
+                if vm['config']['memsize'] < template['config']['minmemsize']:
+                    raise TaskException(
+                        errno.EPERM,
+                        'Memory cannot be set below template minimal value: {}'.format(template['config']['minmemsize'])
+                    )
+
             self.run_subtask_sync(
                 'vm.cache.update',
                 vm['template']['name'],
@@ -916,6 +924,9 @@ class VMCreateTask(VMBaseTask):
             'autostart': False,
             'logging': []
         })
+
+        if vm['config']['ncpus'] < 1:
+            raise TaskException(errno.EINVAL, 'VM cores value too low. Minimum permissible value is 1.')
 
         if vm['config']['ncpus'] > 16:
             raise TaskException(errno.EINVAL, 'Upper limit of VM cores exceeded. Maximum permissible value is 16.')
@@ -1089,6 +1100,9 @@ class VMUpdateTask(VMBaseTask):
     def run(self, id, updated_params):
         if not self.datastore.exists('vms', ('id', '=', id)):
             raise TaskException(errno.ENOENT, 'VM {0} not found'.format(id))
+
+        if 'config' in updated_params and updated_params['config']['ncpus'] < 1:
+            raise TaskException(errno.EINVAL, 'VM cores value too low. Minimum permissible value is 1.')
 
         if 'config' in updated_params and updated_params['config']['ncpus'] > 16:
             raise TaskException(errno.EINVAL, 'Upper limit of VM cores exceeded. Maximum permissible value is 16.')
