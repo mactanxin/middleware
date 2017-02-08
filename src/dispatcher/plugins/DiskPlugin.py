@@ -1263,7 +1263,7 @@ def update_disk_cache(dispatcher, path):
 
     provider = gdisk.provider
     partitions = list(generate_partitions_list(gpart))
-    identifier = device_to_identifier(gdisk.name, camdev.serial if camdev else None)
+    identifier = device_to_identifier(gdisk.name, camdev.serial if camdev else provider.config.get('ident'))
     data_part = first_or_default(lambda x: x['type'] == 'freebsd-zfs', partitions)
     data_uuid = data_part["uuid"] if data_part else None
     data_path = data_uuid
@@ -1352,11 +1352,10 @@ def generate_disk_cache(dispatcher, path):
     except RuntimeError:
         camdev = None
 
-    serial = camdev.serial if camdev else None
-
+    provider = gdisk.provider
+    serial = camdev.serial if camdev else provider.config.get('ident')
     identifier = device_to_identifier(name, serial)
     ds_disk = dispatcher.datastore.get_by_id('disks', identifier)
-    provider = gdisk.provider
 
     try:
         camdev = dispatcher.threaded(CamDevice, gdisk.name)
