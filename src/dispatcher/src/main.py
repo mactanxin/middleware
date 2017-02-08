@@ -846,7 +846,7 @@ class Dispatcher(object):
         try:
             with open(FACTORY_FILE, 'r') as fd:
                 dump = json.load(fd)
-                migrate_db(self.datastore_log, dump, MIGRATIONS_DIR, ['log'])
+                migrate_db(self.datastore_log, dump, MIGRATIONS_DIR, ['log'], True)
         except IOError as err:
             self.logger.warning('Cannot open factory.json: {0}'.format(str(err)))
         except ValueError as err:
