@@ -47,11 +47,21 @@ class CalendarTasksProvider(Provider):
     @query('CalendarTask')
     @generator
     def query(self, filter=None, params=None):
+        def extend(obj):
+            for k, v in obj.get('schedule', {}).items():
+                if k == 'timezone':
+                    continue
+                if v != '*':
+                    return obj
+            obj['schedule'] = None
+            return obj
+
         return q.query(
             self.dispatcher.call_sync('scheduler.management.query'),
             *(filter or []),
             stream=True,
-            **(params or {})
+            **(params or {}),
+            callback=extend
         )
 
 
