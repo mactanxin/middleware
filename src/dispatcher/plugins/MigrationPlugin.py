@@ -33,6 +33,7 @@ import logging
 import sqlite3
 import datetime
 import errno
+from lib.system import system, SubprocessException
 from freenas.serviced import push_status
 from freenas.utils import query as q
 from bsd import geom
@@ -58,7 +59,6 @@ FREENAS93_DATABASE_PATH = '/data/freenas-v1.db'
 NOGROUP_ID = '8980c534-6a71-4bfb-bc72-54cbd5a186db'
 # We need to set this env var before any migrate93 based imports
 os.environ['93_DATABASE_PATH'] = FREENAS93_DATABASE_PATH
-from migrate93.src.utils import run_syncdb
 from migrate93.freenasUI.middleware.notifier import notifier
 
 
@@ -584,7 +584,18 @@ class MasterMigrateTask(ProgressTask):
         self.migration_progess(0, 'Starting migration from 9.x database to 10.x')
 
         # bring the 9.x database up to date with the latest 9.x version
-        run_syncdb()
+        # doing this via a subprocess call since otherwise there are much import
+        # issues which I tried hunting down but could not finally resolve
+        try:
+            out, err = system('/usr/local/sbin/migrate93', '-f', FREENAS93_DATABASE_PATH)
+        except SubprocessException as e:
+            logger.error('Traceback of 9.x database migration', exc_info=True)
+            raise TaskException(
+                'Error whilst trying upgrade 9.x database to latest 9.x schema: {0}'.format(e)
+            )
+        logger.debug(
+            'Result of running 9.x was as follows: stdout: {0}, stderr: {1}'.format(out, err)
+        )
 
         self.status = 'RUNNING'
 
