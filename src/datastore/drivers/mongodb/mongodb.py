@@ -37,7 +37,7 @@ from datetime import datetime
 from pymongo import MongoClient
 from six import string_types
 from datastore import DatastoreException, DuplicateKeyException
-from freenas.utils.query import get
+from freenas.utils.query import get, delete
 
 
 def auto_retry(fn):
@@ -271,11 +271,28 @@ class MongodbDatastore(object):
         reverse = kwargs.pop('reverse', False)
         postprocess = kwargs.pop('callback', None)
         select = kwargs.pop('select', None)
+        exclude = kwargs.pop('exclude', None)
 
         db = self._get_db(collection)
         cur = db.find(self._build_query(args))
         if count:
             return cur.count()
+
+        if exclude:
+            def exclude_fn(fn, obj):
+                obj = fn(obj) if fn else obj
+
+                if isinstance(exclude, (list, tuple)):
+                    for i in exclude:
+                        delete(obj, i)
+
+                if isinstance(exclude, str):
+                    delete(obj, exclude)
+
+                return obj
+
+            before_exclude = postprocess
+            postprocess = lambda o: exclude_fn(before_exclude, o)
 
         if select:
             def select_fn(fn, obj):
@@ -287,8 +304,8 @@ class MongodbDatastore(object):
                 if isinstance(select, str):
                     return get(obj, select)
 
-            old = postprocess
-            postprocess = lambda o: select_fn(old, o)
+            before_select = postprocess
+            postprocess = lambda o: select_fn(before_select, o)
 
         if sort:
             def sort_transform(result, key):
