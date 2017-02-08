@@ -1165,13 +1165,16 @@ class DispatcherConnection(ServerConnection):
 
     def open_session(self):
         if self.dispatcher.logdb_ready:
-            self.session_id = self.dispatcher.datastore_log.insert('sessions', {
-                'started_at': datetime.datetime.utcnow(),
-                'address': self.client_address,
-                'resource': self.resource,
-                'active': True,
-                'username': self.user.name
-            })
+            try:
+                self.session_id = self.dispatcher.datastore_log.insert('sessions', {
+                    'started_at': datetime.datetime.utcnow(),
+                    'address': self.client_address,
+                    'resource': self.resource,
+                    'active': True,
+                    'username': self.user.name
+                })
+            except:
+                pass
 
         self.dispatcher.dispatch_event('session.changed', {
             'operation': 'create',
@@ -1180,14 +1183,17 @@ class DispatcherConnection(ServerConnection):
 
     def close_session(self):
         if self.session_id and self.dispatcher.logdb_ready:
-            session = self.dispatcher.datastore_log.get_by_id('sessions', self.session_id)
-            session['active'] = False
-            session['ended_at'] = datetime.datetime.utcnow()
-            self.dispatcher.datastore_log.update('sessions', self.session_id, session)
-            self.dispatcher.dispatch_event('session.changed', {
-                'operation': 'update',
-                'ids': [self.session_id]
-            })
+            try:
+                session = self.dispatcher.datastore_log.get_by_id('sessions', self.session_id)
+                session['active'] = False
+                session['ended_at'] = datetime.datetime.utcnow()
+                self.dispatcher.datastore_log.update('sessions', self.session_id, session)
+                self.dispatcher.dispatch_event('session.changed', {
+                    'operation': 'update',
+                    'ids': [self.session_id]
+                })
+            except:
+                pass
 
         if isinstance(self.user, User):
             self.dispatcher.dispatch_event('server.client_logout', {
