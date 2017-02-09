@@ -107,7 +107,7 @@ def populate_user_obj(user, fn10_groups, fn9_user, fn9_groups, fn9_grpmem):
     pubkeys = None
     try:
         with open('%s/.ssh/authorized_keys' % fn9_user['bsdusr_home'], 'r') as f:
-            pubkeys = f.read()
+            pubkeys = f.read().strip()
     except:
         pass
 
