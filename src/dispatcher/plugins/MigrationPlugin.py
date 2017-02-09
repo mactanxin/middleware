@@ -566,6 +566,95 @@ class VolumeMigrateTask(Task):
                 ))
 
 
+@description("Shares migration task")
+class ShareMigrateTask(Task):
+    @classmethod
+    def early_describe(cls):
+        return "Migration of FreeNAS 9.x shares to 10.x"
+
+    def describe(self):
+        return TaskDescription("Migration of FreeNAS 9.x shares to 10.x")
+
+    def run(self):
+        # Generic stuff needed for all share migration
+        fn10_datasets = list(self.dispatcher.call_sync('volume.dataset.query'))
+
+        # Lets start with AFP shares
+        fn9_afp_shares = get_table('select * from sharing_afp_share')
+        for fn9_afp_share in fn9_afp_shares.values():
+            ro_users, ro_groups, rw_users, rw_groups, users_allow, groups_allow, users_deny, groups_deny = [[] for _ in range(8)]
+            for allow_item in fn9_afp_share['afp_rw'].split(','):
+                allow_item = allow_item.strip(' ')
+                if allow_item.startswith('@'):
+                    groups_allow.append(allow_item[1:])
+                elif allow_item:
+                    users_allow.append(allow_item)
+            for ro_item in fn9_afp_share['afp_ro'].split(','):
+                ro_item = ro_item.strip(' ')
+                if ro_item.startswith('@'):
+                    ro_groups.append(ro_item[1:])
+                elif ro_item:
+                    ro_users.append(ro_item)
+            for rw_item in fn9_afp_share['afp_rw'].split(','):
+                rw_item = rw_item.strip(' ')
+                if rw_item.startswith('@'):
+                    rw_groups.append(rw_item[1:])
+                elif rw_item:
+                    rw_users.append(rw_item)
+            for deny_item in fn9_afp_share['afp_deny'].split(','):
+                deny_item = deny_item.strip(' ')
+                if deny_item.startswith('@'):
+                    groups_deny.append(deny_item[1:])
+                elif deny_item:
+                    users_deny.append(deny_item)
+            hosts_deny = list(filter(None, fn9_afp_share['afp_hostsdeny'].split(' ')))
+            hosts_allow = list(filter(None, fn9_afp_share['afp_hostsallow'].split(' ')))
+
+            try:
+                self.run_subtask_sync(
+                    'share.create',
+                    {
+                        'name': fn9_afp_share['afp_name'],
+                        'description': fn9_afp_share['afp_comment'],
+                        'enabled': True,
+                        'immutable': False,
+                        'type': 'afp',
+                        'target_path': fn9_afp_share['afp_path'][5:],  # to remove leading /mnt
+                        'target_type': 'DATASET' if q.query(
+                            fn10_datasets,
+                            ('mountpoint', '=', fn9_afp_share['afp_path']),
+                            single=True
+                        ) else 'DIRECTORY',
+                        'properties': {
+                            'read_only': False,
+                            'time_machine': bool(fn9_afp_share['afp_timemachine']),
+                            'zero_dev_numbers': bool(fn9_afp_share['afp_nodev']),
+                            'no_stat': bool(fn9_afp_share['afp_nostat']),
+                            'afp3_privileges': bool(fn9_afp_share['afp_upriv']),
+                            'default_file_perms': {'value': int(fn9_afp_share['afp_fperm'])},
+                            'default_directory_perms': {'value': int(fn9_afp_share['afp_dperm'])},
+                            'ro_users': ro_users or None,
+                            'ro_groups': ro_groups or None,
+                            'rw_users': rw_users or None,
+                            'rw_groups': rw_groups or None,
+                            'users_allow': users_allow or None,
+                            'users_deny': users_deny or None,
+                            'groups_allow': groups_allow or None,
+                            'groups_deny': groups_deny or None,
+                            'hosts_allow': hosts_allow or None,
+                            'hosts_deny': hosts_deny or None
+                        }
+                    }
+                )
+            except RpcException as err:
+                self.add_warning(TaskWarning(
+                    errno.EINVAL,
+                    'Cannot create AFP share: {0} due to error: {1}'.format(
+                        fn9_afp_share['afp_name'], err
+                    )
+                ))
+
+
 @description("Master top level migration task for 9.x to 10.x")
 class MasterMigrateTask(ProgressTask):
     def __init__(self, dispatcher):
@@ -675,6 +764,7 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('migration.accountsmigrate', AccountsMigrateTask)
     plugin.register_task_handler('migration.networkmigrate', NetworkMigrateTask)
     plugin.register_task_handler('migration.volumemigrate', VolumeMigrateTask)
+    plugin.register_task_handler('migration.sharemigrate', ShareMigrateTask)
 
     plugin.register_event_type('migration.status')
 
