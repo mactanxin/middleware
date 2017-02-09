@@ -184,7 +184,7 @@ class BootEnvironmentsDelete(Task):
         )
 
 
-@description("Attaches the given Disk to the boot pool")
+@description("Attaches the given disk to the boot pool")
 @accepts(str, str)
 class BootAttachDisk(ProgressTask):
     @classmethod
@@ -231,7 +231,53 @@ class BootAttachDisk(ProgressTask):
         self.set_progress(100)
 
 
-@description("Detaches the specified Disk from the Boot Pool (not functional yet)")
+@description("Replaces a disk in the boot pool")
+@accepts(str, str)
+class BootReplaceDisk(ProgressTask):
+    @classmethod
+    def early_describe(cls):
+        return "Replacing disk in the boot pool"
+
+    def describe(self, olddisk, newdisk):
+        return TaskDescription(
+            "Replacing the {name} disk in the boot pool with {newdisk}",
+            name=olddisk,
+            newdisk=newdisk
+        )
+
+    def verify(self, olddisk, newdisk):
+        boot_pool_name = self.configstore.get('system.boot_pool_name')
+        return ['zpool:{0}'.format(boot_pool_name)]
+
+    def run(self, olddisk, newdisk):
+        pool = self.dispatcher.call_sync('zfs.pool.get_boot_pool')
+        vdev = vdev_by_path(pool['groups'], olddisk + 'p2')
+        disk_id = self.dispatcher.call_sync('disk.path_to_id', newdisk)
+
+        # Format disk
+        self.run_subtask_sync('disk.format.boot', disk_id)
+        self.set_progress(20)
+
+        # Replace disk in a pool
+        boot_pool_name = self.configstore.get('system.boot_pool_name')
+        self.run_subtask_sync(
+            'zfs.pool.replace',
+            boot_pool_name,
+            vdev['guid'],
+            {
+                'type': 'disk',
+                'path': newdisk + 'p2',
+            },
+            progress_callback=lambda p, m, e: self.chunk_progress(20, 80, '', p, m, e)
+        )
+
+        # Install grub
+        disk_id = self.dispatcher.call_sync('disk.path_to_id', newdisk + 'p2')
+        self.run_subtask_sync('disk.install_bootloader', disk_id)
+        self.set_progress(100)
+
+
+@description("Detaches the specified disk from the boot pool")
 @accepts(str)
 class BootDetachDisk(Task):
     @classmethod
@@ -411,6 +457,7 @@ def _init(dispatcher, plugin):
 
     plugin.register_task_handler('boot.disk.attach', BootAttachDisk)
     plugin.register_task_handler('boot.disk.detach', BootDetachDisk)
+    plugin.register_task_handler('boot.disk.replace', BootReplaceDisk)
     plugin.register_task_handler('boot.pool.scrub', BootPoolScrubTask)
 
     with bootenvs.lock:
