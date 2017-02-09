@@ -205,17 +205,23 @@ class BootAttachDisk(ProgressTask):
 
         # Format disk
         self.run_subtask_sync('disk.format.boot', disk_id)
-        self.set_progress(30)
+        self.set_progress(20)
 
         # Attach disk to the pool
         boot_pool_name = self.configstore.get('system.boot_pool_name')
-        self.run_subtask_sync('zfs.pool.extend', boot_pool_name, None, [{
-            'target_guid': guid,
-            'vdev': {
-                'type': 'disk',
-                'path': os.path.join('/dev', disk + 'p2')
-            }
-        }])
+        self.run_subtask_sync(
+            'zfs.pool.extend',
+            boot_pool_name,
+            None,
+            [{
+                'target_guid': guid,
+                'vdev': {
+                    'type': 'disk',
+                    'path': os.path.join('/dev', disk + 'p2')
+                }
+            }],
+            progress_callback=lambda p, m, e: self.chunk_progress(20, 80, '', p, m, e)
+        )
 
         self.set_progress(80)
 
