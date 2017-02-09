@@ -190,6 +190,16 @@ def _depends():
 
 
 def _init(dispatcher, plugin):
+    plugin.register_schema_definition('ShareWebdav', {
+        'type': 'object',
+        'additionalProperties': False,
+        'properties': {
+            '%type': {'enum': ['ShareWebdav']},
+            'read_only': {'type': 'boolean'},
+            'permission': {'type': 'boolean'},
+            'show_hidden_files': {'type': 'boolean'},
+        }
+    })
 
     plugin.register_task_handler("share.webdav.create", CreateWebDAVShareTask)
     plugin.register_task_handler("share.webdav.update", UpdateWebDAVShareTask)
