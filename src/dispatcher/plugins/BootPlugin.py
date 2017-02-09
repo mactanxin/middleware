@@ -35,6 +35,7 @@ from task import Provider, Task, ProgressTask, TaskException, query, TaskDescrip
 from cache import EventCacheStore
 from utils import split_dataset
 from debug import AttachCommandOutput
+from lib.zfs import vdev_by_path, iterate_vdevs
 from freenas.dispatcher.rpc import accepts, returns, description, SchemaHelper as h, generator
 from freenas.utils import include, first_or_default, query as q
 
