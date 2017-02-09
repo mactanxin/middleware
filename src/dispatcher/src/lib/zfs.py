@@ -50,14 +50,16 @@ def compare_vdevs(vd1, vd2):
 
 def iterate_vdevs(topology):
     for name, grp in list(topology.items()):
-        for vdev in grp:
-            if vdev['type'] == 'disk':
-                yield vdev, name
-                continue
+        def iterate_group(g):
+            for vdev in g:
+                if vdev['type'] == 'disk':
+                    yield vdev, name
+                    continue
 
-            if 'children' in vdev:
-                for child in vdev['children']:
-                    yield child, name
+                if 'children' in vdev:
+                    yield from iterate_group(vdev['children'])
+
+        yield from iterate_group(grp)
 
 
 def vdev_by_guid(topology, guid):
