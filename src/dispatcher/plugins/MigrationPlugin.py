@@ -418,9 +418,9 @@ class NetworkMigrateTask(Task):
 
 
 @description("Storage volume migration task")
-class VolumeMigrateTask(Task):
+class StorageMigrateTask(Task):
     def __init__(self, dispatcher):
-        super(VolumeMigrateTask, self).__init__(dispatcher)
+        super(StorageMigrateTask, self).__init__(dispatcher)
         self.__confxml = None
         self._notifier = notifier()
 
@@ -707,7 +707,7 @@ class MasterMigrateTask(ProgressTask):
         self.status = 'RUNNING'
 
         self.migration_progess(0, 'Migrating storage app: disks and volumes')
-        self.run_subtask_sync('migration.volumemigrate')
+        self.run_subtask_sync('migration.storagemigrate')
         self.apps_migrated.append('storage')
 
         self.migration_progess(10, 'Migrating account app: users and groups')
@@ -771,7 +771,7 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('migration.mastermigrate', MasterMigrateTask)
     plugin.register_task_handler('migration.accountsmigrate', AccountsMigrateTask)
     plugin.register_task_handler('migration.networkmigrate', NetworkMigrateTask)
-    plugin.register_task_handler('migration.volumemigrate', VolumeMigrateTask)
+    plugin.register_task_handler('migration.storagemigrate', StorageMigrateTask)
     plugin.register_task_handler('migration.sharemigrate', ShareMigrateTask)
 
     plugin.register_event_type('migration.status')
