@@ -412,7 +412,10 @@ class RsyncCopyTask(ProgressTask):
                             proc_output = proc_output.split(' ')
                             progress = [x for x in proc_output if '%' in x]
                             if len(progress):
-                                self.set_progress(int(progress[0][:-1]))
+                                try:
+                                    self.set_progress(int(progress[0][:-1]))
+                                except ValueError:
+                                    pass
                     except Exception as e:
                         # Catch IOERROR Errno 9 which usually arises because
                         # of already closed fileobject being used here therby
