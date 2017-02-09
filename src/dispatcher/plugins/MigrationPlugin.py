@@ -706,15 +706,23 @@ class MasterMigrateTask(ProgressTask):
 
         self.status = 'RUNNING'
 
-        self.migration_progess(0, 'Migrating account app: users and groups')
+        self.migration_progess(0, 'Migrating storage app: disks and volumes')
+        self.run_subtask_sync('migration.volumemigrate')
+        self.apps_migrated.append('storage')
+
+        self.migration_progess(10, 'Migrating account app: users and groups')
         self.run_subtask_sync('migration.accountsmigrate')
         self.apps_migrated.append('accounts')
 
         self.migration_progess(
-            10, 'Migrating netwrok app: network config, interfaces, vlans, bridges, and laggs'
+            20, 'Migrating netwrok app: network config, interfaces, vlans, bridges, and laggs'
         )
         self.run_subtask_sync('migration.networkmigrate')
         self.apps_migrated.append('network')
+
+        self.migration_progess(30, 'Migrating shares app: AFP, SMB, NFS, and iSCSI')
+        self.run_subtask_sync('migration.sharemigrate')
+        self.apps_migrated.append('sharing')
 
         # If we reached till here migration must have succeeded
         # so lets rename the databse
