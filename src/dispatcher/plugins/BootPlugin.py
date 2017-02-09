@@ -273,7 +273,6 @@ class BootReplaceDisk(ProgressTask):
         )
 
         # Install grub
-        disk_id = self.dispatcher.call_sync('disk.path_to_id', newdisk + 'p2')
         self.run_subtask_sync('disk.install_bootloader', disk_id)
         self.set_progress(100)
 
