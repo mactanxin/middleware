@@ -881,7 +881,7 @@ def remove_dots(obj):
         return {'fd': obj.fd}
 
     if isinstance(obj, Password):
-        return '<hidden>'
+        return str(obj)
 
     if isinstance(obj, dict):
         return {replace_invalid_chars(k): remove_dots(v) for k, v in obj.items()}
