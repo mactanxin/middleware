@@ -655,6 +655,51 @@ class ShareMigrateTask(Task):
                 ))
 
 
+@description("Service settings migration task")
+class ServiceMigrateTask(Task):
+    @classmethod
+    def early_describe(cls):
+        return "Migration of FreeNAS 9.x services' settings to 10.x"
+
+    def describe(self):
+        return TaskDescription("Migration of FreeNAS 9.x services' settings to 10.x")
+
+    def run(self):
+        # dict containing service enable flags for all services
+        fn9_services = {
+            srv['srv_service']: srv for srv in get_table('select * from services_services').values()
+        }
+
+        fn10_services = list(self.dispatcher.call_sync('service.query'))
+
+        # Migrating AFP service
+        fn9_afp = get_table('select * from services_afp', dictionary=False)[0]
+        try:
+            self.run_subtask_sync(
+                'service.update',
+                q.query(fn10_services, ("name", "=", "afp"), single=True)['id'],
+                {'config': {
+                    'enable': bool(fn9_services['afp']['srv_enable']),
+                    'guest_enable': bool(fn9_afp['afp_srv_guest']),
+                    'guest_user': fn9_afp['afp_srv_guest_user'],
+                    'bind_addresses': [
+                        i.strip() for i in fn9_afp['afp_srv_bindip'].split(',')
+                        if (i and not i.isspace())
+                    ] or None,
+                    'connections_limit': fn9_afp['afp_srv_connections_limit'],
+                    'homedir_enable': True if fn9_afp['afp_srv_homedir_enable'] in ('True', 1) else False,
+                    'homedir_path': fn9_afp['afp_srv_homedir'] or None,
+                    'homedir_name': fn9_afp['afp_srv_homename'] or None,
+                    'dbpath': fn9_afp['afp_srv_dbpath'] or None,
+                    'auxiliary': fn9_afp['afp_srv_global_aux'] or None
+                }}
+            )
+        except RpcException as err:
+            self.add_warning(TaskWarning(
+                errno.EINVAL, 'Could not update AFP service settings due to err: {0}'.format(err)
+            ))
+
+
 @description("Master top level migration task for 9.x to 10.x")
 class MasterMigrateTask(ProgressTask):
     def __init__(self, dispatcher):
@@ -724,6 +769,10 @@ class MasterMigrateTask(ProgressTask):
         self.run_subtask_sync('migration.sharemigrate')
         self.apps_migrated.append('sharing')
 
+        self.migration_progess(40, 'Migrating services app: AFP, SMB, NFS, iSCSI, etc')
+        self.run_subtask_sync('migration.servicemigrate')
+        self.apps_migrated.append('services')
+
         # If we reached till here migration must have succeeded
         # so lets rename the databse
         os.rename(FREENAS93_DATABASE_PATH, "{0}.done".format(FREENAS93_DATABASE_PATH))
@@ -773,6 +822,7 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('migration.networkmigrate', NetworkMigrateTask)
     plugin.register_task_handler('migration.storagemigrate', StorageMigrateTask)
     plugin.register_task_handler('migration.sharemigrate', ShareMigrateTask)
+    plugin.register_task_handler('migration.servicemigrate', ServiceMigrateTask)
 
     plugin.register_event_type('migration.status')
 
