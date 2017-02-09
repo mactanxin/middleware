@@ -182,18 +182,21 @@ class AccountsMigrateTask(Task):
         grp_membership = get_table('select * from account_bsdgroupmembership')
 
         # First lets create all the non buitlin groups in this system
-        group_subtasks = []
         for g in filter(lambda x: x['bsdgrp_builtin'] == 0, groups.values()):
-            group_subtasks.append(self.run_subtask(
-                'group.create',
-                {
-                    'name': g['bsdgrp_group'],
-                    'gid': g['bsdgrp_gid'],
-                    'sudo': g['bsdgrp_sudo']
-                }
-            ))
-        if group_subtasks:
-            self.join_subtasks(*group_subtasks)
+            try:
+                self.run_subtask_sync(
+                    'group.create',
+                    {
+                        'name': g['bsdgrp_group'],
+                        'gid': g['bsdgrp_gid'],
+                        'sudo': g['bsdgrp_sudo']
+                    }
+                )
+            except RpcException as err:
+                self.add_warning(TaskWarning(
+                    errno.EINVAL,
+                    'Could not create group: {0} due to error: {1}'.format(g['bsdgrp_group'], err)
+                ))
 
         # Now lets first add the root user's properties (password, etc)
         fn10_groups = list(self.dispatcher.call_sync('group.query'))
@@ -210,15 +213,17 @@ class AccountsMigrateTask(Task):
         self.run_subtask_sync('user.update', fn10_root_user['id'], fn10_root_user)
 
         # Now rest of the users can be looped upon
-        user_subtasks = []
         for u in filter(lambda x: x['bsdusr_builtin'] == 0, users.values()):
-            user_subtasks.append(self.run_subtask(
-                'user.create',
-                populate_user_obj(None, fn10_groups, u, groups, grp_membership)
-            ))
-
-        if user_subtasks:
-            self.join_subtasks(*user_subtasks)
+            try:
+                self.run_subtask_sync(
+                    'user.create',
+                    populate_user_obj(None, fn10_groups, u, groups, grp_membership)
+                )
+            except RpcException as err:
+                self.add_warning(TaskWarning(
+                    errno.EINVAL,
+                    'Could not create user: {0} due to error: {1}'.format(u['bsdusr_username'], err)
+                ))
 
 
 @description("Network migration task")
@@ -246,7 +251,6 @@ class NetworkMigrateTask(Task):
         # Now start with the conversion logic
 
         # Migrating regular network interfaces
-        interfaces_subtasks = []
         for fn9_iface in fn9_interfaces.values():
             fn10_iface = q.query(
                 fn10_interfaces, ('id', '=', fn9_iface['int_interface']), single=True
@@ -318,9 +322,16 @@ class NetworkMigrateTask(Task):
                 elif k in fn9_iface['int_options']:
                     l = fn10_iface.setdefault('capabilities', {}).setdefault('add', [])
                     l += v
-            interfaces_subtasks.append(self.run_subtask(
-                'network.interface.update', fn10_iface.pop('id'), fn10_iface
-            ))
+            network_id = fn10_iface.pop('id')
+            try:
+                self.run_subtask_sync('network.interface.update', network_id, fn10_iface)
+            except RpcException as err:
+                self.add_warning(TaskWarning(
+                    errno.EINVAL,
+                    'Could not configure network interface: {0} due to error: {1}'.format(
+                        network_id, err
+                    )
+                ))
 
         # TODO: Migrate LAGG interfaces
         # for key, value in fn9_lagg_interfaces
@@ -329,25 +340,25 @@ class NetworkMigrateTask(Task):
         # for key, value in fn9_vlan:
         #     pass
 
-        if interfaces_subtasks:
-            self.join_subtasks(*interfaces_subtasks)
-
         # Migrating hosts database
-        host_subtasks = []
         for line in fn9_globalconf['gc_hosts'].split('\n'):
             line = line.strip()
             if line:
                 ip, *names = line.split(' ')
-                host_subtasks.extend([
-                    self.run_subtask('network.host.create', {'id': name, 'addresses': [ip]})
-                    for name in names
-                ])
-
-        if host_subtasks:
-            self.join_subtasks(*host_subtasks)
+                for name in names:
+                    try:
+                        self.run_subtask_sync(
+                            'network.host.create', {'id': name, 'addresses': [ip]}
+                        )
+                    except RpcException as err:
+                        self.add_warning(TaskWarning(
+                            errno.EINVAL,
+                            'Could not add host: {0}, ip: {1} due to error: {2}'.format(
+                                name, ip, err
+                            )
+                        ))
 
         # Migrating static routes
-        route_subtasks = []
         for route in fn9_static_routes.values():
             try:
                 net = ipaddress.ip_network(route['sr_destination'])
@@ -355,16 +366,21 @@ class NetworkMigrateTask(Task):
                 logger.debug("Invalid network {0}: {1}".format(route['sr_destination'], e))
                 continue
 
-            route_subtasks.append(self.run_subtask('network.route.create', {
-                'id': route['sr_description'],
-                'type': 'INET',
-                'network': str(net.network_address),
-                'netmask': net.prefixlen,
-                'gateway': route['sr_gateway'],
-            }))
-
-        if route_subtasks:
-            self.join_subtasks(*route_subtasks)
+            try:
+                self.run_subtask_sync('network.route.create', {
+                    'id': route['sr_description'],
+                    'type': 'INET',
+                    'network': str(net.network_address),
+                    'netmask': net.prefixlen,
+                    'gateway': route['sr_gateway'],
+                })
+            except RpcException as err:
+                self.add_warning(TaskWarning(
+                    errno.EINVAL,
+                    'Could not add network route: {0} due to error: {1}'.format(
+                        route['sr_description'], err
+                    )
+                ))
 
         # Set the system hostname
         self.run_subtask_sync(
