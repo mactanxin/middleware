@@ -284,7 +284,8 @@ class InputServer(object):
                 break
 
             name, value, timestamp = line.split()
-            ds = self.context.get_data_source(name)
+            _, _, datapoint = name.partition('.')
+            ds = self.context.get_data_source('localhost.{0}'.format(datapoint))
             ds.submit(int(timestamp), float(value))
 
         socket.shutdown(gevent.socket.SHUT_RDWR)

@@ -1,5 +1,4 @@
-Hostname "localhost"
-FQDNLookup true
+FQDNLookup false
 BaseDir "/var/db/collectd"
 PIDFile "/var/run/collectd.pid"
 PluginDir "/usr/local/lib/collectd"
