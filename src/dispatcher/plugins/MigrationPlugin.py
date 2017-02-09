@@ -157,7 +157,7 @@ def populate_user_obj(user, fn10_groups, fn9_user, fn9_groups, fn9_grpmem):
         'password_disabled': bool(fn9_user['bsdusr_password_disabled']),
         'locked': bool(fn9_user['bsdusr_locked']),
         'shell': fn9_user['bsdusr_shell'],
-        # 'home': fn9_user['bsdusr_home'],
+        'home': fn9_user['bsdusr_home'],
         'sudo': bool(fn9_user['bsdusr_sudo']),
         'email': fn9_user['bsdusr_email'],
         'lmhash': lmhash,
