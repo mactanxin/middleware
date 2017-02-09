@@ -541,7 +541,8 @@ class VMBaseTask(ProgressTask):
                 'target_path': res['name'],
                 'size': 0
             })
-            properties['target_path'] = os.path.join(vm_root_dir, properties['target_path'])
+            if properties['target_type'] != 'DISK':
+                properties['target_path'] = os.path.join(vm_root_dir, properties['target_path'])
 
             cloning_supported = self.dispatcher.call_sync(
                 'vm.datastore.query',
