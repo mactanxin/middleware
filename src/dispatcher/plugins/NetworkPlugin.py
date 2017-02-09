@@ -135,17 +135,15 @@ class NetworkConfigureTask(Task):
     def run(self, settings):
         node = ConfigNode('network', self.configstore)
         node.update(settings)
-        dhcp_used = self.datastore.exists('network.interfaces', ('dhcp', '=', True))
 
-        if dhcp_used:
-            if node['dhcp.assign_gateway']:
-                # Clear out gateway settings
-                node['gateway.ipv4'] = None
+        if node['dhcp.assign_gateway']:
+            # Clear out gateway settings
+            node['gateway.ipv4'] = None
 
-            if node['dhcp.assign_dns']:
-                # Clear out DNS settings
-                node['dns.addresses'] = []
-                node['dns.search'] = []
+        if node['dhcp.assign_dns']:
+            # Clear out DNS settings
+            node['dns.addresses'] = []
+            node['dns.search'] = []
 
         configure_proxy(self.dispatcher, node['http_proxy'].value)
 

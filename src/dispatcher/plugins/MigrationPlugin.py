@@ -33,33 +33,30 @@ import logging
 import sqlite3
 import datetime
 import errno
-from time import sleep
+from lib.system import system, SubprocessException
+from freenas.serviced import push_status
 from freenas.utils import query as q
-from freenas.dispatcher.rpc import (
-    RpcException,
-    SchemaHelper as h,
-    accepts,
-    description,
-    returns
-)
+from bsd import geom
+from lxml import etree
+from freenas.dispatcher.rpc import RpcException, description
 from task import (
     Task,
     ProgressTask,
     TaskException,
     TaskWarning,
-    TaskDescription,
-    VerifyException
+    TaskDescription
 )
 
 logger = logging.getLogger('MigrationPlugin')
-sys.path.append('/usr/local/lib')
+sys.path.append('/usr/local/lib/migrate93')
 FREENAS93_DATABASE_PATH = '/data/freenas-v1.db'
-NOGROUP_ID = '8980c534-6a71-4bfb-bc72-54cbd5a186db'
 # We need to set this env var before any migrate93 based imports
 os.environ['93_DATABASE_PATH'] = FREENAS93_DATABASE_PATH
-from migrate93.src.utils import run_syncdb
+from freenasUI.middleware.notifier import notifier
 
 
+# Here we define all the constants
+NOGROUP_ID = '8980c534-6a71-4bfb-bc72-54cbd5a186db'
 LAGG_PROTOCOL_MAP = {
     'failover': 'FAILOVER',
     'fec': 'ETHERCHANNEL',
@@ -110,7 +107,7 @@ def populate_user_obj(user, fn10_groups, fn9_user, fn9_groups, fn9_grpmem):
     pubkeys = None
     try:
         with open('%s/.ssh/authorized_keys' % fn9_user['bsdusr_home'], 'r') as f:
-            pubkeys = f.read()
+            pubkeys = f.read().strip()
     except:
         pass
 
@@ -160,7 +157,7 @@ def populate_user_obj(user, fn10_groups, fn9_user, fn9_groups, fn9_grpmem):
         'password_disabled': bool(fn9_user['bsdusr_password_disabled']),
         'locked': bool(fn9_user['bsdusr_locked']),
         'shell': fn9_user['bsdusr_shell'],
-        # 'home': fn9_user['bsdusr_home'],
+        'home': fn9_user['bsdusr_home'],
         'sudo': bool(fn9_user['bsdusr_sudo']),
         'email': fn9_user['bsdusr_email'],
         'lmhash': lmhash,
@@ -185,18 +182,21 @@ class AccountsMigrateTask(Task):
         grp_membership = get_table('select * from account_bsdgroupmembership')
 
         # First lets create all the non buitlin groups in this system
-        group_subtasks = []
         for g in filter(lambda x: x['bsdgrp_builtin'] == 0, groups.values()):
-            group_subtasks.append(self.run_subtask(
-                'group.create',
-                {
-                    'name': g['bsdgrp_group'],
-                    'gid': g['bsdgrp_gid'],
-                    'sudo': g['bsdgrp_sudo']
-                }
-            ))
-        if group_subtasks:
-            self.join_subtasks(*group_subtasks)
+            try:
+                self.run_subtask_sync(
+                    'group.create',
+                    {
+                        'name': g['bsdgrp_group'],
+                        'gid': g['bsdgrp_gid'],
+                        'sudo': g['bsdgrp_sudo']
+                    }
+                )
+            except RpcException as err:
+                self.add_warning(TaskWarning(
+                    errno.EINVAL,
+                    'Could not create group: {0} due to error: {1}'.format(g['bsdgrp_group'], err)
+                ))
 
         # Now lets first add the root user's properties (password, etc)
         fn10_groups = list(self.dispatcher.call_sync('group.query'))
@@ -213,15 +213,17 @@ class AccountsMigrateTask(Task):
         self.run_subtask_sync('user.update', fn10_root_user['id'], fn10_root_user)
 
         # Now rest of the users can be looped upon
-        user_subtasks = []
         for u in filter(lambda x: x['bsdusr_builtin'] == 0, users.values()):
-            user_subtasks.append(self.run_subtask(
-                'user.create',
-                populate_user_obj(None, fn10_groups, u, groups, grp_membership)
-            ))
-
-        if user_subtasks:
-            self.join_subtasks(*user_subtasks)
+            try:
+                self.run_subtask_sync(
+                    'user.create',
+                    populate_user_obj(None, fn10_groups, u, groups, grp_membership)
+                )
+            except RpcException as err:
+                self.add_warning(TaskWarning(
+                    errno.EINVAL,
+                    'Could not create user: {0} due to error: {1}'.format(u['bsdusr_username'], err)
+                ))
 
 
 @description("Network migration task")
@@ -249,7 +251,6 @@ class NetworkMigrateTask(Task):
         # Now start with the conversion logic
 
         # Migrating regular network interfaces
-        interfaces_subtasks = []
         for fn9_iface in fn9_interfaces.values():
             fn10_iface = q.query(
                 fn10_interfaces, ('id', '=', fn9_iface['int_interface']), single=True
@@ -321,9 +322,16 @@ class NetworkMigrateTask(Task):
                 elif k in fn9_iface['int_options']:
                     l = fn10_iface.setdefault('capabilities', {}).setdefault('add', [])
                     l += v
-            interfaces_subtasks.append(self.run_subtask(
-                'network.interface.update', fn10_iface.pop('id'), fn10_iface
-            ))
+            network_id = fn10_iface.pop('id')
+            try:
+                self.run_subtask_sync('network.interface.update', network_id, fn10_iface)
+            except RpcException as err:
+                self.add_warning(TaskWarning(
+                    errno.EINVAL,
+                    'Could not configure network interface: {0} due to error: {1}'.format(
+                        network_id, err
+                    )
+                ))
 
         # TODO: Migrate LAGG interfaces
         # for key, value in fn9_lagg_interfaces
@@ -332,25 +340,25 @@ class NetworkMigrateTask(Task):
         # for key, value in fn9_vlan:
         #     pass
 
-        if interfaces_subtasks:
-            self.join_subtasks(*interfaces_subtasks)
-
         # Migrating hosts database
-        host_subtasks = []
         for line in fn9_globalconf['gc_hosts'].split('\n'):
             line = line.strip()
             if line:
                 ip, *names = line.split(' ')
-                host_subtasks.extend([
-                    self.run_subtask('network.host.create', {'id': name, 'addresses': [ip]})
-                    for name in names
-                ])
-
-        if host_subtasks:
-            self.join_subtasks(*host_subtasks)
+                for name in names:
+                    try:
+                        self.run_subtask_sync(
+                            'network.host.create', {'id': name, 'addresses': [ip]}
+                        )
+                    except RpcException as err:
+                        self.add_warning(TaskWarning(
+                            errno.EINVAL,
+                            'Could not add host: {0}, ip: {1} due to error: {2}'.format(
+                                name, ip, err
+                            )
+                        ))
 
         # Migrating static routes
-        route_subtasks = []
         for route in fn9_static_routes.values():
             try:
                 net = ipaddress.ip_network(route['sr_destination'])
@@ -358,16 +366,21 @@ class NetworkMigrateTask(Task):
                 logger.debug("Invalid network {0}: {1}".format(route['sr_destination'], e))
                 continue
 
-            route_subtasks.append(self.run_subtask('network.route.create', {
-                'id': route['sr_description'],
-                'type': 'INET',
-                'network': str(net.network_address),
-                'netmask': net.prefixlen,
-                'gateway': route['sr_gateway'],
-            }))
-
-        if route_subtasks:
-            self.join_subtasks(*route_subtasks)
+            try:
+                self.run_subtask_sync('network.route.create', {
+                    'id': route['sr_description'],
+                    'type': 'INET',
+                    'network': str(net.network_address),
+                    'netmask': net.prefixlen,
+                    'gateway': route['sr_gateway'],
+                })
+            except RpcException as err:
+                self.add_warning(TaskWarning(
+                    errno.EINVAL,
+                    'Could not add network route: {0} due to error: {1}'.format(
+                        route['sr_description'], err
+                    )
+                ))
 
         # Set the system hostname
         self.run_subtask_sync(
@@ -376,6 +389,10 @@ class NetworkMigrateTask(Task):
         )
 
         # Finally migrate the global network config
+        gc_nameservers = [
+            fn9_globalconf['gc_nameserver' + x] for x in ['1', '2', '3']
+            if fn9_globalconf['gc_nameserver' + x]
+        ]
         self.run_subtask_sync(
             'network.config.update',
             {
@@ -385,11 +402,12 @@ class NetworkMigrateTask(Task):
                     'ipv4': fn9_globalconf['gc_ipv4gateway'] or None,
                     'ipv6': fn9_globalconf['gc_ipv6gateway'] or None
                 },
-                'dns': {
-                    'addresses': [
-                        fn9_globalconf['gc_nameserver' + x] for x in ['1', '2', '3']
-                        if fn9_globalconf['gc_nameserver' + x]
-                    ]
+                'dns': {'addresses': gc_nameservers},
+                'dhcp': {
+                    'assign_gateway': not bool(
+                        fn9_globalconf['gc_ipv4gateway'] or fn9_globalconf['gc_ipv6gateway']
+                    ),
+                    'assign_dns': not bool(gc_nameservers)
                 },
                 'netwait': {
                     'enabled': bool(fn9_globalconf['gc_netwait_enabled']),
@@ -397,6 +415,289 @@ class NetworkMigrateTask(Task):
                 }
             }
         )
+
+
+@description("Storage volume migration task")
+class StorageMigrateTask(Task):
+    def __init__(self, dispatcher):
+        super(StorageMigrateTask, self).__init__(dispatcher)
+        self.__confxml = None
+        self._notifier = notifier()
+
+    @classmethod
+    def early_describe(cls):
+        return "Migration of FreeNAS 9.x storage volumes (pools)"
+
+    def describe(self):
+        return TaskDescription("Migration of FreeNAS 9.x storage volumes (pools)")
+
+    def _geom_confxml(self):
+        if self.__confxml is None:
+            self.__confxml = etree.fromstring(notifier().sysctl('kern.geom.confxml'))
+        return self.__confxml
+
+    def identifier_to_device(self, ident):
+
+        if not ident:
+            return None
+
+        doc = self._geom_confxml()
+
+        search = re.search(r'\{(?P<type>.+?)\}(?P<value>.+)', ident)
+        if not search:
+            return None
+
+        tp = search.group("type")
+        value = search.group("value")
+
+        if tp == 'uuid':
+            search = doc.xpath("//class[name = 'PART']/geom//config[rawuuid = '%s']/../../name" % value)
+            if len(search) > 0:
+                for entry in search:
+                    if not entry.text.startswith('label'):
+                        return entry.text
+            return None
+
+        elif tp == 'label':
+            search = doc.xpath("//class[name = 'LABEL']/geom//provider[name = '%s']/../name" % value)
+            if len(search) > 0:
+                return search[0].text
+            return None
+
+        elif tp == 'serial':
+            for devname in self.__get_disks():
+                serial = self._notifier.serial_from_device(devname)
+                if serial == value:
+                    return devname
+            return None
+
+        elif tp == 'devicename':
+            search = doc.xpath("//class[name = 'DEV']/geom[name = '%s']" % value)
+            if len(search) > 0:
+                return value
+            return None
+
+    def device_to_identifier(name, serial=None):
+        gdisk = geom.geom_by_name('DISK', name)
+        if not gdisk:
+            return None
+
+        if 'lunid' in gdisk.provider.config:
+            return "lunid:{0}".format(gdisk.provider.config['lunid'])
+
+        if serial:
+            return "serial:{0}".format(serial)
+
+        gpart = geom.geom_by_name('PART', name)
+        if gpart:
+            for i in gpart.providers:
+                if i.config['type'] in ('freebsd-zfs', 'freebsd-ufs'):
+                    return "uuid:{0}".format(i.config['rawuuid'])
+
+        glabel = geom.geom_by_name('LABEL', name)
+        if glabel and glabel.provider:
+            return "label:{0}".format(glabel.provider.name)
+
+        return "devicename:{0}".format(os.path.join('/dev', name))
+
+    def run(self):
+
+        # Migrate disk settings
+        disk_subtasks = []
+        fn9_disks = get_table('select * from storage_disk', dictionary=False)
+        fn10_disks = self.dispatcher.call_sync('disk.query')
+
+        for fn9_disk in fn9_disks:
+            dev = self.identifier_to_device(fn9_disk['disk_identifier'])
+            if not dev:
+                self.add_warning(TaskWarning(
+                    errno.EINVAL,
+                    'Identifier to device failed for {0}, skipping'.format(
+                        fn9_disk['disk_identifier']
+                    )
+                ))
+                continue
+            newident = self.device_to_identifier(dev, serial=(fn9_disk['disk_serial'] or None))
+            if not newident:
+                self.add_warning(TaskWarning('Failed to convert {0} to id, skipping'.format(dev)))
+                continue
+
+            fn10_disk = None
+            fn10_disk = q.query(fn10_disks, ('id', '=', newident), single=True)
+
+            if fn10_disk is None:
+                self.add_warning(TaskWarning(
+                    'Failed to lookup id: {0} for fn9 disk id: {1}, skipping'.format(
+                        newident, dev
+                    )
+                ))
+                continue
+
+            del fn10_disk['name']
+            del fn10_disk['serial']
+            del fn10_disk['path']
+            del fn10_disk['mediasize']
+            del fn10_disk['status']
+            fn10_disk.update({
+                'smart': fn9_disk['disk_togglesmart'],
+                'smart_options': fn9_disk['disk_smartoptions'],
+                'standby_mode': None if fn9_disk['disk_hddstandby'] == 'Always On' else int(fn9_disk['disk_hddstandby']),
+                'acoustic_level': fn9_disk['disk_acousticlevel'].upper(),
+                'apm_mode': None if fn9_disk['disk_advpowermgmt'] == 'Disabled' else int(fn9_disk['disk_advpowermgmt'])
+            })
+            disk_subtasks.append(self.run_subtask('disk.update', fn10_disk.pop('id'), fn10_disk))
+
+        if disk_subtasks:
+            self.join_subtasks(*disk_subtasks)
+
+        # Importing fn9 volumes
+        fn9_volumes = get_table('select * from storage_volume')
+        for fn9_volume in fn9_volumes.values():
+            try:
+                self.run_subtask_sync(
+                    'volume.import', fn9_volume['vol_guid'], fn9_volume['vol_name']
+                )
+            except RpcException as err:
+                self.add_warning(TaskWarning(
+                    errno.EINVAL,
+                    'Cannot import volume name: {0} GUID: {1} due to error: {2}'.format(
+                        fn9_volume['vol_name'], fn9_volume['vol_guid'], err
+                    )
+                ))
+
+
+@description("Shares migration task")
+class ShareMigrateTask(Task):
+    @classmethod
+    def early_describe(cls):
+        return "Migration of FreeNAS 9.x shares to 10.x"
+
+    def describe(self):
+        return TaskDescription("Migration of FreeNAS 9.x shares to 10.x")
+
+    def run(self):
+        # Generic stuff needed for all share migration
+        fn10_datasets = list(self.dispatcher.call_sync('volume.dataset.query'))
+
+        # Lets start with AFP shares
+        fn9_afp_shares = get_table('select * from sharing_afp_share')
+        for fn9_afp_share in fn9_afp_shares.values():
+            ro_users, ro_groups, rw_users, rw_groups, users_allow, groups_allow, users_deny, groups_deny = [[] for _ in range(8)]
+            for allow_item in fn9_afp_share['afp_rw'].split(','):
+                allow_item = allow_item.strip(' ')
+                if allow_item.startswith('@'):
+                    groups_allow.append(allow_item[1:])
+                elif allow_item:
+                    users_allow.append(allow_item)
+            for ro_item in fn9_afp_share['afp_ro'].split(','):
+                ro_item = ro_item.strip(' ')
+                if ro_item.startswith('@'):
+                    ro_groups.append(ro_item[1:])
+                elif ro_item:
+                    ro_users.append(ro_item)
+            for rw_item in fn9_afp_share['afp_rw'].split(','):
+                rw_item = rw_item.strip(' ')
+                if rw_item.startswith('@'):
+                    rw_groups.append(rw_item[1:])
+                elif rw_item:
+                    rw_users.append(rw_item)
+            for deny_item in fn9_afp_share['afp_deny'].split(','):
+                deny_item = deny_item.strip(' ')
+                if deny_item.startswith('@'):
+                    groups_deny.append(deny_item[1:])
+                elif deny_item:
+                    users_deny.append(deny_item)
+            hosts_deny = list(filter(None, fn9_afp_share['afp_hostsdeny'].split(' ')))
+            hosts_allow = list(filter(None, fn9_afp_share['afp_hostsallow'].split(' ')))
+
+            try:
+                self.run_subtask_sync(
+                    'share.create',
+                    {
+                        'name': fn9_afp_share['afp_name'],
+                        'description': fn9_afp_share['afp_comment'],
+                        'enabled': True,
+                        'immutable': False,
+                        'type': 'afp',
+                        'target_path': fn9_afp_share['afp_path'][5:],  # to remove leading /mnt
+                        'target_type': 'DATASET' if q.query(
+                            fn10_datasets,
+                            ('mountpoint', '=', fn9_afp_share['afp_path']),
+                            single=True
+                        ) else 'DIRECTORY',
+                        'properties': {
+                            'read_only': False,
+                            'time_machine': bool(fn9_afp_share['afp_timemachine']),
+                            'zero_dev_numbers': bool(fn9_afp_share['afp_nodev']),
+                            'no_stat': bool(fn9_afp_share['afp_nostat']),
+                            'afp3_privileges': bool(fn9_afp_share['afp_upriv']),
+                            'default_file_perms': {'value': int(fn9_afp_share['afp_fperm'])},
+                            'default_directory_perms': {'value': int(fn9_afp_share['afp_dperm'])},
+                            'ro_users': ro_users or None,
+                            'ro_groups': ro_groups or None,
+                            'rw_users': rw_users or None,
+                            'rw_groups': rw_groups or None,
+                            'users_allow': users_allow or None,
+                            'users_deny': users_deny or None,
+                            'groups_allow': groups_allow or None,
+                            'groups_deny': groups_deny or None,
+                            'hosts_allow': hosts_allow or None,
+                            'hosts_deny': hosts_deny or None
+                        }
+                    }
+                )
+            except RpcException as err:
+                self.add_warning(TaskWarning(
+                    errno.EINVAL,
+                    'Cannot create AFP share: {0} due to error: {1}'.format(
+                        fn9_afp_share['afp_name'], err
+                    )
+                ))
+
+
+@description("Service settings migration task")
+class ServiceMigrateTask(Task):
+    @classmethod
+    def early_describe(cls):
+        return "Migration of FreeNAS 9.x services' settings to 10.x"
+
+    def describe(self):
+        return TaskDescription("Migration of FreeNAS 9.x services' settings to 10.x")
+
+    def run(self):
+        # dict containing service enable flags for all services
+        fn9_services = {
+            srv['srv_service']: srv for srv in get_table('select * from services_services').values()
+        }
+
+        fn10_services = list(self.dispatcher.call_sync('service.query'))
+
+        # Migrating AFP service
+        fn9_afp = get_table('select * from services_afp', dictionary=False)[0]
+        try:
+            self.run_subtask_sync(
+                'service.update',
+                q.query(fn10_services, ("name", "=", "afp"), single=True)['id'],
+                {'config': {
+                    'enable': bool(fn9_services['afp']['srv_enable']),
+                    'guest_enable': bool(fn9_afp['afp_srv_guest']),
+                    'guest_user': fn9_afp['afp_srv_guest_user'],
+                    'bind_addresses': [
+                        i.strip() for i in fn9_afp['afp_srv_bindip'].split(',')
+                        if (i and not i.isspace())
+                    ] or None,
+                    'connections_limit': fn9_afp['afp_srv_connections_limit'],
+                    'homedir_enable': True if fn9_afp['afp_srv_homedir_enable'] in ('True', 1) else False,
+                    'homedir_path': fn9_afp['afp_srv_homedir'] or None,
+                    'homedir_name': fn9_afp['afp_srv_homename'] or None,
+                    'dbpath': fn9_afp['afp_srv_dbpath'] or None,
+                    'auxiliary': fn9_afp['afp_srv_global_aux'] or None
+                }}
+            )
+        except RpcException as err:
+            self.add_warning(TaskWarning(
+                errno.EINVAL, 'Could not update AFP service settings due to err: {0}'.format(err)
+            ))
 
 
 @description("Master top level migration task for 9.x to 10.x")
@@ -422,28 +723,55 @@ class MasterMigrateTask(ProgressTask):
                 'status': self.status
             }
         )
+        push_status(
+            'MigrationPlugin: status: {0}, apps migrated: {1}'.format(
+                self.status, ', '.join(self.apps_migrated)
+            )
+        )
 
     def verify(self):
-        return ['system']
+        return ['root']
 
     def run(self):
-        logger.debug('Starting migration from 9.x database to 10.x')
         self.migration_progess(0, 'Starting migration from 9.x database to 10.x')
 
         # bring the 9.x database up to date with the latest 9.x version
-        run_syncdb()
+        # doing this via a subprocess call since otherwise there are much import
+        # issues which I tried hunting down but could not finally resolve
+        try:
+            out, err = system('/usr/local/sbin/migrate93', '-f', FREENAS93_DATABASE_PATH)
+        except SubprocessException as e:
+            logger.error('Traceback of 9.x database migration', exc_info=True)
+            raise TaskException(
+                'Error whilst trying upgrade 9.x database to latest 9.x schema: {0}'.format(e)
+            )
+        logger.debug(
+            'Result of running 9.x was as follows: stdout: {0}, stderr: {1}'.format(out, err)
+        )
 
         self.status = 'RUNNING'
 
-        self.migration_progess(0, 'Migrating account app: users and groups')
+        self.migration_progess(0, 'Migrating storage app: disks and volumes')
+        self.run_subtask_sync('migration.storagemigrate')
+        self.apps_migrated.append('storage')
+
+        self.migration_progess(10, 'Migrating account app: users and groups')
         self.run_subtask_sync('migration.accountsmigrate')
         self.apps_migrated.append('accounts')
 
         self.migration_progess(
-            10, 'Migrating netwrok app: network config, interfaces, vlans, bridges, and laggs'
+            20, 'Migrating netwrok app: network config, interfaces, vlans, bridges, and laggs'
         )
         self.run_subtask_sync('migration.networkmigrate')
         self.apps_migrated.append('network')
+
+        self.migration_progess(30, 'Migrating shares app: AFP, SMB, NFS, and iSCSI')
+        self.run_subtask_sync('migration.sharemigrate')
+        self.apps_migrated.append('sharing')
+
+        self.migration_progess(40, 'Migrating services app: AFP, SMB, NFS, iSCSI, etc')
+        self.run_subtask_sync('migration.servicemigrate')
+        self.apps_migrated.append('services')
 
         # If we reached till here migration must have succeeded
         # so lets rename the databse
@@ -472,6 +800,10 @@ def _depends():
 
 def _init(dispatcher, plugin):
 
+    def start_migration(args):
+        logger.debug('Starting migration from 9.x database to 10.x')
+        dispatcher.call_task_sync('migration.mastermigrate')
+
     plugin.register_schema_definition('migration-status', {
         'type': 'object',
         'properties': {
@@ -488,11 +820,14 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('migration.mastermigrate', MasterMigrateTask)
     plugin.register_task_handler('migration.accountsmigrate', AccountsMigrateTask)
     plugin.register_task_handler('migration.networkmigrate', NetworkMigrateTask)
+    plugin.register_task_handler('migration.storagemigrate', StorageMigrateTask)
+    plugin.register_task_handler('migration.sharemigrate', ShareMigrateTask)
+    plugin.register_task_handler('migration.servicemigrate', ServiceMigrateTask)
 
     plugin.register_event_type('migration.status')
 
     if os.path.exists(FREENAS93_DATABASE_PATH):
-        dispatcher.call_task_sync('migration.mastermigrate')
+        plugin.register_event_handler('service.ready', start_migration)
     else:
         dispatcher.dispatch_event(
             'migration.status',
@@ -501,3 +836,4 @@ def _init(dispatcher, plugin):
                 'status': 'NOT_NEEDED'
             }
         )
+        push_status('MigrationPlugin: Migration not needed')

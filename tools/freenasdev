@@ -73,16 +73,14 @@ freenasrsync_client() {
 freenasrsync_dispatcher() {
 	# Main Source and Plugins
 	myrsync ${REPO_PARENT_PATH}/middleware/src/dispatcher/ "root@${1}":/usr/local/lib/dispatcher/ --exclude-from="${REPO_PARENT_PATH}/middleware/tools/dispatcher_rsync_exclude_list.txt"
-	myrsyncnodel ${REPO_PARENT_PATH}/middleware/src/dispatcher/src/frontend/static/ "root@${1}":/usr/local/lib/dispatcher/src/frontend/static/
-	# myrsync ${REPO_PARENT_PATH}/middleware/src/dispatcher/plugins "root@${1}":/usr/local/lib/dispatcher/
 
 	# Libexec stuff
 	myrsync ${REPO_PARENT_PATH}/middleware/src/dispatcher/libexec/ "root@${1}":/usr/local/libexec/dispatcher/
 	myrsync ${REPO_PARENT_PATH}/middleware/src/dispatcher/tools/taskworker "root@${1}":/usr/local/libexec/taskworker
 
 	# rc.d dispatcher stuff
-	myrsync ${REPO_PARENT_PATH}/middleware/src/dispatcher/etc/dispatcher "root@${1}":/usr/local/etc/rc.d/dispatcher
 	myrsync ${REPO_PARENT_PATH}/middleware/src/dispatcher/etc/middleware.conf "root@${1}":/usr/local/etc/middleware.conf
+	myrsyncnodel ${REPO_PARENT_PATH}/middleware/src/dispatcher/etc/serviced.d/ "root@${1}":/usr/local/etc/serviced.d/
 
 	# sbin stuff
 	myrsyncnodel ${REPO_PARENT_PATH}/middleware/src/dispatcher/tools/ "root@${1}":/usr/local/sbin/ --exclude taskworker
