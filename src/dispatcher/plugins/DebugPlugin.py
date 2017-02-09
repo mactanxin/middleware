@@ -59,7 +59,7 @@ class CollectDebugTask(ProgressTask):
         return TaskDescription('Collecting debug data')
 
     def verify(self, fd, logs=True, cores=False):
-        return ['system']
+        return []
 
     def process_hook(self, cmd, plugin, tar):
         if cmd['type'] == 'AttachData':
@@ -171,7 +171,7 @@ class SaveDebugTask(ProgressTask):
             errors.add((0, 'path'), 'The Path is required', code=errno.EINVAL)
         if errors:
             raise errors
-        return ['system']
+        return []
 
     def run(self, path, logs=True, cores=False):
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC)
