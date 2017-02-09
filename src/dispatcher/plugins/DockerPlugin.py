@@ -2019,9 +2019,6 @@ def _init(dispatcher, plugin):
                         })
 
     def refresh_database_cache(collection, event, query, lock, host_id=None):
-        if not dispatcher.datastore_log:
-            return
-
         filter = []
         if host_id:
             filter.append(('host', '=', host_id))
