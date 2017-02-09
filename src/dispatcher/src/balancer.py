@@ -40,7 +40,7 @@ import signal
 from lib.freebsd import get_sysctl
 from threading import Condition
 from datetime import datetime
-from freenas.dispatcher import validator
+from freenas.dispatcher import validator, Password
 from freenas.dispatcher.fd import FileDescriptor
 from freenas.dispatcher.rpc import RpcException
 from gevent.queue import Queue
@@ -879,6 +879,9 @@ def replace_invalid_chars(s):
 def remove_dots(obj):
     if isinstance(obj, FileDescriptor):
         return {'fd': obj.fd}
+
+    if isinstance(obj, Password):
+        return '<hidden>'
 
     if isinstance(obj, dict):
         return {replace_invalid_chars(k): remove_dots(v) for k, v in obj.items()}
