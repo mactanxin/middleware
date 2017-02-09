@@ -34,6 +34,7 @@ import fnmatch
 import uuid
 import hashlib
 import logging
+import contextlib
 import usb1
 from xml.etree import ElementTree
 from bsd import geom
@@ -164,7 +165,26 @@ class DeviceInfoProvider(Provider):
         return result
 
     def _get_class_cpu(self):
-        pass
+        result = []
+        ncpus = get_sysctl('hw.ncpu')
+        model = get_sysctl('hw.model').strip('\x00')
+        for i in range(0, ncpus):
+            freq = None
+            temp = None
+
+            with contextlib.suppress(OSError):
+                freq = get_sysctl('dev.cpu.{0}.freq'.format(i)),
+
+            with contextlib.suppress(OSError):
+                temp = get_sysctl('dev.cpu.{0}.temperature'.format(i))
+
+            result.append({
+                'name': model,
+                'freq': freq,
+                'temperature': temp
+            })
+
+        return result
 
     def _get_class_usb(self):
         result = []
