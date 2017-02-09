@@ -80,6 +80,15 @@ class TestProvider(Provider):
         gen = ({'id': i} for i in range(0, 10))
         return q.query(gen, *(filter or []), callback=extend, **(params or {}))
 
+    def exclude_string(self):
+        return self.lazy_query([], {'exclude': 'slow_value'})
+
+    def exclude_tuple(self):
+        return self.lazy_query([], {'exclude': ('slow_value', 'composite_slow_value.foo')})
+
+    def exclude_lazy(self):
+        return self.lazy_query([], {'exclude': ('slow_value', 'composite_slow_value')})
+
 
 @description('Downloads tests')
 class TestDownloadTask(Task):
