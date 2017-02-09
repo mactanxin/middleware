@@ -68,7 +68,7 @@ def vdev_by_guid(topology, guid):
 
 def vdev_by_path(topology, path):
     for vd, _ in iterate_vdevs(topology):
-        if vd['path'] == path:
+        if vd.get('path') == path:
             return vd
 
 
