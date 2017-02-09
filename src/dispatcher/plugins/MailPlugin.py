@@ -40,6 +40,7 @@ from email.utils import formatdate
 from datastore.config import ConfigNode
 from freenas.dispatcher.model import BaseStruct, BaseEnum, types
 from freenas.dispatcher.rpc import RpcException, SchemaHelper as h, accepts, description, returns
+from freenas.dispatcher import Password
 from task import Provider, Task, ValidationException, TaskDescription
 
 logger = logging.getLogger('MailPlugin')
@@ -69,7 +70,7 @@ class AlertEmitterEmail(BaseStruct):
     auth: bool
     encryption: MailEncryptionType
     user: Optional[str]
-    password: Optional[str]
+    password: Optional[Password]
 
 
 class AlertEmitterParametersEmail(BaseStruct):
@@ -81,6 +82,7 @@ class AlertEmitterParametersEmail(BaseStruct):
 class MailProvider(Provider):
     def get_config(self) -> AlertEmitterEmail:
         node = ConfigNode('mail', self.configstore).__getstate__()
+        node['pass'] = Password(node['pass'])
         return AlertEmitterEmail(node)
 
     @accepts(h.ref('MailMessage'), h.ref('Mail'))
@@ -188,6 +190,9 @@ class MailConfigureTask(Task):
 
     def run(self, mail):
         node = ConfigNode('mail', self.configstore)
+        if 'pass' in mail:
+            mail['pass'] = mail['pass'].secret
+
         node.update(mail)
 
 

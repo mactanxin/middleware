@@ -27,6 +27,7 @@ import errno
 import logging
 
 from datastore.config import ConfigNode
+from freenas.dispatcher import Password
 from freenas.dispatcher.rpc import RpcException, SchemaHelper as h, description, accepts, returns, private
 from task import Task, Provider, TaskException, ValidationException, TaskDescription
 
@@ -57,7 +58,9 @@ class DynDNSProvider(Provider):
     @accepts()
     @returns(h.ref('ServiceDyndns'))
     def get_config(self):
-        return ConfigNode('service.dyndns', self.configstore).__getstate__()
+        state = ConfigNode('service.dyndns', self.configstore).__getstate__()
+        state['password'] = Password(state['password'])
+        return state
 
     @accepts()
     @returns(h.object())
@@ -87,6 +90,9 @@ class DynDNSConfigureTask(Task):
     def run(self, dyndns):
         try:
             node = ConfigNode('service.dyndns', self.configstore)
+            if 'password' in dyndns:
+                dyndns['password'] = dyndns['password'].secret
+
             node.update(dyndns)
             self.dispatcher.call_sync('etcd.generation.generate_group', 'dyndns')
             self.dispatcher.dispatch_event('service.dyndns.changed', {
@@ -116,7 +122,7 @@ def _init(dispatcher, plugin):
             'ipserver': {'type': ['string', 'null']},
             'domains': {'type': 'array', 'items': {'type': 'string'}},
             'username': {'type': 'string'},
-            'password': {'type': 'string'},
+            'password': {'type': 'password'},
             'update_period': {'type': ['integer', 'null']},
             'force_update_period': {'type': ['integer', 'null']},
             'auxiliary': {'type': ['string', 'null']},

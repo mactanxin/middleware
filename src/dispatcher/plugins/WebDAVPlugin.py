@@ -29,6 +29,7 @@ import errno
 import logging
 
 from datastore.config import ConfigNode
+from freenas.dispatcher import Password
 from freenas.dispatcher.rpc import RpcException, SchemaHelper as h, description, accepts, returns, private
 from task import Task, Provider, TaskException, TaskDescription
 from utils import is_port_open
@@ -42,7 +43,9 @@ class WebDAVProvider(Provider):
     @accepts()
     @returns(h.ref('ServiceWebdav'))
     def get_config(self):
-        return ConfigNode('service.webdav', self.configstore).__getstate__()
+        state = ConfigNode('service.webdav', self.configstore).__getstate__()
+        state['password'] = Password(state['password'])
+        return state
 
 
 @private
@@ -61,6 +64,8 @@ class WebDAVConfigureTask(Task):
 
     def run(self, webdav):
         node = ConfigNode('service.webdav', self.configstore).__getstate__()
+        if 'password' in webdav:
+            webdav['password'] = webdav['password'].secret
 
         for p in ('http_port', 'https_port'):
             port = webdav.get(p)
@@ -122,7 +127,7 @@ def _init(dispatcher, plugin):
                 'minimum': 1,
                 'maximum': 65535
             },
-            'password': {'type': 'string'},
+            'password': {'type': 'password'},
             'authentication': {'$ref': 'ServiceWebdavAuthentication'},
             'certificate': {'type': ['string', 'null']},
         },

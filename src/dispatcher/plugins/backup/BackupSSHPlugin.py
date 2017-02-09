@@ -210,7 +210,7 @@ def open_ssh_connection(dispatcher, backup):
             else:
                 raise Exception('Cannot authenticate using keys')
 
-        session.auth_password(creds['username'], creds['password'])
+        session.auth_password(creds['username'], creds['password'].secret)
         return session
 
     except socket.gaierror as err:
