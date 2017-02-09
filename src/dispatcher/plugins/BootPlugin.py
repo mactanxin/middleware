@@ -200,7 +200,7 @@ class BootAttachDisk(ProgressTask):
         return ['zpool:{0}'.format(boot_pool_name), 'disk:{0}'.format(disk)]
 
     def run(self, disk):
-        pool = self.dispatcher.call_sync('boot.pool.get_config')
+        pool = self.dispatcher.call_sync('zfs.pool.get_boot_pool')
         guid = q.get(pool, 'groups.data.0.guid')
         disk_id = self.dispatcher.call_sync('disk.path_to_id', disk)
 
@@ -251,6 +251,8 @@ class BootReplaceDisk(ProgressTask):
         return ['zpool:{0}'.format(boot_pool_name)]
 
     def run(self, olddisk, newdisk):
+        olddisk = os.path.join('/dev', olddisk)
+        newdisk = os.path.join('/dev', newdisk)
         pool = self.dispatcher.call_sync('zfs.pool.get_boot_pool')
         vdev = vdev_by_path(pool['groups'], olddisk + 'p2')
         disk_id = self.dispatcher.call_sync('disk.path_to_id', newdisk)
@@ -293,9 +295,9 @@ class BootDetachDisk(Task):
 
     def run(self, disk):
         boot_pool_name = self.configstore.get('system.boot_pool_name')
-        pool = self.dispatcher.call_sync('boot.pool.get_config')
+        pool = self.dispatcher.call_sync('zfs.pool.get_boot_pool')
         vdev = first_or_default(
-            lambda v: os.path.join('/dev', disk) == v['path'],
+            lambda v: os.path.join('/dev', disk + 'p2') == v['path'],
             q.get(pool, 'groups.data.0.children')
         )
         if not vdev:
