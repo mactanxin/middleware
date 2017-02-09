@@ -124,11 +124,11 @@ class ISCSITargetUpdateTask(Task):
 
         ctx = iscsi.ISCSIInitiator()
         session = first_or_default(lambda s: s.config.target == target['name'], ctx.sessions)
-        session = iscsi_convert_session(target, session.config)
+        config = iscsi_convert_session(target, session.config)
         if session.id:
-            ctx.modify_session(session)
+            ctx.modify_session(session.id, config)
         else:
-            ctx.add_session(session)
+            ctx.add_session(config)
 
         self.dispatcher.emit_event('disk.iscsi.target.changed', {
             'operation': 'update',
@@ -232,3 +232,9 @@ def _init(dispatcher, plugin):
     for i in dispatcher.datastore.query_stream('iscsi_initiator.targets'):
         session = iscsi_convert_session(i)
         ctx.add_session(session)
+
+
+def _cleanup(dispatcher, plugin):
+    ctx = iscsi.ISCSIInitiator()
+    for i in ctx.sessions:
+        ctx.remove_session(i)
