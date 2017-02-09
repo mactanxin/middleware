@@ -36,6 +36,7 @@ from email.mime.text import MIMEText
 from email.utils import formatdate
 
 from datastore.config import ConfigNode
+from freenas.dispatcher import Password
 from freenas.dispatcher.rpc import (
     RpcException, SchemaHelper as h, accepts, description, returns
 )
@@ -49,7 +50,9 @@ class MailProvider(Provider):
 
     @returns(h.ref('Mail'))
     def get_config(self):
-        return ConfigNode('mail', self.configstore)
+        state = ConfigNode('mail', self.configstore).__getstate__()
+        state['pass'] = Password(state['pass'])
+        return state
 
     @accepts(h.ref('MailMessage'), h.ref('Mail'))
     def send(self, mailmessage, mail=None):
@@ -157,6 +160,9 @@ class MailConfigureTask(Task):
 
     def run(self, mail):
         node = ConfigNode('mail', self.configstore)
+        if 'pass' in mail:
+            mail['pass'] = mail['pass'].secret
+
         node.update(mail)
 
 
@@ -175,7 +181,7 @@ def _init(dispatcher, plugin):
             'auth': {'type': 'boolean'},
             'encryption': {'$ref': 'MailEncryptionType'},
             'user': {'type': ['string', 'null']},
-            'pass': {'type': ['string', 'null']},
+            'pass': {'type': ['password', 'null']},
         },
         'additionalProperties': False,
     })

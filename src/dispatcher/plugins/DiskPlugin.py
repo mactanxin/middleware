@@ -622,7 +622,7 @@ class DiskGELIInitTask(Task):
             with tempfile.NamedTemporaryFile('w') as passfile:
                 keyfile.write(key)
                 keyfile.flush()
-                passfile.write(password)
+                passfile.write(password.secret)
                 passfile.flush()
                 try:
                     if password and key:
@@ -680,7 +680,7 @@ class DiskGELISetUserKeyTask(Task):
             with tempfile.NamedTemporaryFile('w') as passfile:
                 keyfile.write(key)
                 keyfile.flush()
-                passfile.write(password)
+                passfile.write(password.secret)
                 passfile.flush()
                 try:
                     if password and key:
@@ -852,7 +852,7 @@ class DiskGELIAttachTask(Task):
             with tempfile.NamedTemporaryFile('w') as passfile:
                 keyfile.write(key)
                 keyfile.flush()
-                passfile.write(password)
+                passfile.write(password.secret)
                 passfile.flush()
                 try:
                     if password and key:
@@ -1727,7 +1727,7 @@ def _init(dispatcher, plugin):
         'type': 'object',
         'properties': {
             'key': {'type': 'string'},
-            'password': {'type': 'string'}
+            'password': {'type': 'password'}
         }
     })
 
@@ -1735,7 +1735,7 @@ def _init(dispatcher, plugin):
         'type': 'object',
         'properties': {
             'key': {'type': 'string'},
-            'password': {'type': 'string'},
+            'password': {'type': 'password'},
             'slot': {'type': 'integer'}
         }
     })

@@ -32,6 +32,7 @@ import logging
 import requests
 import simplejson
 from task import Task, Provider, TaskException, TaskDescription
+from freenas.dispatcher import Password
 from freenas.dispatcher.rpc import RpcException, accepts, description, returns
 from freenas.dispatcher.rpc import SchemaHelper as h
 
@@ -42,7 +43,7 @@ DEFAULT_DEBUG_DUMP_DIR = '/tmp'
 
 @description("Provides access support")
 class SupportProvider(Provider):
-    @accepts(str, str)
+    @accepts(str, Password)
     @returns(h.array(str))
     def categories(self, user, password):
         version = self.dispatcher.call_sync('system.info.version')
@@ -53,7 +54,7 @@ class SupportProvider(Provider):
                 'https://%s/%s/api/v1.0/categories' % (ADDRESS, sw_name),
                 data=json.dumps({
                     'user': user,
-                    'password': password,
+                    'password': password.secret,
                     'project': project_name,
                 }),
                 headers={'Content-Type': 'application/json'},
@@ -61,7 +62,7 @@ class SupportProvider(Provider):
             )
             data = r.json()
         except simplejson.JSONDecodeError as e:
-            logger.debug('Failed to decode ticket attachment response: %s', r.text)
+            logger.debug('Failed to decode ticket attachment response: %s', e.text)
             raise RpcException(errno.EINVAL, 'Failed to decode ticket response')
         except requests.ConnectionError as e:
             raise RpcException(errno.ENOTCONN, 'Connection failed: {0}'.format(str(e)))
@@ -134,7 +135,7 @@ class SupportSubmitTask(Task):
                 'category': ticket['category'],
                 'type': ticket['type'],
                 'user': ticket['username'],
-                'password': ticket['password'],
+                'password': ticket['password'].secret,
                 'debug': ticket['debug'] if ticket.get('debug') else False,
                 'project': project_name,
             }
@@ -169,7 +170,7 @@ class SupportSubmitTask(Task):
                         'https://%s/%s/api/v1.0/ticket/attachment' % (ADDRESS, sw_name),
                         data={
                             'user': ticket['username'],
-                            'password': ticket['password'],
+                            'password': ticket['password'].secret,
                             'ticketnum': ticketid,
                         },
                         timeout=10,
@@ -200,7 +201,7 @@ def _init(dispatcher, plugin):
         'type': 'object',
         'properties': {
             'username': {'type': 'string'},
-            'password': {'type': 'string'},
+            'password': {'type': 'password'},
             'subject': {'type': 'string'},
             'description': {'type': 'string'},
             'category': {'type': 'string'},

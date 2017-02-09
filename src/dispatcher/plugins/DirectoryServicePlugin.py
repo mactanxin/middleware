@@ -27,7 +27,6 @@
 
 import errno
 import logging
-import contextlib
 from datastore.config import ConfigNode
 from freenas.dispatcher.rpc import RpcException, accepts, returns, SchemaHelper as h, generator
 from task import Provider, Task, TaskDescription, TaskException, query

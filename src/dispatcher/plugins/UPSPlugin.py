@@ -30,10 +30,9 @@ import errno
 import logging
 import os
 import re
-import socket
-import time
 
 from datastore.config import ConfigNode
+from freenas.dispatcher import Password
 from freenas.dispatcher.rpc import RpcException, SchemaHelper as h, description, accepts, private, returns
 from lib.system import system, SubprocessException
 from task import Task, Provider, TaskException, TaskDescription
@@ -52,13 +51,16 @@ nut_signal_descriptions = {
     'FSD': 'The UPS is in the "forced shutdown" mode'
 }
 
+
 @description('Provides info about UPS service configuration')
 class UPSProvider(Provider):
     @private
     @accepts()
     @returns(h.ref('ServiceUps'))
     def get_config(self):
-        return ConfigNode('service.ups', self.configstore).__getstate__()
+        state = ConfigNode('service.ups', self.configstore).__getstate__()
+        state['monitor_password'] = Password(state['monitor_password'])
+        return
 
     @accepts()
     @returns(h.array(h.array(str)))
@@ -122,6 +124,9 @@ class UPSConfigureTask(Task):
 
     def run(self, ups):
         node = ConfigNode('service.ups', self.configstore).__getstate__()
+        if 'monitor_password' in ups:
+            ups['monitor_password'] = ups['monitor_password'].secret
+
         node.update(ups)
 
         if node['mode'] == 'MASTER' and (not node['driver_port'] or not node['driver']):
@@ -181,7 +186,6 @@ def _init(dispatcher, plugin):
                 'title':'UPS signal received', 'class': 'UpsSignal'
             })
 
-
     # Register schemas
     plugin.register_schema_definition('ServiceUps', {
         'type': 'object',
@@ -198,7 +202,7 @@ def _init(dispatcher, plugin):
             'shutdown_mode': {'$ref': 'ServiceUpsShutdownmode'},
             'shutdown_timer': {'type': 'integer'},
             'monitor_user': {'type': 'string'},
-            'monitor_password': {'type': 'string'},
+            'monitor_password': {'type': 'password'},
             'allow_remote_connections': {'type': 'boolean'},
             'auxiliary_users': {'type': ['string', 'null']},
             'propagate_alerts': {'type': 'boolean'},

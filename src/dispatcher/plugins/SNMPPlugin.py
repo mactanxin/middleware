@@ -29,6 +29,7 @@ import logging
 import re
 
 from datastore.config import ConfigNode
+from freenas.dispatcher import Password
 from freenas.dispatcher.rpc import RpcException, SchemaHelper as h, description, accepts, returns, private
 from task import Task, Provider, TaskException, TaskDescription
 
@@ -40,7 +41,9 @@ class SNMPProvider(Provider):
     @accepts()
     @returns(h.ref('ServiceSnmp'))
     def get_config(self):
-        return ConfigNode('service.snmp', self.configstore).__getstate__()
+        state = ConfigNode('service.snmp', self.configstore).__getstate__()
+        state['v3_password'] = Password(state['v3_password'])
+        return state
 
 
 @private
@@ -59,6 +62,9 @@ class SNMPConfigureTask(Task):
 
     def run(self, snmp):
         node = ConfigNode('service.snmp', self.configstore).__getstate__()
+        if 'v3_password' in snmp:
+            snmp['v3_password'] = snmp['v3_password'].secret
+
         node.update(snmp)
 
         if node['contact']:
@@ -119,7 +125,7 @@ def _init(dispatcher, plugin):
             'community': {'type': ['string', 'null']},
             'v3': {'type': 'boolean'},
             'v3_username': {'type': ['string', 'null']},
-            'v3_password': {'type': ['string', 'null']},
+            'v3_password': {'type': ['password', 'null']},
             'v3_auth_type': {'$ref': 'ServiceSnmpV3authtype'},
             'v3_privacy_protocol': {'$ref': 'ServiceSnmpV3privacyprotocol'},
             'v3_privacy_passphrase': {'type': ['string', 'null']},

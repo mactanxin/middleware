@@ -40,6 +40,7 @@ from utils import get_freenas_peer_client, call_task_and_check_state
 from freenas.utils import exclude, query as q, first_or_default
 from freenas.utils.decorators import limit
 from freenas.utils.url import wrap_address, is_ip
+from freenas.utils.lazy import lazy
 from freenas.dispatcher.rpc import (
     RpcException, SchemaHelper as h, description, accepts, returns, private, generator, unauthenticated
 )
@@ -62,8 +63,13 @@ class PeerFreeNASProvider(Provider):
     @query('Peer')
     @generator
     def query(self, filter=None, params=None):
+        def extend_query():
+            for i in self.datastore.query_stream('peers', ('type', '=', 'freenas')):
+                i['status'] = lazy(self.get_status, i['id'])
+                yield i
+
         return q.query(
-            self.dispatcher.call_sync('peer.query', [('type', '=', 'freenas')]),
+            extend_query(),
             *(filter or []),
             stream=True,
             **(params or {})
@@ -287,7 +293,7 @@ class FreeNASPeerCreateTask(Task):
                         remote_client.connect(
                             'ws+ssh://{0}@{1}'.format(username, wrap_address(remote)),
                             port=port,
-                            password=password
+                            password=password.secret
                         )
 
                     remote_client.login_service('replicator')
@@ -649,7 +655,7 @@ def _init(dispatcher, plugin):
         'properties': {
             '%type': {'enum': ['FreenasInitialCredentials']},
             'username': {'type': ['string', 'null']},
-            'password': {'type': ['string', 'null']},
+            'password': {'type': ['password', 'null']},
             'auth_code': {'type': ['integer', 'null']},
             'key_auth': {'type': 'boolean'}
         },

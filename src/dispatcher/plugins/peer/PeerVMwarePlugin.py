@@ -30,9 +30,11 @@ import errno
 import logging
 from datetime import datetime
 from pyVim import connect
+from freenas.dispatcher import Password
 from freenas.dispatcher.rpc import RpcException, SchemaHelper as h, description, accepts, returns, private, generator
 from task import Task, Provider, TaskException, VerifyException, query, TaskDescription
 from freenas.utils import query as q
+from freenas.utils.lazy import lazy
 
 
 logger = logging.getLogger(__name__)
@@ -43,8 +45,18 @@ class PeerVMwareProvider(Provider):
     @query('Peer')
     @generator
     def query(self, filter=None, params=None):
+        def extend_query():
+            for i in self.datastore.query_stream('peers', ('type', '=', 'vmware')):
+                password = q.get(i, 'credentials.password')
+                if password:
+                    q.set(i, 'credentials.password', Password(password))
+
+                i['status'] = lazy(self.get_status, i['id'])
+
+                yield i
+
         return q.query(
-            self.dispatcher.call_sync('peer.query', [('type', '=', 'vmware')]),
+            extend_query(),
             *(filter or []),
             stream=True,
             **(params or {})
@@ -106,6 +118,10 @@ class VMwarePeerCreateTask(Task):
         if self.datastore.exists('peers', ('name', '=', peer['name'])):
             raise TaskException(errno.EINVAL, 'Peer entry {0} already exists'.format(peer['name']))
 
+        password = q.get(peer, 'credentials.password')
+        if password:
+            q.set(peer, 'credentials.password', password.secret)
+
         return self.datastore.insert('peers', peer)
 
 
@@ -131,6 +147,10 @@ class VMwarePeerUpdateTask(Task):
         peer = self.datastore.get_by_id('peers', id)
         if not peer:
             raise TaskException(errno.ENOENT, 'Peer {0} does not exist'.format(id))
+
+        password = q.get(updated_fields, 'credentials.password')
+        if password:
+            q.set(updated_fields, 'credentials.password', password.secret)
 
         peer.update(updated_fields)
         if 'name' in updated_fields and self.datastore.exists('peers', ('name', '=', peer['name'])):
@@ -180,7 +200,7 @@ def _init(dispatcher, plugin):
             '%type': {'enum': ['VmwareCredentials']},
             'address': {'type': 'string'},
             'username': {'type': 'string'},
-            'password': {'type': 'string'}
+            'password': {'type': 'password'}
         },
         'additionalProperties': False
     })
