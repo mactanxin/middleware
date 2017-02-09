@@ -58,9 +58,6 @@ LoadPlugin write_graphite
 <Plugin "zfs_arc">
 </Plugin>
 
-<Plugin "df">
-</Plugin>
-
 <Plugin unixsock>
     SocketFile "/var/run/collectd.sock"
     SocketGroup "collectd"
