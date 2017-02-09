@@ -535,11 +535,19 @@ class VolumeMigrateTask(Task):
             self.join_subtasks(*disk_subtasks)
 
         # Importing fn9 volumes
-        volume_subtaks = []
         fn9_volumes = get_table('select * from storage_volume')
-        fn10_volumes = self.dispatcher.call_sync
         for fn9_volume in fn9_volumes.values():
-            fn10_volume = q.query(fn10_volumes)
+            try:
+                self.run_subtask_sync(
+                    'volume.import', fn9_volume['vol_guid'], fn9_volume['vol_name']
+                )
+            except RpcException as err:
+                self.add_warning(TaskWarning(
+                    errno.EINVAL,
+                    'Cannot import volume name: {0} GUID: {1} due to error: {2}'.format(
+                        fn9_volume['vol_name'], fn9_volume['vol_guid'], err
+                    )
+                ))
 
 
 @description("Master top level migration task for 9.x to 10.x")
