@@ -12,6 +12,7 @@ LoadPlugin interface
 LoadPlugin load
 LoadPlugin memory
 LoadPlugin network
+LoadPlugin nfsstat
 LoadPlugin processes
 LoadPlugin swap
 LoadPlugin uptime
@@ -94,8 +95,8 @@ LoadPlugin write_graphite
     Import "collectd-zfs"
     Import "collectd-disktemp"
 
-    <Module collectd-zfs>
+    <Module "collectd-zfs">
     </Module>
-    <Module collectd-disktemp>
+    <Module "collectd-disktemp">
     </Module>
 </Plugin>
