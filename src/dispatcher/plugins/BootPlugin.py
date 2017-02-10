@@ -274,7 +274,8 @@ class BootReplaceDisk(ProgressTask):
             progress_callback=lambda p, m, e: self.chunk_progress(20, 80, '', p, m, e)
         )
 
-        # Install grub
+        # Install grub. Re-fetch disk id, it might have changed during disk format
+        disk_id = self.dispatcher.call_sync('disk.path_to_id', newdisk)
         self.run_subtask_sync('disk.install_bootloader', disk_id)
         self.set_progress(100)
 
