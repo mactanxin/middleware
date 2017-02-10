@@ -394,7 +394,8 @@ class DiskInstallBootloaderTask(Task):
     def run(self, id):
         try:
             disk = disk_by_id(self.dispatcher, id)
-            system('/usr/local/sbin/grub-install', "--modules=zfs part_gpt", disk['path'])
+            system('/usr/local/sbin/grub-install', '--modules=zfs part_gpt', disk['path'])
+            system('/usr/local/sbin/grub-mkconfig', '-o', '/boot/grub/grub.cfg')
         except SubprocessException as err:
             raise TaskException(errno.EFAULT, 'Cannot install GRUB: {0}'.format(err.err))
 
