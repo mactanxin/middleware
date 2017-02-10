@@ -364,6 +364,12 @@ class UpdateShareTask(Task):
         except (OSError, ValueError):
             pass
 
+        if share['target_type'] == 'ZVOL' and q.get(updated_fields, 'properties.size'):
+            pool, dataset = split_dataset(share['target_path'])
+            self.run_subtask_sync('volume.dataset.update', dataset, {
+                'volsize': q.get(updated_fields, 'properties.size')
+            })
+
         if 'type' in updated_fields:
             old_share_type = share['type']
             new_share_type = self.dispatcher.call_sync('share.supported_types').get(updated_fields['type'])
@@ -384,12 +390,6 @@ class UpdateShareTask(Task):
         if permissions:
             path = self.dispatcher.call_sync('share.translate_path', id)
             self.run_subtask_sync('file.set_permissions', path, permissions)
-
-        if share['target_type'] == 'ZVOL' and q.get(updated_fields, 'properties.size'):
-            pool, dataset = split_dataset(share['target_path'])
-            self.run_subtask_sync('volume.dataset.update', dataset, {
-                'volsize': q.get(updated_fields, 'properties.size')
-            })
 
         self.dispatcher.dispatch_event('share.changed', {
             'operation': 'update',
