@@ -478,7 +478,7 @@ class SystemUIConfigureTask(Task):
 
         try:
             self.dispatcher.call_sync('etcd.generation.generate_group', 'nginx')
-            self.dispatcher.call_sync('service.reload', 'nginx')
+            self.dispatcher.call_sync('service.restart', 'nginx')
         except RpcException as e:
             raise TaskException(
                 errno.ENXIO,
