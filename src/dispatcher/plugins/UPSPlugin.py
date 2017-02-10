@@ -217,7 +217,6 @@ def _init(dispatcher, plugin):
         'enum': ['LOWBATT', 'BATT']
     })
 
-
     # Register providers
     plugin.register_provider("service.ups", UPSProvider)
 
