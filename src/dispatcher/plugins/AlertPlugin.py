@@ -258,7 +258,7 @@ class AlertFilterCreateTask(Task):
 
 
 @description("Deletes the specified Alert Filter")
-@accepts(int)
+@accepts(str)
 class AlertFilterDeleteTask(Task):
     @classmethod
     def early_describe(cls):
@@ -299,7 +299,7 @@ class AlertFilterDeleteTask(Task):
 
 
 @description("Updates the specified Alert Filter")
-@accepts(int, h.ref('AlertFilter'))
+@accepts(str, h.ref('AlertFilter'))
 class AlertFilterUpdateTask(Task):
     @classmethod
     def early_describe(cls):
