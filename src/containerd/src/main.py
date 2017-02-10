@@ -87,37 +87,34 @@ NAT_INTERFACE = 'nat0'
 DEFAULT_CONFIGFILE = '/usr/local/etc/middleware.conf'
 SCROLLBACK_SIZE = 20 * 1024
 
-
 vtx_enabled = False
 svm_features = False
 unrestricted_guest = True
 threadpool = ThreadPool(128)
 
-
 logging.getLogger('requests').setLevel(logging.WARNING)
 logging.getLogger('urllib').setLevel(logging.WARNING)
 
-
 DOCKER_LABELS_MAP = {
-    'org.freenas.autostart'           : {'default': 'false', 'preset': 'autostart'        },
-    'org.freenas.bridged'             : {'default': 'false', 'preset': 'bridge.enable'    },
-    'org.freenas.capabilities-add'    : {'default': ''     , 'preset': 'capabilities_add' },
-    'org.freenas.capabilities-drop'   : {'default': ''     , 'preset': 'capabilities_drop'},
-    'org.freenas.command'             : {'default': ''     , 'preset': 'command'          },
-    'org.freenas.dhcp'                : {'default': 'false', 'preset': 'bridge.dhcp'      },
-    'org.freenas.expose-ports-at-host': {'default': 'false', 'preset': 'expose_ports'     },
-    'org.freenas.immutable'           : {'default': ''     , 'preset': 'immutable'        },
-    'org.freenas.interactive'         : {'default': 'false', 'preset': 'interactive'      },
-    'org.freenas.port-mappings'       : {'default': ''     , 'preset': 'ports'            },
-    'org.freenas.privileged'          : {'default': 'false', 'preset': 'privileged'       },
-    'org.freenas.settings'            : {'default': []     , 'preset': 'settings'         },
-    'org.freenas.static-volumes'      : {'default': []     , 'preset': 'static_volumes'   },
-    'org.freenas.upgradeable'         : {'default': 'false', 'preset': 'upgradeable'      },
-    'org.freenas.version'             : {'default': '0'    , 'preset': 'version'          },
-    'org.freenas.volumes'             : {'default': []     , 'preset': 'volumes'          },
-    'org.freenas.web-ui-path'         : {'default': ''     , 'preset': 'web_ui_path'      },
-    'org.freenas.web-ui-port'         : {'default': ''     , 'preset': 'web_ui_port'      },
-    'org.freenas.web-ui-protocol'     : {'default': ''     , 'preset': 'web_ui_protocol'  },
+    'org.freenas.autostart': {'default': 'false', 'preset': 'autostart'},
+    'org.freenas.bridged': {'default': 'false', 'preset': 'bridge.enable'},
+    'org.freenas.capabilities-add': {'default': '', 'preset': 'capabilities_add'},
+    'org.freenas.capabilities-drop': {'default': '', 'preset': 'capabilities_drop'},
+    'org.freenas.command': {'default': '', 'preset': 'command'},
+    'org.freenas.dhcp': {'default': 'false', 'preset': 'bridge.dhcp'},
+    'org.freenas.expose-ports-at-host': {'default': 'false', 'preset': 'expose_ports'},
+    'org.freenas.immutable': {'default': '', 'preset': 'immutable'},
+    'org.freenas.interactive': {'default': 'false', 'preset': 'interactive'},
+    'org.freenas.port-mappings': {'default': '', 'preset': 'ports'},
+    'org.freenas.privileged': {'default': 'false', 'preset': 'privileged'},
+    'org.freenas.settings': {'default': [], 'preset': 'settings'},
+    'org.freenas.static-volumes': {'default': [], 'preset': 'static_volumes'},
+    'org.freenas.upgradeable': {'default': 'false', 'preset': 'upgradeable'},
+    'org.freenas.version': {'default': '0', 'preset': 'version'},
+    'org.freenas.volumes': {'default': [], 'preset': 'volumes'},
+    'org.freenas.web-ui-path': {'default': '', 'preset': 'web_ui_path'},
+    'org.freenas.web-ui-port': {'default': '', 'preset': 'web_ui_port'},
+    'org.freenas.web-ui-protocol': {'default': '', 'preset': 'web_ui_protocol'},
 }
 
 
