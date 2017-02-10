@@ -153,19 +153,19 @@ class ServiceInfoProvider(Provider):
     @accepts(str)
     def reload(self, service):
         svc = self.datastore.get_one('service_definitions', ('name', '=', service))
-        status = self.query([('name', '=', service)], {'single': True})
+        status, pid, _ = get_status(self.dispatcher, self.datastore, service)
         if not svc:
             raise RpcException(errno.ENOENT, 'Service {0} not found'.format(service))
 
-        if status['state'] != 'RUNNING':
+        if status != 'RUNNING':
             return
 
         if svc.get('dependencies'):
             for i in self.datastore.query('service_definitions', ('id', 'in', svc['dependencies'])):
                 self.reload(i['name'])
 
-        if status.get('pid'):
-            for p in status['pid']:
+        if pid:
+            for p in pid:
                 try:
                     os.kill(p, signal.SIGHUP)
                 except ProcessLookupError:
@@ -175,11 +175,11 @@ class ServiceInfoProvider(Provider):
     @accepts(str)
     def restart(self, service):
         svc = self.datastore.get_one('service_definitions', ('name', '=', service))
-        status = self.query([('name', '=', service)], {'single': True})
+        status, _, _ = get_status(self.dispatcher, self.datastore, service)
         if not svc:
             raise RpcException(errno.ENOENT, 'Service {0} not found'.format(service))
 
-        if status['state'] != 'RUNNING':
+        if status != 'RUNNING':
             return
 
         hook_rpc = svc.get('restart_rpc')
