@@ -1921,11 +1921,10 @@ def _init(dispatcher, plugin):
 
         elif args['operation'] == 'update':
             for id in args['ids']:
-                host = dispatcher.datastore.query(
-                    'vms',
-                    ('config.docker_host', '=', True),
-                    ('id', '=', id),
-                    single=True
+                host = dispatcher.call_sync(
+                    'vm.query',
+                    [('config.docker_host', '=', True), ('id', '=', id)],
+                    {'single': True}
                 )
                 if host:
                     parents = ['docker', 'zpool:{0}'.format(host['target'])]
@@ -1935,6 +1934,34 @@ def _init(dispatcher, plugin):
                         'operation': 'update',
                         'ids': [id]
                     })
+
+                    if q.get(host, 'status.state') == 'RUNNING':
+                        refresh_cache(host_id=id)
+
+                    else:
+                        containers = dispatcher.datastore_log.query(
+                            'docker.containers',
+                            ('host', '=', id),
+                            select='id'
+                        )
+
+                        if containers:
+                            containers_state.remove_many(containers)
+                            dispatcher.dispatch_event('docker.container.changed', {
+                                'operation': 'update',
+                                'ids': containers
+                            })
+
+                        networks = dispatcher.datastore_log.query(
+                            'docker.networks',
+                            ('host', '=', id),
+                            select='id'
+                        )
+                        if networks:
+                            dispatcher.dispatch_event('docker.network.changed', {
+                                'operation': 'update',
+                                'ids': networks
+                            })
 
     def on_image_event(args):
         logger.trace('Received Docker image event: {0}'.format(args))
