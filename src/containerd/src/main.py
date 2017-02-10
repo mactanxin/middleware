@@ -128,6 +128,7 @@ class VirtualMachineState(enum.Enum):
     BOOTLOADER = 2
     RUNNING = 3
     PAUSED = 4
+    STOPPING = 5
 
 
 class DockerHostState(enum.Enum):
@@ -576,6 +577,7 @@ class VirtualMachine(object):
         self.logger.info('Stopping VM {0}'.format(self.name))
 
         with self.run_lock:
+            self.set_state(VirtualMachineState.STOPPING)
             if self.bhyve_process:
                 try:
                     if force:
@@ -676,24 +678,29 @@ class VirtualMachine(object):
                 return
 
             with self.run_lock:
-                self.logger.debug('Starting bhyve...')
-                args = self.build_args()
-                env = self.build_env()
+                if self.state == VirtualMachineState.STOPPING:
+                    self.logger.debug('Cancelling bhyve start. Stop ordered')
 
-                self.set_state(VirtualMachineState.RUNNING)
-                self.bhyve_process = subprocess.Popen(
-                    args,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    close_fds=True,
-                    env=env
-                )
+                else:
+                    self.logger.debug('Starting bhyve...')
+                    args = self.build_args()
+                    env = self.build_env()
 
-                # Now it's time to start vmtools worker, because bhyve should be running now
-                self.vmtools_thread = gevent.spawn(self.vmtools_worker)
-                self.output_thread = gevent.spawn(self.output_worker)
+                    self.set_state(VirtualMachineState.RUNNING)
+                    self.bhyve_process = subprocess.Popen(
+                        args,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        close_fds=True,
+                        env=env
+                    )
 
-            self.bhyve_process.wait()
+                    # Now it's time to start vmtools worker, because bhyve should be running now
+                    self.vmtools_thread = gevent.spawn(self.vmtools_worker)
+                    self.output_thread = gevent.spawn(self.output_worker)
+
+            if self.bhyve_process:
+                self.bhyve_process.wait()
 
             # not yet - broken in gevent
             # while True:
@@ -714,7 +721,7 @@ class VirtualMachine(object):
                 os.unlink(self.vmtools_socket)
 
             subprocess.call(['/usr/sbin/bhyvectl', '--destroy', '--vm={0}'.format(self.name)])
-            if self.bhyve_process.returncode == 0:
+            if self.bhyve_process.returncode == 0 and self.state != VirtualMachineState.STOPPING:
                 continue
 
             break
