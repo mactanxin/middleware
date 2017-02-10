@@ -660,7 +660,6 @@ def _init(dispatcher, plugin):
                     'system.ui.update',
                     {'webui_https_certificate': None, 'webui_protocol': ['HTTP']}
                 )
-                dispatcher.call_sync('service.restart', 'nginx')
                 return
 
     # Register schemas
