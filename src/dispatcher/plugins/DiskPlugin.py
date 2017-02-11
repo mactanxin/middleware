@@ -1590,7 +1590,7 @@ def _init(dispatcher, plugin):
             if not dispatcher.resource_exists('disk:{0}'.format(path)):
                 dispatcher.register_resource(Resource('disk:{0}'.format(path)))
 
-        if re.match(r'^/dev/(da|ada|vtbd|nvd)[0-9]+$', path):
+        if re.match(r'^/dev/(da|ada|vtbd|mfid|nvd)[0-9]+$', path):
             # Regenerate disk cache
             logger.info("New disk attached: {0}".format(path))
             with dispatcher.get_lock('diskcache:{0}'.format(path)):
