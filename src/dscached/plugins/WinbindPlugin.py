@@ -57,7 +57,8 @@ AD_LDAP_ATTRIBUTE_MAPPING = {
     'username': 'sAMAccountName',
     'full_name': 'name',
     'builtin': True,
-    'uid': None
+    'uid': None,
+    'gid': None
 }
 
 logger = logging.getLogger(__name__)
@@ -488,7 +489,10 @@ class WinbindPlugin(DirectoryServicePlugin):
             logger.debug('getgrent: not joined')
             return []
 
-        results = self.search(self.base_dn, '(objectClass=group)')
+        query = LdapQueryBuilder(AD_LDAP_ATTRIBUTE_MAPPING)
+        qstr = query.build_query([['objectClass', '=', 'group']] + (filter or []))
+        logger.debug('getgrent query string: {0}'.format(qstr))
+        results = self.search(self.base_dn, qstr)
         return (self.convert_group(i) for i in results)
 
     def getgrnam(self, name):
