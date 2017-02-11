@@ -581,6 +581,7 @@ class ConfigurationService(RpcService):
     def configure_dns(self):
         self.logger.info('Starting DNS configuration')
         resolv = io.StringIO()
+        dhcp_used = self.datastore.exists('network.interfaces', ('dhcp', '=', True))
         search = self.context.configstore.get('network.dns.search')
 
         try:
@@ -601,7 +602,7 @@ class ConfigurationService(RpcService):
             proc.wait()
             resolv.close()
 
-            if not self.context.configstore.get('network.dhcp.assign_dns'):
+            if not self.context.configstore.get('network.dhcp.assign_dns') or not dhcp_used:
                 # Purge DNS entries from all other interfaces
                 out = subprocess.check_output(['/sbin/resolvconf', '-i']).decode('ascii')
                 for i in filter(lambda i: i != 'lo0', out.split()):
