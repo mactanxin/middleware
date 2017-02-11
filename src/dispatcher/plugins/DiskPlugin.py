@@ -64,6 +64,12 @@ SMART_ALERT_MAP = {
     'FAIL': ('SmartFail', 'S.M.A.R.T status failing')
 }
 
+ZFS_TYPE_IDS = (
+    '516e7cba-6ecf-11d6-8ff8-00022d09712b',  # FreeBSD
+    '6a898cc3-1dd2-11b2-99a6-080020736631',  # macOS/Linux/Illumos
+    '85d5e45d-237c-11e1-b4b3-e89a8f7fc3a7'   # MidnightBSD
+)
+
 diskinfo_cache = CacheStore()
 logger = logging.getLogger('DiskPlugin')
 
@@ -1033,7 +1039,7 @@ def device_to_identifier(name, serial=None):
     gpart = geom.geom_by_name('PART', name)
     if gpart:
         for i in gpart.providers:
-            if i.config['type'] in ('freebsd-zfs', 'freebsd-ufs'):
+            if i.config['rawtype'] in ZFS_TYPE_IDS:
                 return "uuid:{0}".format(i.config['rawuuid'])
 
     glabel = geom.geom_by_name('LABEL', name)
@@ -1210,6 +1216,7 @@ def generate_partitions_list(gpart):
             'mediasize': int(p.mediasize),
             'uuid': uuid,
             'type': p.config['type'],
+            'rawtype': p.config['rawtype'],
             'label': p.config.get('label'),
             'encrypted': True if eli else False
         }
@@ -1265,7 +1272,7 @@ def update_disk_cache(dispatcher, path):
     provider = gdisk.provider
     partitions = list(generate_partitions_list(gpart))
     identifier = device_to_identifier(gdisk.name, camdev.serial if camdev else provider.config.get('ident'))
-    data_part = first_or_default(lambda x: x['type'] == 'freebsd-zfs', partitions)
+    data_part = first_or_default(lambda x: x['rawtype'] in ZFS_TYPE_IDS, partitions)
     data_uuid = data_part["uuid"] if data_part else None
     data_path = data_uuid
 
