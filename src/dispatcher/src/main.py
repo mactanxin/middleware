@@ -1392,12 +1392,15 @@ class FileConnection(WebSocketApplication, EventEmitter):
                     if i == b'':
                         break
 
-                    ret = tp_write(file.fileno(), i)
-                    if ret == 0:
-                        # close everything
-                        break
-
-                    self.bytes_done += ret
+                    i = memoryview(i)
+                    num_written = 0
+                    while num_written < len(i):
+                        done = tp_write(file.fileno(), i[num_written:])
+                        if done == 0:
+                            # close everything
+                            return
+                        self.bytes_done += done
+                        num_written += done
                     # issue keepalive
                     self.dispatcher.token_store.keepalive_token(self.token)
         finally:
@@ -1406,11 +1409,13 @@ class FileConnection(WebSocketApplication, EventEmitter):
             self.ws.close()
 
     def on_open(self, *args, **kwargs):
-        self.logger.info("FileConnection Opened")
+        self.logger.trace(
+            "FileConnection Opened with args: {0} and kwargs: {1}".format(args, kwargs)
+        )
 
     def on_close(self, *args, **kwargs):
         self.inq.put(StopIteration)
-        self.logger.info(
+        self.logger.trace(
             "File {0} Closed for file {1}".format(self.token.direction, self.token.name)
         )
         self.dispatcher.token_store.delete_token(self.token)
@@ -1420,12 +1425,8 @@ class FileConnection(WebSocketApplication, EventEmitter):
             return
 
         if not self.authenticated:
-            message = loads(message.decode('utf8'))
-
-            if type(message) is not dict:
-                return
-
-            if 'token' not in message:
+            message = loads(message.decode('utf-8') if type(message) is bytes else message)
+            if type(message) is not dict or 'token' not in message:
                 return
 
             self.token = self.dispatcher.token_store.lookup_token(message['token'])
@@ -1439,9 +1440,16 @@ class FileConnection(WebSocketApplication, EventEmitter):
             # self.dispatcher.balancer.submit(
             #     'file.{0}'.format(self.token.direction), [self], self.token.user)
             self.ws.send(dumps({'status': 'ok'}))
-            return
-
-        self.inq.put(message)
+        elif type(message) is str:
+            try:
+                message = loads(message)
+                if message.get('done'):
+                    self.inq.put(b'')
+            except:
+                pass
+        else:
+            # Normal upload data
+            self.inq.put(message)
 
 
 # Custom handler for enabling downloading of files
