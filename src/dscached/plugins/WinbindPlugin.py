@@ -48,7 +48,6 @@ from freenas.utils.query import get
 
 
 AD_REALM_ID = uuid.UUID('01a35b82-0168-11e6-88d6-0cc47a3511b4')
-WINBIND_ID_BASE = uuid.UUID('e6ae958e-fdaa-44a1-8905-0a0c8d015245')
 WINBINDD_PIDFILE = '/var/run/samba4/winbindd.pid'
 WINBINDD_KEEPALIVE = 60
 AD_LDAP_ATTRIBUTE_MAPPING = {
@@ -558,7 +557,7 @@ class WinbindPlugin(DirectoryServicePlugin):
                 raise RuntimeError(err.output.decode('utf-8'))
 
             self.context.client.call_sync('serviced.job.restart', 'org.samba.winbindd')
-            logging.debug('Done restarting winbind')
+            logger.debug('Done restarting winbind')
 
             # Retry few times in case samba haven't finished restarting yet
             for _ in range(5):
