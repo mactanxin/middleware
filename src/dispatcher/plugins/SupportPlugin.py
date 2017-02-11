@@ -24,11 +24,13 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 #####################################################################
+
 import os
 import time
 import errno
 import json
 import logging
+import redmine
 import requests
 import simplejson
 from task import Task, Provider, TaskException, TaskDescription
@@ -36,8 +38,24 @@ from freenas.dispatcher.rpc import RpcException, accepts, description, returns
 from freenas.dispatcher.rpc import SchemaHelper as h
 
 logger = logging.getLogger('SupportPlugin')
-ADDRESS = 'support-proxy.ixsystems.com'
+
+PROXY_ADDRESS = 'support-proxy.ixsystems.com'
+BUGTRACKER_ADDRESS = 'https://bugs.freenas.org'
 DEFAULT_DEBUG_DUMP_DIR = '/tmp'
+
+VERSION_CODES = {
+    'PRE-ALPHA': 232,
+    '9.10.1-U2': 377,
+    'BETA': 234,
+    'RELEASE': 272,
+    'FUTURE': 237,
+    'ALPHA2': 324,
+    'ALPHA': 233,
+    '10.0-SU1': 384,
+    '10.1-ALPHA': 385,
+    'TrueNAS 10': 365,
+    'BETA2': 375
+}
 
 
 @description("Provides access support")
@@ -50,7 +68,7 @@ class SupportProvider(Provider):
         project_name = '-'.join(version.split('-')[:2]).lower()
         try:
             r = requests.post(
-                'https://%s/%s/api/v1.0/categories' % (ADDRESS, sw_name),
+                'https://%s/%s/api/v1.0/categories' % (PROXY_ADDRESS, sw_name),
                 data=json.dumps({
                     'user': user,
                     'password': password,
@@ -80,7 +98,7 @@ class SupportProvider(Provider):
         project_name = '-'.join(version.split('-')[:2]).lower()
         try:
             r = requests.post(
-                'https://%s/%s/api/v1.0/categoriesnoauth' % (ADDRESS, sw_name),
+                'https://%s/%s/api/v1.0/categoriesnoauth' % (PROXY_ADDRESS, sw_name),
                 data=json.dumps({'project': project_name}),
                 headers={'Content-Type': 'application/json'},
                 timeout=10,
@@ -122,74 +140,43 @@ class SupportSubmitTask(Task):
             version = self.dispatcher.call_sync('system.info.version')
             sw_name = version.split('-')[0].lower()
             project_name = '-'.join(version.split('-')[:2]).lower()
+            attachments = []
+
+            rm_connection = redmine.Redmine(BUGTRACKER_ADDRESS, username=ticket['username'], password=ticket['password'])
+            rm_connection.auth()
+
             for attachment in ticket.get('attachments', []):
                 attachment = os.path.normpath(attachment)
+                attachments.append({'path': attachment, 'filename': os.path.split(attachment)[-1]})
                 if not os.path.exists(attachment):
                     raise TaskException(errno.ENOENT, 'File {} does not exists.'.format(attachment))
 
-            data = {
-                'title': ticket['subject'],
-                'body': ticket['description'],
-                'version': version.split('-', 1)[-1],
-                'category': ticket['category'],
-                'type': ticket['type'],
-                'user': ticket['username'],
-                'password': ticket['password'],
-                'debug': ticket['debug'] if ticket.get('debug') else False,
-                'project': project_name,
-            }
-
-            r = requests.post(
-                'https://%s/%s/api/v1.0/ticket' % (ADDRESS, sw_name),
-                data=json.dumps(data),
-                headers={'Content-Type': 'application/json'},
-                timeout=10,
-            )
-            proxy_response = r.json()
-            if r.status_code != 200:
-                logger.debug('Support Ticket failed (%d): %s', r.status_code, r.text)
-                raise TaskException(errno.EINVAL, 'ticket failed (0}: {1}'.format(r.status_code, r.text))
-
-            ticketid = proxy_response.get('ticketnum')
-
-            if data['debug']:
+            if ticket.get('debug'):
                 debug_file_name = os.path.join(
                     DEFAULT_DEBUG_DUMP_DIR, version + '_' + time.strftime('%Y%m%d%H%M%S') + '.tar.gz'
                 )
                 self.run_subtask_sync('debug.save_to_file', debug_file_name)
-                if ticket.get('attachments'):
-                    ticket['attachments'].append(debug_file_name)
-                else:
-                    ticket['attachments'] = [debug_file_name]
+                attachments.append({'path': debug_file_name, 'filename': os.path.split(debug_file_name)[-1]})
 
-            for attachment in ticket.get('attachments', []):
-                attachment = os.path.normpath(attachment)
-                with open(attachment, 'rb') as fd:
-                    r = requests.post(
-                        'https://%s/%s/api/v1.0/ticket/attachment' % (ADDRESS, sw_name),
-                        data={
-                            'user': ticket['username'],
-                            'password': ticket['password'],
-                            'ticketnum': ticketid,
-                        },
-                        timeout=10,
-                        files={'file': (fd.name.split('/')[-1], fd)},
-                    )
-        except simplejson.JSONDecodeError as e:
-            logger.debug("Failed to decode ticket attachment response: %s", r.text)
-            raise TaskException(errno.EINVAL, 'Failed to decode ticket response')
-        except requests.ConnectionError as e:
-            raise TaskException(errno.ENOTCONN, 'Connection failed: {0}'.format(str(e)))
-        except requests.Timeout as e:
-            raise TaskException(errno.ETIMEDOUT, 'Connection timed out: {0}'.format(str(e)))
-        except RpcException as e:
-            raise TaskException(errno.ENXIO, 'Cannot submit support ticket: {0}'.format(str(e)))
+
+            redmine_response = rm_connection.issue.create(
+                project_id=project_name,
+                subject=ticket['subject'],
+                description=ticket['description'],
+                category_id=ticket['category'],
+                custom_fields=[{'id':2, 'value': VERSION_CODES['BETA2']}],
+                is_private=ticket.get('debug', False),
+                tracker_id=1 if ticket['type'] == 'bug' else 2,
+                uploads=attachments
+            )
+        except redmine.exceptions.AuthError:
+            raise TaskException(errno.EINVAL, 'Invalid username or password')
+
         finally:
-            if data['debug'] and os.path.exists(debug_file_name):
+            if ticket.get('debug') and os.path.exists(debug_file_name):
                 os.remove(debug_file_name)
 
-        return ticketid, proxy_response.get('message')
-
+        return redmine_response.id
 
 def _depends():
     return ['SystemInfoPlugin']
