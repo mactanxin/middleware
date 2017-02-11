@@ -136,6 +136,7 @@ class WinbindPlugin(DirectoryServicePlugin):
             'dc_address': None,
             'gcs_address': None,
             'allow_dns_updates': True,
+            'idmap_type': 'RID',
             'sasl_wrapping': 'PLAIN'
         })
 
@@ -300,15 +301,26 @@ class WinbindPlugin(DirectoryServicePlugin):
             'winbind refresh tickets': 'no',
             'idmap config *: backend': 'tdb',
             'idmap config *: range': '0-65536',
-            'idmap config {0}: backend'.format(workgroup): 'rid',
-            'idmap config {0}: range'.format(workgroup):
-                '{0}-{1}'.format(self.uid_min, self.uid_max),
             'client use spnego': 'yes',
             'allow trusted domains': 'no',
             'client ldap sasl wrapping': self.parameters['sasl_wrapping'].lower(),
             'template shell': '/bin/sh',
             'template homedir': '/home/%U'
         }
+
+        if self.parameters['idmap_type'] == 'RID':
+            params.update({
+                'idmap config {0}: backend'.format(workgroup): 'rid',
+                'idmap config {0}: range'.format(workgroup):
+                    '{0}-{1}'.format(self.uid_min, self.uid_max)
+            })
+
+        elif self.parameters['idmap_type'] == 'UNIX':
+            params.update({
+                'idmap config {0}: backend'.format(workgroup): 'ad',
+                'idmap config {0}: range'.format(workgroup): '0-90000000',
+                'idmap config {0}: schema_mode'.format(workgroup): 'rfc2307'
+            })
 
         if enable:
             for k, v in params.items():
@@ -617,6 +629,11 @@ def _init(context):
         'enum': ['PLAIN', 'SIGN', 'SEAL']
     })
 
+    context.register_schema('WinbindDirectoryIdmapType', {
+        'type': 'string',
+        'enum': ['RID', 'UNIX']
+    })
+
     context.register_schema('WinbindDirectoryParams', {
         'type': 'object',
         'additionalProperties': False,
@@ -630,6 +647,7 @@ def _init(context):
             'dc_address': {'type': ['string', 'null']},
             'gcs_address': {'type': ['string', 'null']},
             'allow_dns_updates': {'type': 'boolean'},
+            'idmap_type': {'$ref': 'WinbindDirectoryIdmapType'},
             'sasl_wrapping': {'$ref': 'WinbindDirectoryParamsSaslWrapping'}
         }
     })
