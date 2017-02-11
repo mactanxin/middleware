@@ -33,6 +33,7 @@ RUN_DEPENDS=	${PYTHON_PKGNAMEPREFIX}argh>0:${PORTSDIR}/devel/py-argh \
 		${PYTHON_PKGNAMEPREFIX}dockerhub>0:${PORTSDIR}/freenas/py-dockerhub \
 		${PYTHON_PKGNAMEPREFIX}dockerfile-parse>0:${PORTSDIR}/devel/py-dockerfile-parse \
 		${PYTHON_PKGNAMEPREFIX}python-consul>0:${PORTSDIR}/devel/py-consul \
+		${PYTHON_PKGNAMEPREFIX}python-redmine>0:${PORTSDIR}/devel/py-redmine \
 		${PYTHON_PKGNAMEPREFIX}sortedcontainers>0:${PORTSDIR}/devel/py-sortedcontainers \
 		${PYTHON_PKGNAMEPREFIX}freenas.dispatcher>0:${PORTSDIR}/freenas/py-freenas.dispatcher \
 		${PYTHON_PKGNAMEPREFIX}libusb1>0:${PORTSDIR}/devel/py-libusb1 \
