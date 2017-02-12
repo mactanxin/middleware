@@ -369,7 +369,7 @@ class SendAlertTask(Task):
         if not priority:
             priority = 'WARNING'
 
-        self.dispatcher.call_sync('alert.emit', {
+        return self.dispatcher.call_sync('alert.emit', {
             'class': 'UserMessage',
             'severity': priority,
             'title': 'Message from user {0}'.format(self.user),
