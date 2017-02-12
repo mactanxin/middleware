@@ -409,6 +409,8 @@ class ZpoolCreateTask(Task):
             'feature@filesystem_limits': 'enabled',
             'feature@embedded_data': 'enabled',
             'feature@large_blocks': 'enabled',
+            'feature@sha512': 'enabled',
+            'feature@skein': 'enabled',
             'cachefile': USER_CACHE_FILE,
             'failmode': 'continue',
             'autoexpand': 'on',
