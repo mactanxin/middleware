@@ -1381,9 +1381,9 @@ class VolumeDetachTask(Task):
         self.dispatcher.run_hook('volume.pre_detach', {'name': id})
         vol = self.datastore.get_by_id('volumes', id)
         disks = self.dispatcher.call_sync('volume.get_volume_disks', id)
-        self.datastore.delete('volumes', vol['id'])
         self.run_subtask_sync('zfs.umount', id)
         self.run_subtask_sync('zfs.pool.export', id)
+        self.datastore.delete('volumes', vol['id'])
 
         encryption = vol.get('encryption')
 
