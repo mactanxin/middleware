@@ -7,6 +7,8 @@ PORTREVISION=	${REVISION}
 CATEGORIES=	freenas
 VALID_CATEGORIES+= freenas
 
+RUN_DEPENDS=	${PYTHON_PKGNAMEPREFIX}pushbullet>0:${PORTSDIR}/devel/py-pushbullet
+
 MAINTAINER=	dev@ixsystems.com
 COMMENT=	FreeNAS alert daemon
 
