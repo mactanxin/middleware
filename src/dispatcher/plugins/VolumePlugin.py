@@ -39,6 +39,7 @@ import bsd.kld
 import hashlib
 import time
 import uuid
+import itertools
 from datetime import datetime
 from event import sync
 from cache import EventCacheStore
@@ -778,11 +779,17 @@ class VolumeDestroyTask(Task):
         with self.dispatcher.get_lock('volumes'):
             if config:
                 try:
+                    action = 'export' if vol['status'] in ('UNAVAIL', 'LOCKED') else 'destroy'
                     self.run_subtask_sync('zfs.umount', id)
+                    self.run_subtask_sync('zfs.pool.{0}'.format(action), id)
                 except RpcException as err:
                     if err.code == errno.EBUSY:
                         # Find out what's holding unmount or destroy
-                        files = self.dispatcher.call_sync('filesystem.get_open_files', vol['mountpoint'])
+                        files = list(itertools.chain(
+                            self.dispatcher.call_sync('filesystem.get_open_files', vol['mountpoint']),
+                            self.dispatcher.call_sync('filesystem.get_open_files', os.path.join('/dev/zvol', vol['id'])),
+                        ))
+
                         if len(files) == 1:
                             raise TaskException(
                                 errno.EBUSY,
@@ -796,10 +803,7 @@ class VolumeDestroyTask(Task):
                                 extra=files
                             )
                     else:
-                        pass
-
-                action = 'export' if vol['status'] in ('UNAVAIL', 'LOCKED') else 'destroy'
-                self.run_subtask_sync('zfs.pool.{0}'.format(action), id)
+                        raise
 
             try:
                 if vol.get('mountpoint'):
@@ -1374,19 +1378,42 @@ class VolumeDetachTask(Task):
         return ['zpool:{0}'.format(id)]
 
     def run(self, id, key_fd=None):
-        vol = self.datastore.get_by_id('volumes', id)
+        vol = self.dispatcher.call_sync('volume.query', [('id', '=', id)], {'single': True})
         if not vol:
             raise TaskException(errno.ENOENT, 'Volume {0} not found'.format(id))
 
+        disks = get_disks(vol['topology'])
         self.dispatcher.run_hook('volume.pre_detach', {'name': id})
-        vol = self.datastore.get_by_id('volumes', id)
-        disks = self.dispatcher.call_sync('volume.get_volume_disks', id)
-        self.run_subtask_sync('zfs.umount', id)
-        self.run_subtask_sync('zfs.pool.export', id)
+
+        try:
+            self.run_subtask_sync('zfs.umount', id)
+            self.run_subtask_sync('zfs.pool.export', id)
+        except RpcException as err:
+            if err.code == errno.EBUSY:
+                # Find out what's holding unmount or destroy
+                files = list(itertools.chain(
+                    self.dispatcher.call_sync('filesystem.get_open_files', vol['mountpoint']),
+                    self.dispatcher.call_sync('filesystem.get_open_files', os.path.join('/dev/zvol', vol['id'])),
+                ))
+
+                if len(files) == 1:
+                    raise TaskException(
+                        errno.EBUSY,
+                        'Volume is in use by {process_name} (pid {pid}, path {path})'.format(**files[0]),
+                        extra=files
+                    )
+                else:
+                    raise TaskException(
+                        errno.EBUSY,
+                        'Volume is in use by {0} processes'.format(len(files)),
+                        extra=files
+                    )
+            else:
+                raise
+
         self.datastore.delete('volumes', vol['id'])
 
         encryption = vol.get('encryption')
-
         if encryption['key'] or encryption['hashed_password']:
             subtasks = []
             for dname in disks:
@@ -2394,7 +2421,8 @@ class DatasetDeleteTask(Task):
         except RpcException as err:
             if err.code == errno.EBUSY and ds['type'] == 'FILESYSTEM':
                 # Find out what's holding unmount or destroy
-                files = self.dispatcher.call_sync('filesystem.get_open_files', ds['mountpoint'])
+                files = list(self.dispatcher.call_sync('filesystem.get_open_files', ds['mountpoint']))
+
                 if len(files) == 1:
                     raise TaskException(
                         errno.EBUSY,

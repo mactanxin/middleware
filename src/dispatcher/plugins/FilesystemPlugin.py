@@ -33,9 +33,7 @@ import grp
 import bsd
 from datetime import datetime
 from bsd import acl
-from freenas.dispatcher.rpc import (
-    RpcException, description, accepts, returns, pass_sender, private
-)
+from freenas.dispatcher.rpc import RpcException, description, accepts, returns, pass_sender, private, generator
 from freenas.dispatcher.rpc import SchemaHelper as h
 from task import Provider, Task, TaskStatus, TaskWarning, TaskException, TaskDescription
 from auth import FileToken
@@ -165,21 +163,19 @@ class FilesystemProvider(Provider):
 
     @accepts(str)
     @returns(h.array(h.ref('OpenFile')))
+    @generator
     def get_open_files(self, path):
-        result = []
-        for proc in bsd.getprocs(bsd.ProcessLookupPredicate.PROC):
-            for f in proc.files:
+        for proc in self.dispatcher.threaded(bsd.getprocs, bsd.ProcessLookupPredicate.PROC):
+            for f in self.dispatcher.threaded(lambda: list(proc.files)):
                 if not f.path:
                     continue
 
                 if f.path.startswith(path):
-                    result.append({
+                    yield {
                         'pid': proc.pid,
                         'process_name': proc.command,
                         'path': f.path
-                    })
-
-        return result
+                    }
 
 
 @accepts(str)
