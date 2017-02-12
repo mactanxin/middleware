@@ -764,11 +764,7 @@ class VolumeDestroyTask(Task):
         if not vol:
             raise VerifyException(errno.ENOENT, 'Volume {0} not found'.format(id))
 
-        try:
-            disks = self.dispatcher.call_sync('volume.get_volume_disks', id)
-            return ['disk:{0}'.format(d) for d in disks]
-        except RpcException:
-            return []
+        return ['zpool:{0}'.format(id)]
 
     def run(self, id):
         vol = self.dispatcher.call_sync('volume.query', [('id', '=', id)], {'single': True})
@@ -1375,7 +1371,7 @@ class VolumeDetachTask(Task):
         if not vol:
             raise VerifyException(errno.ENOENT, 'Volume {0} not found'.format(id))
 
-        return ['disk:{0}'.format(d) for d in self.dispatcher.call_sync('volume.get_volume_disks', vol['id'])]
+        return ['zpool:{0}'.format(id)]
 
     def run(self, id, key_fd=None):
         vol = self.datastore.get_by_id('volumes', id)
@@ -1432,7 +1428,7 @@ class VolumeUpgradeTask(Task):
         if not vol:
             raise VerifyException(errno.ENOENT, 'Volume {0} not found'.format(id))
 
-        return ['disk:{0}'.format(d) for d in self.dispatcher.call_sync('volume.get_volume_disks', id)]
+        return ['zpool:{0}'.format(id)]
 
     def run(self, id):
         vol = self.datastore.get_by_id('volumes', id)
@@ -1457,7 +1453,7 @@ class VolumeReplaceTask(ProgressTask):
         return TaskDescription("Replacing disk a in volume {name}", name=id)
 
     def verify(self, id, vdev, path, password=None):
-        return ['zpool:{0}'.format(id)]
+        return ['zpool:{0}'.format(id), 'disk:{0}'.format(os.path.join('/dev', path))]
 
     def run(self, id, vdev, path, password=None):
         vol = self.dispatcher.call_sync('volume.query', [('id', '=', id)], {'single': True})
@@ -1625,7 +1621,7 @@ class VolumeLockTask(Task):
         if not vol:
             raise VerifyException(errno.ENOENT, 'Volume {0} not found'.format(id))
 
-        return ['disk:{0}'.format(d) for d in self.dispatcher.call_sync('volume.get_volume_disks', id)]
+        return ['zpool:{0}'.format(id)]
 
     def run(self, id):
         vol = self.dispatcher.call_sync('volume.query', [('id', '=', id)], {'single': True})
@@ -1936,7 +1932,7 @@ class VolumeRekeyTask(Task):
         if not self.datastore.exists('volumes', ('id', '=', id)):
             raise VerifyException(errno.ENOENT, 'Volume {0} not found'.format(id))
 
-        return ['disk:{0}'.format(d) for d in self.dispatcher.call_sync('volume.get_volume_disks', id)]
+        return ['zpool:{0}'.format(id)]
 
     def run(self, id, key_encrypted, password=None):
         if not self.datastore.exists('volumes', ('id', '=', id)):
@@ -2022,7 +2018,7 @@ class VolumeBackupKeysTask(Task):
         if not self.datastore.exists('volumes', ('id', '=', id)):
             raise VerifyException(errno.ENOENT, 'Volume {0} not found'.format(id))
 
-        return ['disk:{0}'.format(d) for d in self.dispatcher.call_sync('volume.get_volume_disks', id)]
+        return ['zpool:{0}'.format(id)]
 
     def run(self, id, fd):
         if not self.datastore.exists('volumes', ('id', '=', id)):
@@ -2076,7 +2072,7 @@ class VolumeBackupKeysToFileTask(Task):
         if not self.datastore.exists('volumes', ('id', '=', id)):
             raise VerifyException(errno.ENOENT, 'Volume {0} not found'.format(id))
 
-        return ['disk:{0}'.format(d) for d in self.dispatcher.call_sync('volume.get_volume_disks', id)]
+        return ['zpool:{0}'.format(id)]
 
     def run(self, id, out_path=None):
         with open(out_path, 'wb') as out_file:
@@ -2103,9 +2099,7 @@ class VolumeRestoreKeysTask(Task):
         if not self.datastore.exists('volumes', ('id', '=', id)):
             raise VerifyException(errno.ENOENT, 'Volume {0} not found'.format(id))
 
-        vol = self.dispatcher.call_sync('volume.query', [('id', '=', id)], {'single': True})
-
-        return ['disk:{0}'.format(d) for d, _ in get_disks(vol['topology'])]
+        return ['zpool:{0}'.format(id)]
 
     def run(self, id, fd, password=None):
         if not self.datastore.exists('volumes', ('id', '=', id)):
@@ -2164,9 +2158,7 @@ class VolumeRestoreKeysFromFileTask(Task):
         if not self.datastore.exists('volumes', ('id', '=', id)):
             raise VerifyException(errno.ENOENT, 'Volume {0} not found'.format(id))
 
-        vol = self.dispatcher.call_sync('volume.query', [('id', '=', id)], {'single': True})
-
-        return ['disk:{0}'.format(d) for d, _ in get_disks(vol['topology'])]
+        return ['zpool:{0}'.format(id)]
 
     def run(self, id, in_path, password=None):
         with open(in_path, 'rb') as in_file:
@@ -2193,7 +2185,7 @@ class VolumeScrubTask(ProgressTask):
         if not vol:
             raise VerifyException(errno.ENOENT, 'Volume {0} not found'.format(id))
 
-        return ['disk:{0}'.format(d) for d, _ in get_disks(vol['topology'])]
+        return ['zpool:{0}'.format(id)]
 
     def abort(self):
         self.abort_subtasks()
@@ -2233,7 +2225,7 @@ class VolumeOfflineVdevTask(Task):
         if not vol:
             raise VerifyException(errno.ENOENT, 'Volume {0} not found'.format(id))
 
-        return ['disk:{0}'.format(d) for d, _ in get_disks(vol['topology'])]
+        return ['zpool:{0}'.format(id)]
 
     def run(self, id, vdev_guid):
         vol = self.dispatcher.call_sync('volume.query', [('id', '=', id)], {'single': True})
@@ -2271,7 +2263,7 @@ class VolumeOnlineVdevTask(Task):
         if not vol:
             raise VerifyException(errno.ENOENT, 'Volume {0} not found'.format(id))
 
-        return ['disk:{0}'.format(d) for d, _ in get_disks(vol['topology'])]
+        return ['zpool:{0}'.format(id)]
 
     def run(self, id, vdev_guid):
         vol = self.dispatcher.call_sync('volume.query', [('id', '=', id)], {'single': True})
