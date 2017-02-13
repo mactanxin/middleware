@@ -557,10 +557,11 @@ class Balancer(object):
         }
 
     def verify_schema(self, clazz, args, strict=False):
-        if not hasattr(clazz, 'params_schema'):
+        params_schema = clazz._get_schema()
+        if not params_schema:
             return []
 
-        schema = self.schema_to_list(clazz.params_schema)
+        schema = self.schema_to_list(params_schema)
         val = validator.create_validator(schema, resolver=self.dispatcher.rpc.get_schema_resolver(schema))
         if strict:
             val.fail_read_only = True

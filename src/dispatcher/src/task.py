@@ -28,8 +28,8 @@
 import copy
 import errno
 import logging
-from freenas.dispatcher.rpc import RpcService, RpcException, RpcWarning
-from datastore.config import ConfigStore
+from freenas.dispatcher.rpc import RpcService, RpcException, RpcWarning, convert_schema
+from freenas.utils import exclude
 from threading import RLock
 import collections
 
@@ -74,10 +74,17 @@ class Task(object):
                 pass
 
     @classmethod
+    def _get_schema(cls):
+        if hasattr(cls, 'params_schema'):
+            return cls.params_schema
+
+        return [convert_schema(i) for i in exclude(cls.run.__annotations__, 'return').values()]
+
+    @classmethod
     def _get_metadata(cls):
         return {
             'description': getattr(cls, 'description', None),
-            'schema': getattr(cls, 'params_schema', None),
+            'schema': cls._get_schema(),
             'abortable': True if (hasattr(cls, 'abort') and isinstance(cls.abort, collections.Callable)) else False,
             'private': getattr(cls, 'private', False),
             'metadata': getattr(cls, 'metadata', None)
