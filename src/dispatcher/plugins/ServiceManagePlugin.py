@@ -153,7 +153,7 @@ class ServiceInfoProvider(Provider):
     @accepts(str)
     def reload(self, service):
         svc = self.datastore.get_one('service_definitions', ('name', '=', service))
-        status, pid, _ = get_status(self.dispatcher, self.datastore, svc)
+        status, _, pid = get_status(self.dispatcher, self.datastore, svc)
         if not svc:
             raise RpcException(errno.ENOENT, 'Service {0} not found'.format(service))
 
