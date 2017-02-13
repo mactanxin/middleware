@@ -1601,7 +1601,6 @@ def main():
 
     if args.logd:
         handler = LogdLogHandler(ident='dispatcher')
-        handler.setLevel(logging.DEBUG)
         logging.root.removeHandler(logging.root.handlers[0])
         logging.root.addHandler(handler)
 
