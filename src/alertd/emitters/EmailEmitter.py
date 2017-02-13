@@ -70,4 +70,4 @@ class EmailEmitter(AlertEmitter):
 
 
 def _init(context):
-    context.register_emitter('EMAIL', EmailEmitter)
+    context.register_emitter('email', EmailEmitter)
