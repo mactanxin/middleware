@@ -27,7 +27,7 @@
 
 import errno
 import logging
-from typing import Optional, List, Any
+from typing import Optional, List, Set, Any
 from collections import deque
 from datetime import datetime
 
@@ -146,8 +146,7 @@ class AlertsProvider(Provider):
         )
 
     @description("Dismisses/Deletes an alert from the database")
-    @accepts(int)
-    def dismiss(self, id):
+    def dismiss(self, id: int) -> None:
         alert = self.datastore.get_by_id('alerts', id)
         if not alert:
             raise RpcException(errno.ENOENT, 'Alert {0} not found'.format(id))
@@ -170,8 +169,7 @@ class AlertsProvider(Provider):
         })
 
     @description("Dismisses/Deletes all alerts from the database")
-    @accepts()
-    def dismiss_all(self):
+    def dismiss_all(self) -> None:
         alert_list = self.query([('dismissed', '=', False)])
         alert_ids = []
         for alert in alert_list:
@@ -233,8 +231,7 @@ class AlertsProvider(Provider):
 
     @private
     @description("Cancels already scheduled alert")
-    @accepts(int)
-    def cancel(self, id):
+    def cancel(self, id: int) -> int:
         alert = self.datastore.get_by_id('alerts', id)
         if not alert:
             raise RpcException(errno.ENOENT, 'Alert {0} not found'.format(id))
@@ -265,15 +262,11 @@ class AlertsProvider(Provider):
         return id
 
     @description("Returns list of registered alerts")
-    @accepts()
-    @returns(h.ref('AlertClass'))
-    def get_alert_classes(self):
+    def get_alert_classes(self) -> List[AlertClass]:
         return self.datastore.query('alert.classes')
 
     @description("Returns list of registered alert severities")
-    @accepts()
-    @returns(h.array(str))
-    def get_alert_severities(self):
+    def get_alert_severities(self) -> Set[AlertSeverity]:
         alert_classes = self.get_alert_classes()
         return {alert_class['severity'] for alert_class in alert_classes}
 
@@ -339,6 +332,8 @@ class AlertFilterCreateTask(Task):
             'operation': 'create',
             'ids': [id]
         })
+
+        return id
 
 
 @description("Deletes the specified Alert Filter")
