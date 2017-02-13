@@ -112,7 +112,6 @@ class VMProvider(Provider):
         else:
             return get_vm_path(vm['name'])
 
-    @private
     @accepts(str, str, bool)
     @returns(h.one_of(str, None))
     def get_device_path(self, vm_id, device_name, local=True):
