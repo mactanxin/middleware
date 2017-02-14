@@ -360,7 +360,7 @@ class ReplicationBaseTask(ProgressTask):
 @accepts(h.all_of(
         h.ref('Replication'),
         h.required(
-            'name', 'slave', 'master', 'datasets'
+            'slave', 'master', 'datasets'
         )
     )
 )
@@ -398,8 +398,10 @@ class ReplicationCreateTask(ReplicationBaseTask):
         return ['replication']
 
     def run(self, link):
-        if self.datastore.exists('replication.links', ('name', '=', link['name'])):
-            raise TaskException(errno.EEXIST, 'Replication link with name {0} already exists'.format(link['name']))
+        name = link.get('name')
+        if name:
+            if self.datastore.exists('replication.links', ('name', '=', name)):
+                raise TaskException(errno.EEXIST, 'Replication link with name {0} already exists'.format(name))
 
         normalize(
             link,
@@ -423,10 +425,25 @@ class ReplicationCreateTask(ReplicationBaseTask):
 
         link['initial_master'] = link['master']
 
-        self.check_datasets_valid(link)
-
         is_master, remote = self.get_replication_state(link)
         remote_client = get_freenas_peer_client(self, remote)
+
+        if not name:
+            def check_name(n):
+                c = self.dispatcher.call_sync('replication.local_query', [('name', '=', n)], {'count': True})
+                c += remote_client.call_sync('replication.local_query', [('name', '=', n)], {'count': True})
+                return c
+
+            cnt = 0
+            base = 'replication'
+            name = base
+            while check_name(name):
+                cnt += 1
+                name = f'{base}_{cnt - 1}'
+
+            link['name'] = name
+
+        self.check_datasets_valid(link)
 
         for dataset in iterate_datasets(link['datasets'], is_master):
             if not self.dispatcher.call_sync('zfs.dataset.query', [('name', '=', dataset)], {'count': True}):
