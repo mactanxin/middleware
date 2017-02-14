@@ -1929,6 +1929,10 @@ class DockerService(RpcService):
         image_details = first_or_default(lambda i: i['Id'] == image['Id'], host.connection.images(), {})
         return image_details['RepoTags'][0] or image['Id']
 
+    def diff_container(self, container_id):
+        host = self.context.docker_host_by_container_id(container_id)
+        return host.connection.diff(container_id)
+
 
 class ServerResource(Resource):
     def __init__(self, apps=None, context=None):
