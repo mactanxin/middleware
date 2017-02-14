@@ -52,7 +52,16 @@ class SharesProvider(Provider):
                     perms = self.dispatcher.call_sync('filesystem.stat', path)
                     return perms['permissions']
 
+            def get_perm_type():
+                if share['target_type'] == 'DATASET':
+                    return self.dispatcher.call_sync(
+                        'volume.dataset.query',
+                        [('id', '=', share['target_path'])],
+                        {'select': 'permissions_type', 'single': True}
+                    )
+
             share['filesystem_path'] = path
+            share['permissions_type'] = lazy(get_perm_type)
             share['permissions'] = lazy(get_perms)
             return share
 
@@ -649,6 +658,12 @@ def _init(dispatcher, plugin):
             'filesystem_path': {
                 'type': 'string',
                 'readOnly': True
+            },
+            'permissions_type': {
+                'oneOf': [
+                    {'$ref': 'VolumeDatasetPermissionsType'},
+                    {'type': 'null'}
+                ]
             },
             'permissions': {
                 'oneOf': [
