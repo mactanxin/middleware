@@ -1397,6 +1397,7 @@ class DockerImagePullTask(DockerBaseTask):
 
 @description('Removes previously cached container image from a Docker host/s')
 @accepts(str, h.one_of(str, None))
+@returns(bool)
 class DockerImageDeleteTask(DockerBaseTask):
     @classmethod
     def early_describe(cls):
@@ -1442,9 +1443,11 @@ class DockerImageDeleteTask(DockerBaseTask):
             {'select': ('host', 'names.0')}
         )
         names_in_use = []
+        clean_sweep = True
         for h, n in related:
             if h in hosts:
                 hosts.remove(h)
+                clean_sweep = False
             names_in_use.append(n)
 
         if names_in_use:
@@ -1479,6 +1482,8 @@ class DockerImageDeleteTask(DockerBaseTask):
                 lambda: delete_image(),
                 600
             )
+
+        return clean_sweep
 
 
 @description('Removes all previously cached container images')
