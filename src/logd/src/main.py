@@ -176,7 +176,7 @@ class SyslogServer(object):
 
     def parse_message(self, msg):
         now = datetime.now()
-        m = SYSLOG_PATTERN.match(msg.decode('utf-8'))
+        m = SYSLOG_PATTERN.match(msg.decode('utf-8', 'replace'))
         if not m:
             return
 
