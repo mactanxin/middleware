@@ -30,11 +30,39 @@ import pf
 import netif
 import ipaddress
 import itertools
+from typing import Optional
 from task import Provider, query
+from freenas.dispatcher.model import BaseStruct, BaseEnum
 from freenas.utils import query as q
 
 
 INADDR_ANY = ipaddress.ip_address('0.0.0.0')
+
+
+class PortConsumerType(BaseEnum):
+    SERVICE = 'SERVICE'
+    VM = 'VM'
+    CONTAINER = 'CONTAINER'
+    OTHER = 'OTHER'
+
+
+class PortAddressFamily(BaseEnum):
+    INET = 'INET'
+    INET6 = 'INET6'
+
+
+class PortProtocol(BaseEnum):
+    TCP = 'TCP'
+    UDP = 'UDP'
+
+
+class Port(BaseStruct):
+    consumer_type: PortConsumerType
+    consumer_name: str
+    consumer_pid: Optional[int]
+    af: PortAddressFamily
+    protocol: PortProtocol
+    port: int
 
 
 class NetworkPortProvider(Provider):
@@ -58,21 +86,21 @@ class NetworkPortProvider(Provider):
                         continue
 
                     try:
-                        service = self.dispatcher.call_sync('serviced.job.job_by_pid', proc.pid, True)
+                        service = self.dispatcher.call_sync('serviced.job.get_by_pid', proc.pid, True)
                         type = 'SERVICE'
                         name = service['Label']
                     except:
                         type = 'OTHER'
                         name = proc.command
 
-                    yield {
-                        'consumer_type': type,
-                        'consumer_pid': proc.pid,
-                        'consumer_name': name,
-                        'af': str(netif.AddressFamily(f.af)),
-                        'port': port,
-                        'protocol': f.proto
-                    }
+                    yield Port(
+                        consumer_type=type,
+                        consumer_pid=proc.pid,
+                        consumer_name=name,
+                        af=str(netif.AddressFamily(f.af)),
+                        port=port,
+                        protocol=f.proto
+                    )
 
                     seen_ports.add(port)
 
@@ -90,32 +118,4 @@ class NetworkPortProvider(Provider):
 
 
 def _init(dispatcher, plugin):
-    plugin.register_schema_definition('PortConsumerType', {
-        'type': 'enum',
-        'enum': ['SERVICE', 'VM', 'CONTAINER', 'OTHER']
-    })
-
-    plugin.register_schema_definition('PortAddressFamily', {
-        'type': 'string',
-        'enum': ['INET', 'INET6']
-    })
-
-    plugin.register_schema_definition('PortProtocol', {
-        'type': 'string',
-        'enum': ['TCP', 'UDP']
-    })
-
-    plugin.register_schema_definition('Port', {
-        'type': 'object',
-        'additionalProperties': False,
-        'properties': {
-            'consumer_type': {'$ref': 'PortConsumerType'},
-            'consumer_name': {'type': 'string'},
-            'consumer_pid': {'type': 'integer'},
-            'af': {'$ref': 'PortAddressFamily'},
-            'protocol': {'$ref': 'PortProtocol'},
-            'port': {'type': 'integer'}
-        }
-    })
-
     plugin.register_provider('network.port', NetworkPortProvider)
