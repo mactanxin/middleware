@@ -45,7 +45,6 @@ from task import Provider, Task, TaskException, TaskDescription, query
 from freenas.dispatcher.jsonenc import dumps
 from freenas.dispatcher.model import BaseStruct, BaseEnum, BaseVariantType
 from freenas.utils import normalize, query as q
-from freenas.utils.lazy import lazy
 from debug import AttachData
 
 
@@ -132,9 +131,7 @@ class AlertsProvider(Provider):
     @query('Alert')
     @generator
     def query(self, filter=None, params=None):
-        return self.datastore.query_stream(
-            'alerts', *(filter or []), **(params or {})
-        )
+        return self.datastore.query_stream('alerts', *(filter or []), **(params or {}))
 
     @private
     @accepts(str, str)
@@ -288,7 +285,7 @@ class AlertEmitterProvider(Provider):
         def collect():
             for p in list(self.dispatcher.plugins.values()):
                 if p.metadata and p.metadata.get('type') == 'alert_emitter':
-                    config = lazy(self.dispatcher.call_sync, 'alert.emitter.{0}.get_config'.format(p.metadata['name']))
+                    config = self.dispatcher.call_sync('alert.emitter.{0}.get_config'.format(p.metadata['name']))
                     yield {
                         'id': p.metadata['id'],
                         'name': p.metadata['name'],
