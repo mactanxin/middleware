@@ -330,9 +330,15 @@ class AlertFilterCreateTask(Task):
         id = self.datastore.insert('alert.filters', alertfilter)
         order.insert(index, id)
         self.configstore.set('alert.filter.order', order)
+
         self.dispatcher.dispatch_event('alert.filter.changed', {
             'operation': 'create',
             'ids': [id]
+        })
+
+        self.dispatcher.dispatch_event('alert.filter.changed', {
+            'operation': 'update',
+            'ids': list(set(order) - {id})
         })
 
         return id
@@ -369,17 +375,13 @@ class AlertFilterDeleteTask(Task):
 
         self.dispatcher.dispatch_event('alert.filter.changed', {
             'operation': 'delete',
-            'ids': [id]
+            'ids': id
         })
 
-        # Reindex all following filters
-        for i in list(self.datastore.query('alert.filters', ('index', '>', alertfilter['index']))):
-            i['index'] -= 1
-            self.datastore.update('alert.filters', i['id'], i)
-            self.dispatcher.dispatch_event('alert.filter.changed', {
-                'operation': 'update',
-                'ids': [i['id']]
-            })
+        self.dispatcher.dispatch_event('alert.filter.changed', {
+            'operation': 'update',
+            'ids': list(set(order) - {id})
+        })
 
 
 @description("Updates the specified Alert Filter")
@@ -397,13 +399,13 @@ class AlertFilterUpdateTask(Task):
 
     def run(self, id, updated_fields):
         alertfilter = self.datastore.get_by_id('alert.filters', id)
+        order = self.configstore.get('alert.filter.order')
         if not alertfilter:
             raise RpcException(errno.ENOENT, 'Alert filter doesn\'t exist')
 
         try:
             if 'index' in updated_fields:
                 index = updated_fields.pop('index')
-                order = self.configstore.get('alert.filter.order')
                 order.remove(id)
                 order.insert(index, id)
                 self.configstore.set('alert.filter.order', order)
@@ -418,7 +420,7 @@ class AlertFilterUpdateTask(Task):
 
         self.dispatcher.dispatch_event('alert.filter.changed', {
             'operation': 'update',
-            'ids': [id],
+            'ids': order,
         })
 
 
