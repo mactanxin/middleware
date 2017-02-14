@@ -1499,15 +1499,40 @@ class DockerImageFlushTask(DockerBaseTask):
         return ['docker']
 
     def run(self):
-        subtasks = []
         self.set_progress(0, 'Deleting docker images')
-        for image in self.dispatcher.call_sync('docker.image.query', [], {'select': 'id'}):
-            subtasks.append(self.run_subtask('docker.image.delete', image))
+        done = 0
+        failed = []
+        images_cnt = self.dispatcher.call_sync('docker.image.query', [], {'count': True})
+        while True:
+            images = list(self.dispatcher.call_sync('docker.image.query', [], {'select': ('id', 'parent')}))
+            start_done = done
+            for image in list(images):
+                if image not in failed:
+                    if not first_or_default(lambda i: i[1] == image[0], images):
+                        success = self.run_subtask_sync('docker.image.delete', image[0])
+                        done += 1
+                        self.set_progress(int((done / images_cnt) * 100), 'Deleting docker images')
+                        if success:
+                            images.remove(image)
+                        else:
+                            failed.append(image)
 
-        subtasks_cnt = len(subtasks)
-        for idx, t in enumerate(subtasks):
-            self.join_subtasks(t)
-            self.set_progress(int((idx / subtasks_cnt) * 100), 'Deleting docker images')
+            if start_done == done:
+                for image in images:
+                    name = self.dispatcher.call_sync(
+                        'docker.image.query', [('id', '=', image[0])], {'single': True, 'select': 'names.0'}
+                    )
+                    childs = list(self.dispatcher.call_sync(
+                        'docker.image.query', [('parent', '=', image[0])], {'select': 'names.0'}
+                    ))
+                    if not childs:
+                        continue
+
+                    self.add_warning(TaskWarning(
+                        errno.EACCES,
+                        f'Cannot delete {name}. Delete local child images first: ' + ', '.join(childs)
+                    ))
+                break
 
 
 @accepts(h.all_of(
