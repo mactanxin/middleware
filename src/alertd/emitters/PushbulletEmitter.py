@@ -25,45 +25,45 @@
 #
 #####################################################################
 
-import os
 import socket
-from mako.template import Template
+from pushbullet import Pushbullet
 from main import AlertEmitter
 
 
 class PushbulletEmitter(AlertEmitter):
-    def emit_first(self, alert, options):
-        tmpl = Template(filename=os.path.join(TEMPLATES_ROOT, 'email_first.mako'))
-        to = options.get('addresses')
+    def __init__(self, context):
+        super(PushbulletEmitter, self).__init__(context)
+        self.api_key = self.context.client.call_sync('alert.emitter.pushbullet.get_api_key')
 
-        if to:
-            self.context.client.call_sync('mail.send', {
-                'to': to,
-                'subject': '{0}: {1}'.format(socket.gethostname(), alert['title']),
-                'message': tmpl.render(cls=alert['class'], **alert),
-            })
+    def emit_first(self, alert, options):
+        pb = Pushbullet(self.api_key)
+        pb.push_note(
+            'New alert on {0}: {1}'.format(
+                socket.gethostname(),
+                alert['title']
+            ),
+            alert['description']
+        )
 
     def emit_again(self, alert, options):
-        tmpl = Template(filename=os.path.join(TEMPLATES_ROOT, 'email_again.mako'))
-        to = options.get('addresses')
-
-        if to:
-            self.context.client.call_sync('mail.send', {
-                'to': to,
-                'subject': '{0}: {1}'.format(socket.gethostname(), alert['title']),
-                'message': tmpl.render(cls=alert['class'], **alert),
-            })
+        pb = Pushbullet(self.api_key)
+        pb.push_note(
+            'Alert on {0}: {1}'.format(
+                socket.gethostname(),
+                alert['title']
+            ),
+            alert['description']
+        )
 
     def cancel(self, alert, options):
-        tmpl = Template(filename=os.path.join(TEMPLATES_ROOT, 'email_cancel.mako'))
-        to = options.get('addresses')
-
-        if to:
-            self.context.client.call_sync('mail.send', {
-                'to': to,
-                'subject': '{0}: {1} cancelled'.format(socket.gethostname(), alert['title']),
-                'message': tmpl.render(cls=alert['class'], **alert),
-            })
+        pb = Pushbullet(self.api_key)
+        pb.push_note(
+            'Alert on {0} canceled: {1}'.format(
+                socket.gethostname(),
+                alert['title']
+            ),
+            alert['description']
+        )
 
 
 def _init(context):
