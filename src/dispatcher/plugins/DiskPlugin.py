@@ -1531,7 +1531,7 @@ def update_smart_info(dispatcher, disk):
         [
             ('active', '=', True),
             ('dismissed', '=', False),
-            ('class', 'in', ('SmartFail', 'SmartWarn')),
+            ('clazz', 'in', ('SmartFail', 'SmartWarn')),
             ('target', '=', disk_name)
         ]
     )
@@ -1540,7 +1540,7 @@ def update_smart_info(dispatcher, disk):
         # We need to issue a S.M.A.R.T alert for this disk
         alert_class, title = SMART_ALERT_MAP[smart_status]
         alert_payload = {
-            'class': alert_class,
+            'clazz': alert_class,
             'title': title,
             'target': disk_name,
             'description': 'Disk {0} S.M.A.R.T status: {1}.\
@@ -1550,7 +1550,7 @@ def update_smart_info(dispatcher, disk):
         alert_exists = False
 
         for smart_alert in existing_smart_alerts:
-            if smart_alert['class'] == alert_class and smart_alert['target'] == disk_name:
+            if smart_alert['clazz'] == alert_class and smart_alert['target'] == disk_name:
                 alert_exists = True
                 continue
             dispatcher.call_sync('alert.cancel', smart_alert['id'])

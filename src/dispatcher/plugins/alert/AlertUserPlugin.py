@@ -33,7 +33,7 @@ def _depends():
 def _init(dispatcher, plugin):
     def on_client_login(args):
         dispatcher.call_sync('alert.emit', {
-            'class': 'UserLogin',
+            'clazz': 'UserLogin',
             'one_shot': True,
             'target': args['username'],
             'title': 'User {0} has logged in'.format(args['username']),
@@ -42,7 +42,7 @@ def _init(dispatcher, plugin):
 
     def on_client_logout(args):
         dispatcher.call_sync('alert.emit', {
-            'class': 'UserLogout',
+            'clazz': 'UserLogout',
             'one_shot': True,
             'target': args['username'],
             'title': 'User {0} has logged out'.format(args['username']),

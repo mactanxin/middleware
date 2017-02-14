@@ -169,7 +169,8 @@ def _init(dispatcher, plugin):
             if ups['propagate_alerts']:
                 dispatcher.call_sync('alert.emit', {
                     'description': nut_signal_descriptions[name],
-                    'title':'UPS signal received', 'class': 'UpsSignal'
+                    'title' :'UPS signal received',
+                    'clazz': 'UpsSignal'
                 })
 
             if ups['shutdown_mode'] == 'BATT':
@@ -178,7 +179,8 @@ def _init(dispatcher, plugin):
         elif ups['propagate_alerts']:
             dispatcher.call_sync('alert.emit', {
                 'description': nut_signal_descriptions[name],
-                'title':'UPS signal received', 'class': 'UpsSignal'
+                'title': 'UPS signal received',
+                'clazz': 'UpsSignal'
             })
 
 

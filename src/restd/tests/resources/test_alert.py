@@ -40,7 +40,7 @@ class AlertFilterTestCase(CRUDTestCase):
         return 'alertfiltertest', {
             'predicates': [
                 {
-                    'property': 'class',
+                    'property': 'clazz',
                     'operator': '==',
                     'value': 'VolumeUpgradePossible',
                 }
