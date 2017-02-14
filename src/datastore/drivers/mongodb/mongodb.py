@@ -178,7 +178,7 @@ class MongodbDatastore(object):
             if isinstance(idx, str):
                 idx = [idx]
 
-            self.db[name].create_index([(i, pymongo.ASCENDING) for i in idx], unique_indexes=True)
+            self.db[name].create_index([(i, pymongo.ASCENDING) for i in idx], unique=True)
 
         self.db[name].create_index([('$**', pymongo.TEXT)])
 
