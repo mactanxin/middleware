@@ -1622,6 +1622,7 @@ class DockerService(RpcService):
                     presets = self.labels_to_presets(image['Labels'])
                     result.append({
                         'id': image['Id'],
+                        'parent': image['ParentId'],
                         'names': image['RepoTags'] or [image['Id']],
                         'size': image['VirtualSize'],
                         'hosts': [host.vm.id],

@@ -2393,6 +2393,7 @@ def _init(dispatcher, plugin):
                 'items': {'type': 'string'}
             },
             'size': {'type': 'integer'},
+            'parent': {'type': 'string'},
             'hosts': {
                 'type': 'array',
                 'items': {'type': 'string'}
