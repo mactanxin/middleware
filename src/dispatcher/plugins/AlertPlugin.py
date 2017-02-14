@@ -143,7 +143,7 @@ class AlertsProvider(Provider):
             single=True
         )
 
-    @description("Dismisses/Deletes an alert from the database")
+    @description("Dismisses an alert")
     def dismiss(self, id: int) -> None:
         alert = self.datastore.get_by_id('alerts', id)
         if not alert:

@@ -38,7 +38,7 @@ from email.mime.text import MIMEText
 from email.utils import formatdate
 
 from datastore.config import ConfigNode
-from freenas.dispatcher.model import BaseStruct, BaseEnum, structures
+from freenas.dispatcher.model import BaseStruct, BaseEnum, types
 from freenas.dispatcher.rpc import RpcException, SchemaHelper as h, accepts, description, returns
 from task import Provider, Task, ValidationException, TaskDescription
 
@@ -61,7 +61,7 @@ class MailMessage(BaseStruct):
 
 
 class AlertEmitterEmail(BaseStruct):
-    __variant_of__ = structures.AlertEmitterConfig
+    __variant_of__ = types.AlertEmitterConfig
     from_address: str
     to: List[str]
     server: str
