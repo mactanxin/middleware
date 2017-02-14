@@ -448,7 +448,9 @@ class ConfigurationService(RpcService):
                 if i.name.startswith(('brg', 'tap')):
                     continue
 
-                self.logger.info('Trying to acquire DHCP lease on interface {0}...'.format(i.name))
+                msg = 'Trying to acquire DHCP lease on interface {0}...'.format(i.name)
+                self.logger.info(msg)
+                push_status(msg)
                 i.up()
 
                 if self.context.configure_dhcp(i.name, True, INITIAL_DHCP_TIMEOUT):
