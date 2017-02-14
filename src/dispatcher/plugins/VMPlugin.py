@@ -562,6 +562,7 @@ class VMBaseTask(ProgressTask):
                 'target_path': res['name'],
                 'size': 0
             })
+
             if properties['target_type'] != 'DISK':
                 properties['target_path'] = os.path.join(vm_root_dir, properties['target_path'])
 
@@ -682,6 +683,8 @@ class VMBaseTask(ProgressTask):
                             self.dispatcher.call_sync('vm.datastore.get_filesystem_path', datastore, dir_path),
                         )
 
+        res['properties'] = exclude(res['properties'], 'size', 'source')
+
         if progress_cb:
             progress_cb(100, 'Creating {0}'.format(res['type'].lower()))
 
@@ -779,6 +782,8 @@ class VMBaseTask(ProgressTask):
                             new_properties.get('size', 0)
                         )
 
+            new_res['properties'] = exclude(new_res['properties'], 'size')
+
         if new_res['type'] == 'NIC':
             brigde = new_properties.get('bridge', 'default')
             if brigde != 'default':
@@ -792,6 +797,7 @@ class VMBaseTask(ProgressTask):
                         errno.ENOENT,
                         'Cannot create a bridge to {0}. Interface does not exist'.format(brigde)
                     )
+
 
     def delete_device(self, vm, res):
         reserved_storage = self.dispatcher.call_sync('vm.get_reserved_storage', vm['id'])
@@ -965,11 +971,6 @@ class VMCreateTask(VMBaseTask):
             self.create_device(vm, res, lambda p, m, e=None: collect_progress('Initializing VM devices:', 60, p, m, e))
 
         self.init_files(vm, lambda p, m, e=None: self.chunk_progress(80, 90, 'Initializing VM files:', p, m, e))
-
-        for idx, device in enumerate(vm['devices']):
-            if device['properties'].get('source'):
-                vm['devices'][idx]['properties'].pop('source', None)
-                vm['devices'][idx]['properties'].pop('size', None)
 
         self.id = self.datastore.insert('vms', vm)
         self.dispatcher.dispatch_event('vm.changed', {
@@ -1175,7 +1176,7 @@ class VMUpdateTask(VMBaseTask):
             new_vm_root_dir = get_vm_path(updated_params['name'])
             self.run_subtask_sync('vm.datastore.directory.rename', vm['target'], vm_root_dir, new_vm_root_dir)
 
-        old_vm = copy.deepcopy(vm)
+        old_vm = self.dispatcher.call_sync('vm.query', [('id', '=', vm['id'])], {'single': True})
         vm.update(updated_params)
 
         if 'config' in updated_params:
@@ -1194,7 +1195,7 @@ class VMUpdateTask(VMBaseTask):
                     )
 
         if 'devices' in updated_params:
-            for res in updated_params['devices']:
+            for res in vm['devices']:
                 res.pop('id', None)
                 existing = first_or_default(lambda i: i['name'] == res['name'], old_vm['devices'])
                 if existing:
