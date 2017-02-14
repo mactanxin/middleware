@@ -968,8 +968,8 @@ class VMCreateTask(VMBaseTask):
 
         for idx, device in enumerate(vm['devices']):
             if device['properties'].get('source'):
-                vm['devices'][idx]['properties'].pop('source')
-                vm['devices'][idx]['properties'].pop('size')
+                vm['devices'][idx]['properties'].pop('source', None)
+                vm['devices'][idx]['properties'].pop('size', None)
 
         self.id = self.datastore.insert('vms', vm)
         self.dispatcher.dispatch_event('vm.changed', {
