@@ -36,7 +36,6 @@ import socket
 import logging
 from cache import CacheStore
 from resources import Resource
-from paramiko import SSHException
 from datetime import datetime, timedelta
 from dateutil.parser import parse as parse_datetime
 from task import Provider, Task, ProgressTask, VerifyException, TaskException, TaskWarning, query, TaskDescription
@@ -608,7 +607,7 @@ class ReplicationDeleteTask(ReplicationBaseTask):
 
         try:
             remote_client = get_freenas_peer_client(self, remote)
-        except (SSHException, OSError) as e:
+        except TaskException as e:
             self.add_warning(TaskWarning(
                 e.code,
                 'Remote is unreachable. Delete operation is being performed only locally.'
