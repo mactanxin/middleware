@@ -84,8 +84,30 @@ class VMProvider(Provider):
                 except (RpcException, OSError):
                     pass
 
-            obj['status'] = lazy(lambda: self.dispatcher.call_sync('containerd.management.get_status', obj['id']))
+            def get_disk_size(id, target, name, type):
+                size = 0
+                try:
+                    path = self.dispatcher.call_sync('vm.get_device_path', id, name, False)
+                    dir = os.path.dirname(path)
+
+                    device = first_or_default(
+                        lambda o: o['path'] == path and o['type'] == type,
+                        self.dispatcher.call_sync('vm.datastore.list', type, target, dir)
+                    )
+                    if device:
+                        size = device['size']
+                except RpcException:
+                    pass
+
+                return size
+
+            obj['status'] = lazy(self.dispatcher.call_sync, 'containerd.management.get_status', obj['id'])
             obj['config']['readme'] = lazy(read_readme)
+            for d in obj['devices']:
+                if d['type'] == 'DISK':
+                    type = q.get(d, 'properties.target_type')
+                    q.set(d, 'properties.size', lazy(get_disk_size, obj['id'], obj['target'], d['name'], type))
+
             return obj
 
         return q.query(
