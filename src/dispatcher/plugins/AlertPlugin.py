@@ -454,9 +454,9 @@ class AlertEmitterUpdateTask(Task):
             raise TaskException(errno.ENOENT, 'Emitter not found')
 
         if 'config' in updated_params:
-            self.run_subtask_sync('alert.emitter.{0}.update', emitter['name'], updated_params['config'])
+            self.run_subtask_sync('alert.emitter.{0}.update'.format(emitter['name']), updated_params['config'])
 
-        self.emit_event('alert.emitter.changed', {
+        self.dispatcher.emit_event('alert.emitter.changed', {
             'operation': 'update',
             'id': emitter['id']
         })
