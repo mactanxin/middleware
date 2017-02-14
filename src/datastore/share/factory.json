@@ -1566,6 +1566,9 @@
             "migration": "merge-preserve",
             "pkey-type": "uuid",
             "attributes": {
+                "unique_indexes": [
+                    ["index"]
+                ],
                 "type": "config"
             }
         },
