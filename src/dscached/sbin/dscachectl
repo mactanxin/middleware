@@ -78,11 +78,6 @@ def flush():
     client.call_sync('dscached.management.flush')
     print("Caches flushed sucessfully")
 
-
-def populate():
-    pass
-
-
 def query(user=None, group=None, host=None):
     if user:
         o = get_user(user)
@@ -147,7 +142,7 @@ def create_client():
 
 def main():
     parser = argh.ArghParser()
-    parser.add_commands([stats, flush, populate, query])
+    parser.add_commands([stats, flush, query])
     parser.dispatch()
 
 
