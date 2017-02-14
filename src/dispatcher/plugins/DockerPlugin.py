@@ -915,13 +915,15 @@ class DockerContainerCloneTask(DockerBaseTask):
             q.get(container, 'names.0')
         ))
 
-        image_name = f'freenas/{new_name}:latest'
-        cnt = 0
-        while self.dispatcher.call_sync('docker.image.query', [('names.0', '=', image_name)], {'count': True}):
-            cnt += 1
-            image_name = f'freenas/{new_name}_{cnt}:latest'
+        image_name = normalize_image_name(container['image'])
+        image, tag = image_name.split(':', 1)
+        image = f'{image}_clone'
+        image = get_free_name(
+            image,
+            lambda n: self.dispatcher.call_sync('docker.image.query', [('names.0', '=', f'{n}:{tag}')], {'count': True})
+        )
 
-        image_name = self.run_subtask_sync('docker.container.commit', id, new_name)
+        image_name = self.run_subtask_sync('docker.container.commit', id, image, tag)
 
         container.pop('id')
         q.set(container, 'names.0', new_name)
