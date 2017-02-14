@@ -471,8 +471,11 @@ class MongodbDatastore(object):
             if not self.get_by_id(collection, pkey):
                 obj['created_at'] = t
 
-        db = self._get_db(collection)
-        db.replace_one({'_id': pkey}, obj, upsert=upsert)
+        try:
+            db = self._get_db(collection)
+            db.replace_one({'_id': pkey}, obj, upsert=upsert)
+        except pymongo.errors.DuplicateKeyError:
+            raise DuplicateKeyException('Document with given key already exists')
 
     def upsert(self, collection, pkey, obj, config=False):
         return self.update(collection, pkey, obj, upsert=True, config=config)
