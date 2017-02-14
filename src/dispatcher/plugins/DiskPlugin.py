@@ -54,7 +54,7 @@ from task import (
 from debug import AttachData, AttachCommandOutput
 from freenas.dispatcher.rpc import RpcException, accepts, returns, description, private, SchemaHelper as h, generator
 
-from pySMART import Device, smart_health_assement
+from pySMART import Device
 
 
 EXPIRE_TIMEOUT = timedelta(hours=24)
@@ -952,17 +952,23 @@ class DiskTestTask(ProgressTask):
 
     def describe(self, id, test_type):
         disk = disk_by_id(self.dispatcher, id)
-        return TaskDescription("Performing SMART test on disk {name}", name=disk['path'])
+        return TaskDescription(
+            "Performing {test_type} SMART test on disk {name}",
+            test_type=test_type,
+            name=q.get(disk, 'path', '<unknown>')
+        )
 
     def verify(self, id, test_type):
         disk = diskinfo_cache.get(id)
         if not disk:
             raise VerifyException(errno.ENOENT, 'Disk {0} not found'.format(id))
+        if not q.get(disk, 'smart_info.smart_enabled'):
+            raise VerifyException(
+                errno.EINVAL,
+                'Disk id: {0}, path: {1} is not S.M.A.R.T enabled'.format(id, disk['path'])
+            )
 
         return ['disk:{0}'.format(disk['path'])]
-
-    def handle_progress(self, progress):
-        self.set_progress(progress)
 
     def run(self, id, test_type):
         try:
@@ -970,11 +976,21 @@ class DiskTestTask(ProgressTask):
         except RpcException:
             raise TaskException(errno.ENOENT, 'Disk {0} not found'.format(id))
 
+        def handle_progress(progress):
+            self.set_progress(
+                progress, "Performing {0} SMART test on disk id: {1}, path: {2}".format(
+                    test_type,
+                    id,
+                    diskinfo['path']
+                )
+            )
+
         dev = Device(diskinfo['gdisk_name'])
         dev.run_selftest_and_wait(
             getattr(SelfTestType, test_type).value,
-            progress_handler=self.handle_progress
+            progress_handler=handle_progress
         )
+        handle_progress(100)
         self.dispatcher.call_sync('disk.update_disk_cache', diskinfo['path'], timeout=120)
 
 
@@ -986,7 +1002,12 @@ class DiskParallelTestTask(ProgressTask):
         return "Performing parallel SMART test"
 
     def describe(self, ids, test_type):
-        return TaskDescription("Performing parallel SMART test")
+        disks = self.dispatcher.call_sync('disk.query', [('id', 'in', ids)])
+        return TaskDescription(
+            "Performing parallel {test_type} SMART tests on disk: {names}",
+            test_type=test_type,
+            names=', '.join(q.get(d, 'name', '<unknown>') for d in disks)
+        )
 
     def verify(self, ids, test_type):
         res = []
@@ -994,17 +1015,38 @@ class DiskParallelTestTask(ProgressTask):
             disk = diskinfo_cache.get(id)
             if not disk:
                 raise VerifyException(errno.ENOENT, 'Disk {0} not found'.format(id))
-
+            if not q.get(disk, 'smart_info.smart_enabled'):
+                raise VerifyException(
+                    errno.EINVAL,
+                    'Disk id: {0}, path: {1} is not S.M.A.R.T enabled'.format(id, disk['path'])
+                )
             res.append('disk:{0}'.format(disk['path']))
 
         return res
 
     def run(self, ids, test_type):
-        subtasks = []
-        disks = self.dispatcher.call_sync('disk.query', [('id', 'in', ids)])
-        for d in disks:
-            subtasks.append(self.run_subtask('disk.test', d['id'], test_type))
+        disks = list(self.dispatcher.call_sync('disk.query', [('id', 'in', ids)]))
+        progress_dict = {d['name']: 0 for d in disks}
+        message = "Performing parallel {0} SMART tests on disks: {1}".format(
+            test_type, ', '.join(progress_dict.keys())
+        )
 
+        # Set this initial progress message so that none is not displayed even momentarily
+        self.set_progress(0, message)
+
+        def progress_report(percentage, disk_name):
+            progress_dict[disk_name] = percentage
+            self.set_progress(sum(progress_dict.values()) / len(progress_dict), message)
+
+        subtasks = [
+            self.run_subtask(
+                'disk.test',
+                d['id'],
+                test_type,
+                progress_callback=lambda p, m, e, name=d['name']: progress_report(p, name)
+            )
+            for d in disks
+        ]
         self.join_subtasks(*subtasks)
 
 
