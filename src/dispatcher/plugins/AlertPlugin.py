@@ -375,7 +375,7 @@ class AlertFilterDeleteTask(Task):
 
         self.dispatcher.dispatch_event('alert.filter.changed', {
             'operation': 'delete',
-            'ids': id
+            'ids': [id]
         })
 
         self.dispatcher.dispatch_event('alert.filter.changed', {
