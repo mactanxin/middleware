@@ -1832,6 +1832,26 @@ class DockerCollectionGetPresetsTask(ProgressTask):
         return result
 
 
+def get_free_name(base, condition):
+    cnt = 0
+    name = base
+    while condition(name):
+        cnt += 1
+        name = f'{base}_{cnt - 1}'
+
+    return name
+
+
+def normalize_image_name(name):
+    if '/' not in name:
+        name = f'freenas/{name}'
+
+    if ':' not in name:
+        name = f'{name}:latest'
+
+    return name
+
+
 def collect_debug(dispatcher):
     yield AttachData('hosts-query', dumps(list(dispatcher.call_sync('docker.host.query')), indent=4))
     yield AttachData('containers-query', dumps(list(dispatcher.call_sync('docker.container.query')), indent=4))
