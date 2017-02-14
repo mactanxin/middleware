@@ -435,7 +435,7 @@ class AlertFilterUpdateTask(Task):
         })
 
 
-@accepts(str, h.ref('AlertEmitterConfig'))
+@accepts(str, h.ref('AlertEmitter'))
 @description('Configures global parameters of an alert emitter')
 class AlertEmitterUpdateTask(Task):
     @classmethod
@@ -449,7 +449,7 @@ class AlertEmitterUpdateTask(Task):
         return ['system']
 
     def run(self, id, updated_params):
-        emitter = self.dispatcher.call_sync('alert.emitters.query', [('id', '=', id)], {'single': True})
+        emitter = self.dispatcher.call_sync('alert.emitter.query', [('id', '=', id)], {'single': True})
         if not emitter:
             raise TaskException(errno.ENOENT, 'Emitter not found')
 
