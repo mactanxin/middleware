@@ -137,7 +137,7 @@ class DeviceInfoProvider(Provider):
                 continue
 
             try:
-                desc = get_sysctl(re.sub('(\w+)([0-9]+)', 'dev.\\1.\\2.%desc', i))
+                desc = get_sysctl(re.sub('(\\w+)([0-9]+)', 'dev.\\1.\\2.%desc', i))
                 result.append({
                     'name': i,
                     'description': desc
