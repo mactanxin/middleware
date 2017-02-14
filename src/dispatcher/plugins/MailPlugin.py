@@ -73,7 +73,7 @@ class AlertEmitterEmail(BaseStruct):
 
 
 class AlertEmitterParametersEmail(BaseStruct):
-    __variant_of__ = structures.AlertEmitterParameters
+    __variant_of__ = types.AlertEmitterParameters
     to: List[str]
 
 
