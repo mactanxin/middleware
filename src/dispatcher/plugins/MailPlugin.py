@@ -82,7 +82,7 @@ class AlertEmitterParametersEmail(BaseStruct):
 class MailProvider(Provider):
     def get_config(self) -> AlertEmitterEmail:
         node = ConfigNode('mail', self.configstore).__getstate__()
-        node['pass'] = Password(node['pass'])
+        node['password'] = Password(node['password'])
         return AlertEmitterEmail(node)
 
     @accepts(h.ref('MailMessage'), h.ref('Mail'))
@@ -147,7 +147,7 @@ class MailProvider(Provider):
                 server.starttls()
 
             if mail['auth']:
-                server.login(mail['user'], mail['pass'])
+                server.login(mail['user'], mail['password'])
             server.sendmail(mail['from_address'], to, msg)
             server.quit()
         except smtplib.SMTPAuthenticationError as e:
@@ -180,7 +180,7 @@ class MailConfigureTask(Task):
         if mail.get('auth'):
             if not mail.get('user') and not node['user']:
                 errors.add((0, 'auth'), 'Mail authorization requires a username')
-            if not mail.get('pass') and not node['pass']:
+            if not mail.get('password') and not node['password']:
                 errors.add((0, 'auth'), 'Mail authorization requires a password')
 
         if errors:
@@ -190,8 +190,8 @@ class MailConfigureTask(Task):
 
     def run(self, mail):
         node = ConfigNode('mail', self.configstore)
-        if 'pass' in mail:
-            mail['pass'] = mail['pass'].secret
+        if 'password' in mail:
+            mail['password'] = mail['password'].secret
 
         node.update(mail)
 
