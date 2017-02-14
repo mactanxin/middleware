@@ -525,6 +525,9 @@ class JobService(RpcService):
                 return j.pid == pid
 
             job = first_or_default(fuzzy_match if fuzzy else match, self.context.jobs.values())
+            if job.parent:
+                job = job.parent
+
             if not job:
                 raise RpcException(errno.ENOENT, 'Job for PID {0} not found'.format(pid))
 
