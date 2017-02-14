@@ -146,7 +146,10 @@ def migrate_collection(ds, dump, directory, force=False):
         pkey = int(key) if integer else key
         if metadata['migration'] == 'merge-preserve':
             if not ds.exists(name, ('id', '=', pkey)):
-                ds.insert(name, row, pkey=pkey, config=configstore)
+                try:
+                    ds.insert(name, row, pkey=pkey, config=configstore)
+                except DatastoreException:
+                    pass
 
             continue
 
