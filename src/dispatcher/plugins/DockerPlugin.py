@@ -25,6 +25,7 @@
 #
 #####################################################################
 
+import re
 import copy
 import errno
 import gevent
@@ -646,18 +647,44 @@ class DockerContainerUpdateTask(DockerBaseTask):
 
         container = self.dispatcher.call_sync('docker.container.query', [('id', '=', id)], {'single': True})
 
+        new_image = False
+        if 'image' in updated_fields and container['image'] != updated_fields['image']:
+            new_image = True
+
         container.update(updated_fields)
 
-        self.set_progress(0, 'Deleting old container')
+        fs_diff = self.dispatcher.call_sync('containerd.docker.diff_container', id)
+
+        if not new_image and fs_diff:
+            self.set_progress(0, 'Cloning old container')
+
+            image_name = normalize_image_name(container['image'])
+            image, tag = image_name.split(':', 1)
+            image = re.split(r'_copy(_[0-9]+)?$', image)[0]
+
+            image = f'{image}_copy'
+            image = get_free_name(
+                image,
+                lambda n: self.dispatcher.call_sync(
+                    'docker.image.query',
+                    [('names.0', '=', f'{n}:{tag}')],
+                    {'count': True}
+                )
+            )
+
+            image_name = self.run_subtask_sync('docker.container.commit', id, image, tag)
+            container['image'] = image_name
+
+        self.set_progress(40, 'Deleting old container')
         self.run_subtask_sync(
             'docker.container.delete',
             id,
-            progress_callback=lambda p, m, e: self.chunk_progress(0, 50, 'Deleting the old container:', p, m, e)
+            progress_callback=lambda p, m, e: self.chunk_progress(40, 70, 'Deleting the old container:', p, m, e)
         )
         self.run_subtask_sync(
             'docker.container.create',
             container,
-            progress_callback=lambda p, m, e: self.chunk_progress(50, 100, 'Recreating the container', p, m, e)
+            progress_callback=lambda p, m, e: self.chunk_progress(70, 100, 'Recreating the container', p, m, e)
         )
 
 
