@@ -376,7 +376,15 @@
             "directory.search_order": ["local", "system"],
             "directory.cache_ttl": 3600,
             "directory.cache_enumerations": true,
-            "directory.cache_lookups": true
+            "directory.cache_lookups": true,
+            "alert.filter.order": [
+                "23795a9d-f263-11e6-af4f-000c2921ac63",
+                "2ff8c660-f263-11e6-af4f-000c2921ac63",
+                "89320bfb-f263-11e6-af4f-000c2921ac63",
+                "403d4c81-f263-11e6-af4f-000c2921ac63",
+                "515e1026-f263-11e6-af4f-000c2921ac63",
+                "5c9b5a98-f263-11e6-af4f-000c2921ac63"
+            ]
         },
         "metadata": {
             "attributes": {
@@ -1566,15 +1574,11 @@
             "migration": "merge-preserve",
             "pkey-type": "uuid",
             "attributes": {
-                "unique_indexes": [
-                    ["index"]
-                ],
                 "type": "config"
             }
         },
         "data": {
             "23795a9d-f263-11e6-af4f-000c2921ac63": {
-                "index": 1,
                 "clazz": "VolumeDegraded",
                 "emitter": "email",
                 "predicates": [],
@@ -1584,7 +1588,6 @@
                 }
             },
             "2ff8c660-f263-11e6-af4f-000c2921ac63": {
-                "index": 2,
                 "clazz": "SmartWarn",
                 "emitter": "email",
                 "predicates": [],
@@ -1594,7 +1597,6 @@
                 }
             },
             "89320bfb-f263-11e6-af4f-000c2921ac63": {
-                "index": 3,
                 "clazz": "SmartFail",
                 "emitter": "email",
                 "predicates": [],
@@ -1604,7 +1606,6 @@
                 }
             },
             "403d4c81-f263-11e6-af4f-000c2921ac63": {
-                "index": 4,
                 "clazz": "DirectoryServiceBindFailed",
                 "emitter": "email",
                 "predicates": [],
@@ -1614,7 +1615,6 @@
                 }
             },
             "515e1026-f263-11e6-af4f-000c2921ac63": {
-                "index": 5,
                 "clazz": "CalendarTaskFailed",
                 "emitter": "email",
                 "predicates": [],
@@ -1624,7 +1624,6 @@
                 }
             },
             "5c9b5a98-f263-11e6-af4f-000c2921ac63": {
-                "index": 6,
                 "clazz": "CrashDataFound",
                 "emitter": "email",
                 "predicates": [],

@@ -274,7 +274,14 @@ class AlertFiltersProvider(Provider):
     @query('AlertFilter')
     @generator
     def query(self, filter=None, params=None):
-        return self.datastore.query_stream( 'alert.filters', *(filter or []), **(params or {}))
+        order = self.configstore.get('alert.filter.order')
+
+        def extend(obj):
+            obj['index'] = order.index(obj['id'])
+            return obj
+
+        filters = self.datastore.query('alert.filters', ('id', 'in', order), callback=extend)
+        return q.query(filters, *(filter or []), **(params or {}))
 
 
 @description('Provides access to the alert emitter configuration')
@@ -318,20 +325,11 @@ class AlertFilterCreateTask(Task):
             'predicates': []
         })
 
-        computed_index = self.datastore.query('alert.filters', count=True) + 1
-        index = min(alertfilter.get('index', computed_index), computed_index)
-        alertfilter['index'] = index
-
-        # Reindex all following filters
-        for i in list(self.datastore.query('alert.filters', ('index', '>=', index))):
-            i['index'] += 1
-            self.datastore.update('alert.filters', i['id'], i)
-            self.dispatcher.dispatch_event('alert.filter.changed', {
-                'operation': 'update',
-                'ids': [i['id']]
-            })
-
+        order = self.configstore.get('alert.filter.order')
+        index = alertfilter.pop('index', len(order))
         id = self.datastore.insert('alert.filters', alertfilter)
+        order.insert(index, id)
+        self.configstore.set('alert.filter.order', order)
         self.dispatcher.dispatch_event('alert.filter.changed', {
             'operation': 'create',
             'ids': [id]
@@ -359,7 +357,10 @@ class AlertFilterDeleteTask(Task):
             raise RpcException(errno.ENOENT, 'Alert filter doesn\'t exist')
 
         try:
+            order = self.configstore.get('alert.filter.order')
+            order.remove(id)
             self.datastore.delete('alert.filters', id)
+            self.configstore.set('alert.filter.order', order)
         except DatastoreException as e:
             raise TaskException(
                 errno.EBADMSG,
@@ -399,28 +400,14 @@ class AlertFilterUpdateTask(Task):
         if not alertfilter:
             raise RpcException(errno.ENOENT, 'Alert filter doesn\'t exist')
 
-        if 'index' in updated_fields:
-            computed_index = self.datastore.query('alert.filters', count=True)
-            new_index = min(updated_fields['index'], computed_index)
-            updated_fields['index'] = new_index
-
-            for i in list(self.datastore.query('alert.filters', ('index', '>', alertfilter['index']))):
-                i['index'] -= 1
-                self.datastore.update('alert.filters', i['id'], i)
-                self.dispatcher.dispatch_event('alert.filter.changed', {
-                    'operation': 'update',
-                    'ids': [i['id']]
-                })
-
-            for i in list(self.datastore.query('alert.filters', ('index', '>=', new_index))):
-                i['index'] += 1
-                self.datastore.update('alert.filters', i['id'], i)
-                self.dispatcher.dispatch_event('alert.filter.changed', {
-                    'operation': 'update',
-                    'ids': [i['id']]
-                })
-
         try:
+            if 'index' in updated_fields:
+                index = updated_fields.pop('index')
+                order = self.configstore.get('alert.filter.order')
+                order.remove(id)
+                order.insert(index, id)
+                self.configstore.set('alert.filter.order', order)
+
             alertfilter.update(updated_fields)
             self.datastore.update('alert.filters', id, alertfilter)
         except DatastoreException as e:
