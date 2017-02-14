@@ -944,6 +944,11 @@ class VMCreateTask(VMBaseTask):
 
         self.init_files(vm, lambda p, m, e=None: self.chunk_progress(80, 90, 'Initializing VM files:', p, m, e))
 
+        for idx, device in enumerate(vm['devices']):
+            if device['properties'].get('source'):
+                vm['devices'][idx]['properties'].pop('source')
+                vm['devices'][idx]['properties'].pop('size')
+
         self.id = self.datastore.insert('vms', vm)
         self.dispatcher.dispatch_event('vm.changed', {
             'operation': 'create',
