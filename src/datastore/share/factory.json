@@ -1572,7 +1572,7 @@
         "data": {
             "23795a9d-f263-11e6-af4f-000c2921ac63": {
                 "index": 1,
-                "class": "VolumeDegraded",
+                "clazz": "VolumeDegraded",
                 "emitter": "email",
                 "predicates": [],
                 "parameters": {
@@ -1582,7 +1582,7 @@
             },
             "2ff8c660-f263-11e6-af4f-000c2921ac63": {
                 "index": 2,
-                "class": "SmartWarn",
+                "clazz": "SmartWarn",
                 "emitter": "email",
                 "predicates": [],
                 "parameters": {
@@ -1592,7 +1592,7 @@
             },
             "89320bfb-f263-11e6-af4f-000c2921ac63": {
                 "index": 3,
-                "class": "SmartFail",
+                "clazz": "SmartFail",
                 "emitter": "email",
                 "predicates": [],
                 "parameters": {
@@ -1602,7 +1602,7 @@
             },
             "403d4c81-f263-11e6-af4f-000c2921ac63": {
                 "index": 4,
-                "class": "DirectoryServiceBindFailed",
+                "clazz": "DirectoryServiceBindFailed",
                 "emitter": "email",
                 "predicates": [],
                 "parameters": {
@@ -1612,7 +1612,7 @@
             },
             "515e1026-f263-11e6-af4f-000c2921ac63": {
                 "index": 5,
-                "class": "CalendarTaskFailed",
+                "clazz": "CalendarTaskFailed",
                 "emitter": "email",
                 "predicates": [],
                 "parameters": {
@@ -1622,7 +1622,7 @@
             },
             "5c9b5a98-f263-11e6-af4f-000c2921ac63": {
                 "index": 6,
-                "class": "CrashDataFound",
+                "clazz": "CrashDataFound",
                 "emitter": "email",
                 "predicates": [],
                 "parameters": {
