@@ -1499,10 +1499,10 @@ class DockerService(RpcService):
                     continue
 
                 external = q.get(details, 'NetworkSettings.Networks.external')
-                networks=[]
+                networks = []
                 hidden_builtin_networks = ('bridge', 'external')
-                #Docker does not assign the <container>.NetworkSettings.Networks.<network>.NetworkID
-                #untill the container is started, hence the below gymnastics to retrive the network id
+                # Docker does not assign the <container>.NetworkSettings.Networks.<network>.NetworkID
+                # until the container is started, hence the below gymnastics to retrive the network id
                 network_names = list(q.get(details, 'NetworkSettings.Networks', {}).keys())
                 if network_names:
                     for n in host.connection.networks(names=network_names):
