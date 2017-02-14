@@ -1420,6 +1420,13 @@ class DockerImageDeleteTask(DockerBaseTask):
         if not name:
             raise TaskException(errno.ENOENT, f'Docker container image {id} does not exist')
 
+        childs = list(self.dispatcher.call_sync('docker.image.query', [('parent', '=', id)], {'select': 'names.0'}))
+        if childs:
+            raise TaskException(
+                errno.EACCES,
+                f'Cannot delete image {name}. Image has local child images: ' + ', '.join(childs)
+            )
+
         if hostid:
             hosts = [hostid]
         else:
