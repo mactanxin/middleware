@@ -44,7 +44,8 @@ from freenas.dispatcher.rpc import (
 from task import Provider, Task, TaskException, TaskDescription, query
 from freenas.dispatcher.jsonenc import dumps
 from freenas.dispatcher.model import BaseStruct, BaseEnum, BaseVariantType
-from freenas.utils import normalize
+from freenas.utils import normalize, query as q
+from freenas.utils.lazy import lazy
 from debug import AttachData
 
 
@@ -276,9 +277,7 @@ class AlertFiltersProvider(Provider):
     @query('AlertFilter')
     @generator
     def query(self, filter=None, params=None):
-        return self.datastore.query_stream(
-            'alert.filters', *(filter or []), **(params or {})
-        )
+        return self.datastore.query_stream( 'alert.filters', *(filter or []), **(params or {}))
 
 
 @description('Provides access to the alert emitter configuration')
@@ -286,9 +285,17 @@ class AlertEmitterProvider(Provider):
     @query('AlertEmitter')
     @generator
     def query(self, filter=None, params=None):
-        return self.datastore.query_stream(
-            'alert.emitters', *(filter or []), **(params or {})
-        )
+        def collect():
+            for p in list(self.dispatcher.plugins.values()):
+                if p.metadata and p.metadata.get('type') == 'alert_emitter':
+                    config = lazy(self.dispatcher.call_sync, 'alert.emitter.{0}.get_config'.format(p.metadata['name']))
+                    yield {
+                        'id': p.metadata['id'],
+                        'name': p.metadata['name'],
+                        'config': config
+                    }
+
+        return q.query(collect(), *(filter or []), **(params or {}))
 
 
 @description("Creates an Alert Filter")
@@ -433,7 +440,7 @@ class AlertFilterUpdateTask(Task):
 
 @accepts(str, h.ref('AlertEmitterConfig'))
 @description('Configures global parameters of an alert emitter')
-class UpdateAlertEmitterTask(Task):
+class AlertEmitterUpdateTask(Task):
     @classmethod
     def early_describe(cls):
         return 'Updating alert emitter configuration'
@@ -445,7 +452,17 @@ class UpdateAlertEmitterTask(Task):
         return ['system']
 
     def run(self, id, updated_params):
-        pass
+        emitter = self.dispatcher.call_sync('alert.emitters.query', [('id', '=', id)], {'single': True})
+        if not emitter:
+            raise TaskException(errno.ENOENT, 'Emitter not found')
+
+        if 'config' in updated_params:
+            self.run_subtask_sync('alert.emitter.{0}.update', emitter['name'], updated_params['config'])
+
+        self.emit_event('alert.emitter.changed', {
+            'operation': 'update',
+            'id': emitter['id']
+        })
 
 
 @accepts(str, h.ref('AlertSeverity'))
@@ -489,6 +506,7 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('alert.filter.create', AlertFilterCreateTask)
     plugin.register_task_handler('alert.filter.delete', AlertFilterDeleteTask)
     plugin.register_task_handler('alert.filter.update', AlertFilterUpdateTask)
+    plugin.register_task_handler('alert.emitter.update', AlertEmitterUpdateTask)
 
     def on_alertd_started(args):
         if args['service-name'] != 'alertd.alert':
@@ -515,27 +533,8 @@ def _init(dispatcher, plugin):
     plugin.register_event_handler('plugin.service_registered', on_alertd_started)
 
     # Register event types
-    plugin.register_event_type(
-        'alert.changed',
-        schema={
-            'type': 'object',
-            'properties': {
-                'operation': {'type': 'string', 'enum': ['create', 'delete']},
-                'ids': {'type': 'array', 'items': 'integer'},
-            },
-            'additionalProperties': False
-        }
-    )
-    plugin.register_event_type(
-        'alert.filter.changed',
-        schema={
-            'type': 'object',
-            'properties': {
-                'operation': {'type': 'string', 'enum': ['create', 'delete', 'update']},
-                'ids': {'type': 'array', 'items': 'string'},
-            },
-            'additionalProperties': False
-        }
-    )
+    plugin.register_event_type('alert.changed')
+    plugin.register_event_type('alert.filter.changed')
+    plugin.register_event_type('alert.emitter.changed')
 
     plugin.register_debug_hook(collect_debug)

@@ -79,10 +79,9 @@ class AlertEmitterParametersEmail(BaseStruct):
 
 @description("Provides Information about the mail configuration")
 class MailProvider(Provider):
-
-    @returns(h.ref('Mail'))
-    def get_config(self):
-        return ConfigNode('mail', self.configstore)
+    def get_config(self) -> AlertEmitterEmail:
+        node = ConfigNode('mail', self.configstore).__getstate__()
+        return AlertEmitterEmail(node)
 
     @accepts(h.ref('MailMessage'), h.ref('Mail'))
     def send(self, mailmessage, mail=None):
@@ -192,9 +191,14 @@ class MailConfigureTask(Task):
         node.update(mail)
 
 
-def _init(dispatcher, plugin):
-    # Register providers
-    plugin.register_provider('mail', MailProvider)
+def _metadata():
+    return {
+        'id': '700a2699-f24a-11e6-8277-0cc47a3511b4',
+        'type': 'alert_emitter',
+        'name': 'email'
+    }
 
-    # Register task handlers
-    plugin.register_task_handler('mail.update', MailConfigureTask)
+
+def _init(dispatcher, plugin):
+    plugin.register_provider('alert.emitter.email', MailProvider)
+    plugin.register_task_handler('alert.emitter.email.update', MailConfigureTask)
