@@ -31,12 +31,9 @@ from main import AlertEmitter
 
 
 class PushbulletEmitter(AlertEmitter):
-    def __init__(self, context):
-        super(PushbulletEmitter, self).__init__(context)
-        self.api_key = self.context.client.call_sync('alert.emitter.pushbullet.get_api_key')
-
     def emit_first(self, alert, options):
-        pb = Pushbullet(self.api_key)
+        api_key = self.context.client.call_sync('alert.emitter.pushbullet.get_api_key')
+        pb = Pushbullet(api_key)
         pb.push_note(
             'New alert on {0}: {1}'.format(
                 socket.gethostname(),
@@ -46,7 +43,8 @@ class PushbulletEmitter(AlertEmitter):
         )
 
     def emit_again(self, alert, options):
-        pb = Pushbullet(self.api_key)
+        api_key = self.context.client.call_sync('alert.emitter.pushbullet.get_api_key')
+        pb = Pushbullet(api_key)
         pb.push_note(
             'Alert on {0}: {1}'.format(
                 socket.gethostname(),
@@ -56,7 +54,8 @@ class PushbulletEmitter(AlertEmitter):
         )
 
     def cancel(self, alert, options):
-        pb = Pushbullet(self.api_key)
+        api_key = self.context.client.call_sync('alert.emitter.pushbullet.get_api_key')
+        pb = Pushbullet(api_key)
         pb.push_note(
             'Alert on {0} canceled: {1}'.format(
                 socket.gethostname(),
