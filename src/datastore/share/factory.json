@@ -1563,20 +1563,72 @@
     {
         "metadata": {
             "name": "alert.filters",
-            "migration": "keep",
+            "migration": "merge-preserve",
             "pkey-type": "uuid",
             "attributes": {
                 "type": "config"
             }
         },
         "data": {
-            "default": {
-                "emitter": "EMAIL",
+            "23795a9d-f263-11e6-af4f-000c2921ac63": {
+                "index": 1,
+                "class": "VolumeDegraded",
+                "emitter": "email",
+                "predicates": [],
                 "parameters": {
-                    "%type": "alert-emitter-email",
+                    "%type": "AlertEmitterParameters",
                     "addresses": []
-                },
-                "predicates": []
+                }
+            },
+            "2ff8c660-f263-11e6-af4f-000c2921ac63": {
+                "index": 2,
+                "class": "SmartWarn",
+                "emitter": "email",
+                "predicates": [],
+                "parameters": {
+                    "%type": "AlertEmitterParameters",
+                    "addresses": []
+                }
+            },
+            "89320bfb-f263-11e6-af4f-000c2921ac63": {
+                "index": 3,
+                "class": "SmartFail",
+                "emitter": "email",
+                "predicates": [],
+                "parameters": {
+                    "%type": "AlertEmitterParameters",
+                    "addresses": []
+                }
+            },
+            "403d4c81-f263-11e6-af4f-000c2921ac63": {
+                "index": 4,
+                "class": "DirectoryServiceBindFailed",
+                "emitter": "email",
+                "predicates": [],
+                "parameters": {
+                    "%type": "AlertEmitterParameters",
+                    "addresses": []
+                }
+            },
+            "515e1026-f263-11e6-af4f-000c2921ac63": {
+                "index": 5,
+                "class": "CalendarTaskFailed",
+                "emitter": "email",
+                "predicates": [],
+                "parameters": {
+                    "%type": "AlertEmitterParameters",
+                    "addresses": []
+                }
+            },
+            "5c9b5a98-f263-11e6-af4f-000c2921ac63": {
+                "index": 6,
+                "class": "CrashDataFound",
+                "emitter": "email",
+                "predicates": [],
+                "parameters": {
+                    "%type": "AlertEmitterParameters",
+                    "addresses": []
+                }
             }
         }
     },
