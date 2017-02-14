@@ -389,33 +389,20 @@ class DevdEventSource(EventSource):
         if args['subsystem'] == 'SESSION' and args['type'] == 'UPDATE':
             self.emit_event('iscsi.session.update', **exclude(args, "system", "subsystem", "type"))
 
-    def read_until_nul(self, sock):
-        buf = io.BytesIO()
-        while True:
-            byte = sock.read(1)
-            if byte == b'':
-                return None
-
-            if byte == b'\x00':
-                return buf.getvalue()
-
-            buf.write(byte)
-
     def run(self):
         while True:
             try:
-                self.socket = socket.socket(family=socket.AF_UNIX)
-                self.socket.connect("/var/run/devd.xml.pipe")
-                f = self.socket.makefile("rb", 0)
+                self.socket = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
+                self.socket.connect("/var/run/devd.xml.seqpacket.pipe")
                 
                 while True:
-                    line = self.read_until_nul(f)
+                    line = self.socket.recv(8192)
                     if line is None:
                         # Connection closed - we need to reconnect
                         # return
                         raise OSError('Connection closed')
 
-                    event = self.__tokenize(line.decode('utf-8', 'replace'))
+                    event = self.__tokenize(line.strip(b'\x00').decode('utf-8', 'replace'))
                     if not event:
                         # WTF
                         continue
@@ -516,12 +503,7 @@ def _init(dispatcher, plugin):
         }
     })
 
-    if os.path.exists('/var/run/devd.pipe'):
-        plugin.register_event_source('system.device', DevdEventSource)
-    else:
-        plugin.register_event_handler(
-            'service.started', on_service_started)
-
+    plugin.register_event_source('system.device', DevdEventSource)
     plugin.register_provider('system.device', DeviceInfoProvider)
     plugin.register_provider('system.dmi', DMIDataProvider)
 
