@@ -342,6 +342,13 @@
             "system.upload_crash": true,
             "system.home_directory_root": null,
             "system.graphite_servers": [],
+            "mail.from": "",
+            "mail.server": "",
+            "mail.port": 25,
+            "mail.encryption": "PLAIN",
+            "mail.auth": false,
+            "mail.user": "",
+            "mail.pass": "",
             "network.autoconfigure": true,
             "network.gateway.ipv4": null,
             "network.gateway.ipv6": null,
@@ -1569,37 +1576,6 @@
                     "addresses": []
                 },
                 "predicates": []
-            }
-        }
-    },
-    {
-        "metadata": {
-            "name": "alert.emitters",
-            "migration": "keep",
-            "pkey-type": "uuid",
-            "attributes": {
-                "type": "config"
-            }
-        },
-        "data": {
-            "61e11cf7-f164-11e6-8277-0cc47a3511b4": {
-                "name": "email",
-                "config": {
-                    "from_address": "",
-                    "to": [],
-                    "server": "",
-                    "port": 25,
-                    "encryption": "PLAIN",
-                    "auth": false,
-                    "user": "",
-                    "pass": ""
-                }
-            },
-            "750a5978-f165-11e6-8277-0cc47a3511b4": {
-                "name": "pushbullet",
-                "config": {
-                    "api_key": null
-                }
             }
         }
     },
