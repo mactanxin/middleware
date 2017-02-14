@@ -1,5 +1,5 @@
 #
-# Copyright 2016 iXsystems, Inc.
+# Copyright 2017 iXsystems, Inc.
 # All rights reserved
 #
 # Redistribution and use in source and binary forms, with or without
@@ -25,29 +25,45 @@
 #
 #####################################################################
 
+import socket
+from pushbullet import Pushbullet
+from main import AlertEmitter
 
-def _depends():
-    return ['AlertPlugin']
+
+class PushbulletEmitter(AlertEmitter):
+    def emit_first(self, alert, options):
+        api_key = self.context.client.call_sync('alert.emitter.pushbullet.get_api_key')
+        pb = Pushbullet(api_key)
+        pb.push_note(
+            'New alert on {0}: {1}'.format(
+                socket.gethostname(),
+                alert['title']
+            ),
+            alert['description']
+        )
+
+    def emit_again(self, alert, options):
+        api_key = self.context.client.call_sync('alert.emitter.pushbullet.get_api_key')
+        pb = Pushbullet(api_key)
+        pb.push_note(
+            'Alert on {0}: {1}'.format(
+                socket.gethostname(),
+                alert['title']
+            ),
+            alert['description']
+        )
+
+    def cancel(self, alert, options):
+        api_key = self.context.client.call_sync('alert.emitter.pushbullet.get_api_key')
+        pb = Pushbullet(api_key)
+        pb.push_note(
+            'Alert on {0} canceled: {1}'.format(
+                socket.gethostname(),
+                alert['title']
+            ),
+            alert['description']
+        )
 
 
-def _init(dispatcher, plugin):
-    def on_client_login(args):
-        dispatcher.call_sync('alert.emit', {
-            'clazz': 'UserLogin',
-            'one_shot': True,
-            'target': args['username'],
-            'title': 'User {0} has logged in'.format(args['username']),
-            'description': 'User {username} has logged in from {address}'.format(**args)
-        })
-
-    def on_client_logout(args):
-        dispatcher.call_sync('alert.emit', {
-            'clazz': 'UserLogout',
-            'one_shot': True,
-            'target': args['username'],
-            'title': 'User {0} has logged out'.format(args['username']),
-            'description': 'User {username} has logged out'.format(**args)
-        })
-
-    plugin.register_event_handler('server.client_login', on_client_login)
-    plugin.register_event_handler('server.client_logout', on_client_logout)
+def _init(context):
+    context.register_emitter('pushbullet', PushbulletEmitter)

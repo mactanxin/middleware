@@ -61,18 +61,15 @@ def register_general_purpose_schemas(dispatcher):
     })
 
     dispatcher.register_schema_definition('ValidationError', {
-        'type': 'array',
-        'items': {
-            'type': 'object',
-            'additionalProperties': False,
-            'properties': {
-                'path': {
-                    'type': 'array',
-                    'items': {'type': 'string'}
-                },
-                'code': {'type': 'integer'},
-                'message': {'type': 'string'}
-            }
+        'type': 'object',
+        'additionalProperties': False,
+        'properties': {
+            'path': {
+                'type': 'array',
+                'items': {'type': 'string'}
+            },
+            'code': {'type': 'integer'},
+            'message': {'type': 'string'}
         }
     })
 
@@ -86,7 +83,10 @@ def register_general_purpose_schemas(dispatcher):
             'extra': {
                 'oneOf': [
                     {'type': 'null'},
-                    {'$ref': 'ValidationError'}
+                    {
+                        'type': 'array',
+                        'items': {'$ref': 'ValidationError'}
+                    }
                 ]
             }
         }

@@ -915,7 +915,7 @@ class DockerHost(object):
                             state = details['State']
                             if not state.get('Running') and state.get('ExitCode') not in (None, 0, 137):
                                 self.context.client.call_sync('alert.emit', {
-                                    'class': 'DockerContainerDied',
+                                    'clazz: 'DockerContainerDied',
                                     'target': name,
                                     'title': 'Docker container {0} exited with nonzero status.'.format(name),
                                     'description': 'Docker container {0} has exited with status {1}'.format(
@@ -930,7 +930,7 @@ class DockerHost(object):
 
                         elif ev['Action'] == 'oom':
                             self.context.client.call_sync('alert.emit', {
-                                'class': 'DockerContainerDied',
+                                'clazz': 'DockerContainerDied',
                                 'target': name,
                                 'title': 'Docker container {0} ran out of memory.'.format(name),
                                 'description': 'Docker container {0} has run out of memory.'.format(name)

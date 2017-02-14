@@ -63,7 +63,7 @@ def _init(dispatcher, plugin):
             alert = dispatcher.call_sync('alert.get_active_alert', 'DiskControllerFirmwareMismatch', target)
             if int(firmware_ver) != int(driver_ver) and not alert:
                 dispatcher.call_sync('alert.emit', {
-                    'class': 'DiskControllerFirmwareMismatch',
+                    'clazz': 'DiskControllerFirmwareMismatch',
                     'title': 'Firmware/driver version mismatch',
                     'target': '{0}.{1}'.format(driver, number),
                     'description': 'Firmware version {0} does not match driver version {1} for {2}'.format(

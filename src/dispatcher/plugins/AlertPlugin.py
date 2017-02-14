@@ -27,6 +27,7 @@
 
 import errno
 import logging
+from typing import Optional, List, Set, Any
 from collections import deque
 from datetime import datetime
 
@@ -40,9 +41,10 @@ from freenas.dispatcher.rpc import (
     private,
     generator
 )
-from task import Provider, Task, TaskException, TaskDescription, VerifyException, query
+from task import Provider, Task, TaskException, TaskDescription, query
 from freenas.dispatcher.jsonenc import dumps
-from freenas.utils import normalize
+from freenas.dispatcher.model import BaseStruct, BaseEnum, BaseVariantType
+from freenas.utils import normalize, query as q
 from debug import AttachData
 
 
@@ -52,14 +54,84 @@ pending_alerts = deque()
 pending_cancels = deque()
 
 
+class AlertSeverity(BaseEnum):
+    CRITICAL = 'CRITICAL'
+    WARNING = 'WARNING'
+    INFO = 'INFO'
+
+
+class Alert(BaseStruct):
+    id: int
+    clazz: str
+    subtype: str
+    severity: AlertSeverity
+    target: str
+    title: str
+    description: str
+    user: str
+    happened_at: datetime
+    cancelled_at: Optional[datetime]
+    dismissed_at: Optional[datetime]
+    last_emitted_at: Optional[datetime]
+    active: bool
+    dismissed: bool
+    one_shot: bool
+    send_count: int
+    properties: dict
+
+
+class AlertClass(BaseStruct):
+    id: str
+    type: str
+    subtype: str
+    severity: AlertSeverity
+
+
+class AlertEmitterConfig(BaseVariantType):
+    pass
+
+
+class AlertEmitterParameters(BaseVariantType):
+    pass
+
+
+class AlertEmitter(BaseStruct):
+    id: str
+    name: str
+    config: AlertEmitterConfig
+
+
+class AlertPredicateOperator(BaseEnum):
+    EQ = '=='
+    NE = '!='
+    LE = '<='
+    GE = '>='
+    LT = '<'
+    GT = '>'
+    MATCH = '~'
+
+
+class AlertPredicate(BaseStruct):
+    property: str
+    operator: AlertPredicateOperator
+    value: Any
+
+
+class AlertFilter(BaseStruct):
+    id: str
+    index: int
+    clazz: str
+    emitter: str
+    parameters: AlertEmitterParameters
+    predicates: List[AlertPredicate]
+
+
 @description('Provides access to the alert system')
 class AlertsProvider(Provider):
     @query('Alert')
     @generator
     def query(self, filter=None, params=None):
-        return self.datastore.query_stream(
-            'alerts', *(filter or []), **(params or {})
-        )
+        return self.datastore.query_stream('alerts', *(filter or []), **(params or {}))
 
     @private
     @accepts(str, str)
@@ -67,13 +139,12 @@ class AlertsProvider(Provider):
     def get_active_alert(self, cls, target):
         return self.datastore.query(
             'alerts',
-            ('class', '=', cls), ('target', '=', target), ('active', '=', True),
+            ('clazz', '=', cls), ('target', '=', target), ('active', '=', True),
             single=True
         )
 
     @description("Dismisses/Deletes an alert from the database")
-    @accepts(int)
-    def dismiss(self, id):
+    def dismiss(self, id: int) -> None:
         alert = self.datastore.get_by_id('alerts', id)
         if not alert:
             raise RpcException(errno.ENOENT, 'Alert {0} not found'.format(id))
@@ -96,8 +167,7 @@ class AlertsProvider(Provider):
         })
 
     @description("Dismisses/Deletes all alerts from the database")
-    @accepts()
-    def dismiss_all(self):
+    def dismiss_all(self) -> None:
         alert_list = self.query([('dismissed', '=', False)])
         alert_ids = []
         for alert in alert_list:
@@ -118,13 +188,13 @@ class AlertsProvider(Provider):
     @description("Emits an event for the provided alert")
     @accepts(h.all_of(
         h.ref('Alert'),
-        h.required('class')
+        h.required('clazz')
     ))
     @returns(int)
     def emit(self, alert):
-        cls = self.datastore.get_by_id('alert.classes', alert['class'])
+        cls = self.datastore.get_by_id('alert.classes', alert['clazz'])
         if not cls:
-            raise RpcException(errno.ENOENT, 'Alert class {0} not found'.format(alert['class']))
+            raise RpcException(errno.ENOENT, 'Alert class {0} not found'.format(alert['clazz']))
 
         normalize(alert, {
             'when': datetime.utcnow(),
@@ -159,8 +229,7 @@ class AlertsProvider(Provider):
 
     @private
     @description("Cancels already scheduled alert")
-    @accepts(int)
-    def cancel(self, id):
+    def cancel(self, id: int) -> int:
         alert = self.datastore.get_by_id('alerts', id)
         if not alert:
             raise RpcException(errno.ENOENT, 'Alert {0} not found'.format(id))
@@ -191,27 +260,39 @@ class AlertsProvider(Provider):
         return id
 
     @description("Returns list of registered alerts")
-    @accepts()
-    @returns(h.ref('AlertClass'))
-    def get_alert_classes(self):
+    def get_alert_classes(self) -> List[AlertClass]:
         return self.datastore.query('alert.classes')
 
     @description("Returns list of registered alert severities")
-    @accepts()
-    @returns(h.array(str))
-    def get_alert_severities(self):
+    def get_alert_severities(self) -> Set[AlertSeverity]:
         alert_classes = self.get_alert_classes()
         return {alert_class['severity'] for alert_class in alert_classes}
 
 
 @description('Provides access to the alerts filters')
-class AlertsFiltersProvider(Provider):
+class AlertFiltersProvider(Provider):
     @query('AlertFilter')
     @generator
     def query(self, filter=None, params=None):
-        return self.datastore.query_stream(
-            'alert.filters', *(filter or []), **(params or {})
-        )
+        return self.datastore.query_stream( 'alert.filters', *(filter or []), **(params or {}))
+
+
+@description('Provides access to the alert emitter configuration')
+class AlertEmitterProvider(Provider):
+    @query('AlertEmitter')
+    @generator
+    def query(self, filter=None, params=None):
+        def collect():
+            for p in list(self.dispatcher.plugins.values()):
+                if p.metadata and p.metadata.get('type') == 'alert_emitter':
+                    config = self.dispatcher.call_sync('alert.emitter.{0}.get_config'.format(p.metadata['name']))
+                    yield {
+                        'id': p.metadata['id'],
+                        'name': p.metadata['name'],
+                        'config': config
+                    }
+
+        return q.query(collect(), *(filter or []), **(params or {}))
 
 
 @description("Creates an Alert Filter")
@@ -233,7 +314,7 @@ class AlertFilterCreateTask(Task):
 
     def run(self, alertfilter):
         normalize(alertfilter, {
-            'class': None,
+            'clazz': None,
             'predicates': []
         })
 
@@ -255,6 +336,8 @@ class AlertFilterCreateTask(Task):
             'operation': 'create',
             'ids': [id]
         })
+
+        return id
 
 
 @description("Deletes the specified Alert Filter")
@@ -352,6 +435,33 @@ class AlertFilterUpdateTask(Task):
         })
 
 
+@accepts(str, h.ref('AlertEmitter'))
+@description('Configures global parameters of an alert emitter')
+class AlertEmitterUpdateTask(Task):
+    @classmethod
+    def early_describe(cls):
+        return 'Updating alert emitter configuration'
+
+    def describe(self, id, updated_params):
+        return
+
+    def verify(self, id, updated_params):
+        return ['system']
+
+    def run(self, id, updated_params):
+        emitter = self.dispatcher.call_sync('alert.emitter.query', [('id', '=', id)], {'single': True})
+        if not emitter:
+            raise TaskException(errno.ENOENT, 'Emitter not found')
+
+        if 'config' in updated_params:
+            self.run_subtask_sync('alert.emitter.{0}.update'.format(emitter['name']), updated_params['config'])
+
+        self.dispatcher.emit_event('alert.emitter.changed', {
+            'operation': 'update',
+            'id': emitter['id']
+        })
+
+
 @accepts(str, h.ref('AlertSeverity'))
 @description('Sends user alerts')
 class SendAlertTask(Task):
@@ -370,7 +480,7 @@ class SendAlertTask(Task):
             priority = 'WARNING'
 
         return self.dispatcher.call_sync('alert.emit', {
-            'class': 'UserMessage',
+            'clazz': 'UserMessage',
             'severity': priority,
             'title': 'Message from user {0}'.format(self.user),
             'description': message,
@@ -383,115 +493,17 @@ def collect_debug(dispatcher):
 
 
 def _init(dispatcher, plugin):
-    plugin.register_schema_definition('AlertSeverity', {
-        'type': 'string',
-        'enum': ['CRITICAL', 'WARNING', 'INFO'],
-    })
-
-    plugin.register_schema_definition('AlertClassId', {
-        'type': 'string',
-        'enum': dispatcher.datastore.query('alert.classes', select='id')
-    })
-
-    plugin.register_schema_definition('Alert', {
-        'type': 'object',
-        'properties': {
-            'id': {'type': 'integer'},
-            'class': {'$ref': 'AlertClassId'},
-            'type': {'$ref': 'AlertType'},
-            'subtype': {'type': 'string'},
-            'severity': {'$ref': 'AlertSeverity'},
-            'target': {'type': 'string'},
-            'title': {'type': 'string'},
-            'description': {'type': 'string'},
-            'user': {'type': 'string'},
-            'happened_at': {'type': 'string'},
-            'cancelled_at': {'type': ['string', 'null']},
-            'dismissed_at': {'type': ['string', 'null']},
-            'last_emitted_at': {'type': ['string', 'null']},
-            'active': {'type': 'boolean'},
-            'dismissed': {'type': 'boolean'},
-            'one_shot': {'type': 'boolean'},
-            'send_count': {'type': 'integer'},
-            'properties': {
-                'type': 'object'
-            }
-        },
-        'additionalProperties': False
-    })
-
-    plugin.register_schema_definition('AlertType', {
-        'type': 'string',
-        'enum': ['SYSTEM', 'VOLUME', 'DISK']
-    })
-
-    plugin.register_schema_definition('AlertEmitterEmail', {
-        'type': 'object',
-        'additionalProperties': False,
-        'properties': {
-            '%type': {'enum': ['AlertEmitterEmail']},
-            'addresses': {
-                'type': 'array',
-                'items': {'type': 'string'}
-            }
-        }
-    })
-
-    plugin.register_schema_definition('AlertFilter', {
-        'type': 'object',
-        'properties': {
-            'id': {'type': 'string'},
-            'index': {'type': 'integer'},
-            'class': {'$ref': 'AlertClassId'},
-            'emitter': {'type': 'string'},
-            'parameters': {
-                'discriminator': '%type',
-                'oneOf': [
-                    {'$ref': 'AlertEmitterEmail'}
-                ]
-            },
-            'predicates': {
-                'type': 'array',
-                'items': {
-                    'type': 'object',
-                    'additionalProperties': False,
-                    'properties': {
-                        'property': {'type': 'string'},
-                        'operator': {
-                            'type': 'string',
-                            'enum': ['==', '!=', '<=', '>=', '>', '<', '~']
-                        },
-                        'value': {'type': ['string', 'integer', 'boolean', 'null']}
-                    }
-                }
-            }
-        },
-        'additionalProperties': False,
-    })
-
-    plugin.register_schema_definition('AlertClass', {
-        'type': 'object',
-        'additionalProperties': {
-            'type': 'object',
-            'properties': {
-                'id': {'$ref': 'AlertClassId'},
-                'type': {'type': 'string'},
-                'subtype': {'type': 'string'},
-                'severity': {'$ref': 'AlertSeverity'}
-            },
-            'additionalProperties': False,
-        }
-    })
-
     # Register providers
     plugin.register_provider('alert', AlertsProvider)
-    plugin.register_provider('alert.filter', AlertsFiltersProvider)
+    plugin.register_provider('alert.filter', AlertFiltersProvider)
+    plugin.register_provider('alert.emitter', AlertEmitterProvider)
 
     # Register task handlers
     plugin.register_task_handler('alert.send', SendAlertTask)
     plugin.register_task_handler('alert.filter.create', AlertFilterCreateTask)
     plugin.register_task_handler('alert.filter.delete', AlertFilterDeleteTask)
     plugin.register_task_handler('alert.filter.update', AlertFilterUpdateTask)
+    plugin.register_task_handler('alert.emitter.update', AlertEmitterUpdateTask)
 
     def on_alertd_started(args):
         if args['service-name'] != 'alertd.alert':
@@ -518,27 +530,8 @@ def _init(dispatcher, plugin):
     plugin.register_event_handler('plugin.service_registered', on_alertd_started)
 
     # Register event types
-    plugin.register_event_type(
-        'alert.changed',
-        schema={
-            'type': 'object',
-            'properties': {
-                'operation': {'type': 'string', 'enum': ['create', 'delete']},
-                'ids': {'type': 'array', 'items': 'integer'},
-            },
-            'additionalProperties': False
-        }
-    )
-    plugin.register_event_type(
-        'alert.filter.changed',
-        schema={
-            'type': 'object',
-            'properties': {
-                'operation': {'type': 'string', 'enum': ['create', 'delete', 'update']},
-                'ids': {'type': 'array', 'items': 'string'},
-            },
-            'additionalProperties': False
-        }
-    )
+    plugin.register_event_type('alert.changed')
+    plugin.register_event_type('alert.filter.changed')
+    plugin.register_event_type('alert.emitter.changed')
 
     plugin.register_debug_hook(collect_debug)

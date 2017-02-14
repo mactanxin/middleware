@@ -43,7 +43,7 @@ class EmailEmitter(AlertEmitter):
             self.context.client.call_sync('mail.send', {
                 'to': to,
                 'subject': '{0}: {1}'.format(socket.gethostname(), alert['title']),
-                'message': tmpl.render(cls=alert['class'], **alert),
+                'message': tmpl.render(cls=alert['clazz'], **alert),
             })
 
     def emit_again(self, alert, options):
@@ -54,7 +54,7 @@ class EmailEmitter(AlertEmitter):
             self.context.client.call_sync('mail.send', {
                 'to': to,
                 'subject': '{0}: {1}'.format(socket.gethostname(), alert['title']),
-                'message': tmpl.render(cls=alert['class'], **alert),
+                'message': tmpl.render(cls=alert['clazz'], **alert),
             })
 
     def cancel(self, alert, options):
@@ -65,9 +65,9 @@ class EmailEmitter(AlertEmitter):
             self.context.client.call_sync('mail.send', {
                 'to': to,
                 'subject': '{0}: {1} cancelled'.format(socket.gethostname(), alert['title']),
-                'message': tmpl.render(cls=alert['class'], **alert),
+                'message': tmpl.render(cls=alert['clazz'], **alert),
             })
 
 
 def _init(context):
-    context.register_emitter('EMAIL', EmailEmitter)
+    context.register_emitter('email', EmailEmitter)

@@ -349,6 +349,7 @@
             "mail.auth": false,
             "mail.user": "",
             "mail.pass": "",
+            "pushbullet.api_key": null,
             "network.autoconfigure": true,
             "network.gateway.ipv4": null,
             "network.gateway.ipv6": null,
@@ -445,7 +446,6 @@
                 "dependencies": [
                     "file:motd",
                     "file:local/sudoers",
-                    "plugin:pwd_database",
                     "plugin:mail/aliases"
                 ],
                 "name": "accounts"

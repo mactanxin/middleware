@@ -399,7 +399,7 @@ class DeleteVMSnapshotsTask(ProgressTask):
         if failed_snapshots:
             descr = Template(ALERT_TEMPLATE).render(id=id, failed_snapshots=failed_snapshots)
             self.dispatcher.call_sync('alert.emit', {
-                'class': 'VMwareSnapshotFailed',
+                'clazz': 'VMwareSnapshotFailed',
                 'target': dataset,
                 'title': 'Failed to create or remove snapshot of one or more VMware virtual machines',
                 'description': descr

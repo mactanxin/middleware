@@ -542,7 +542,7 @@ class UpdateProvider(Provider):
             'alert.query',
             [
                 ('and', [('active', '=', True), ('dismissed', '=', False)]),
-                ('or', [('class', '=', update_class), ('target', '=', update_version)])
+                ('or', [('clazz', '=', update_class), ('target', '=', update_version)])
             ]
         )
         title = UPDATE_ALERT_TITLE_MAP.get(update_class, 'Update Alert')
@@ -565,7 +565,7 @@ class UpdateProvider(Provider):
                     errno.EINVAL, 'Unknown update alert class: {0}'.format(update_class)
                 )
         alert_payload = {
-            'class': update_class,
+            'clazz': update_class,
             'title': title,
             'target': update_version,
             'description': desc
@@ -576,7 +576,7 @@ class UpdateProvider(Provider):
         # above this fails the exception prevents alert.cancel from being called.
         for update_alert in existing_update_alerts:
             if (
-                update_alert['class'] == update_class and
+                update_alert['clazz'] == update_class and
                 update_alert["target"] == update_version and
                 update_alert["description"] == desc
             ):

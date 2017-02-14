@@ -186,10 +186,10 @@ class Main(object):
                 self.logger.error('Cannot initialize plugin {0}'.format(f), exc_info=True)
 
     def emit_alert(self, alert):
-        self.logger.debug('Emitting alert <id:{0}> (class {1})'.format(alert['id'], alert['class']))
+        self.logger.debug('Emitting alert <id:{0}> (class {1})'.format(alert['id'], alert['clazz']))
         for i in self.datastore.query('alert.filters', ('or', [
-            ('class', '=', None),
-            ('class', '=', alert['class'])
+            ('clazz', '=', None),
+            ('clazz', '=', alert['clazz'])
         ])):
             for pr in i.get('predicates', []):
                 if pr['operator'] not in operators_table:
@@ -227,7 +227,7 @@ class Main(object):
         self.datastore.update('alerts', alert['id'], alert)
 
     def cancel_alert(self, alert):
-        self.logger.debug('Cancelling alert <id:{0}> (class {1})'.format(alert['id'], alert['class']))
+        self.logger.debug('Cancelling alert <id:{0}> (class {1})'.format(alert['id'], alert['clazz']))
 
         alert.update({
             'active': False,

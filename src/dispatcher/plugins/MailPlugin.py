@@ -24,32 +24,64 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 #####################################################################
+
 import base64
 import errno
 import logging
 import os
 import smtplib
 import socket
+from typing import Optional, List
 from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formatdate
 
 from datastore.config import ConfigNode
-from freenas.dispatcher.rpc import (
-    RpcException, SchemaHelper as h, accepts, description, returns
-)
+from freenas.dispatcher.model import BaseStruct, BaseEnum, structures
+from freenas.dispatcher.rpc import RpcException, SchemaHelper as h, accepts, description, returns
 from task import Provider, Task, ValidationException, TaskDescription
 
 logger = logging.getLogger('MailPlugin')
 
 
+class MailEncryptionType(BaseEnum):
+    PLAIN = 'PLAIN'
+    SSL = 'SSL'
+    TLS = 'TLS'
+
+
+class MailMessage(BaseStruct):
+    from_address: str
+    to: str
+    subject: str
+    message: str
+    attachments: List[str]
+    extra_headers: dict
+
+
+class AlertEmitterEmail(BaseStruct):
+    __variant_of__ = structures.AlertEmitterConfig
+    from_address: str
+    to: List[str]
+    server: str
+    port: int
+    auth: bool
+    encryption: MailEncryptionType
+    user: Optional[str]
+    password: Optional[str]
+
+
+class AlertEmitterParametersEmail(BaseStruct):
+    __variant_of__ = structures.AlertEmitterParameters
+    to: List[str]
+
+
 @description("Provides Information about the mail configuration")
 class MailProvider(Provider):
-
-    @returns(h.ref('Mail'))
-    def get_config(self):
-        return ConfigNode('mail', self.configstore)
+    def get_config(self) -> AlertEmitterEmail:
+        node = ConfigNode('mail', self.configstore).__getstate__()
+        return AlertEmitterEmail(node)
 
     @accepts(h.ref('MailMessage'), h.ref('Mail'))
     def send(self, mailmessage, mail=None):
@@ -68,8 +100,7 @@ class MailProvider(Provider):
         extra_headers = mailmessage.get('extra_headers')
 
         if not to:
-            to = self.dispatcher.call_sync(
-                'user.query', [('username', '=', 'root')], {'single': True})
+            to = self.dispatcher.call_sync('user.query', [('username', '=', 'root')], {'single': True})
             if to and to.get('email'):
                 to = [to['email']]
 
@@ -82,7 +113,7 @@ class MailProvider(Provider):
         if subject:
             msg['Subject'] = subject
 
-        msg['From'] = mailmessage['from'] if mailmessage.get('from') else mail['from']
+        msg['From'] = mailmessage.get('from_address', mail['from_address'])
         msg['To'] = ', '.join(to)
         msg['Date'] = formatdate()
 
@@ -115,7 +146,7 @@ class MailProvider(Provider):
 
             if mail['auth']:
                 server.login(mail['user'], mail['pass'])
-            server.sendmail(mail['from'], to, msg)
+            server.sendmail(mail['from_address'], to, msg)
             server.quit()
         except smtplib.SMTPAuthenticationError as e:
             raise RpcException(errno.EACCES, 'Authentication error: {0} {1}'.format(
@@ -160,47 +191,14 @@ class MailConfigureTask(Task):
         node.update(mail)
 
 
+def _metadata():
+    return {
+        'id': '700a2699-f24a-11e6-8277-0cc47a3511b4',
+        'type': 'alert_emitter',
+        'name': 'email'
+    }
+
+
 def _init(dispatcher, plugin):
-    plugin.register_schema_definition('MailEncryptionType', {
-        'type': 'string',
-        'enum': ['PLAIN', 'TLS', 'SSL'],
-    })
-
-    plugin.register_schema_definition('Mail', {
-        'type': 'object',
-        'properties': {
-            'from': {'type': 'string'},
-            'server': {'type': 'string'},
-            'port': {'type': 'integer'},
-            'auth': {'type': 'boolean'},
-            'encryption': {'$ref': 'MailEncryptionType'},
-            'user': {'type': ['string', 'null']},
-            'pass': {'type': ['string', 'null']},
-        },
-        'additionalProperties': False,
-    })
-
-    plugin.register_schema_definition('MailMessage', {
-        'type': 'object',
-        'properties': {
-            'from': {'type': 'string'},
-            'to': {
-                'type': 'array',
-                'items': {'type': 'string'},
-            },
-            'subject': {'type': 'string'},
-            'message': {'type': 'string'},
-            'attachments': {
-                'type': 'array',
-                'items': {'type': 'string'},
-            },
-            'extra_headers': {'type': 'object'},
-        },
-        'additionalProperties': False,
-    })
-
-    # Register providers
-    plugin.register_provider('mail', MailProvider)
-
-    # Register task handlers
-    plugin.register_task_handler('mail.update', MailConfigureTask)
+    plugin.register_provider('alert.emitter.email', MailProvider)
+    plugin.register_task_handler('alert.emitter.email.update', MailConfigureTask)

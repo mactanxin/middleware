@@ -43,7 +43,7 @@ def _init(dispatcher, plugin):
 
         if volume['status'] not in ('ONLINE', 'LOCKED') and volume['id'] and not alert:
             dispatcher.rpc.call_sync('alert.emit', {
-                'class': 'VolumeDegraded',
+                'clazz': 'VolumeDegraded',
                 'target': volume['id'],
                 'title': 'Volume {0} is degraded'.format(volume['id']),
                 'description': 'The volume {0} state is {1}'.format(
@@ -64,7 +64,7 @@ def _init(dispatcher, plugin):
                 continue
 
             dispatcher.rpc.call_sync('alert.emit', {
-                'class': 'VolumeUpgradePossible',
+                'clazz': 'VolumeUpgradePossible',
                 'target': volume['id'],
                 'title': 'Volume {0} can be upgraded'.format(volume['id']),
                 'description': 'New feature flags are available for volume {0}'.format(volume['id']),
