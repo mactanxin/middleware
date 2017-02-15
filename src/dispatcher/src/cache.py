@@ -33,6 +33,8 @@ from sortedcontainers import SortedDict
 
 class CacheStore(object):
     class CacheItem(object):
+        __slots__ = ('valid', 'data')
+
         def __init__(self):
             self.valid = Event()
             self.data = None

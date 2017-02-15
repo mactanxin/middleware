@@ -137,6 +137,8 @@ def annotate(user, directory, name_field, cache=None):
 
 
 class CacheItem(object):
+    __slots__ = ('id', 'uuid', 'names', 'value', 'directory', 'ttl', 'created_at', 'lock', 'destroyed')
+
     def __init__(self, id, uuid, names, value, directory, ttl):
         self.id = id
         self.uuid = uuid.lower()
