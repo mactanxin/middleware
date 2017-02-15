@@ -406,6 +406,7 @@ class ReplicationCreateTask(ReplicationBaseTask):
         normalize(
             link,
             {
+                'one_time': False,
                 'replicate_services': False,
                 'bidirectional': False,
                 'auto_recover': False,
@@ -473,6 +474,10 @@ class ReplicationCreateTask(ReplicationBaseTask):
             parents=get_replication_resources(self.dispatcher, link)
         )
         remote_client.disconnect()
+
+        if is_master and link['one_time']:
+            self.dispatcher.submit_task('replication.sync', link['name'])
+
         return id
 
     def rollback(self, link):
@@ -982,6 +987,9 @@ class ReplicationSyncTask(ReplicationBaseTask):
                         'ids': [link['id']]
                     })
                     remote_client.disconnect()
+
+                if status == 'SUCCESS' and link['one_time']:
+                    self.dispatcher.submit_task('replication.delete', link['name'])
 
 
 @private
@@ -1810,6 +1818,7 @@ def _init(dispatcher, plugin):
             'bidirectional': {'type': 'boolean'},
             'auto_recover': {'type': 'boolean'},
             'replicate_services': {'type': 'boolean'},
+            'one_time': {'type': 'boolean'},
             'recursive': {'type': 'boolean'},
             'status': {
                 'type': 'array',
