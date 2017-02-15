@@ -557,7 +557,7 @@ class SystemRebootTask(Task):
         })
 
         self.dispatcher.call_sync('alert.emit', {
-            'class': 'SystemReboot',
+            'clazz': 'SystemReboot',
             'user': self.user,
             'title': 'System reboot',
             'description': 'System has been rebooted by {0}'.format(self.user),
