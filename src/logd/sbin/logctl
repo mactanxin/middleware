@@ -240,6 +240,8 @@ def main():
             signal.pause()
     except KeyboardInterrupt:
         pass
+    except BrokenPipeError:
+        pass
 
     if args.dump:
         out.close()
