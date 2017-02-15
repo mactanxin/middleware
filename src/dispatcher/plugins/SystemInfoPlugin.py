@@ -596,7 +596,7 @@ class SystemHaltTask(Task):
         })
 
         self.dispatcher.call_sync('alert.emit', {
-            'class': 'SystemShutdown',
+            'clazz': 'SystemShutdown',
             'user': self.user,
             'title': 'System shutdown',
             'description': 'System has been shut down by {0}'.format(self.user),
