@@ -496,7 +496,10 @@ class DockerContainerCreateTask(DockerBaseTask):
                 )
 
         bridge = container.get('bridge')
-        if bridge.get('enable') and not (bridge.get('dhcp') or bridge.get('address')):
+        network_mode = container.get('primary_network_mode')
+        bridge_enabled = network_mode == 'BRIDGED'
+
+        if bridge_enabled and not (bridge.get('dhcp') or bridge.get('address')):
             raise VerifyException(
                 errno.EINVAL,
                 'Either dhcp or static address must be selected for bridged container'
@@ -525,6 +528,7 @@ class DockerContainerCreateTask(DockerBaseTask):
             'privileged': False,
             'capabilities_add': [],
             'capabilities_drop': [],
+            'primary_network_mode': 'NAT',
             'networks': [],
         })
 
@@ -621,7 +625,9 @@ class DockerContainerUpdateTask(DockerBaseTask):
                 )
 
         bridge = updated_fields.get('bridge', {})
-        if bridge.get('enable') and not (bridge.get('dhcp') or bridge.get('address')):
+        network_mode = updated_fields.get('primary_network_mode')
+        bridge_enabled = network_mode == 'BRIDGED'
+        if bridge_enabled and not (bridge.get('dhcp') or bridge.get('address')):
             raise VerifyException(
                 errno.EINVAL,
                 'Either dhcp or static address must be selected for bridged container'

@@ -97,7 +97,6 @@ logging.getLogger('urllib').setLevel(logging.WARNING)
 
 DOCKER_LABELS_MAP = {
     'org.freenas.autostart': {'default': 'false', 'preset': 'autostart'},
-    'org.freenas.bridged': {'default': 'false', 'preset': 'bridge.enable'},
     'org.freenas.capabilities-add': {'default': '', 'preset': 'capabilities_add'},
     'org.freenas.capabilities-drop': {'default': '', 'preset': 'capabilities_drop'},
     'org.freenas.command': {'default': '', 'preset': 'command'},
@@ -106,6 +105,7 @@ DOCKER_LABELS_MAP = {
     'org.freenas.immutable': {'default': '', 'preset': 'immutable'},
     'org.freenas.interactive': {'default': 'false', 'preset': 'interactive'},
     'org.freenas.port-mappings': {'default': '', 'preset': 'ports'},
+    'org.freenas.primary-network-mode': {'default': '', 'preset': 'primary_network_mode'},
     'org.freenas.privileged': {'default': 'false', 'preset': 'privileged'},
     'org.freenas.settings': {'default': [], 'preset': 'settings'},
     'org.freenas.static-volumes': {'default': [], 'preset': 'static_volumes'},
@@ -1375,7 +1375,6 @@ class DockerService(RpcService):
         result = {
             'autostart': truefalse_to_bool(labels.get('org.freenas.autostart')),
             'bridge': {
-                'enable': truefalse_to_bool(labels.get('org.freenas.bridged')),
                 'dhcp': truefalse_to_bool(labels.get('org.freenas.dhcp')),
                 'address': None
             },
@@ -1386,6 +1385,7 @@ class DockerService(RpcService):
             'immutable': [],
             'interactive': truefalse_to_bool(labels.get('org.freenas.interactive')),
             'ports': [],
+            'primary_network_mode': labels.get('org.freenas.primary-network-mode'),
             'privileged': truefalse_to_bool(labels.get('org.freenas.privileged')),
             'settings': [],
             'static_volumes': [],
@@ -1501,11 +1501,22 @@ class DockerService(RpcService):
                 except NotFound:
                     continue
 
-                external = q.get(details, 'NetworkSettings.Networks.external')
-                networks = []
-                hidden_builtin_networks = ('bridge', 'external')
-                # Docker does not assign the <container>.NetworkSettings.Networks.<network>.NetworkID
-                # until the container is started, hence the below gymnastics to retrive the network id
+                host_config = q.get(details, 'HostConfig')
+                net_mode = host_config.get('NetworkMode')
+                bridge_enabled = net_mode == 'external'
+
+                primary_network_mode = 'NAT'
+                if bridge_enabled:
+                    primary_network_mode = 'BRIDGED'
+                if net_mode == 'host':
+                    primary_network_mode = 'HOST'
+                if net_mode == 'none':
+                    primary_network_mode = 'NONE'
+
+                networks=[]
+                hidden_builtin_networks = ('bridge', 'external', 'host', 'none')
+                #Docker does not assign the <container>.NetworkSettings.Networks.<network>.NetworkID
+                #untill the container is started, hence the below gymnastics to retrive the network id
                 network_names = list(q.get(details, 'NetworkSettings.Networks', {}).keys())
                 if network_names:
                     for n in host.connection.networks(names=network_names):
@@ -1513,10 +1524,10 @@ class DockerService(RpcService):
                             networks.append(n.get('Id'))
                 labels = q.get(details, 'Config.Labels')
                 environment = q.get(details, 'Config.Env')
-                host_config = q.get(details, 'HostConfig')
                 names = list(normalize_names(container['Names']))
-                bridge_ipaddress = q.get(external, 'IPAMConfig.IPv4Address') if external else None
-                bridge_macaddress = q.get(details, 'Config.MacAddress') if external else None
+                external = q.get(details, 'NetworkSettings.Networks.external')
+                bridge_ipaddress = q.get(external, 'IPAMConfig.IPv4Address') if bridge_enabled else None
+                bridge_macaddress = q.get(details, 'Config.MacAddress') if bridge_enabled else None
                 presets = self.labels_to_presets(labels)
                 settings = []
                 web_ui_url = None
@@ -1549,7 +1560,6 @@ class DockerService(RpcService):
                     'hostname': details['Config']['Hostname'],
                     'exec_ids': details['ExecIDs'] or [],
                     'bridge': {
-                        'enable': external is not None,
                         'dhcp': truefalse_to_bool(labels.get('org.freenas.dhcp')),
                         'address': bridge_ipaddress,
                         'macaddress': bridge_macaddress,
@@ -1560,6 +1570,7 @@ class DockerService(RpcService):
                     'capabilities_add': host_config['CapAdd'] or [],
                     'capabilities_drop': host_config['CapDrop'] or [],
                     'privileged': host_config.get('Privileged', False),
+                    'primary_network_mode': primary_network_mode,
                     'networks': networks,
                 })
                 if presets and presets.get('web_ui_protocol'):
@@ -1711,12 +1722,13 @@ class DockerService(RpcService):
         if not host:
             raise RpcException(errno.ENOENT, 'Docker host {0} not found'.format(container['host']))
 
-        bridge_enabled = q.get(container, 'bridge.enable')
+        primary_network_mode = container.get('primary_network_mode')
+        bridge_enabled = primary_network_mode == 'BRIDGED'
         dhcp_enabled = q.get(container, 'bridge.dhcp') if bridge_enabled else False
         labels = {
             'org.freenas.autostart': bool_to_truefalse(container.get('autostart')),
             'org.freenas.expose-ports-at-host': bool_to_truefalse(container.get('expose_ports')),
-            'org.freenas.bridged': bool_to_truefalse(bridge_enabled),
+            'org.freenas.primary-network-mode': primary_network_mode,
             'org.freenas.dhcp': bool_to_truefalse(dhcp_enabled),
         }
 
@@ -1756,6 +1768,13 @@ class DockerService(RpcService):
         caps_add.append('NET_ADMIN') if 'NET_ADMIN' not in caps_add else None
         caps_drop = container.get('capabilities_drop', [])
 
+        network_mode = 'default'
+        if bridge_enabled:
+            network_mode = 'external'
+        if primary_network_mode == 'HOST':
+            network_mode = 'host'
+        if primary_network_mode == 'NONE':
+            network_mode = 'none'
         host_config= host.connection.create_host_config(
             port_bindings=port_bindings,
             binds={
@@ -1767,7 +1786,7 @@ class DockerService(RpcService):
             privileged=container['privileged'],
             cap_add=caps_add,
             cap_drop=caps_drop,
-            network_mode='external' if bridge_enabled else 'default'
+            network_mode=network_mode
         )
 
         create_args = {
