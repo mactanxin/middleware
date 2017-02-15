@@ -1731,7 +1731,6 @@ class DockerService(RpcService):
         labels = {
             'org.freenas.autostart': bool_to_truefalse(container.get('autostart')),
             'org.freenas.expose-ports-at-host': bool_to_truefalse(container.get('expose_ports')),
-            'org.freenas.primary-network-mode': primary_network_mode,
             'org.freenas.dhcp': bool_to_truefalse(dhcp_enabled),
         }
 
