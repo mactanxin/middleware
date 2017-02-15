@@ -220,7 +220,7 @@ def _metadata():
 
 
 def _depends():
-    return ['ZfsPlugin', 'SharingPlugin']
+    return ['SharingPlugin']
 
 
 def _init(dispatcher, plugin):

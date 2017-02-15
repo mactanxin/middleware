@@ -358,7 +358,7 @@ def convert_share(dispatcher, ret, path, enabled, share):
 
 
 def _depends():
-    return ['SMBPlugin', 'SharingPlugin']
+    return ['SharingPlugin']
 
 
 def _metadata():

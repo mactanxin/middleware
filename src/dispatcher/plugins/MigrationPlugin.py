@@ -422,6 +422,7 @@ class StorageMigrateTask(Task):
         super(StorageMigrateTask, self).__init__(dispatcher)
         self.__confxml = None
         self._notifier = notifier()
+        self.fn10_disks = []
 
     @classmethod
     def early_describe(cls):
@@ -463,12 +464,11 @@ class StorageMigrateTask(Task):
                 return search[0].text
             return None
 
-        elif tp == 'serial':
-            for devname in self.__get_disks():
-                serial = self._notifier.serial_from_device(devname)
-                if serial == value:
-                    return devname
-            return None
+        elif tp.startswith('serial'):
+            if tp == 'serial_lunid':
+                value = value.split('_')[0]
+            dev = q.query(self.fn10_disks, ('serial', '=', value), single=True)
+            return dev['status']['gdisk_name'] if dev else None
 
         elif tp == 'devicename':
             search = doc.xpath("//class[name = 'DEV']/geom[name = '%s']" % value)
@@ -481,7 +481,7 @@ class StorageMigrateTask(Task):
         # Migrate disk settings
         disk_subtasks = []
         fn9_disks = get_table('select * from storage_disk', dictionary=False)
-        fn10_disks = self.dispatcher.call_sync('disk.query')
+        self.fn10_disks = list(self.dispatcher.call_sync('disk.query'))
 
         for fn9_disk in fn9_disks:
             dev = self.identifier_to_device(fn9_disk['disk_identifier'])
@@ -497,7 +497,7 @@ class StorageMigrateTask(Task):
             newident_err = None
             try:
                 newident = self.dispatcher.call_sync(
-                    'disk.device_to_identifier', dev, serial=(fn9_disk['disk_serial'] or None)
+                    'disk.device_to_identifier', dev, fn9_disk['disk_serial'] or None
                 )
             except RpcException as err:
                 newident_err = err
@@ -509,14 +509,11 @@ class StorageMigrateTask(Task):
                 ))
                 continue
 
-            fn10_disk = None
-            fn10_disk = q.query(fn10_disks, ('id', '=', newident), single=True)
+            fn10_disk = q.query(self.fn10_disks, ('id', '=', newident), single=True)
 
             if fn10_disk is None:
                 self.add_warning(TaskWarning(
-                    'Failed to lookup id: {0} for fn9 disk id: {1}, skipping'.format(
-                        newident, dev
-                    )
+                    'Failed to lookup id: {0} for fn9 disk id: {1}, skipping'.format(newident, dev)
                 ))
                 continue
 
@@ -771,18 +768,6 @@ class MasterMigrateTask(ProgressTask):
         self.status = 'FINISHED'
         self.migration_progess(100, 'Migration of FreeNAS 9.x database config and settings done')
 
-
-def _depends():
-    return [
-        'UserPlugin', 'NetworkPlugin', 'VolumePlugin', 'AlertPlugin',
-        'ShareISCSIPlugin', 'ShareNFSPlugin', 'ShareAFPPlugin', 'ShareSMBPlugin',
-        'ShareWebDAVPlugin', 'IPMIPlugin', 'NTPPlugin', 'SupportPlugin',
-        'SystemDatasetPlugin', 'SystemInfoPlugin', 'FTPPlugin', 'TFTPPlugin',
-        'UpdatePlugin', 'CryptoPlugin', 'UPSPlugin', 'BootPlugin',
-        'KerberosPlugin', 'KerberosPlugin', 'CalendarTasksPlugin', 'RsyncdPlugin',
-        'ServiceManagePlugin', 'SNMPPlugin', 'SSHPlugin', 'TunablePlugin',
-        'MailPlugin', 'LLDPPlugin', 'DynDNSPlugin', 'DirectoryServicePlugin'
-    ]
 
 
 def _init(dispatcher, plugin):

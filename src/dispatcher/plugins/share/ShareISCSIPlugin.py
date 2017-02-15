@@ -566,6 +566,10 @@ def _metadata():
     }
 
 
+def _depends():
+    return ['SharingPlugin']
+
+
 def _init(dispatcher, plugin):
     plugin.register_schema_definition('ShareIscsi', {
         'type': 'object',
