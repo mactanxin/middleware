@@ -1399,7 +1399,10 @@ class DockerService(RpcService):
 
         if labels.get('org.freenas.immutable'):
             for l in labels.get('org.freenas.immutable').split(','):
-                result['immutable'].append(DOCKER_LABELS_MAP[l].get('preset'))
+                try:
+                    result['immutable'].append(DOCKER_LABELS_MAP[l].get('preset'))
+                except KeyError:
+                    pass
 
         if labels.get('org.freenas.port-mappings'):
             for mapping in labels.get('org.freenas.port-mappings').split(','):
