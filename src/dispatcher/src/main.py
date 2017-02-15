@@ -286,6 +286,8 @@ class Plugin(object):
 
 
 class EventType(object):
+    __slots__ = ('name', 'source', 'schema', 'refcount', 'lock', 'logger')
+
     def __init__(self, name, source=None, schema=None):
         self.name = name
         self.source = source
