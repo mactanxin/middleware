@@ -105,10 +105,17 @@ class NetworkPortProvider(Provider):
                     seen_ports.add(port)
 
         def collect_pf():
-            if 0:
-                yield None
-
-            return
+            pf = pf.PF()
+            for rule in pf.get_rules('rdr'):
+                for p in range(rule.proxy_ports[0], rule.proxy_ports[1]):
+                    yield Port(
+                        consumer_type=PortConsumerType.CONTAINER,
+                        consumer_pid=None,
+                        consumer_name=rule.label,
+                        af=PortAddressFamily.INET,
+                        port=p,
+                        protocol=PortProtocol.TCP
+                    )
 
         return q.query(
             itertools.chain(collect_system(), collect_pf()),
