@@ -37,6 +37,11 @@ import datastore.restore
 
 DEFAULT_CONFIGFILE = '/usr/local/etc/middleware.conf'
 DEFAULT_FACTORY_FILE = '/usr/local/share/datastore/factory.json'
+EXAMPLE_USAGE = '''
+Examples:
+
+dsrestore -f example.json
+'''
 ds = None
 
 
@@ -52,12 +57,17 @@ def init_datastore(filename, alt):
 
 def main():
     global ds
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description='The dsrestore command is used to restore database contents from a saved database dump file.',
+        epilog=EXAMPLE_USAGE,
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+
     parser.add_argument('-c', metavar='CONFIG', default=DEFAULT_CONFIGFILE, help='Config file name')
-    parser.add_argument('-f', metavar='FILE', default=DEFAULT_FACTORY_FILE, help='Input file name')
-    parser.add_argument('-t', metavar='TYPE', default='', help='Collection types to restore')
-    parser.add_argument('--reset', action='store_true')
-    parser.add_argument('--alt', action='store_true', help='Use alternate DSN')
+    parser.add_argument('-f', metavar='FILE', default=DEFAULT_FACTORY_FILE, help='Restore from a specified input file name')
+    parser.add_argument('-t', metavar='TYPE', default='', help='Manually designate the collection types for restoration')
+    parser.add_argument('--reset', action='store_true', help='Wipes the database before beginning the restore. Used to purge or compact the database')
+    parser.add_argument('--alt', action='store_true', help='Use an alternate data source name (DSN). This should only be used by the updater')
 
     args = parser.parse_args()
     types = list(filter(None, args.t.split(',')))
