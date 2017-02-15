@@ -988,6 +988,7 @@ class DockerHost(object):
                                     continue
 
                                 rule = pf.Rule()
+                                rule.label = 'container:{0}'.format(name)
                                 rule.dst.port_range = [i['host_port'], 0]
                                 rule.dst.port_op = pf.RuleOperator.EQ
                                 rule.action = pf.RuleAction.RDR
@@ -2354,6 +2355,7 @@ class Main(object):
                 raise ValueError('Cannot redirect Docker API to {0}: port 2375 already in use'.format(hostid))
 
             rule = pf.Rule()
+            rule.label = 'Docker API'
             rule.dst.port_range = [2375, 0]
             rule.dst.port_op = pf.RuleOperator.EQ
             rule.action = pf.RuleAction.RDR
