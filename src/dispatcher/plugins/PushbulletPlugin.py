@@ -26,7 +26,6 @@
 #####################################################################
 
 import socket
-from pushbullet import Pushbullet
 from typing import Optional, List
 from freenas.dispatcher.rpc import private
 from freenas.dispatcher.model import BaseStruct, types
@@ -49,12 +48,6 @@ class PushbulletProvider(Provider):
     def get_config(self) -> AlertEmitterPushbullet:
         node = ConfigNode('pushbullet', self.configstore).__getstate__()
         return AlertEmitterPushbullet(node)
-
-    @private
-    def test(self):
-        key = self.get_api_key()
-        pb = Pushbullet(key)
-        pb.push_note('This is a test', 'This is a test not from {0}'.format(socket.gethostname()))
 
 
 @private
