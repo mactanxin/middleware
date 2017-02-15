@@ -562,7 +562,6 @@ class VMBaseTask(ProgressTask):
                 'target_path': res['name'],
                 'size': 0
             })
-
             if properties['target_type'] != 'DISK':
                 properties['target_path'] = os.path.join(vm_root_dir, properties['target_path'])
 
@@ -797,7 +796,6 @@ class VMBaseTask(ProgressTask):
                         errno.ENOENT,
                         'Cannot create a bridge to {0}. Interface does not exist'.format(brigde)
                     )
-
 
     def delete_device(self, vm, res):
         reserved_storage = self.dispatcher.call_sync('vm.get_reserved_storage', vm['id'])
