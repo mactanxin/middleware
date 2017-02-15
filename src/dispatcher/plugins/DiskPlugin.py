@@ -243,6 +243,11 @@ class DiskProvider(Provider):
         else:
             return False
 
+    @accepts(str, h.oneOf(str, None))
+    @returns(h.oneOf(str, None))
+    def device_to_identifier(self, name, serial=None):
+        return device_to_identifier(name, serial)
+
 
 class EnclosureProvider(Provider):
     @query('Enclosure')

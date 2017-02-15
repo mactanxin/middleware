@@ -36,7 +36,6 @@ import errno
 from lib.system import system, SubprocessException
 from freenas.serviced import push_status
 from freenas.utils import query as q
-from bsd import geom
 from lxml import etree
 from freenas.dispatcher.rpc import RpcException, description
 from task import (
@@ -477,29 +476,6 @@ class StorageMigrateTask(Task):
                 return value
             return None
 
-    def device_to_identifier(name, serial=None):
-        gdisk = geom.geom_by_name('DISK', name)
-        if not gdisk:
-            return None
-
-        if 'lunid' in gdisk.provider.config:
-            return "lunid:{0}".format(gdisk.provider.config['lunid'])
-
-        if serial:
-            return "serial:{0}".format(serial)
-
-        gpart = geom.geom_by_name('PART', name)
-        if gpart:
-            for i in gpart.providers:
-                if i.config['type'] in ('freebsd-zfs', 'freebsd-ufs'):
-                    return "uuid:{0}".format(i.config['rawuuid'])
-
-        glabel = geom.geom_by_name('LABEL', name)
-        if glabel and glabel.provider:
-            return "label:{0}".format(glabel.provider.name)
-
-        return "devicename:{0}".format(os.path.join('/dev', name))
-
     def run(self):
 
         # Migrate disk settings
@@ -517,9 +493,20 @@ class StorageMigrateTask(Task):
                     )
                 ))
                 continue
-            newident = self.device_to_identifier(dev, serial=(fn9_disk['disk_serial'] or None))
-            if not newident:
-                self.add_warning(TaskWarning('Failed to convert {0} to id, skipping'.format(dev)))
+            newident = None
+            newident_err = None
+            try:
+                newident = self.dispatcher.call_sync(
+                    'disk.device_to_identifier', dev, serial=(fn9_disk['disk_serial'] or None)
+                )
+            except RpcException as err:
+                newident_err = err
+            if newident is None:
+                self.add_warning(TaskWarning(
+                    'Skipping {0} since failed to convert it to id{1}'.format(
+                        dev, ' due to error: {0}'.format(newident_err) if newident_err else ''
+                    )
+                ))
                 continue
 
             fn10_disk = None
