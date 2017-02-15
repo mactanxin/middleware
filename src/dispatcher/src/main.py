@@ -119,6 +119,7 @@ class Plugin(object):
 
     def __init__(self, dispatcher, filename=None):
         self.filename = filename
+        self.name, _ = os.path.splitext(os.path.basename(self.filename))
         self.init = None
         self.dependencies = set()
         self.dispatcher = dispatcher
@@ -150,6 +151,9 @@ class Plugin(object):
 
         self.module = module
 
+    def push_status(self, message):
+        push_status('{0}: {1}'.format(self.name, message))
+
     def attach_hook(self, name, func):
         self.dispatcher.attach_hook(name, func)
         self.registers['attach_hooks'].append((name, func))
@@ -160,12 +164,11 @@ class Plugin(object):
 
     def load(self, dispatcher):
         try:
-            name, _ = os.path.splitext(os.path.basename(self.filename))
             self.module._init(self.dispatcher, self)
             self.state = self.LOADED
-            self.dispatcher.dispatch_event('server.plugin.initialized', {"name": name})
+            self.dispatcher.dispatch_event('server.plugin.initialized', {"name": self.name})
             with contextlib.suppress(BaseException):
-                push_status('Plugin loaded: {0}'.format(name))
+                push_status('Plugin loaded: {0}'.format(self.name))
         except Exception as err:
             self.dispatcher.logger.exception('Plugin %s exception', self.filename)
             self.dispatcher.report_error('Cannot initalize plugin {0}'.format(self.filename), err)

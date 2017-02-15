@@ -2022,7 +2022,9 @@ def _init(dispatcher, plugin):
         global snapshots
 
         zfs = get_zfs()
-        logger.info("Syncing ZFS pools...")
+        msg = "Syncing ZFS pools..."
+        logger.info(msg)
+        plugin.push_status(msg)
 
         def sort_func(d):
             return os.path.dirname(d), os.path.basename(d)
@@ -2043,7 +2045,10 @@ def _init(dispatcher, plugin):
             zpool_sync_resources(dispatcher, name)
         pools.update(**pools_dict)
 
-        logger.info("Syncing ZFS datasets...")
+        msg = "Syncing ZFS datasets..."
+        logger.info(msg)
+        plugin.push_status(msg)
+
         datasets_dict = {}
         for i in dispatcher.threaded(lambda: [d.__getstate__(False) for d in zfs.datasets]):
             name = i['id']
@@ -2053,7 +2058,10 @@ def _init(dispatcher, plugin):
                 parents=['zpool:{0}'.format(i['pool'])])
         datasets.update(**datasets_dict)
 
-        logger.info("Syncing ZFS snapshots...")
+        msg = "Syncing ZFS snapshots..."
+        logger.info(msg)
+        plugin.push_status(msg)
+
         snapshots_dict = {}
         for i in dispatcher.threaded(lambda: [s.__getstate__() for s in zfs.snapshots]):
             snapshots_dict[i['id']] = i
