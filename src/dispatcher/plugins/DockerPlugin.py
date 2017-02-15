@@ -153,13 +153,13 @@ class DockerContainerProvider(Provider):
             return self.dispatcher.call_sync('docker.container.create_exec', id, '/bin/sh')
 
 
-@description('Provides information about Docker networks')
+@description('Provides information about Docker user-defined networks')
 class DockerNetworkProvider(Provider):
-    @description('Returns information about Docker networks')
+    @description('Returns information about Docker user-defined networks')
     @query('DockerNetwork')
     @generator
     def query(self, filter=None, params=None):
-        hide_builtin_networks = [('name', 'nin', ('bridge', 'external'))]
+        hide_builtin_networks = [('name', 'nin', ('bridge', 'external', 'host', 'none'))]
         if filter:
             filter.extend(hide_builtin_networks)
         else:
@@ -496,11 +496,21 @@ class DockerContainerCreateTask(DockerBaseTask):
                 )
 
         bridge = container.get('bridge')
-        if bridge.get('enable') and not (bridge.get('dhcp') or bridge.get('address')):
+        network_mode = container.get('primary_network_mode')
+        bridge_enabled = network_mode == 'BRIDGED'
+
+        if bridge_enabled and not (bridge.get('dhcp') or bridge.get('address')):
             raise VerifyException(
                 errno.EINVAL,
                 'Either dhcp or static address must be selected for bridged container'
             )
+
+        if network_mode in ('HOST', 'NONE') and container.get('networks'):
+            raise VerifyException(
+                errno.EINVAL,
+                'Cannot connect networks to container with primary network mode: {0}'.format(network_mode)
+            )
+
 
         if hostname:
             return ['docker:{0}'.format(hostname)]
@@ -525,6 +535,7 @@ class DockerContainerCreateTask(DockerBaseTask):
             'privileged': False,
             'capabilities_add': [],
             'capabilities_drop': [],
+            'primary_network_mode': 'NAT',
             'networks': [],
         })
 
@@ -621,10 +632,19 @@ class DockerContainerUpdateTask(DockerBaseTask):
                 )
 
         bridge = updated_fields.get('bridge', {})
-        if bridge.get('enable') and not (bridge.get('dhcp') or bridge.get('address')):
+        network_mode = updated_fields.get('primary_network_mode')
+        bridge_enabled = network_mode == 'BRIDGED'
+        if bridge_enabled and not (bridge.get('dhcp') or bridge.get('address')):
             raise VerifyException(
                 errno.EINVAL,
                 'Either dhcp or static address must be selected for bridged container'
+            )
+
+        networks = updated_fields.get('networks') or container.get('networks')
+        if network_mode in ('HOST', 'NONE') and networks:
+            raise VerifyException(
+                errno.EINVAL,
+                'Cannot connect networks to container with primary network mode: {0}'.format(network_mode)
             )
 
         if 'running' in updated_fields:
@@ -2431,6 +2451,7 @@ def _init(dispatcher, plugin):
                 'items': {'type': 'string'}
             },
             'privileged': {'type': 'boolean'},
+            'primary_network_mode': {'oneOf': [{'$ref': 'DockerContainerNetworkMode'}, {'type': 'null'}]},
             'networks': {
                 'type': 'array',
                 'items': {'type': 'string'}
@@ -2438,11 +2459,15 @@ def _init(dispatcher, plugin):
         }
     })
 
+    plugin.register_schema_definition('DockerContainerNetworkMode', {
+        'type': 'string',
+        'enum': ['NAT', 'BRIDGED', 'HOST', 'NONE']
+    })
+
     plugin.register_schema_definition('DockerContainerBridge', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
-            'enable': {'type': 'boolean'},
             'dhcp': {'type': 'boolean'},
             'address': {'type': ['string', 'null']},
             'macaddress': {'type': ['string', 'null']}
