@@ -958,11 +958,14 @@ class DockerHost(object):
                             if alert:
                                 self.context.client.call_sync('alert.cancel', alert['id'])
 
-                            labels = details['Config']['Labels']
-                            if not truefalse_to_bool(labels.get('org.freenas.expose-ports-at-host')):
+                            expose_ports, primary_network_mode = self.context.client.call_sync(
+                                'docker.container.query',
+                                [('id', '=', ev['id'])],
+                                {'select': ['expose_ports', 'primary_network_mode'], 'single': True}
+                            )
+                            if not expose_ports:
                                 continue
-
-                            if truefalse_to_bool(labels.get('org.freenas.bridged')):
+                            if primary_network_mode != 'NAT':
                                 continue
 
                             self.logger.debug('Redirecting container {0} ports on host firewall'.format(ev['id']))
