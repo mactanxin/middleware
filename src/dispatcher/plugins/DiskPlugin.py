@@ -243,8 +243,8 @@ class DiskProvider(Provider):
         else:
             return False
 
-    @accepts(str, h.oneOf(str, None))
-    @returns(h.oneOf(str, None))
+    @accepts(str, h.one_of(str, None))
+    @returns(h.one_of(str, None))
     def device_to_identifier(self, name, serial=None):
         return device_to_identifier(name, serial)
 
