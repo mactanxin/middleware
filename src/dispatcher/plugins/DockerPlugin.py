@@ -2437,6 +2437,7 @@ def _init(dispatcher, plugin):
                 'items': {'type': 'string'}
             },
             'privileged': {'type': 'boolean'},
+            'primary_network_mode': {'oneOf': [{'$ref': 'DockerContainerNetworkMode'}, {'type': 'null'}]},
             'networks': {
                 'type': 'array',
                 'items': {'type': 'string'}
@@ -2444,11 +2445,15 @@ def _init(dispatcher, plugin):
         }
     })
 
+    plugin.register_schema_definition('DockerContainerNetworkMode', {
+        'type': 'string',
+        'enum': ['NAT', 'BRIDGED', 'HOST', 'NONE']
+    })
+
     plugin.register_schema_definition('DockerContainerBridge', {
         'type': 'object',
         'additionalProperties': False,
         'properties': {
-            'enable': {'type': 'boolean'},
             'dhcp': {'type': 'boolean'},
             'address': {'type': ['string', 'null']},
             'macaddress': {'type': ['string', 'null']}
