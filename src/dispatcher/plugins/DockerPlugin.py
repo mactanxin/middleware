@@ -505,6 +505,13 @@ class DockerContainerCreateTask(DockerBaseTask):
                 'Either dhcp or static address must be selected for bridged container'
             )
 
+        if network_mode in ('HOST', 'NONE') and container.get('networks'):
+            raise VerifyException(
+                errno.EINVAL,
+                'Cannot connect networks to container with primary network mode: {0}'.format(network_mode)
+            )
+
+
         if hostname:
             return ['docker:{0}'.format(hostname)]
         else:
@@ -631,6 +638,13 @@ class DockerContainerUpdateTask(DockerBaseTask):
             raise VerifyException(
                 errno.EINVAL,
                 'Either dhcp or static address must be selected for bridged container'
+            )
+
+        networks = updated_fields.get('networks') or container.get('networks')
+        if network_mode in ('HOST', 'NONE') and networks:
+            raise VerifyException(
+                errno.EINVAL,
+                'Cannot connect networks to container with primary network mode: {0}'.format(network_mode)
             )
 
         if 'running' in updated_fields:
