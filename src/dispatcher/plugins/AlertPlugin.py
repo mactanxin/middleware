@@ -447,7 +447,7 @@ class AlertEmitterUpdateTask(Task):
 
         self.dispatcher.emit_event('alert.emitter.changed', {
             'operation': 'update',
-            'id': emitter['id']
+            'ids': [emitter['id']]
         })
 
 
