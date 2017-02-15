@@ -107,11 +107,18 @@ class NetworkPortProvider(Provider):
         def collect_pf():
             pf = pf.PF()
             for rule in pf.get_rules('rdr'):
+                if rule.label.startswith('container:'):
+                    _, name = rule.label.split(':', maxsplit=1)
+                    consumer = PortConsumerType.CONTAINER
+                else:
+                    name = rule.label
+                    consumer = PortConsumerType.OTHER
+
                 for p in range(rule.proxy_ports[0], rule.proxy_ports[1]):
                     yield Port(
-                        consumer_type=PortConsumerType.CONTAINER,
+                        consumer_type=consumer,
                         consumer_pid=None,
-                        consumer_name=rule.label,
+                        consumer_name=name,
                         af=PortAddressFamily.INET,
                         port=p,
                         protocol=PortProtocol.TCP
