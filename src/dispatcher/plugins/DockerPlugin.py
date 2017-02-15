@@ -153,13 +153,13 @@ class DockerContainerProvider(Provider):
             return self.dispatcher.call_sync('docker.container.create_exec', id, '/bin/sh')
 
 
-@description('Provides information about Docker networks')
+@description('Provides information about Docker user-defined networks')
 class DockerNetworkProvider(Provider):
-    @description('Returns information about Docker networks')
+    @description('Returns information about Docker user-defined networks')
     @query('DockerNetwork')
     @generator
     def query(self, filter=None, params=None):
-        hide_builtin_networks = [('name', 'nin', ('bridge', 'external'))]
+        hide_builtin_networks = [('name', 'nin', ('bridge', 'external', 'host', 'none'))]
         if filter:
             filter.extend(hide_builtin_networks)
         else:
