@@ -94,7 +94,7 @@ class Main(object):
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
                     encoding='utf-8',
-                    timeout=30
+                    timeout=60
                 )
 
                 if proc.returncode != 0:
