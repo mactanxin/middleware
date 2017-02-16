@@ -638,6 +638,137 @@ class ShareMigrateTask(Task):
                     )
                 ))
 
+        # Now SMB shares
+        fn9_smb_shares = get_table('select * from sharing_cifs_share')
+        for fn9_smb_share in fn9_smb_shares.values():
+            # Why does fn9 allow comma, space, or TAB delimiters in the same field!!!
+            hosts_allow = list(filter(
+                None,
+                fn9_smb_share['cifs_hostsallow'].replace('\t', ',').replace(' ', ',').split(','))
+            ) or None
+            hosts_deny = list(filter(
+                None,
+                fn9_smb_share['cifs_hostsdeny'].replace('\t', ',').replace(' ', ',').split(','))
+            ) or None
+            # Note: 'cifs_storage_task_id' property of the share in fn9 is what tracked
+            # whether the share was snapshotted or not and provided the 'windows shadow copies'
+            # feature but in fn10 this has changed and is provided on a per share basis via the
+            # 'previous_versions' boolean property which picks up *any* snapshots (if present)
+            # of said dataset (or in the case of a shared directory it's parent dataset)
+
+            # Also omitting 'cifs_auxsmbconf' property completely, if you know how to properly
+            # parse it to fn10's `extra_parameters` object's key:value string format please do so
+            try:
+                self.run_subtask_sync(
+                    'share.create',
+                    {
+                        'name': fn9_smb_share['cifs_name'],
+                        'description': fn9_smb_share['cifs_comment'],
+                        'enabled': True,
+                        'immutable': False,
+                        'type': 'smb',
+                        'target_path': fn9_smb_share['cifs_path'][5:],  # to remove leading /mnt
+                        'target_type': 'DATASET' if q.query(
+                            fn10_datasets,
+                            ('mountpoint', '=', fn9_smb_share['cifs_path']),
+                            single=True
+                        ) else 'DIRECTORY',
+                        'properties': {
+                            'read_only': bool(fn9_smb_share['cifs_ro']),
+                            'guest_ok': bool(fn9_smb_share['cifs_guestok']),
+                            'guest_only': bool(fn9_smb_share['cifs_guestonly']),
+                            'browseable': bool(fn9_smb_share['cifs_browsable']),
+                            'recyclebin': bool(fn9_smb_share['cifs_recyclebin']),
+                            'show_hidden_files': bool(fn9_smb_share['cifs_showhiddenfiles']),
+                            'previous_versions': True,  # see comment above for explanation
+                            'home_share': bool(fn9_smb_share['cifs_home']),
+                            'vfs_objects': fn9_smb_share['cifs_vfsobjects'].split(','),
+                            'hosts_allow': hosts_allow,
+                            'hosts_deny': hosts_deny
+                        }
+                    }
+                )
+            except RpcException as err:
+                self.add_warning(TaskWarning(
+                    errno.EINVAL,
+                    'Cannot create SMB share: {0} due to error: {1}'.format(
+                        fn9_smb_share['cifs_name'], err
+                    )
+                ))
+
+        # Now NFS shares
+        fn9_nfs_shares = get_table('select * from sharing_nfs_share')
+        for nfs_path in get_table('select * from sharing_nfs_share_path').values():
+            fn9_nfs_shares[nfs_path['share_id']]['path'] = nfs_path['path']
+
+        for fn9_nfs_share in fn9_nfs_shares.values():
+            try:
+                self.run_subtask_sync(
+                    'share.create',
+                    {
+                        'name': os.path.basename(fn9_nfs_shares[1]['path']),  # Had to use something
+                        'description': fn9_nfs_share['nfs_comment'],
+                        'enabled': True,
+                        'immutable': False,
+                        'type': 'nfs',
+                        'target_path': fn9_nfs_share['path'][5:],  # to remove leading /mnt
+                        'target_type': 'DATASET' if q.query(
+                            fn10_datasets,
+                            ('mountpoint', '=', fn9_nfs_share['path']),
+                            single=True
+                        ) else 'DIRECTORY',
+                        'properties': {
+                            'alldirs': bool(fn9_nfs_share['nfs_alldirs']),
+                            'read_only': bool(fn9_nfs_share['nfs_ro']),
+                            'maproot_user': fn9_nfs_share['nfs_maproot_user'],
+                            'maproot_group': fn9_nfs_share['nfs_maproot_group'],
+                            'mapall_user': fn9_nfs_share['nfs_mapall_user'],
+                            'mapall_group': fn9_nfs_share['nfs_mapall_group'],
+                            'hosts': fn9_nfs_share['nfs_hosts'].replace('\t', ',').replace(' ', ',').split(','),
+                            'security': [fn9_nfs_share['nfs_security']] if fn9_nfs_share['nfs_security'] else []
+                        }
+                    }
+                )
+            except RpcException as err:
+                self.add_warning(TaskWarning(
+                    errno.EINVAL,
+                    'Cannot create NFS share: {0} due to error: {1}'.format(
+                        fn9_nfs_share['path'], err
+                    )
+                ))
+
+        # Now WebDAV shares (que rico!)
+        fn9_dav_shares = get_table('select * from sharing_webdav_share')
+        for fn9_dav_share in fn9_dav_shares.values():
+            try:
+                self.run_subtask_sync(
+                    'share.create',
+                    {
+                        'name': fn9_dav_share['webdav_name'],
+                        'description': fn9_dav_share['webdav_comment'],
+                        'enabled': True,
+                        'immutable': False,
+                        'type': 'webdav',
+                        'target_path': fn9_dav_share['webdav_path'][5:],  # to remove leading /mnt
+                        'target_type': 'DATASET' if q.query(
+                            fn10_datasets,
+                            ('mountpoint', '=', fn9_dav_share['webdav_path']),
+                            single=True
+                        ) else 'DIRECTORY',
+                        'properties': {
+                            'read_only': bool(fn9_dav_share['webdav_ro']),
+                            'permission': bool(fn9_dav_share['webdav_perm'])
+                        }
+                    }
+                )
+            except RpcException as err:
+                self.add_warning(TaskWarning(
+                    errno.EINVAL,
+                    'Cannot create SMB share: {0} due to error: {1}'.format(
+                        fn9_dav_share['webdav_name'], err
+                    )
+                ))
+
 
 @description("Service settings migration task")
 class ServiceMigrateTask(Task):
@@ -767,7 +898,6 @@ class MasterMigrateTask(ProgressTask):
         ]
         self.status = 'FINISHED'
         self.migration_progess(100, 'Migration of FreeNAS 9.x database config and settings done')
-
 
 
 def _init(dispatcher, plugin):
