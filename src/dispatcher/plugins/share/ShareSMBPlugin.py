@@ -384,6 +384,7 @@ def _init(dispatcher, plugin):
             'recyclebin': {'type': 'boolean'},
             'show_hidden_files': {'type': 'boolean'},
             'previous_versions': {'type': 'boolean'},
+            'home_share': {'type': 'boolean'},
             'full_audit_prefix': {'type': 'string'},
             'full_audit_priority': {'type': 'string'},
             'full_audit_failure': {'type': 'string'},
