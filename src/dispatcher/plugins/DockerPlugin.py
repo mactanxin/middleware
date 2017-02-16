@@ -50,6 +50,7 @@ logger = logging.getLogger(__name__)
 collections = None
 images = None
 containers_state = None
+containers_rename_cache = None
 
 CONTAINERS_QUERY = 'containerd.docker.query_containers'
 NETWORKS_QUERY = 'containerd.docker.query_networks'
@@ -151,6 +152,20 @@ class DockerContainerProvider(Provider):
             return id
         else:
             return self.dispatcher.call_sync('docker.container.create_exec', id, '/bin/sh')
+
+    @description('Orders container event handler to translate a set of delete+create events into rename+update events')
+    @private
+    @accepts(str, str)
+    def order_rename(self, id, new_name):
+        containers_rename_cache.put(id, new_name)
+        containers_rename_cache.put(new_name, id)
+
+    @description('Invalidates container event rename order')
+    @private
+    @accepts(str, str)
+    def invalidate_rename(self, id, new_name):
+        containers_rename_cache.remove(id)
+        containers_rename_cache.remove(new_name)
 
 
 @description('Provides information about Docker user-defined networks')
@@ -470,19 +485,22 @@ class DockerUpdateTask(Task):
 
 
 @description('Creates a Docker container')
-@accepts(h.all_of(
-    h.ref('DockerContainer'),
-    h.required('names', 'image')
-))
+@accepts(
+    h.all_of(
+        h.ref('DockerContainer'),
+        h.required('names', 'image')
+    ),
+    bool
+)
 class DockerContainerCreateTask(DockerBaseTask):
     @classmethod
     def early_describe(cls):
         return 'Creating a Docker container'
 
-    def describe(self, container):
+    def describe(self, container, nowait=False):
         return TaskDescription('Creating Docker container {name}', name=container['names'][0])
 
-    def verify(self, container):
+    def verify(self, container, nowait=False):
         host = self.datastore.get_by_id('vms', container.get('host')) or {}
         hostname = host.get('name')
 
@@ -517,7 +535,7 @@ class DockerContainerCreateTask(DockerBaseTask):
         else:
             return ['docker']
 
-    def run(self, container):
+    def run(self, container, nowait=False):
         if self.datastore_log.exists('docker.containers', ('names.0', '=', container['names'][0])):
             raise TaskException(errno.EEXIST, 'Docker container {0} already exists'.format(container['names'][0]))
 
@@ -581,17 +599,23 @@ class DockerContainerCreateTask(DockerBaseTask):
                 return self.dispatcher.call_sync(
                     'docker.container.query',
                     [('id', 'in', args['ids']), ('names.0', '=', container['name'])],
-                    {'single': True}
+                    {'count': True}
                 )
             else:
                 return False
 
-        self.dispatcher.exec_and_wait_for_event(
-            'docker.container.changed',
-            match_fn,
-            lambda: self.dispatcher.call_sync('containerd.docker.create_container', container, timeout=100),
-            600
-        )
+        def call():
+            return self.dispatcher.call_sync('containerd.docker.create_container', container, timeout=100)
+
+        if nowait:
+            call()
+        else:
+            self.dispatcher.exec_and_wait_for_event(
+                'docker.container.changed',
+                match_fn,
+                call,
+                600
+            )
 
         if container.get('networks'):
             self.set_progress(95, 'Connecting to networks')
@@ -695,33 +719,50 @@ class DockerContainerUpdateTask(DockerBaseTask):
             image_name = self.run_subtask_sync('docker.container.commit', id, image, tag)
             container['image'] = image_name
 
+        name = q.get(container, 'names.0')
+        self.dispatcher.call_sync('docker.container.order_rename', id, name)
+
         self.set_progress(40, 'Deleting old container')
-        self.run_subtask_sync(
-            'docker.container.delete',
-            id,
-            progress_callback=lambda p, m, e: self.chunk_progress(40, 70, 'Deleting the old container:', p, m, e)
-        )
-        self.run_subtask_sync(
-            'docker.container.create',
-            container,
-            progress_callback=lambda p, m, e: self.chunk_progress(70, 100, 'Recreating the container', p, m, e)
-        )
+        try:
+            def do_update():
+                self.run_subtask_sync(
+                    'docker.container.delete',
+                    id,
+                    True,
+                    progress_callback=lambda p, m, e: self.chunk_progress(40, 70, 'Deleting the old container:', p, m, e)
+                )
+                self.run_subtask_sync(
+                    'docker.container.create',
+                    container,
+                    True,
+                    progress_callback=lambda p, m, e: self.chunk_progress(70, 100, 'Recreating the container', p, m, e)
+                )
+
+            self.dispatcher.exec_and_wait_for_event(
+                'docker.container.changed',
+                lambda args: args['operation'] == 'rename' and id in [i[0] for i in args['ids']],
+                do_update,
+                600
+            )
+
+        finally:
+            self.dispatcher.call_sync('docker.container.invalidate_rename', id, name)
 
 
 @description('Deletes a Docker container')
-@accepts(str)
+@accepts(str, bool)
 class DockerContainerDeleteTask(DockerBaseTask):
     @classmethod
     def early_describe(cls):
         return 'Deleting a Docker container'
 
-    def describe(self, id):
+    def describe(self, id, nowait=False):
         name = self.dispatcher.call_sync(
             'docker.container.query', [('id', '=', id)], {'single': True, 'select': 'names.0'}
         )
         return TaskDescription('Deleting Docker container {name}', name=name or id)
 
-    def verify(self, id):
+    def verify(self, id, nowait=False):
         hostname = None
         try:
             hostname = self.dispatcher.call_sync('containerd.docker.host_name_by_container_id', id)
@@ -733,7 +774,7 @@ class DockerContainerDeleteTask(DockerBaseTask):
         else:
             return ['docker']
 
-    def run(self, id):
+    def run(self, id, nowait=False):
         if not self.datastore_log.exists('docker.containers', ('id', '=', id)):
             raise TaskException(errno.ENOENT, 'Docker container {0} does not exist'.format(id))
 
@@ -758,12 +799,18 @@ class DockerContainerDeleteTask(DockerBaseTask):
 
             return
 
-        self.dispatcher.exec_and_wait_for_event(
-            'docker.container.changed',
-            lambda args: args['operation'] == 'delete' and id in args['ids'],
-            lambda: self.dispatcher.call_sync('containerd.docker.delete_container', id),
-            600
-        )
+        def call():
+            return self.dispatcher.call_sync('containerd.docker.delete_container', id)
+
+        if nowait:
+            call()
+        else:
+            self.dispatcher.exec_and_wait_for_event(
+                'docker.container.changed',
+                lambda args: args['operation'] == 'delete' and id in args['ids'],
+                call,
+                600
+            )
 
 
 @description('Starts a Docker container')
@@ -1916,6 +1963,7 @@ def _init(dispatcher, plugin):
     global collections
     global images
     global containers_state
+    global containers_rename_cache
 
     containers_lock = RLock()
     networks_lock = RLock()
@@ -1923,6 +1971,7 @@ def _init(dispatcher, plugin):
     images = EventCacheStore(dispatcher, 'docker.image')
     collections = CacheStore()
     containers_state = CacheStore()
+    containers_rename_cache = CacheStore()
 
     def docker_resource_create_update(name, parents):
         if first_or_default(lambda o: o['name'] == name, dispatcher.call_sync('task.list_resources')):
@@ -2102,24 +2151,54 @@ def _init(dispatcher, plugin):
                         containers_state.remove(id)
 
                 if args['operation'] == 'delete':
+                    ids = []
                     for i in args['ids']:
                         dispatcher.datastore_log.delete(collection, i)
 
-                    dispatcher.dispatch_event(event, {
-                        'operation': 'delete',
-                        'ids': args['ids']
-                    })
+                        if not containers_rename_cache.get(i):
+                            ids.append(i)
+                            containers_rename_cache.remove(i)
+
+                    if ids:
+                        dispatcher.dispatch_event(event, {
+                            'operation': 'delete',
+                            'ids': ids
+                        })
                 else:
                     objs = dispatcher.call_sync(CONTAINERS_QUERY, [('id', 'in', args['ids'])])
+                    ids = []
+                    ids_rename = []
                     for obj in map(lambda o: exclude(o, 'running', 'health'), objs):
+                        id = q.get(obj, 'id')
                         if args['operation'] == 'create':
                             dispatcher.datastore_log.insert(collection, obj)
+
+                            name = q.get(obj, 'names.0')
+                            old_id = containers_rename_cache.get(name)
+                            if old_id:
+                                ids_rename.append([old_id, id])
+                                containers_rename_cache.remove(name)
+                            else:
+                                ids.append(id)
+
                         else:
                             dispatcher.datastore_log.update(collection, obj['id'], obj)
+                            ids.append(id)
 
+                    if ids:
                         dispatcher.dispatch_event(event, {
                             'operation': args['operation'],
-                            'ids': args['ids']
+                            'ids': ids
+                        })
+
+                    if ids_rename:
+                        dispatcher.dispatch_event(event, {
+                            'operation': 'rename',
+                            'ids': ids_rename
+                        })
+                        dispatcher.dispatch_event(event, {
+                            'operation': 'update',
+                            'ids': [i[1] for i in ids_rename]
                         })
 
     def on_network_event(args):
