@@ -428,6 +428,9 @@ class TaskService(RpcService):
 
         return result
 
+    def write_resource_graph(self, path):
+        return self.__dispatcher.resource_graph.draw(path)
+
     def list_executors(self):
         result = []
         for exe in self.__dispatcher.balancer.executors:

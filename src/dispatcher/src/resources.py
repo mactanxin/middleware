@@ -185,3 +185,6 @@ class ResourceGraph(object):
             for name in names:
                 res = self.get_resource(name)
                 res.busy = False
+
+    def draw(self, path):
+        return nx.write_dot(nx.relabel_nodes(self.resources, lambda n: f'"{n.name}"'), path)
