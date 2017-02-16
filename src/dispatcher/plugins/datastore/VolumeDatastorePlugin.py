@@ -52,7 +52,10 @@ class VolumeDatastoreProvider(Provider):
     def list(self, type, datastore_id, root_path):
         result = []
         if type == 'BLOCK':
-            dataset = os.path.join(datastore_id, root_path)
+            if root_path:
+                dataset = os.path.join(datastore_id, root_path)
+            else:
+                dataset = datastore_id
 
             zvols = self.dispatcher.call_sync(
                 'volume.dataset.query',
