@@ -811,8 +811,85 @@ class ServiceMigrateTask(Task):
             )
         except RpcException as err:
             self.add_warning(TaskWarning(
-                errno.EINVAL, 'Could not update AFP service settings due to err: {0}'.format(err)
+                errno.EINVAL, 'Could not migrate AFP service settings due to err: {0}'.format(err)
             ))
+
+        # Migrating SMB service
+        fn9_smb = get_table('select * from services_cifs')
+        try:
+            self.run_subtask_sync(
+                'service.update',
+                q.query(fn10_services, ("name", "=", "smb"), single=True)['id'],
+                {'config': {
+                    'enable': bool(fn9_services['cifs']['srv_enable'])
+                }}
+            )
+        except RpcException as err:
+            self.add_warning(TaskWarning(
+                errno.EINVAL, 'Could not migrate SMB service settings due to err: {0}'.format(err)
+            ))
+
+        # Migrating NFS service
+        fn9_nfs = get_table('select * from services_nfs')
+        try:
+            self.run_subtask_sync(
+                'service.update',
+                q.query(fn10_services, ("name", "=", "nfs"), single=True)['id'],
+                {'config': {
+                    'enable': bool(fn9_services['nfs']['srv_enable'])
+                }}
+            )
+        except RpcException as err:
+            self.add_warning(TaskWarning(
+                errno.EINVAL, 'Could not migrate NFS service settings due to err: {0}'.format(err)
+            ))
+
+        # Migrating WebDAV service
+        fn9_dav = get_table('select * from services_webdav')
+        try:
+            self.run_subtask_sync(
+                'service.update',
+                q.query(fn10_services, ("name", "=", "webdav"), single=True)['id'],
+                {'config': {
+                    'enable': bool(fn9_services['webdav']['srv_enable'])
+                }}
+            )
+        except RpcException as err:
+            self.add_warning(TaskWarning(
+                errno.EINVAL, 'Could not migrate WebDAV service settings due to err: {0}'.format(err)
+            ))
+
+        # Migrating SSHD service
+        fn9_sshd = get_table('select * from services_ssh')
+        try:
+            self.run_subtask_sync(
+                'service.update',
+                q.query(fn10_services, ("name", "=", "webdav"), single=True)['id'],
+                {'config': {
+                    'enable': bool(fn9_services['webdav']['srv_enable'])
+                }}
+            )
+        except RpcException as err:
+            self.add_warning(TaskWarning(
+                errno.EINVAL, 'Could not migrate SSHD service settings due to err: {0}'.format(err)
+            ))
+
+        # Template to use for adding future service migrations
+        # Migrating FOO service
+        # fn9_foo = get_table('select * from services_foo')
+        # try:
+        #     self.run_subtask_sync(
+        #         'service.update',
+        #         q.query(fn10_services, ("name", "=", "foo"), single=True)['id'],
+        #         {'config': {
+        #             'enable': bool(fn9_services['foo']['srv_enable'])
+        #         }}
+        #     )
+        # except RpcException as err:
+        #     self.add_warning(TaskWarning(
+        #         errno.EINVAL, 'Could not migrate FOO service settings due to err: {0}'.format(err)
+        #     ))
+
 
 
 @description("Master top level migration task for 9.x to 10.x")
