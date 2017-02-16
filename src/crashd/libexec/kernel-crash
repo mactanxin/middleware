@@ -28,6 +28,7 @@
 
 import os
 import sys
+import glob
 import tarfile
 
 
@@ -38,6 +39,12 @@ if __name__ == '__main__':
     if not os.listdir(CRASH_DIR):
         sys.exit(0)
 
-    with tarfile.open('kernel-crash.txz', 'w:xz') as tar:
+    with tarfile.open('kernel-crash.tar.gz', 'w:gz') as tar:
         for i in os.listdir(CRASH_DIR):
             tar.add(os.path.join(CRASH_DIR, i), arcname=i)
+
+    for f in glob.glob(os.path.join(CRASH_DIR, '*')):
+        try:
+            os.remove(f)
+        except OSError:
+            pass
