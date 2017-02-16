@@ -2463,19 +2463,19 @@ def _init(dispatcher, plugin):
                 'items': {'type': 'string'}
             },
             'image': {'type': 'string'},
-            'image_id': {'type': 'string'},
+            'image_id': {'type': 'string', 'readOnly': True},
             'host': {'type': ['string', 'null']},
             'hostname': {'type': ['string', 'null']},
             'memory_limit': {'type': ['integer', 'null']},
             'expose_ports': {'type': 'boolean'},
             'autostart': {'type': 'boolean'},
-            'running': {'type': 'boolean'},
-            'health': {'type': ['string', 'null']},
-            'reachable': {'type': 'boolean'},
+            'running': {'type': 'boolean', 'readOnly': True},
+            'health': {'type': ['string', 'null'], 'readOnly': True},
+            'reachable': {'type': 'boolean', 'readOnly': True},
             'interactive': {'type': 'boolean'},
-            'version': {'type': 'string'},
-            'web_ui_url': {'type': 'string'},
-            'hub_url': {'type': 'string'},
+            'version': {'type': 'string', 'readOnly': True},
+            'web_ui_url': {'type': 'string', 'readOnly': True},
+            'hub_url': {'type': 'string', 'readOnly': True},
             'environment': {
                 'type': 'array',
                 'items': {'type': 'string'}
@@ -2533,7 +2533,8 @@ def _init(dispatcher, plugin):
             'primary_network_mode': {'oneOf': [{'$ref': 'DockerContainerNetworkMode'}, {'type': 'null'}]},
             'networks': {
                 'type': 'array',
-                'items': {'type': 'string'}
+                'items': {'type': 'string'},
+                'readOnly': True
             }
         }
     })
