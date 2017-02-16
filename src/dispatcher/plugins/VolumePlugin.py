@@ -761,9 +761,12 @@ class VolumeDestroyTask(Task):
         return TaskDescription("Deleting the volume {name}", name=id)
 
     def verify(self, id):
-        vol = self.datastore.get_by_id('volumes', id)
-        if not vol:
+        status = self.dispatcher.call_sync('volume.query', [('id', '=', id)], {'single': True, 'select': 'status'})
+        if not status:
             raise VerifyException(errno.ENOENT, 'Volume {0} not found'.format(id))
+
+        if status == 'LOCKED':
+            return []
 
         return ['zpool:{0}'.format(id)]
 
