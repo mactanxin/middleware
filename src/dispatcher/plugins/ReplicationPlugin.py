@@ -476,7 +476,7 @@ class ReplicationCreateTask(ReplicationBaseTask):
         remote_client.disconnect()
 
         if is_master and link['one_time']:
-            self.dispatcher.submit_task('replication.sync', link['name'])
+            self.dispatcher.submit_task('replication.sync', link['id'])
 
         return id
 
@@ -613,15 +613,18 @@ class ReplicationDeleteTask(ReplicationBaseTask):
     def early_describe(cls):
         return "Deleting the replication link"
 
-    def describe(self, name, scrub=False):
-        return TaskDescription("Deleting the replication link {name}", name=name)
+    def describe(self, id, scrub=False):
+        name = self.datastore.query('replication.links', ('id', '=', id), select='name', single=True)
+        return TaskDescription("Deleting the replication link {name}", name=name or '')
 
-    def verify(self, name, scrub=False):
+    def verify(self, id, scrub=False):
         return ['replication']
 
-    def run(self, name, scrub=False):
-        if not self.datastore.exists('replication.links', ('name', '=', name)):
-            raise TaskException(errno.ENOENT, 'Replication link {0} do not exist.'.format(name))
+    def run(self, id, scrub=False):
+        if not self.datastore.exists('replication.links', ('id', '=', id)):
+            raise TaskException(errno.ENOENT, 'Replication link {0} do not exist.'.format(id))
+
+        name = self.datastore.query('replication.links', ('id', '=', id), select='name', single=True)
 
         link = self.run_subtask_sync('replication.get_latest_link', name)
         is_master, remote = self.get_replication_state(link)
@@ -663,7 +666,7 @@ class ReplicationDeleteTask(ReplicationBaseTask):
 
         if remote_client:
             if remote_client.call_sync('replication.get_one_local', name):
-                call_task_and_check_state(remote_client, 'replication.delete', name)
+                call_task_and_check_state(remote_client, 'replication.delete', id)
             remote_client.disconnect()
 
 
@@ -674,22 +677,27 @@ class ReplicationUpdateTask(ReplicationBaseTask):
     def early_describe(cls):
         return "Updating the replication link"
 
-    def describe(self, name, updated_fields):
-        return TaskDescription("Updating the replication link {name}", name=name)
+    def describe(self, id, updated_fields):
+        name = self.datastore.query('replication.links', ('id', '=', id), select='name', single=True)
+        return TaskDescription("Updating the replication link {name}", name=name or '')
 
-    def verify(self, name, updated_fields):
-        if not self.datastore.exists('replication.links', ('name', '=', name)):
-            raise VerifyException(errno.ENOENT, 'Replication link {0} do not exist.'.format(name))
+    def verify(self, id, updated_fields):
+        name = self.datastore.query('replication.links', ('id', '=', id), select='name', single=True)
 
         if 'datasets' in updated_fields:
             if not len(updated_fields['datasets']):
                 raise VerifyException(errno.ENOENT, 'At least one dataset have to be specified')
 
-        return ['replication:{0}'.format(name)]
+        if name:
+            return ['replication:{0}'.format(name)]
+        else:
+            return ['replication']
 
-    def run(self, name, updated_fields):
-        if not self.datastore.exists('replication.links', ('name', '=', name)):
-            raise TaskException(errno.ENOENT, 'Replication link {0} do not exist.'.format(name))
+    def run(self, id, updated_fields):
+        if not self.datastore.exists('replication.links', ('id', '=', id)):
+            raise TaskException(errno.ENOENT, 'Replication link {0} do not exist.'.format(id))
+
+        name = self.datastore.query('replication.links', ('id', '=', id), select='name', single=True)
 
         link = self.run_subtask_sync('replication.get_latest_link', name)
 
@@ -761,7 +769,7 @@ class ReplicationUpdateTask(ReplicationBaseTask):
                     'New remote {0} is unreachable.'.format(new_remote)
                 )
             if remote_available:
-                self.run_subtask_sync('replication.delete', old_name)
+                self.run_subtask_sync('replication.delete', id)
                 self.run_subtask_sync('replication.create', link)
             else:
                 raise TaskException(errno.EACCES, 'Remote {0} is unreachable.'.format(remote))
@@ -865,18 +873,23 @@ class ReplicationSyncTask(ReplicationBaseTask):
     def early_describe(cls):
         return "Synchronizing replication link"
 
-    def describe(self, name):
-        return TaskDescription("Synchronizing replication link {name}", name=name)
+    def describe(self, id):
+        name = self.datastore.query('replication.links', ('id', '=', id), select='name', single=True)
+        return TaskDescription("Synchronizing replication link {name}", name=name or '')
 
-    def verify(self, name):
-        if not self.datastore.exists('replication.links', ('name', '=', name)):
-            raise VerifyException(errno.ENOENT, 'Replication link {0} do not exist.'.format(name))
+    def verify(self, id):
+        name = self.datastore.query('replication.links', ('id', '=', id), select='name', single=True)
 
-        return ['replication:{0}'.format(name)]
+        if name:
+            return ['replication:{0}'.format(name)]
+        else:
+            return ['replication']
 
-    def run(self, name):
-        if not self.datastore.exists('replication.links', ('name', '=', name)):
-            raise TaskException(errno.ENOENT, 'Replication link {0} do not exist.'.format(name))
+    def run(self, id):
+        if not self.datastore.exists('replication.links', ('id', '=', id)):
+            raise TaskException(errno.ENOENT, 'Replication link {0} do not exist.'.format(id))
+
+        name = self.datastore.query('replication.links', ('id', '=', id), select='name', single=True)
 
         start_time = time.time()
         started_at = datetime.utcnow().isoformat().split('.')[0]
@@ -945,7 +958,7 @@ class ReplicationSyncTask(ReplicationBaseTask):
                 call_task_and_check_state(
                     remote_client,
                     'replication.sync',
-                    link['name']
+                    id
                 )
 
         except TaskException as e:
@@ -989,7 +1002,7 @@ class ReplicationSyncTask(ReplicationBaseTask):
                     remote_client.disconnect()
 
                 if status == 'SUCCESS' and link['one_time']:
-                    self.dispatcher.submit_task('replication.delete', link['name'])
+                    self.dispatcher.submit_task('replication.delete', id)
 
 
 @private
@@ -1991,7 +2004,7 @@ def _init(dispatcher, plugin):
                 if (last_status and last_status['status'] == 'FAILED') or recover:
                     dispatcher.call_task_sync(
                         'replication.sync',
-                        link['name']
+                        link['id']
                     )
                 if recover:
                     link['update_date'] = str(datetime.utcnow())
