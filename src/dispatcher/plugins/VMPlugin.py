@@ -101,7 +101,13 @@ class VMProvider(Provider):
 
                 return size
 
-            obj['status'] = lazy(self.dispatcher.call_sync, 'containerd.management.get_status', obj['id'])
+            def get_status():
+                if obj['target'] in datastores:
+                    return self.dispatcher.call_sync('containerd.management.get_status', obj['id'])
+                else:
+                    return {'state': 'ORPHANED'}
+
+            obj['status'] = lazy(get_status)
             obj['config']['readme'] = lazy(read_readme)
             for d in obj['devices']:
                 if d['type'] == 'DISK':
@@ -109,6 +115,8 @@ class VMProvider(Provider):
                     q.set(d, 'properties.size', lazy(get_disk_size, obj['id'], obj['target'], d['name'], type))
 
             return obj
+
+        datastores = list(self.dispatcher.call_sync('vm.datastore.query', [], {'select': 'id'}))
 
         return q.query(
             self.datastore.query_stream('vms', callback=extend),
@@ -2526,7 +2534,7 @@ def _init(dispatcher, plugin):
 
     plugin.register_schema_definition('VmStatusState', {
         'type': 'string',
-        'enum': ['STOPPED', 'BOOTLOADER', 'RUNNING', 'PAUSED']
+        'enum': ['STOPPED', 'BOOTLOADER', 'RUNNING', 'PAUSED', 'ORPHANED']
     })
 
     plugin.register_schema_definition('VmStatusHealth', {
@@ -2859,6 +2867,16 @@ def _init(dispatcher, plugin):
                         dispatcher.call_task_sync('vm.snapshot.delete', i['id'])
                         logger.debug('Removed {0} VM snapshot'.format(i['name']))
 
+    def on_datastore_change(args):
+        if args['operation'] == 'delete':
+            vm_ids = dispatcher.datastore.query('vms', ('target', 'in', args['ids']), select='id')
+
+            if vm_ids:
+                dispatcher.dispatch_event('vm.changed', {
+                    'operation': 'update',
+                    'ids': vm_ids
+                })
+
     plugin.register_provider('vm', VMProvider)
     plugin.register_provider('vm.config', VMConfigProvider)
     plugin.register_provider('vm.snapshot', VMSnapshotProvider)
@@ -2896,5 +2914,6 @@ def _init(dispatcher, plugin):
     plugin.register_event_type('vm.snapshot.changed')
 
     plugin.register_event_handler('vm.datastore.snapshot.changed', on_snapshot_change)
+    plugin.register_event_handler('vm.datastore.changed', on_datastore_change)
 
     plugin.register_debug_hook(collect_debug)
