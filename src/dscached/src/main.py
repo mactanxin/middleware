@@ -548,10 +548,13 @@ class AccountService(RpcService):
 
         raise RpcException(errno.ENOENT, 'UUID {0} not found'.format(uuid))
 
-    @accepts(str, bool)
-    def getgroupmembership(self, user_name, skip_ad=False):
-        result = []
+    @accepts(str, bool, bool)
+    def getgroupmembership(self, user_name, skip_ad=False, include_primary_group=False):
         user = self.getpwnam(user_name, skip_ad)
+        result = []
+
+        if include_primary_group and 'gid' in user:
+            result.append(user['gid'])
 
         def collect_groups(group):
             result.append(group['gid'])
