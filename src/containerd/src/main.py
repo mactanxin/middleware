@@ -908,10 +908,10 @@ class DockerHost(object):
                             'operation': actions.get(ev['Action'], 'update'),
                             'ids': [ev['id']]
                         })
-                        details = self.connection.inspect_container(ev['id'])
                         name = q.get(ev, 'Actor.Attributes.name')
 
                         if ev['Action'] == 'die':
+                            details = self.connection.inspect_container(ev['id'])
                             state = details['State']
                             if not state.get('Running') and state.get('ExitCode') not in (None, 0, 137):
                                 self.context.client.call_sync('alert.emit', {
@@ -973,6 +973,7 @@ class DockerHost(object):
                             mapped_ports = []
 
                             # Setup or destroy port redirection now, if needed
+                            details = self.connection.inspect_container(ev['id'])
                             for i in get_docker_ports(details):
                                 if i['host_port'] in mapped_ports:
                                     continue
