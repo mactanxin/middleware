@@ -101,16 +101,6 @@ def list():
 
 
 @argh.arg('--select')
-def get(name, id, select=None):
-    obj = ds.get_by_id(id)
-    if obj is None:
-        print("Object {0} not found in collection {1}".format(id, name), file=sys.stderr)
-        sys.exit(1)
-
-    print(dumps(json_select(obj, select)))
-
-
-@argh.arg('--select')
 @argh.arg('--sort')
 @argh.arg('--limit', type=int)
 @argh.arg('filter', nargs='*')
@@ -157,7 +147,7 @@ def main():
     parser = argh.ArghParser()
     parser.add_argument('-c', metavar='CONFIG', default=DEFAULT_CONFIGFILE, help='Config file name')
     parser.add_argument('--tcp', action='store_true', default=False, help='Use TCP connection')
-    parser.add_commands([create, list, get, query, update, config_list, config_get, config_set])
+    parser.add_commands([create, list, query, update, config_list, config_get, config_set])
     args = parser.parse_args()
     init_datastore(args.c, tcp=args.tcp)
     parser.dispatch()
