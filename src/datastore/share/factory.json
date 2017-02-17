@@ -958,7 +958,7 @@
                     "RunAtLoad": true,
                     "Requires": ["networking", "logging", "etc"],
                     "ProgramArguments": [
-                        "/usr/local/bin/openvpn",
+                        "/usr/local/sbin/openvpn",
                         "--config",
                         "/usr/local/etc/openvpn.conf"
                     ]
