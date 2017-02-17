@@ -511,7 +511,7 @@ class VolumeCreateTask(ProgressTask):
         return TaskDescription("Creating volume {name}", name=volume['id'])
 
     def verify(self, volume, password=None, dataset_properties=None):
-        return ['disk:{0}'.format(disk_spec_to_path(self.dispatcher, i)) for i, _ in get_disks(volume['topology'])]
+        return ['disk:{0}'.format(disk_spec_to_id(self.dispatcher, i)) for i, _ in get_disks(volume['topology'])]
 
     def run(self, volume, password=None, dataset_properties=None):
         if self.datastore.exists('volumes', ('id', '=', volume['id'])):
@@ -668,7 +668,7 @@ class VolumeAutoCreateTask(ProgressTask):
         if isinstance(disks, str) and disks == 'auto':
             return ['disk:{0}'.format(disk) for disk in self.dispatcher.call_sync('disk.query', {'select': 'path'})]
         else:
-            return ['disk:{0}'.format(disk_spec_to_path(self.dispatcher, i)) for i in disks]
+            return ['disk:{0}'.format(disk_spec_to_id(self.dispatcher, i)) for i in disks]
 
     def run(self, name, type, layout, disks, cache_disks=None, log_disks=None, key_encryption=False, password=None, auto_unlock=None):
         if self.datastore.exists('volumes', ('id', '=', name)):
@@ -2743,6 +2743,17 @@ def disk_spec_to_path(dispatcher, ident):
             ('online', '=', True)
         ],
         {'single': True, 'select': 'path'}
+    )
+
+
+def disk_spec_to_id(dispatcher, ident):
+    return dispatcher.call_sync(
+        'disk.query',
+        [
+            ('or', [('path', '=', ident), ('name', '=', ident), ('id', '=', ident)]),
+            ('online', '=', True)
+        ],
+        {'single': True, 'select': 'id'}
     )
 
 
