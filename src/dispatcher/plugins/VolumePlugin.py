@@ -1415,7 +1415,7 @@ class VolumeDetachTask(Task):
         encryption = vol.get('encryption')
         if encryption['key'] or encryption['hashed_password']:
             subtasks = []
-            for dname in disks:
+            for dname, _ in disks:
                 disk_id = self.dispatcher.call_sync('disk.path_to_id', dname)
                 subtasks.append(self.run_subtask('disk.geli.detach', disk_id))
             self.join_subtasks(*subtasks)
