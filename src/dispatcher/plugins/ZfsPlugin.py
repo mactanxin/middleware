@@ -1231,7 +1231,7 @@ class ZfsReceiveTask(Task):
     def describe(self, name, fd, force=False, nomount=False, props=None, limitds=None):
         return TaskDescription(
             'Receiving ZFS replication stream into {name} dataset',
-            name=name.split('/')[0] if name else ''
+            name=name or ''
         )
 
     def verify(self, name, fd, force=False, nomount=False, props=None, limitds=None):
@@ -1364,7 +1364,7 @@ def sync_dataset_cache(dispatcher, dataset, old_dataset=None, recursive=False):
         if e.code == libzfs.Error.NOENT:
             if datasets.remove(dataset):
                 snapshots.remove_predicate(lambda i: i['dataset'] == dataset)
-                names = datasets.remove_predicate(lambda i: is_child(i['name'], dataset))
+                datasets.remove_predicate(lambda i: is_child(i['name'], dataset))
 
             return
 
@@ -1503,9 +1503,6 @@ def _init(dispatcher, plugin):
     @sync
     def on_dataset_setprop(args):
         with dispatcher.get_lock('zfs-cache'):
-            if args['ds'].endswith('/%recv'):
-                args['ds'] = args['ds'][:-6]
-
             if args['action'] == 'set':
                 logger.log(TRACE, '{0} {1} property {2} set to: {3}'.format(
                     'Snapshot' if '@' in args['ds'] else 'Dataset',
