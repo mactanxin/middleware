@@ -330,6 +330,8 @@ class VolumeProvider(Provider):
     def get_volume_disks(self, name):
         result = []
         vol = self.dispatcher.call_sync('volume.query', [('id', '=', name)], {'single': True})
+        if not vol:
+            raise RpcException(errno.ENOENT, f'Volume {name} not found')
 
         encrypted = vol.get('key_encrypted', False) or vol.get('password_encrypted', False)
         if not encrypted or vol.get('providers_presence', 'NONE') != 'NONE':
