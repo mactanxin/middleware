@@ -105,8 +105,8 @@ class NetworkPortProvider(Provider):
                     seen_ports.add(port)
 
         def collect_pf():
-            pf = pf.PF()
-            for rule in pf.get_rules('rdr'):
+            p = pf.PF()
+            for rule in p.get_rules('rdr'):
                 if rule.label.startswith('container:'):
                     _, name = rule.label.split(':', maxsplit=1)
                     consumer = PortConsumerType.CONTAINER
@@ -122,6 +122,15 @@ class NetworkPortProvider(Provider):
                         af=PortAddressFamily.INET,
                         port=p,
                         protocol=PortProtocol.TCP
+                    )
+
+                    yield Port(
+                        consumer_type=consumer,
+                        consumer_pid=None,
+                        consumer_name=name,
+                        af=PortAddressFamily.INET,
+                        port=p,
+                        protocol=PortProtocol.UDP
                     )
 
         return q.query(
