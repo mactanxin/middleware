@@ -1,0 +1,232 @@
+#!/usr/local/bin/python3 -u
+#
+# Copyright 2017 iXsystems, Inc.
+# All rights reserved
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted providing that the following conditions
+# are met:
+# 1. Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+# 2. Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in the
+#    documentation and/or other materials provided with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+# IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+# WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
+# DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+# OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+# HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+# STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
+# IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+#
+#####################################################################
+
+import os
+import sys
+import signal
+import argh
+import bsd
+import struct
+from datetime import datetime
+from ctypes import Structure, c_void_p, c_int, c_uint, c_uint32, c_size_t, POINTER, sizeof
+from ptrace.debugger import PtraceDebugger
+from ptrace.func_call import FunctionCallOptions
+
+
+SYSCALL_OPTIONS = FunctionCallOptions(string_max_length=65536)
+
+
+class IncrementalFrameDecoder(object):
+    def __init__(self, tag):
+        self.tag = tag
+        self.reset()
+
+    def reset(self):
+        self.received_timestamp = None
+        self.received_header = False
+        self.received_length = None
+        self.magic = None
+        self.total_length = None
+        self.header = None
+        self.payload = b''
+
+    def parse_header(self):
+        self.received_timestamp = datetime.now()
+
+        if len(self.header) != 8:
+            self.print_frame()
+            self.reset()
+            return
+
+        self.magic, self.total_length = struct.unpack('II', self.header)
+        self.received_length = 0
+
+        if self.magic != 0xdeadbeef:
+            self.print_frame()
+            self.reset()
+
+    def print_frame(self):
+        if self.magic != 0xdeadbeef:
+            print('[{0:%H:%M:%S.%f}, {1}] <{2}> !!! Wrong magic: {3}'.format(
+                self.received_timestamp,
+                self.total_length,
+                self.tag,
+                self.magic
+            ))
+            return
+
+        print('[{0:%H:%M:%S.%f}, {1}] <{2}> {3}'.format(
+            self.received_timestamp,
+            self.total_length,
+            self.tag,
+            self.payload
+        ))
+
+    def feed(self, data):
+        print('feed: {0}'.format(data))
+
+        if self.received_length is not None and self.received_length == self.total_length:
+            self.print_frame()
+            self.reset()
+            return self.feed(data)
+
+        if not data:
+            return
+
+        if not self.received_header:
+            self.header = data[:8]
+            self.received_header = True
+            self.parse_header()
+            return self.feed(data[8:])
+
+        if self.received_header:
+            chunk = data[:self.total_length - self.received_length]
+            self.payload += chunk
+            self.received_length += len(chunk)
+            return self.feed(data[len(chunk):])
+
+
+class Iovec(Structure):
+    _fields_ = [
+        ('iov_base', c_void_p),
+        ('iov_len', c_size_t)
+    ]
+
+
+class MsgHdr(Structure):
+    _fields_ = [
+        ('msg_name', c_void_p),
+        ('msg_namelen', c_uint32),
+        ('msg_iov', c_void_p),
+        ('msg_iovlen', c_int),
+        ('msg_control', c_void_p),
+        ('msg_controllen', c_uint),
+        ('msg_flags', c_int)
+    ]
+
+
+def read_iovec(ptrace, iovec, iovlen):
+    ret = b''
+    iovec = ptrace.readBytes(iovec, sizeof(Iovec) * iovlen)
+    iovec = (Iovec * iovlen).from_buffer_copy(iovec)
+    for i in iovec:
+        buf = ptrace.readBytes(i.iov_base, i.iov_len)
+        ret += buf
+
+    return ret
+
+
+@argh.arg('pid', type=int)
+def list_sockets(pid):
+    try:
+        proc = bsd.kinfo_getproc(pid)
+    except OSError as err:
+        print('Cannot look up pid {0}: {1}'.format(pid, err), file=sys.stderr)
+        sys.exit(1)
+
+    print('FD   ')
+    for i in proc.files:
+        if i.type != bsd.DescriptorType.SOCKET:
+            continue
+
+        print('')
+
+
+@argh.arg('pid', type=int)
+@argh.arg('fd', type=int)
+def attach(pid, fd):
+    ptrace = PtraceDebugger()
+    proc = ptrace.addProcess(pid, False)
+    proc.syscall()
+    reader = IncrementalFrameDecoder('read')
+    writer = IncrementalFrameDecoder('write')
+
+    try:
+        while True:
+            proc.waitSyscall()
+            syscall = proc.syscall_state.event(SYSCALL_OPTIONS)
+
+            if syscall.name not in ('read', 'recv', 'recvfrom', 'recvmsg', 'write', 'send', 'sendto', 'sendmsg'):
+                proc.syscall()
+                continue
+
+            print('syscall: name={0}, result={1}'.format(syscall.name, syscall.result))
+
+            if syscall.arguments[0].value != fd:
+                proc.syscall()
+                continue
+
+            if syscall.name in ('read', 'recv'):
+                if syscall.result is None:
+                    proc.syscall()
+                    continue
+
+                buffer = proc.readBytes(syscall.arguments[1].value, syscall.arguments[2].value)
+                reader.feed(buffer)
+
+            if syscall.name in ('write', 'send'):
+                if syscall.result is None:
+                    proc.syscall()
+                    continue
+
+                buffer = proc.readBytes(syscall.arguments[1].value, syscall.arguments[2].value)
+                reader.feed(buffer)
+
+            if syscall.name == 'recvmsg':
+                if syscall.result is None:
+                    proc.syscall()
+                    continue
+
+                buffer = proc.readBytes(syscall.arguments[1].value, sizeof(MsgHdr))
+                msghdr = MsgHdr.from_buffer_copy(buffer)
+                reader.feed(read_iovec(proc, msghdr.msg_iov, msghdr.msg_iovlen))
+
+            if syscall.name == 'sendmsg':
+                if syscall.result is not None:
+                    proc.syscall()
+                    continue
+
+                buffer = proc.readBytes(syscall.arguments[1].value, sizeof(MsgHdr))
+                msghdr = MsgHdr.from_buffer_copy(buffer)
+                writer.feed(read_iovec(proc, msghdr.msg_iov, msghdr.msg_iovlen))
+
+            proc.syscall()
+    except KeyboardInterrupt:
+        proc.was_attached = True
+        proc.detach()
+        ptrace.quit()
+
+
+def main():
+    parser = argh.ArghParser()
+    parser.add_commands([list_sockets, attach])
+    parser.dispatch()
+
+
+if __name__ == '__main__':
+    main()
