@@ -1439,7 +1439,7 @@ class ReplicateDatasetTask(ProgressTask):
                 if delta:
                     done += delta
 
-                progress = ((idx / actions_len) * 100) + ((1 / actions_len) * 100 * (done / send_size))
+                progress = ((idx / actions_len) * 100) + ((1 / actions_len) * 100 * (done / send_size or 1))
                 if progress > 100:
                     progress = 100
 
@@ -1515,7 +1515,6 @@ class ReplicateDatasetTask(ProgressTask):
                 self.set_progress(get_progress(), 'Removing remote dataset {0}'.format(action['remotefs']))
                 result = remote_client.call_task_sync(
                     'zfs.destroy',
-                    action['remotefs'].split('/')[0],
                     action['remotefs']
                 )
 
