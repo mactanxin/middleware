@@ -118,12 +118,12 @@ def restart(label):
         sys.exit(0)
 
 
-def wait(label):
+def wait(label, state):
     client = create_client()
     try:
-        state = client.call_sync('serviced.job.wait', label)
+        state = client.call_sync('serviced.job.wait', label, [state])
     except RpcException as err:
-        print('Failed to stop job: {0}'.format(err), file=sys.stderr)
+        print('Failed to wait for job: {0}'.format(err), file=sys.stderr)
         sys.exit(1)
     else:
         print('New job state is: {0}'.format(state))
