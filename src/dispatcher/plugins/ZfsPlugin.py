@@ -1129,7 +1129,12 @@ class ZfsCloneTask(ZfsBaseTask):
         try:
             zfs = get_zfs()
             snapshot = zfs.get_snapshot(name)
-            snapshot.clone(new_name)
+            self.dispatcher.exec_and_wait_for_event(
+                'fs.zfs.snapshot.cloned',
+                lambda args: args['ds'] == new_name,
+                lambda: snapshot.clone(new_name),
+                600
+            )
         except libzfs.ZFSException as err:
             raise TaskException(zfs_error_to_errno(err.code), str(err))
 

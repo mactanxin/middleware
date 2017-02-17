@@ -2698,10 +2698,11 @@ class SnapshotCloneTask(Task):
         return [f'zfs:{ds}']
 
     def run(self, name, new_name):
-        self.run_subtask_sync(
-            'zfs.clone',
-            name,
-            new_name
+        self.dispatcher.exec_and_wait_for_event(
+            'volume.dataset.changed',
+            lambda args: args['operation'] == 'create' and new_name in args['ids'],
+            lambda: self.run_subtask_sync('zfs.clone', name, new_name),
+            600
         )
 
         type = self.dispatcher.call_sync(
