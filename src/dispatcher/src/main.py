@@ -700,13 +700,13 @@ class Dispatcher(object):
         if not self.datastore.collection_exists(collection):
             self.datastore.collection_create(collection, pkey_type, kwargs)
 
-    def register_resource(self, res, parents=None):
+    def register_resource(self, res, parents=None, children=None):
         self.logger.debug('Resource added: {0}'.format(res.name))
-        self.resource_graph.add_resource(res, parents)
+        self.resource_graph.add_resource(res, parents, children)
 
-    def update_resource(self, name, new_parents):
+    def update_resource(self, name, new_parents, new_children=None):
         self.logger.log(TRACE, 'Resource updated: {0}, new parents: {1}'.format(name, ', '.join(new_parents)))
-        self.resource_graph.update_resource(name, new_parents)
+        self.resource_graph.update_resource(name, new_parents, new_children)
 
     def rename_resource(self, oldname, newname):
         self.logger.log(TRACE, 'Resource renamed: {0} ->{1}'.format(oldname, newname))
@@ -724,13 +724,14 @@ class Dispatcher(object):
     def resource_exists(self, name):
         return self.resource_graph.get_resource(name) is not None
 
-    def track_resources(self, query_call, changed_event, name_callback, parents_callback):
+    def track_resources(self, query_call, changed_event, name_callback, parents_callback, children_callback=None):
         self.resource_trackers.append(ResourceTracker(
             self,
             query_call,
             changed_event,
             name_callback,
-            parents_callback
+            parents_callback,
+            children_callback
         ))
 
     def register_hook(self, name):

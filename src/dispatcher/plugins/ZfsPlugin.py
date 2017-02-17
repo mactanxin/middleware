@@ -42,12 +42,11 @@ from task import (
 from freenas.dispatcher.rpc import RpcException, accepts, returns, description, private, generator
 from freenas.dispatcher.rpc import SchemaHelper as h
 from freenas.dispatcher.jsonenc import dumps
-from resources import Resource
 from debug import AttachData, AttachCommandOutput
-from lib.zfs import iterate_vdevs, vdev_by_guid, vdev_by_path
+from lib.zfs import iterate_vdevs, vdev_by_guid, vdev_by_path, get_disks
 from freenas.utils.trace_logger import TRACE
 from freenas.utils import first_or_default, query as q
-from utils import is_child
+from utils import is_child, split_dataset
 
 
 USER_CACHE_FILE = '/data/zfs/volume.cache'
@@ -316,9 +315,7 @@ class ZpoolScrubTask(ProgressTask, ScanStatusTaskMixin):
         return TaskDescription("Scrubbing ZFS pool {name}", name=pool)
 
     def verify(self, pool, threshold=None):
-        zfs = get_zfs()
-        pool = zfs.get(pool)
-        return get_disk_names(self.dispatcher, pool)
+        return [f'zpool:{pool}']
 
     def run(self, pool):
         self.pool = pool
@@ -350,7 +347,7 @@ class ZpoolScrubTask(ProgressTask, ScanStatusTaskMixin):
 class ZpoolCreateTask(Task):
     def __partition_to_disk(self, part):
         result = self.dispatcher.call_sync('disk.get_partition_config', part)
-        return os.path.basename(result['disk'])
+        return os.path.basename(result['disk_id'])
 
     def __get_disks(self, topology):
         result = []
@@ -438,14 +435,7 @@ class ZpoolCreateTask(Task):
 
 class ZpoolBaseTask(ProgressTask):
     def verify(self, *args, **kwargs):
-        name = args[0]
-        try:
-            zfs = get_zfs()
-            pool = zfs.get(name)
-        except libzfs.ZFSException:
-            raise VerifyException(errno.ENOENT, "Pool {0} not found".format(name))
-
-        return get_disk_names(self.dispatcher, pool)
+        return [f'zpool:{args[0]}']
 
 
 @private
@@ -458,9 +448,6 @@ class ZpoolConfigureTask(ZpoolBaseTask):
 
     def describe(self, pool, updated_props):
         return TaskDescription('Updating ZFS pool {name} configuration', name=pool)
-
-    def verify(self, pool, updated_props):
-        super(ZpoolConfigureTask, self).verify(pool)
 
     def run(self, pool, updated_props):
         try:
@@ -713,13 +700,17 @@ class ZpoolImportTask(Task):
 
         if guid.isdigit():
             pool = first_or_default(
-                lambda p: str(p.guid) == guid,
-                self.dispatcher.threaded(lambda: list(zfs.find_import(search_paths=['/dev/gptid'])))
+                lambda p: str(p['guid']) == guid,
+                self.dispatcher.threaded(
+                    lambda: [p.__getstate__() for p in zfs.find_import(search_paths=['/dev/gptid'])]
+                )
             )
         else:
             pool = first_or_default(
                 None,
-                self.dispatcher.threaded(lambda: list(zfs.find_import(search_paths=['/dev/gptid'], name=guid))),
+                self.dispatcher.threaded(
+                    lambda: [p.__getstate__() for p in zfs.find_import(search_paths=['/dev/gptid'], name=guid)]
+                )
             )
 
         if not pool:
@@ -764,9 +755,6 @@ class ZpoolExportTask(ZpoolBaseTask):
     def describe(self, name):
         return TaskDescription('Exporting ZFS pool {name}', name=name)
 
-    def verify(self, name):
-        super(ZpoolExportTask, self).verify(name)
-
     def run(self, name):
         zfs = get_zfs()
         try:
@@ -788,7 +776,7 @@ class ZpoolDestroyExportedTask(Task):
         return TaskDescription('Destroying exported pool {name}', name=name)
 
     def verify(self, name):
-        return ['disk:{0}'.format(d) for d in self.dispatcher.call_sync('disk.query', {'select': 'path'})]
+        return ['disk:{0}'.format(d) for d in self.dispatcher.call_sync('disk.query', {'select': 'id'})]
 
     def run(self, name):
         def check_and_clear_label(path):
@@ -818,14 +806,8 @@ class ZpoolDestroyExportedTask(Task):
 
 class ZfsBaseTask(Task):
     def verify(self, *args, **kwargs):
-        path = args[0]
-        try:
-            zfs = get_zfs()
-            dataset = zfs.get_object(path)
-        except libzfs.ZFSException as err:
-            raise TaskException(errno.ENOENT, str(err))
-
-        return ['zpool:{0}'.format(dataset.pool.name)]
+        pool, _ = split_dataset(args[0])
+        return ['zpool:{0}'.format(args[0])]
 
 
 @private
@@ -918,9 +900,6 @@ class ZfsDatasetCreateTask(Task):
 
     def verify(self, path, type, params=None):
         pool_name = path.split('/')[0]
-        if not pool_exists(pool_name):
-            raise VerifyException(errno.ENOENT, 'Pool {0} not found'.format(pool_name))
-
         self.check_type(type)
         return ['zpool:{0}'.format(pool_name)]
 
@@ -1310,13 +1289,13 @@ def pool_exists(pool):
 
 def get_disk_names(dispatcher, pool):
     ret = []
-    for x in pool.disks:
+    for disk, _ in get_disks(pool['groups']):
         try:
-            d = dispatcher.call_sync('disk.partition_to_disk', x)
+            d = dispatcher.call_sync('disk.partition_to_disk', disk)
         except RpcException:
             continue
 
-        ret.append('disk:' + d)
+        ret.append(d)
 
     return ret
 
@@ -1342,13 +1321,11 @@ def sync_zpool_cache(dispatcher, pool, guid=None):
                     })
 
         pools.put(pool, zfspool)
-        zpool_sync_resources(dispatcher, pool)
     except libzfs.ZFSException as e:
         if e.code == libzfs.Error.NOENT:
             pools.remove(pool)
             snapshots.remove_predicate(lambda i: i['pool'] == pool)
-            names = datasets.remove_predicate(lambda i: i['pool'] == pool)
-            dispatcher.unregister_resources(['zfs:{0}'.format(i) for i in names])
+            datasets.remove_predicate(lambda i: i['pool'] == pool)
             return
 
         logger.warning("Cannot read pool status from pool {0}".format(pool))
@@ -1363,13 +1340,8 @@ def sync_dataset_cache(dispatcher, dataset, old_dataset=None, recursive=False):
 
         if old_dataset:
             datasets.rename(old_dataset, dataset)
-            dispatcher.unregister_resource('zfs:{0}'.format(old_dataset))
 
-        if datasets.put(dataset, dispatcher.threaded(lambda: ds.__getstate__(False))) or old_dataset:
-            dispatcher.register_resource(
-                Resource('zfs:{0}'.format(dataset)),
-                parents=['zpool:{0}'.format(pool)])
-
+        datasets.put(dataset, dispatcher.threaded(lambda: ds.__getstate__(False)))
         ds_snapshots = {}
         for i in dispatcher.threaded(lambda: [d.__getstate__() for d in ds.snapshots]):
             name = i['name']
@@ -1393,10 +1365,6 @@ def sync_dataset_cache(dispatcher, dataset, old_dataset=None, recursive=False):
             if datasets.remove(dataset):
                 snapshots.remove_predicate(lambda i: i['dataset'] == dataset)
                 names = datasets.remove_predicate(lambda i: is_child(i['name'], dataset))
-                dispatcher.unregister_resources(
-                    ['zfs:{0}'.format(i) for i in names] +
-                    ['zfs:{0}'.format(dataset)]
-                )
 
             return
 
@@ -1416,26 +1384,6 @@ def sync_snapshot_cache(dispatcher, snapshot, old_snapshot=None):
             return
 
         logger.warning("Cannot read snapshot status from snapshot {0}".format(snapshot))
-
-
-def zpool_sync_resources(dispatcher, name):
-    res_name = 'zpool:{0}'.format(name)
-
-    try:
-        zfs = get_zfs()
-        pool = zfs.get(name)
-    except libzfs.ZFSException:
-        dispatcher.unregister_resource(res_name)
-        return
-
-    if dispatcher.resource_exists(res_name):
-        dispatcher.update_resource(
-            res_name,
-            new_parents=get_disk_names(dispatcher, pool))
-    else:
-        dispatcher.register_resource(
-            Resource(res_name),
-            parents=get_disk_names(dispatcher, pool))
 
 
 def zpool_try_clear(dispatcher, name, vdev):
@@ -2042,7 +1990,6 @@ def _init(dispatcher, plugin):
         for i in dispatcher.threaded(lambda: [p.__getstate__(False) for p in zfs.pools]):
             name = i['name']
             pools_dict[name] = i
-            zpool_sync_resources(dispatcher, name)
         pools.update(**pools_dict)
 
         msg = "Syncing ZFS datasets..."
@@ -2053,9 +2000,6 @@ def _init(dispatcher, plugin):
         for i in dispatcher.threaded(lambda: [d.__getstate__(False) for d in zfs.datasets]):
             name = i['id']
             datasets_dict[name] = i
-            dispatcher.register_resource(
-                Resource('zfs:{0}'.format(name)),
-                parents=['zpool:{0}'.format(i['pool'])])
         datasets.update(**datasets_dict)
 
         msg = "Syncing ZFS snapshots..."
@@ -2076,3 +2020,17 @@ def _init(dispatcher, plugin):
         logger.info("Syncing ZFS cache took {0:.0f} ms".format((time.time() - zfs_cache_start) * 1000))
 
     gevent.spawn(sync_sizes)
+
+    dispatcher.track_resources(
+        'zfs.pool.query',
+        'entity-subscriber.zfs.pool.changed',
+        lambda id: f'zpool:{id}',
+        lambda pool: [f'disk:{d}' for d in get_disk_names(dispatcher, pool)]
+    )
+
+    dispatcher.track_resources(
+        'zfs.dataset.query',
+        'entity-subscriber.zfs.dataset.changed',
+        lambda id: f'zfs:{id}',
+        lambda dataset: [f'zpool:{dataset["pool"]}']
+    )

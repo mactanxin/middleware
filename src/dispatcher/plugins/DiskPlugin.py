@@ -40,7 +40,6 @@ import libzfs
 import contextlib
 from xml.etree import ElementTree
 from bsd import geom, getswapinfo
-from resources import Resource
 from datetime import datetime, timedelta
 from freenas.utils import first_or_default, remove_non_printable, query as q
 from cam import CamDevice, CamEnclosure, EnclosureStatus, ElementStatus
@@ -121,10 +120,10 @@ class DiskProvider(Provider):
         # Is it disk name?
         d = get_disk_by_path(part_name)
         if d:
-            return part_name
+            return d['id']
 
         part = self.get_partition_config(part_name)
-        return part['disk']
+        return part['disk_id']
 
     @accepts(str)
     @returns(h.ref('DiskStatus'))
@@ -154,6 +153,7 @@ class DiskProvider(Provider):
                 if part_name in part['paths']:
                     result = part.copy()
                     result['disk'] = disk['path']
+                    result['disk_id'] = disk['id']
                     return result
 
         raise RpcException(errno.ENOENT, "Partition {0} not found".format(part_name))
@@ -310,7 +310,7 @@ class DiskGPTFormatTask(Task):
         if fstype not in ['freebsd-zfs']:
             raise VerifyException(errno.EINVAL, "Unsupported fstype {0}".format(fstype))
 
-        return ['disk:{0}'.format(disk['path'])]
+        return ['disk:{0}'.format(id)]
 
     def run(self, id, fstype, params=None):
         disk = disk_by_id(self.dispatcher, id)
@@ -412,7 +412,7 @@ class DiskInstallBootloaderTask(Task):
         if not get_disk_by_path(disk['path']):
             raise VerifyException(errno.ENOENT, "Disk {0} not found".format(id))
 
-        return ['disk:{0}'.format(disk['path'])]
+        return ['disk:{0}'.format(id)]
 
     def run(self, id):
         try:
@@ -530,7 +530,7 @@ class DiskConfigureTask(Task):
         if not disk:
             raise VerifyException(errno.ENOENT, 'Disk {0} not found'.format(id))
 
-        return ['disk:{0}'.format(disk['path'])]
+        return ['disk:{0}'.format(id)]
 
     def run(self, id, updated_fields):
         disk = self.datastore.get_by_id('disks', id)
@@ -588,7 +588,7 @@ class DiskDeleteTask(Task):
         if not disk:
             raise VerifyException(errno.ENOENT, 'Disk {0} not found'.format(id))
 
-        return ['disk:{0}'.format(os.path.basename(disk['path']))]
+        return ['disk:{0}'.format(id)]
 
     def run(self, id):
         disk = self.datastore.get_by_id('disks', id)
@@ -622,7 +622,7 @@ class DiskGELIInitTask(Task):
         if not ('key' in params or 'password' in params):
             raise VerifyException(errno.EINVAL, "At least one of key, password have to be specified for encryption")
 
-        return ['disk:{0}'.format(disk['path'])]
+        return ['disk:{0}'.format(id)]
 
     def run(self, id, params=None):
         if params is None:
@@ -685,7 +685,7 @@ class DiskGELISetUserKeyTask(Task):
             raise VerifyException(errno.EINVAL, "Chosen key slot value {0} is not in valid range [0-1]".
                                   format(params.get('slot', None)))
 
-        return ['disk:{0}'.format(disk['path'])]
+        return ['disk:{0}'.format(id)]
 
     def run(self, id, params=None):
         if params is None:
@@ -739,7 +739,7 @@ class DiskGELIDelUserKeyTask(Task):
         if slot not in [0, 1]:
             raise VerifyException(errno.EINVAL, "Chosen key slot value {0} is not in valid range [0-1]".format(slot))
 
-        return ['disk:{0}'.format(disk['path'])]
+        return ['disk:{0}'.format(id)]
 
     def run(self, id, slot):
         disk_info = disk_by_id(self.dispatcher, id)
@@ -776,7 +776,7 @@ class DiskGELIBackupMetadataTask(Task):
         if not disk:
             raise VerifyException(errno.ENOENT, "Disk {0} not found".format(id))
 
-        return ['disk:{0}'.format(disk['path'])]
+        return ['disk:{0}'.format(id)]
 
     def run(self, id):
         disk_info = disk_by_id(self.dispatcher, id)
@@ -815,7 +815,7 @@ class DiskGELIRestoreMetadataTask(Task):
         if not disk:
             raise VerifyException(errno.ENOENT, "Disk {0} not found".format(id))
 
-        return ['disk:{0}'.format(disk['path'])]
+        return ['disk:{0}'.format(id)]
 
     def run(self, id, metadata):
         disk = metadata.get('disk')
@@ -858,7 +858,7 @@ class DiskGELIAttachTask(Task):
         if not ('key' in params or 'password' in params):
             raise VerifyException(errno.EINVAL, "At least one of key, password have to be specified")
 
-        return ['disk:{0}'.format(disk['path'])]
+        return ['disk:{0}'.format(id)]
 
     def run(self, id, params=None):
         if params is None:
@@ -907,7 +907,7 @@ class DiskGELIDetachTask(Task):
         if not disk:
             raise VerifyException(errno.ENOENT, "Disk {0} not found".format(id))
 
-        return ['disk:{0}'.format(disk['path'])]
+        return ['disk:{0}'.format(id)]
 
     def run(self, id):
         disk_info = disk_by_id(self.dispatcher, id)
@@ -942,7 +942,7 @@ class DiskGELIKillTask(Task):
         if not disk:
             raise VerifyException(errno.ENOENT, "Disk {0} not found".format(id))
 
-        return ['disk:{0}'.format(disk['path'])]
+        return ['disk:{0}'.format(id)]
 
     def run(self, id):
         disk_info = disk_by_id(self.dispatcher, id)
@@ -985,7 +985,7 @@ class DiskTestTask(ProgressTask):
                 'Disk id: {0}, path: {1} is not S.M.A.R.T enabled'.format(id, disk['path'])
             )
 
-        return ['disk:{0}'.format(disk['path'])]
+        return ['disk:{0}'.format(id)]
 
     def run(self, id, test_type):
         try:
@@ -1032,12 +1032,13 @@ class DiskParallelTestTask(ProgressTask):
             disk = diskinfo_cache.get(id)
             if not disk:
                 raise VerifyException(errno.ENOENT, 'Disk {0} not found'.format(id))
+
             if not q.get(disk, 'smart_info.smart_enabled'):
                 raise VerifyException(
                     errno.EINVAL,
                     'Disk id: {0}, path: {1} is not S.M.A.R.T enabled'.format(id, disk['path'])
                 )
-            res.append('disk:{0}'.format(disk['path']))
+            res.append('disk:{0}'.format(id))
 
         return res
 
@@ -1645,10 +1646,6 @@ def _depends():
 def _init(dispatcher, plugin):
     def on_device_attached(args):
         path = args['path']
-        if re.match(r'^/dev/(da|ada|vtbd|nvd|mfid|multipath/mpath)[0-9]+$', path):
-            if not dispatcher.resource_exists('disk:{0}'.format(path)):
-                dispatcher.register_resource(Resource('disk:{0}'.format(path)))
-
         if re.match(r'^/dev/(da|ada|vtbd|mfid|nvd)[0-9]+$', path):
             # Regenerate disk cache
             logger.info("New disk attached: {0}".format(path))
@@ -1673,9 +1670,6 @@ def _init(dispatcher, plugin):
                     'path': path,
                     'id': disk['id']
                 })
-
-        if re.match(r'^/dev/(da|ada|vtbd|nvd|mfid|multipath/mpath)[0-9]+$', path):
-            dispatcher.unregister_resource('disk:{0}'.format(path))
 
     def on_device_mediachange(args):
         # Regenerate caches
@@ -1986,4 +1980,11 @@ def _init(dispatcher, plugin):
 
     gevent.wait(greenlets)
     logger.info("Syncing disk cache took {0:.0f} ms".format((time.time() - disk_cache_start) * 1000))
+
     gevent.spawn(smart_updater)
+    dispatcher.track_resources(
+        'disk.query',
+        'entity-subscriber.disk.changed',
+        lambda id: f'disk:{id}',
+        lambda volume: ['root']
+    )

@@ -66,7 +66,7 @@ class ResourceGraph(object):
     def nodes(self):
         return self.resources.nodes()
 
-    def add_resource(self, resource, parents=None):
+    def add_resource(self, resource, parents=None, children=None):
         with self.mutex:
             if not resource:
                 raise ResourceError('Invalid resource')
@@ -84,6 +84,11 @@ class ResourceGraph(object):
                     raise ResourceError('Invalid parent resource {0}'.format(p))
     
                 self.resources.add_edge(node, resource)
+
+            for p in children or []:
+                node = self.get_resource(p)
+                if not node:
+                    raise ResourceError('Invalid child resource {0}'.format(p))
 
     def remove_resource(self, name):
         with self.mutex:
@@ -119,7 +124,7 @@ class ResourceGraph(object):
 
             resource.name = newname
 
-    def update_resource(self, name, new_parents):
+    def update_resource(self, name, new_parents, new_children=None):
         with self.mutex:
             resource = self.get_resource(name)
     
@@ -135,6 +140,13 @@ class ResourceGraph(object):
                     raise ResourceError('Invalid parent resource {0}'.format(p))
     
                 self.resources.add_edge(node, resource)
+
+            for p in new_children or []:
+                node = self.get_resource(p)
+                if not node:
+                    raise ResourceError('Invalid child resource {0}'.format(p))
+
+                self.resources.add_edge(resource, node)
 
     def get_resource(self, name):
         f = [i for i in self.resources.nodes() if i.name == name]
@@ -200,10 +212,11 @@ class ResourceGraph(object):
 
 
 class ResourceTracker(object):
-    def __init__(self, dispatcher, query_call, changed_event, name_callback, parents_callback):
+    def __init__(self, dispatcher, query_call, changed_event, name_callback, parents_callback, children_callback=None):
         self.dispatcher = dispatcher
         self.name_callback = name_callback
         self.parents_callback = parents_callback
+        self.children_callback = children_callback or (lambda _: None)
         self.lock = RLock()
 
         with self.lock:
@@ -219,13 +232,15 @@ class ResourceTracker(object):
                 for i in args['entities']:
                     res = Resource(self.name_callback(i['id']))
                     parents = self.parents_callback(i)
-                    self.dispatcher.register_resource(res, parents=parents)
+                    children = self.children_callback(i)
+                    self.dispatcher.register_resource(res, parents=parents, children=children)
 
             elif args['operation'] == 'update':
                 for i in args['entities']:
                     name = self.name_callback(i['id'])
                     parents = self.parents_callback(i)
-                    self.dispatcher.update_resource(name, new_parents=parents)
+                    children = self.children_callback(i)
+                    self.dispatcher.update_resource(name, new_parents=parents, new_children=children)
 
             elif args['operation'] == 'rename':
                 for i in args['ids']:
