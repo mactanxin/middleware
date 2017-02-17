@@ -2281,6 +2281,7 @@ class DatasetCreateTask(Task):
             'type': 'FILESYSTEM',
             'permissions_type': 'PERM',
             'mounted': True,
+            'hidden': False,
             'properties': {},
             'metadata': {}
         })
@@ -2291,6 +2292,7 @@ class DatasetCreateTask(Task):
         if dataset['type'] == 'FILESYSTEM':
             props = {
                 'org.freenas:permissions_type': {'value': dataset['permissions_type']},
+                'org.freenas:hidden': {'value': 'yes' if dataset['hidden'] else 'no'},
                 'aclmode': {'value': 'restricted' if dataset['permissions_type'] == 'ACL' else 'passthrough'}
             }
 
@@ -3128,6 +3130,7 @@ def _init(dispatcher, plugin):
             'permissions': perms['permissions'] if perms else None,
             'last_replicated_by': last_replicated_by,
             'last_replicated_at': last_replicated_at,
+            'hidden': yesno_to_bool(q.get(ds, 'properties.org\\.freenas:hidden.value')),
             'metadata': convert_properties(ds['properties'])
         }
 
@@ -3390,6 +3393,7 @@ def _init(dispatcher, plugin):
             'permissions_type': {'$ref': 'VolumeDatasetPermissionsType'},
             'last_replicated_by': {'type': ['string', 'null']},
             'last_replicated_at': {'type': ['datetime', 'null']},
+            'hidden': {'type': 'boolean'},
             'metadata': {
                 'type': 'object',
                 'additionalProperties': {'type': 'string'}
