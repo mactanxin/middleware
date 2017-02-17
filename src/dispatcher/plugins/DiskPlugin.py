@@ -984,6 +984,15 @@ class DiskTestTask(ProgressTask):
                 errno.EINVAL,
                 'Disk id: {0}, path: {1} is not S.M.A.R.T enabled'.format(id, disk['path'])
             )
+        if not q.get(
+            disk, 'smart_info.test_capabilities.{0}'.format(getattr(SelfTestType, test_type).value)
+        ):
+            raise VerifyException(
+                errno.EINVAL,
+                'Disk id: {0}, path: {1} does not support {2} S.M.A.R.T test'.format(
+                    id, disk['path'], test_type
+                )
+            )
 
         return ['disk:{0}'.format(id)]
 
