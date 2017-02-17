@@ -203,6 +203,7 @@ class DiskProvider(Provider):
         )
         return disk_info['id'] if disk_info else None
 
+    @private
     @accepts(h.array(str))
     @returns(h.array(h.object(
         properties={
@@ -224,6 +225,22 @@ class DiskProvider(Provider):
             result.append({'path': p, 'key_slot': int(vdev_config.get('UsedKey'))})
 
         return result
+
+    @private
+    @accepts(str)
+    @returns(bool)
+    def is_geli_provider(self, path):
+        id = self.dispatcher.call_sync('disk.path_to_id', path)
+        provider_path = self.dispatcher.call_sync(
+            'disk.query',
+            [('id', '=', id)],
+            {'select': 'status.data_partition_path', 'single': True}
+        )
+        if provider_path:
+            geom.scan()
+            return bool(geom.geom_by_name('ELI', provider_path.strip('/dev')))
+        else:
+            return False
 
 
 class EnclosureProvider(Provider):

@@ -555,6 +555,9 @@ class VolumeCreateTask(ProgressTask):
         subtasks = []
         for dname, dgroup in get_disks(volume['topology']):
             disk_id = self.dispatcher.call_sync('disk.path_to_id', dname)
+            if self.dispatcher.call_sync('disk.is_geli_provider', disk_id):
+                self.run_subtask_sync('disk.geli.kill', disk_id)
+
             subtasks.append(self.run_subtask('disk.format.gpt', disk_id, 'freebsd-zfs', {
                 'blocksize': params.get('blocksize', 4096),
                 'swapsize': params.get('swapsize', 2048) if dgroup == 'data' else 0
@@ -1490,6 +1493,8 @@ class VolumeReplaceTask(ProgressTask):
         if not vol:
             raise TaskException(errno.ENOENT, 'Volume {0} not found'.format(id))
 
+        vdev_config = vdev_by_guid(vol['topology'], vdev)
+
         disk = self.dispatcher.call_sync('disk.query', [('path', '=', path), ('online', '=', True)], {'single': True})
         spares = vol['topology'].get('spare', [])
 
@@ -1563,6 +1568,12 @@ class VolumeReplaceTask(ProgressTask):
             vol['topology'] = new_topology
 
         self.datastore.update('volumes', id, vol)
+
+        if vol.get('key_encrypted') or vol.get('password_encrypted'):
+            if vdev_config and self.dispatcher.call_sync('disk.is_geli_provider', vdev_config['path']):
+                disk_id = self.dispatcher.call_sync('disk.path_to_id', vdev_config['path'])
+                self.run_subtask_sync('disk.geli.kill', disk_id)
+
         self.dispatcher.dispatch_event('volume.changed', {
             'operation': 'update',
             'ids': [id]
