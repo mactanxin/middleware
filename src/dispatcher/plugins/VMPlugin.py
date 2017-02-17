@@ -46,6 +46,7 @@ from bsd import sysctl
 from task import Provider, Task, ProgressTask, VerifyException, TaskException, query, TaskWarning, TaskDescription
 from task import ValidationException
 from datastore.config import ConfigNode
+from freenas.dispatcher import Password
 from freenas.dispatcher.jsonenc import loads, dumps
 from freenas.dispatcher.rpc import RpcException, generator
 from freenas.dispatcher.rpc import SchemaHelper as h, description, accepts, returns, private
@@ -113,6 +114,10 @@ class VMProvider(Provider):
                 if d['type'] == 'DISK':
                     type = q.get(d, 'properties.target_type')
                     q.set(d, 'properties.size', lazy(get_disk_size, obj['id'], obj['target'], d['name'], type))
+
+            vnc_password = q.get(obj, 'config.vnc_password')
+            if vnc_password:
+                q.set(obj, 'config.vnc_password', Password(vnc_password))
 
             return obj
 
@@ -969,6 +974,10 @@ class VMCreateTask(VMBaseTask):
         if not datastore:
             raise TaskException(errno.EINVAL, 'Datastore {0} not found'.format(vm['target']))
 
+        vnc_password = q.get(vm, 'config.vnc_password')
+        if vnc_password:
+            q.set(vm, 'config.vnc_password', vnc_password)
+
         self.set_progress(50, 'Initializing VM root directory')
         self.init_root_dir(vm)
         devices_len = len(vm['devices'])
@@ -1199,6 +1208,10 @@ class VMUpdateTask(VMBaseTask):
                         errno.EINVAL,
                         'Cannot change bootloader type. VM has graphical console - this is only supported in UEFI mode'
                     )
+
+            vnc_password = q.get(vm, 'config.vnc_password')
+            if vnc_password:
+                q.set(vm, 'config.vnc_password', vnc_password)
 
         if 'devices' in updated_params:
             for res in vm['devices']:
@@ -2586,7 +2599,7 @@ def _init(dispatcher, plugin):
                     'boot_partition': {'type': ['string', 'null']},
                     'boot_directory': {'type': ['string', 'null']},
                     'cloud_init': {'type': ['string', 'null']},
-                    'vnc_password': {'type': ['string', 'null']},
+                    'vnc_password': {'type': ['password', 'null']},
                     'autostart': {'type': 'boolean'},
                     'docker_host': {'type': 'boolean'},
                     'readme': {'type': ['string', 'null']},

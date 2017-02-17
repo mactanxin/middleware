@@ -62,6 +62,7 @@ from freenas.utils.lazy import lazy, unlazy
 from cryptography.fernet import Fernet, InvalidToken
 from freenas.dispatcher.fd import FileDescriptor
 from freenas.dispatcher.jsonenc import loads, dumps
+from freenas.dispatcher import Password
 from debug import AttachData
 
 
@@ -498,7 +499,7 @@ class SnapshotProvider(Provider):
         h.ref('Volume'),
         h.required('id', 'topology')
     ),
-    h.one_of(str, None),
+    h.one_of(Password, None),
     h.one_of(h.ref('VolumeDatasetProperties'), None),
 )
 class VolumeCreateTask(ProgressTask):
@@ -651,7 +652,7 @@ class VolumeCreateTask(ProgressTask):
 
 
 @description("Creates new volume and automatically guesses disks layout")
-@accepts(str, str, str, h.one_of(h.array(str), str), h.array(str), h.array(str), h.one_of(bool, None), h.one_of(str, None), h.one_of(bool, None))
+@accepts(str, str, str, h.one_of(h.array(str), str), h.array(str), h.array(str), h.one_of(bool, None), h.one_of(Password, None), h.one_of(bool, None))
 class VolumeAutoCreateTask(ProgressTask):
     @classmethod
     def early_describe(cls):
@@ -851,7 +852,7 @@ class ExportedVolumeDestroyTask(Task):
 
 
 @description("Updates configuration of existing volume")
-@accepts(str, h.ref('Volume'), h.one_of(str, None))
+@accepts(str, h.ref('Volume'), h.one_of(Password, None))
 class VolumeUpdateTask(ProgressTask):
     @classmethod
     def early_describe(cls):
@@ -874,7 +875,7 @@ class VolumeUpdateTask(ProgressTask):
 
     def run(self, id, updated_params, password=None):
         if password is None:
-            password = ''
+            password = Password('')
 
         volume = self.dispatcher.call_sync('volume.query', [('id', '=', id)], {'single': True})
         remove_unchanged(updated_params, volume)
@@ -1150,7 +1151,7 @@ class VolumeUpdateTask(ProgressTask):
 
 
 @description("Imports previously exported volume")
-@accepts(str, h.one_of(str, None), h.object(), h.ref('VolumeImportParams'), h.one_of(str, None))
+@accepts(str, h.one_of(str, None), h.object(), h.ref('VolumeImportParams'), h.one_of(Password, None))
 @returns(str)
 class VolumeImportTask(Task):
     @classmethod
@@ -1467,7 +1468,7 @@ class VolumeUpgradeTask(Task):
 
 
 @description('Replaces a disk in active volume')
-@accepts(str, str, str, h.one_of(str, None))
+@accepts(str, str, str, h.one_of(Password, None))
 class VolumeReplaceTask(ProgressTask):
     @classmethod
     def early_describe(cls):
@@ -1572,7 +1573,7 @@ class VolumeReplaceTask(ProgressTask):
 
 
 @description('Replaces failed disk in active volume')
-@accepts(str, str, h.one_of(str, None))
+@accepts(str, str, h.one_of(Password, None))
 class VolumeAutoReplaceTask(ProgressTask):
     @classmethod
     def early_describe(cls):
@@ -1828,7 +1829,7 @@ class VolumeAutoImportTask(Task):
 
 
 @description("Unlocks encrypted ZFS volume")
-@accepts(str, h.one_of(str, None), h.object())
+@accepts(str, h.one_of(Password, None), h.object())
 class VolumeUnlockTask(Task):
     @classmethod
     def early_describe(cls):
@@ -1930,7 +1931,7 @@ class VolumeUnlockTask(Task):
 
 
 @description("Generates and sets new key for encrypted ZFS volume")
-@accepts(str, bool, h.one_of(str, None))
+@accepts(str, bool, h.one_of(Password, None))
 class VolumeRekeyTask(Task):
     @classmethod
     def early_describe(cls):
@@ -2013,7 +2014,7 @@ class VolumeRekeyTask(Task):
 
 @description("Creates a backup of Master Keys of encrypted volume")
 @accepts(str, FileDescriptor)
-@returns(str)
+@returns(Password)
 class VolumeBackupKeysTask(Task):
     @classmethod
     def early_describe(cls):
@@ -2053,7 +2054,7 @@ class VolumeBackupKeysTask(Task):
         for result in output:
             out_data[result['disk']] = result
 
-        password = str(uuid.uuid4())
+        password = Password(str(uuid.uuid4()))
         enc_data = fernet_encrypt(password, dumps(out_data).encode('utf-8'))
 
         with os.fdopen(fd.fd, 'wb') as out_file:
@@ -2064,7 +2065,7 @@ class VolumeBackupKeysTask(Task):
 
 @description("Creates a backup file of Master Keys of encrypted volume")
 @accepts(str, str)
-@returns(str)
+@returns(Password)
 class VolumeBackupKeysToFileTask(Task):
     @classmethod
     def early_describe(cls):
@@ -2088,7 +2089,7 @@ class VolumeBackupKeysToFileTask(Task):
 
 
 @description("Loads a backup of Master Keys of encrypted volume")
-@accepts(str, FileDescriptor, h.one_of(str, None))
+@accepts(str, FileDescriptor, h.one_of(Password, None))
 class VolumeRestoreKeysTask(Task):
     @classmethod
     def early_describe(cls):
@@ -2144,7 +2145,7 @@ class VolumeRestoreKeysTask(Task):
 
 
 @description("Loads a backup file of Master Keys of encrypted volume")
-@accepts(str, str, h.one_of(str, None))
+@accepts(str, str, h.one_of(Password, None))
 class VolumeRestoreKeysFromFileTask(Task):
     @classmethod
     def early_describe(cls):
@@ -2763,7 +2764,7 @@ def get_digest(password, salt=None):
     if salt is None:
         salt = base64.b64encode(os.urandom(256)).decode('utf-8')
 
-    hmac = hashlib.pbkdf2_hmac('sha256', bytes(str(password), 'utf-8'), salt.encode('utf-8'), 200000)
+    hmac = hashlib.pbkdf2_hmac('sha256', bytes(str(password.secret), 'utf-8'), salt.encode('utf-8'), 200000)
     digest = base64.b64encode(hmac).decode('utf-8')
     return salt, digest
 

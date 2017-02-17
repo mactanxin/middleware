@@ -34,6 +34,7 @@ import redmine
 import requests
 import simplejson
 from task import Task, Provider, TaskException, TaskDescription
+from freenas.dispatcher import Password
 from freenas.dispatcher.rpc import RpcException, accepts, description, returns
 from freenas.dispatcher.rpc import SchemaHelper as h
 
@@ -60,7 +61,7 @@ VERSION_CODES = {
 
 @description("Provides access support")
 class SupportProvider(Provider):
-    @accepts(str, str)
+    @accepts(str, Password)
     @returns(h.array(str))
     def categories(self, user, password):
         version = self.dispatcher.call_sync('system.info.version')
@@ -71,7 +72,7 @@ class SupportProvider(Provider):
                 'https://%s/%s/api/v1.0/categories' % (PROXY_ADDRESS, sw_name),
                 data=json.dumps({
                     'user': user,
-                    'password': password,
+                    'password': password.secret,
                     'project': project_name,
                 }),
                 headers={'Content-Type': 'application/json'},
@@ -79,7 +80,7 @@ class SupportProvider(Provider):
             )
             data = r.json()
         except simplejson.JSONDecodeError as e:
-            logger.debug('Failed to decode ticket attachment response: %s', r.text)
+            logger.debug('Failed to decode ticket attachment response: %s', e.text)
             raise RpcException(errno.EINVAL, 'Failed to decode ticket response')
         except requests.ConnectionError as e:
             raise RpcException(errno.ENOTCONN, 'Connection failed: {0}'.format(str(e)))
@@ -138,11 +139,14 @@ class SupportSubmitTask(Task):
     def run(self, ticket):
         try:
             version = self.dispatcher.call_sync('system.info.version')
-            sw_name = version.split('-')[0].lower()
             project_name = '-'.join(version.split('-')[:2]).lower()
             attachments = []
 
-            rm_connection = redmine.Redmine(BUGTRACKER_ADDRESS, username=ticket['username'], password=ticket['password'])
+            rm_connection = redmine.Redmine(
+                BUGTRACKER_ADDRESS,
+                username=ticket['username'],
+                password=ticket['password'].secret
+            )
             rm_connection.auth()
 
             for attachment in ticket.get('attachments', []):
@@ -158,13 +162,12 @@ class SupportSubmitTask(Task):
                 self.run_subtask_sync('debug.save_to_file', debug_file_name)
                 attachments.append({'path': debug_file_name, 'filename': os.path.split(debug_file_name)[-1]})
 
-
             redmine_response = rm_connection.issue.create(
                 project_id=project_name,
                 subject=ticket['subject'],
                 description=ticket['description'],
                 category_id=ticket['category'],
-                custom_fields=[{'id':2, 'value': VERSION_CODES['BETA2']}],
+                custom_fields=[{'id': 2, 'value': VERSION_CODES['BETA2']}],
                 is_private=ticket.get('debug', False),
                 tracker_id=1 if ticket['type'] == 'bug' else 2,
                 uploads=attachments
@@ -178,6 +181,7 @@ class SupportSubmitTask(Task):
 
         return redmine_response.id
 
+
 def _depends():
     return ['SystemInfoPlugin']
 
@@ -187,7 +191,7 @@ def _init(dispatcher, plugin):
         'type': 'object',
         'properties': {
             'username': {'type': 'string'},
-            'password': {'type': 'string'},
+            'password': {'type': 'password'},
             'subject': {'type': 'string'},
             'description': {'type': 'string'},
             'category': {'type': 'string'},

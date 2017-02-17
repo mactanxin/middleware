@@ -43,12 +43,14 @@ class PeerProvider(Provider):
     @query('Peer')
     @generator
     def query(self, filter=None, params=None):
-        def extend(peer):
-            peer['status'] = peers_status.get(peer['id'], {'state': 'UNKNOWN', 'rtt': None})
-            return peer
+        def extend_query():
+            for t in self.peer_types():
+                for peer in self.dispatcher.call_sync(f'peer.{t}.query', [], {'exclude': 'status'}):
+                    peer['status'] = peers_status.get(peer['id'], {'state': 'UNKNOWN', 'rtt': None})
+                    yield peer
 
         return q.query(
-            self.datastore.query_stream('peers', callback=extend),
+            extend_query(),
             *(filter or []),
             stream=True,
             **(params or {})

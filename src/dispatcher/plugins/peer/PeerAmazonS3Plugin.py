@@ -30,6 +30,7 @@ import logging
 from freenas.dispatcher.rpc import SchemaHelper as h, description, accepts, returns, private, generator
 from task import Task, Provider, TaskException, VerifyException, query, TaskDescription
 from freenas.utils import query as q
+from freenas.utils.lazy import lazy
 
 
 logger = logging.getLogger(__name__)
@@ -40,8 +41,13 @@ class PeerAmazonS3Provider(Provider):
     @query('Peer')
     @generator
     def query(self, filter=None, params=None):
+        def extend_query():
+            for i in self.datastore.query_stream('peers', ('type', '=', 'amazon-s3')):
+                i['status'] = lazy(self.get_status, i['id'])
+                yield i
+
         return q.query(
-            self.dispatcher.call_sync('peer.query', [('type', '=', 'amazon-s3')]),
+            extend_query(),
             *(filter or []),
             stream=True,
             **(params or {})

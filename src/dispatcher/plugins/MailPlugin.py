@@ -40,6 +40,7 @@ from email.utils import formatdate
 from datastore.config import ConfigNode
 from freenas.dispatcher.model import BaseStruct, BaseEnum, types
 from freenas.dispatcher.rpc import RpcException, SchemaHelper as h, accepts, description, returns
+from freenas.dispatcher import Password
 from task import Provider, Task, ValidationException, TaskDescription
 
 logger = logging.getLogger('MailPlugin')
@@ -69,7 +70,7 @@ class AlertEmitterEmail(BaseStruct):
     auth: bool
     encryption: MailEncryptionType
     user: Optional[str]
-    password: Optional[str]
+    password: Optional[Password]
 
 
 class AlertEmitterParametersEmail(BaseStruct):
@@ -81,6 +82,7 @@ class AlertEmitterParametersEmail(BaseStruct):
 class MailProvider(Provider):
     def get_config(self) -> AlertEmitterEmail:
         node = ConfigNode('mail', self.configstore).__getstate__()
+        node['password'] = Password(node['password'])
         return AlertEmitterEmail(node)
 
     @accepts(h.ref('MailMessage'), h.ref('Mail'))
@@ -145,7 +147,7 @@ class MailProvider(Provider):
                 server.starttls()
 
             if mail['auth']:
-                server.login(mail['user'], mail['pass'])
+                server.login(mail['user'], mail['password'])
             server.sendmail(mail['from_address'], to, msg)
             server.quit()
         except smtplib.SMTPAuthenticationError as e:
@@ -178,7 +180,7 @@ class MailConfigureTask(Task):
         if mail.get('auth'):
             if not mail.get('user') and not node['user']:
                 errors.add((0, 'auth'), 'Mail authorization requires a username')
-            if not mail.get('pass') and not node['pass']:
+            if not mail.get('password') and not node['password']:
                 errors.add((0, 'auth'), 'Mail authorization requires a password')
 
         if errors:
@@ -188,6 +190,9 @@ class MailConfigureTask(Task):
 
     def run(self, mail):
         node = ConfigNode('mail', self.configstore)
+        if 'password' in mail:
+            mail['password'] = mail['password'].secret
+
         node.update(mail)
 
 

@@ -34,6 +34,7 @@ from datetime import datetime
 from task import Provider, Task, TaskException, TaskDescription, TaskWarning, ValidationException, VerifyException, query
 from debug import AttachFile
 from freenas.dispatcher.rpc import RpcException, description, accepts, returns, SchemaHelper as h, generator
+from freenas.dispatcher import Password
 from datastore import DuplicateKeyException, DatastoreException
 from lib.system import SubprocessException, system
 from freenas.utils import normalize, crypted_password, nt_password, query as q
@@ -190,7 +191,7 @@ class GroupProvider(Provider):
     h.ref('User'),
     h.required('username'),
     h.forbidden('builtin'),
-    h.object(properties={'password': {'type': ['string', 'null']}}),
+    h.object(properties={'password': {'type': ['password', 'null']}}),
     h.any_of(
         h.required('password'),
         h.required('unixhash', 'nthash'),
@@ -312,8 +313,8 @@ class UserCreateTask(Task):
         password = user.pop('password', None)
         if password:
             user.update({
-                'unixhash': crypted_password(password),
-                'nthash': nt_password(password),
+                'unixhash': crypted_password(password.secret),
+                'nthash': nt_password(password.secret),
                 'password_changed_at': datetime.utcnow()
             })
 
@@ -643,8 +644,8 @@ class UserUpdateTask(Task):
             password = user.pop('password', None)
             if password:
                 user.update({
-                    'unixhash': crypted_password(password),
-                    'nthash': nt_password(password),
+                    'unixhash': crypted_password(password.secret),
+                    'nthash': nt_password(password.secret),
                     'password_changed_at': datetime.utcnow()
                 })
 
@@ -870,7 +871,7 @@ def _init(dispatcher, plugin):
             'group': {'type': ['string', 'null']},
             'shell': {'type': 'string'},
             'home': {'type': ['string', 'null']},
-            'password': {'type': ['string', 'null']},
+            'password': {'type': ['password', 'null']},
             'unixhash': {'type': ['string', 'null']},
             'lmhash': {'type': ['string', 'null']},
             'nthash': {'type': ['string', 'null']},

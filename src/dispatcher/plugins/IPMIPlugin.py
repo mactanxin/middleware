@@ -140,7 +140,7 @@ class ConfigureIPMITask(Task):
                 system('/usr/local/bin/ipmitool', 'lan', 'set', channel, 'arp', 'generate', 'on')
 
             if 'password' in updated_params:
-                system('/usr/local/bin/ipmitool', 'user', 'set', 'password', '2', updated_params['password'])
+                system('/usr/local/bin/ipmitool', 'user', 'set', 'password', '2', updated_params['password'].secret)
                 system('/usr/local/bin/ipmitool', 'user', 'enable', '2')
 
         except SubprocessException as err:
@@ -158,10 +158,7 @@ def _init(dispatcher, plugin):
         'additionalProperties': False,
         'properties': {
             'id': {'type': 'integer'},
-            'password': {
-                'type': 'string',
-                'maxLength': 20
-            },
+            'password': {'type': 'password'},
             'dhcp': {'type': 'boolean'},
             'address': {'$ref': 'Ipv4Address'},
             'netmask': {'type': 'integer'},
