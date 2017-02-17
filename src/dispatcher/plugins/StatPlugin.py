@@ -31,42 +31,61 @@ from freenas.dispatcher.rpc import accepts, description, returns, SchemaHelper a
 from task import Provider, Task, VerifyException, query, TaskDescription
 from freenas.utils import query as q
 
+# Write plugin names or matching substrings of plugin names
+# that report temperature in celsius directly
+CELSIUS_STATS = ['disktemp']
+
+
+def temp_normalize(name, value):
+    if value in [-1, None]:
+        value = None
+    elif not any(x in name for x in CELSIUS_STATS):
+        value = (value - 2732) / 10
+    return value
+
+
+def temp_raw(name, value):
+    raw = value
+    if value is not None and not any(x in name for x in CELSIUS_STATS):
+        raw = value * 10 + 2732
+    return raw
+
 
 UNITS = {
     'Ops/s': {
         'match': lambda x: re.match(r'(.*)(disk_merged|disk_ops)(.*)', x),
-        'normalize': lambda x: x,
-        'raw': lambda x: x
+        'normalize': lambda n, x: x,
+        'raw': lambda n, x: x
     },
     'B/s': {
         'match': lambda x: re.match(r'(.*)(disk_octets|if_octets)(.*)', x),
-        'normalize': lambda x: x,
-        'raw': lambda x: x
+        'normalize': lambda n, x: x,
+        'raw': lambda n, x: x
     },
     'B': {
         'match': lambda x: re.match(r'(.*)(df-|memory)(.*)', x),
-        'normalize': lambda x: x,
-        'raw': lambda x: x
+        'normalize': lambda n, x: x,
+        'raw': lambda n, x: x
     },
     'C': {
         'match': lambda x: re.match(r'(.*)(temperature)(.*)', x),
-        'normalize': lambda x: None if (x == -1) or (x is None) else (x - 2732)/10,
-        'raw': lambda x: None if x is None else x * 10 + 2732
+        'normalize': temp_normalize,
+        'raw': temp_raw
     },
     'Jiffies': {
         'match': lambda x: re.match(r'(.*)(cpu-)(.*)', x),
-        'normalize': lambda x: x,
-        'raw': lambda x: x
+        'normalize': lambda n, x: x,
+        'raw': lambda n, x: x
     },
     'Packets/s': {
         'match': lambda x: re.match(r'(.*)(if_packets)(.*)', x),
-        'normalize': lambda x: x,
-        'raw': lambda x: x
+        'normalize': lambda n, x: x,
+        'raw': lambda n, x: x
     },
     'Errors/s': {
         'match': lambda x: re.match(r'(.*)(if_errors)(.*)', x),
-        'normalize': lambda x: x,
-        'raw': lambda x: x
+        'normalize': lambda n, x: x,
+        'raw': lambda n, x: x
     }
 }
 
@@ -241,7 +260,7 @@ def normalize_values(stat):
 def normalize(name, value):
     for key, unit in UNITS.items():
         if unit['match'](name):
-            return key, unit['normalize'](value)
+            return key, unit['normalize'](name, value)
 
     return '', value
 
@@ -249,7 +268,7 @@ def normalize(name, value):
 def raw(name, value):
     for key, unit in UNITS.items():
         if unit['match'](name):
-            return unit['raw'](value)
+            return unit['raw'](name, value)
 
     return value
 
