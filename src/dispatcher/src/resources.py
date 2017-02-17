@@ -110,6 +110,15 @@ class ResourceGraph(object):
     
                 self.resources.remove_node(resource)
 
+    def rename_resource(self, oldname, newname):
+        with self.mutex:
+            resource = self.get_resource(oldname)
+
+            if not resource:
+                return
+
+            resource.name = newname
+
     def update_resource(self, name, new_parents):
         with self.mutex:
             resource = self.get_resource(name)
@@ -188,3 +197,44 @@ class ResourceGraph(object):
 
     def draw(self, path):
         return nx.write_dot(nx.relabel_nodes(self.resources, lambda n: f'"{n.name}"'), path)
+
+
+class ResourceTracker(object):
+    def __init__(self, dispatcher, query_call, changed_event, name_callback, parents_callback):
+        self.dispatcher = dispatcher
+        self.name_callback = name_callback
+        self.parents_callback = parents_callback
+        self.lock = RLock()
+
+        with self.lock:
+            self.dispatcher.register_event_handler(changed_event, self.on_changed)
+            self.on_changed({
+                'operation': 'create',
+                'entities': self.dispatcher.call_sync(query_call)
+            })
+
+    def on_changed(self, args):
+        with self.lock:
+            if args['operation'] == 'create':
+                for i in args['entities']:
+                    res = Resource(self.name_callback(i['id']))
+                    parents = self.parents_callback(i)
+                    self.dispatcher.register_resource(res, parents=parents)
+
+            elif args['operation'] == 'update':
+                for i in args['entities']:
+                    name = self.name_callback(i['id'])
+                    parents = self.parents_callback(i)
+                    self.dispatcher.update_resource(name, new_parents=parents)
+
+            elif args['operation'] == 'rename':
+                for i in args['ids']:
+                    oldid, newid = i
+                    self.dispatcher.rename_resource(self.name_callback(oldid), self.name_callback(newid))
+
+            elif args['operation'] == 'delete':
+                for i in args['ids']:
+                    self.dispatcher.unregister_resource(self.name_callback(i))
+
+            else:
+                raise AssertionError('Invalid changed event type: {0}'.format(args['operation']))

@@ -32,7 +32,6 @@ import copy
 import os
 import sys
 import re
-import collections
 import fnmatch
 import json
 import datetime
@@ -71,11 +70,9 @@ from datastore.config import ConfigStore
 from freenas.dispatcher.jsonenc import loads, dumps
 from freenas.dispatcher.rpc import RpcContext, RpcException, ServerLockProxy
 from freenas.dispatcher.server import Server, ServerConnection
-from resources import ResourceGraph
-from services import (
-    ManagementService, DebugService, EventService, TaskService,
-    PluginService, ShellService, LockService
-)
+from resources import ResourceGraph, ResourceTracker
+from services import ManagementService, DebugService, EventService, TaskService
+from services import LockService, PluginService, ShellService
 from schemas import register_general_purpose_schemas
 from balancer import Balancer
 from auth import PasswordAuthenticator, TokenStore, Token, User, Service
@@ -341,6 +338,7 @@ class Dispatcher(object):
         self.tasks = {}
         self.task_hooks = {}
         self.resource_graph = ResourceGraph()
+        self.resource_trackers = []
         self.logger = logging.getLogger('Main')
         self.token_store = TokenStore(self)
         self.event_delivery_lock = RLock()
@@ -710,6 +708,10 @@ class Dispatcher(object):
         self.logger.log(TRACE, 'Resource updated: {0}, new parents: {1}'.format(name, ', '.join(new_parents)))
         self.resource_graph.update_resource(name, new_parents)
 
+    def rename_resource(self, oldname, newname):
+        self.logger.log(TRACE, 'Resource renamed: {0} ->{1}'.format(oldname, newname))
+        self.resource_graph.rename_resource(oldname, newname)
+
     def unregister_resource(self, name):
         self.logger.debug('Resource removed: {0}'.format(name))
         self.resource_graph.remove_resource(name)
@@ -721,6 +723,15 @@ class Dispatcher(object):
 
     def resource_exists(self, name):
         return self.resource_graph.get_resource(name) is not None
+
+    def track_resources(self, query_call, changed_event, name_callback, parents_callback):
+        self.resource_trackers.append(ResourceTracker(
+            self,
+            query_call,
+            changed_event,
+            name_callback,
+            parents_callback
+        ))
 
     def register_hook(self, name):
         if name not in self.hooks:
