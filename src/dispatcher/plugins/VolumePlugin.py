@@ -1543,7 +1543,7 @@ class VolumeReplaceTask(ProgressTask):
                 'zfs.pool.replace',
                 id, vdev, {
                     'type': 'disk',
-                    'path': disk['status']['data_partition_path']
+                    'path': get_disk_gptid(self.dispatcher, disk['path'])
                 },
                 progress_callback=self.set_progress
             )
