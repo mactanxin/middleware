@@ -105,7 +105,7 @@ DOCKER_LABELS_MAP = {
     'org.freenas.immutable': {'default': '', 'preset': 'immutable'},
     'org.freenas.interactive': {'default': 'false', 'preset': 'interactive'},
     'org.freenas.port-mappings': {'default': '', 'preset': 'ports'},
-    'org.freenas.primary-network-mode': {'default': '', 'preset': 'primary_network_mode'},
+    'org.freenas.primary-network-mode': {'default': None, 'preset': 'primary_network_mode'},
     'org.freenas.privileged': {'default': 'false', 'preset': 'privileged'},
     'org.freenas.settings': {'default': [], 'preset': 'settings'},
     'org.freenas.static-volumes': {'default': [], 'preset': 'static_volumes'},
