@@ -359,7 +359,7 @@ class VolumeProvider(Provider):
     @accepts()
     @returns(h.array(str))
     def get_available_disks(self):
-        disks = set([d['path'] for d in self.dispatcher.call_sync('disk.query', [('online', '=', True)])])
+        disks = set(self.dispatcher.call_sync('disk.query', [('online', '=', True)], {'select': 'id'}))
         for pool in self.dispatcher.call_sync('zfs.pool.query'):
             for dev in self.dispatcher.call_sync('zfs.pool.get_disks', pool['id']):
                 try:
@@ -681,7 +681,7 @@ class VolumeAutoCreateTask(ProgressTask):
         if isinstance(disks, str) and disks == 'auto':
             available_disks = self.dispatcher.call_sync(
                 'disk.query',
-                [('path', 'in', self.dispatcher.call_sync('volume.get_available_disks'))]
+                [('id', 'in', self.dispatcher.call_sync('volume.get_available_disks'))]
             )
 
             if not available_disks:
