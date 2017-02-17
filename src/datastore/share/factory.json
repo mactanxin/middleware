@@ -960,7 +960,7 @@
                     "ProgramArguments": [
                         "/usr/local/sbin/openvpn",
                         "--config",
-                        "/usr/local/etc/openvpn.conf"
+                        "/usr/local/etc/openvpn/openvpn.conf"
                     ]
                 },
                 "builtin": false,
