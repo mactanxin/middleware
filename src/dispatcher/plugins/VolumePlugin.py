@@ -1596,6 +1596,9 @@ class VolumeAutoReplaceTask(ProgressTask):
         if not vol:
             raise TaskException(errno.ENOENT, 'Volume {0} not found'.format(id))
 
+        if vol['key_encrypted'] or vol['password_encrypted']:
+            raise TaskException(errno.EPERM, 'Cannot autoreplace disk in an encrypted volume')
+
         empty_disks = self.dispatcher.call_sync('disk.query', [
             ('status.empty', '=', True),
             ('online', '=', True)
