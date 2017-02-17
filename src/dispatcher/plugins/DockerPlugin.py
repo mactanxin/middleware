@@ -2533,8 +2533,7 @@ def _init(dispatcher, plugin):
             'primary_network_mode': {'oneOf': [{'$ref': 'DockerContainerNetworkMode'}, {'type': 'null'}]},
             'networks': {
                 'type': 'array',
-                'items': {'type': 'string'},
-                'readOnly': True
+                'items': {'type': 'string'}
             }
         }
     })
