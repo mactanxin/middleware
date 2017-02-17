@@ -556,9 +556,8 @@ class Dispatcher(object):
     def dispatch_event(self, name, args):
         self.logger.log(TRACE, 'Dispatching event: name={0} args={1}'.format(name, args))
         with self.event_delivery_lock:
-            if 'timestamp' not in args:
-                # If there's no timestamp, assume event fired right now
-                args['timestamp'] = datetime.datetime.utcnow()
+            # If there's no timestamp, assume event fired right now
+            args.setdefault('timestamp', datetime.datetime.utcnow())
 
             for srv in self.ws_servers:
                 for conn in srv.connections:
@@ -604,9 +603,7 @@ class Dispatcher(object):
         return self.balancer.verify_subtask(*args, **kwargs)
 
     def register_event_handler(self, name, handler):
-        if name not in self.event_handlers:
-            self.event_handlers[name] = []
-
+        self.event_handlers.setdefault(name, [])
         self.event_handlers[name].append(handler)
 
         for en, ev in self.event_types.items():
@@ -735,8 +732,7 @@ class Dispatcher(object):
         ))
 
     def register_hook(self, name):
-        if name not in self.hooks:
-            self.hooks[name] = []
+        self.hooks.setdefault(name, [])
 
     def unregister_hook(self, name):
         del self.hooks[name]
