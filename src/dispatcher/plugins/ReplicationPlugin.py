@@ -1178,11 +1178,11 @@ class CalculateReplicationDeltaTask(Task):
             extend_with_snapshot_name(i)
 
         if recursive:
-            datasets = self.dispatcher.call_sync(
+            datasets = list(self.dispatcher.call_sync(
                 'zfs.dataset.query',
                 [('name', '~', '^{0}(/|$)'.format(localds))],
                 {'select': 'name'}
-            )
+            ))
 
         for ds in datasets:
             localfs = ds
@@ -1394,11 +1394,15 @@ class ReplicateDatasetTask(ProgressTask):
         remote_data = []
 
         for i in remote_datasets:
+            if i['name'].endswith('/%recv'):
+                continue
+
+            recv_dataset = first_or_default(lambda d: d['name'] == f'{i["name"]}/%recv', remote_datasets)
             remote_data.append({
                 'name': i['name'],
                 'created_at': int(q.get(i, 'properties.creation.rawvalue')),
                 'uuid': q.get(i, 'properties.org\\.freenas:uuid.value'),
-                'resume_token': q.get(i, 'properties.receive_resume_token.value')
+                'resume_token': q.get(recv_dataset, 'properties.receive_resume_token.value')
             })
 
         for i in remote_snapshots:
