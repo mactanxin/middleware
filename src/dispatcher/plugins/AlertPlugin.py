@@ -314,7 +314,7 @@ class AlertFilterCreateTask(Task):
         return 'Creating alert filter'
 
     def describe(self, alertfilter):
-        return TaskDescription('Creating alert filter {name}', name=alertfilter.get('name', '') if alertfilter else '')
+        return TaskDescription('Creating alert filter')
 
     def verify(self, alertfilter):
         return ['system']
@@ -352,7 +352,7 @@ class AlertFilterDeleteTask(Task):
         return 'Deleting alert filter'
 
     def describe(self, id):
-        return TaskDescription('Deleting alert filter {name}', name=str(id))
+        return TaskDescription('Deleting alert filter')
 
     def verify(self, id):
         return ['system']
@@ -392,7 +392,7 @@ class AlertFilterUpdateTask(Task):
         return 'Updating alert filter'
 
     def describe(self, id, updated_fields):
-        return TaskDescription('Updating alert filter {name}', name=str(id))
+        return TaskDescription('Updating alert filter')
 
     def verify(self, id, updated_fields):
         return ['system']
