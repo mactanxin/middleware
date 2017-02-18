@@ -182,8 +182,7 @@ class OpenVpnConfigureTask(Task):
             })
 
         except RpcException as e:
-            raise TaskException(errno.ENXIO,
-                                'Cannot reconfigure OpenVPN: {0}'.format(str(e)))
+            raise TaskException(errno.ENXIO, 'Cannot reconfigure OpenVPN: {0}'.format(str(e)))
 
         return 'RESTART'
 
@@ -207,8 +206,7 @@ class OpenVPNGenerateKeys(Task):
 
         if key_length and key_type == 'dh-parameters':
             if key_length not in [1024, 2048]:
-                raise VerifyException(errno.EINVAL,
-                                      'You have to chose between 1024 and 2048 bits.')
+                raise VerifyException(errno.EINVAL, 'You have to chose between 1024 and 2048 bits.')
 
         if not key_length and key_type == 'dh-parameters':
                 raise VerifyException(errno.EINVAL, 'You have to chose between 1024 and 2048 bits.')
