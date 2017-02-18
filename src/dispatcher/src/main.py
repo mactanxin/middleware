@@ -159,7 +159,7 @@ class Plugin(object):
         self.dispatcher.detach_hook(name, func)
         self.registers['attach_hooks'].remove((name, func))
 
-    def load(self, dispatcher):
+    def load(self):
         try:
             self.module._init(self.dispatcher, self)
             self.state = self.LOADED
@@ -279,7 +279,7 @@ class Plugin(object):
 
     def reload(self):
         self.unload()
-        self.load(self.dispatcher)
+        self.load()
 
 
 class EventType(object):
@@ -457,7 +457,7 @@ class Dispatcher(object):
 
         for i in loadlist:
             try:
-                i.load(self)
+                i.load()
             except RuntimeError as err:
                 self.logger.exception("Error initializing plugin %s: %s", i.filename, err.args)
 
