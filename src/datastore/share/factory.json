@@ -222,6 +222,7 @@
             "service.openvpn.cert": "",
             "service.openvpn.key": "",
             "service.openvpn.dh" : "",
+            "service.openvpn.cipher": "BF-CBC",
             "service.openvpn.tls_auth": null,
             "service.openvpn.server_ip": null,
             "service.openvpn.server_netmask": null,
