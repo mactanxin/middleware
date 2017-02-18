@@ -195,7 +195,6 @@ class OpenVpnConfigureTask(Task):
 class OpenVPNGenerateKeys(Task):
     """ To get it working properly you need to set appropriate timeout on dipatcher client.
         Generation of 2048 bit dh parameters can take a long time.
-        Maybe this task should be ProgressTask type? - need consultation on that
     """
     @classmethod
     def early_describe(cls):
@@ -253,7 +252,6 @@ def _depends():
 
 
 def _init(dispatcher, plugin):
-    """Generation of 1024 bit dh-parameters and default psk key shouldn't take to long..."""
     if not dispatcher.configstore.get('service.openvpn.dh'):
         try:
             dhparams = system('/usr/bin/openssl', 'dhparam', '1024')[0]
