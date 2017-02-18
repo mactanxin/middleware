@@ -24,7 +24,6 @@
 #
 #####################################################################
 
-import netif
 import errno
 import logging
 import ipaddress
