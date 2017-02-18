@@ -69,7 +69,7 @@ class OpenVPNClientConfigProvider(Provider):
        the client OpenVPN directory with 'ta.key' file name.
     """
     @returns(str)
-    def provide_config(self):
+    def get_config(self):
         try:
             with open('/usr/local/etc/openvpn/openvpn_client', 'r') as f:
                 return f.read()
@@ -79,7 +79,7 @@ class OpenVPNClientConfigProvider(Provider):
                                'Please configure OpenVPN server first.')
 
     @returns(str)
-    def provide_tls_auth_key(self):
+    def get_tls_auth_key(self):
         node = ConfigNode('service.openvpn', self.configstore).__getstate__()
         return node['tls_auth']
 
