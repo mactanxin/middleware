@@ -162,13 +162,13 @@ class OpenVpnConfigureTask(Task):
                 openvpn_updated['key'] = cert
                 openvpn_updated['cert'] = cert
 
-            openvpn_user = self.datastore.exists('users', ('username', '=', node['user']))
+            openvpn_user = self.dispatcher.call_sync('user.query', [('username', '=', node['user'])], {'single': True})
             if not openvpn_user:
                 raise TaskException(errno.EINVAL, 'Provided user does not exist.')
 
-            openvpn_group = self.datastore.exists('groups', ('name', '=', node['group']))
+            openvpn_group = self.dispatcher.call_sync('group.query', [('name', '=', node['group'])], {'single': True})
             if not openvpn_group:
-                raise TaskException(errno.EINVAL, 'Provided user does not exist.')
+                raise TaskException(errno.EINVAL, 'Provided group does not exist.')
 
 
         try:
