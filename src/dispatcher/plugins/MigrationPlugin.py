@@ -769,6 +769,19 @@ class ShareMigrateTask(Task):
                     )
                 ))
 
+        # Lastly lets tackle the mamoth in the room: iSCSI
+
+        # getting all the information from the fn9 database
+        fn9_iscsitarget = get_table('select * from services_iscsitarget')
+        fn9_iscsitargetauthcreds = get_table('select * from services_iscsitargetauthcredential')
+        fn9_iscsitargetauthinitiator = get_table('select * from services_iscsitargetauthorizedinitiator')
+        fn9_iscsitargetextent = get_table('select * from services_iscsitargetextent')
+        fn9_iscsitargetglobalconf = get_table('select * from services_iscsitargetglobalconfiguration', dictionary=False)[0]
+        fn9_iscsitargetgroups = get_table('select * from services_iscsitargetgroups')
+        fn9_iscsitargetportal = get_table('select * from services_iscsitargetportal')
+        fn9_iscsitargetportalip = get_table('select * from services_iscsitargetportalip')
+        fn9_iscsitargettoextent = get_table('select * from services_iscsitargettoextent')
+
 
 @description("Service settings migration task")
 class ServiceMigrateTask(Task):
