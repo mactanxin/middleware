@@ -16,22 +16,10 @@
             else:
                 openvpn_conf[cert] = cert_data['privatekey_path'] 
 
-        if openvpn_conf['server_bridge_extended']:
-            processed = []
-
-            processed.append(openvpn_conf['server_bridge_ip'])
-            processed.append(openvpn_conf['server_bridge_netmask'])
-            processed.append(openvpn_conf['server_bridge_range_begin'])
-            processed.append(openvpn_conf['server_bridge_range_end'])
-
-            openvpn_conf['server_bridge'] = ' '.join(processed)
-
-        elif openvpn_conf['server_bridge']:
-            openvpn_conf['server_bridge'] = ' '
-
 %>\
 % if openvpn_conf['mode'] == 'pki':
 dev ${openvpn_conf['dev']}
+server ${openvpn_conf['server_ip']} ${openvpn_conf['server_netmask']}
 % if openvpn_conf['persist_key']:
 persist-key
 % endif
@@ -46,9 +34,6 @@ dh /usr/local/etc/openvpn/dh.pem
 tls-auth /usr/local/etc/openvpn/ta.key 0
 % endif
 cipher ${openvpn_conf['cipher']} 
-% if openvpn_conf['server_bridge']:
-server-bridge ${openvpn_conf['server_bridge']}
-% endif
 max-clients ${openvpn_conf['max_clients']}
 user ${openvpn_conf['user']}
 group ${openvpn_conf['group']}
@@ -57,10 +42,14 @@ proto ${openvpn_conf['proto']}
 % if openvpn_conf['comp_lzo']:
 comp-lzo
 % endif
+% for route in openvpn_conf['push_routes']:
+push "route ${route}"
+% endfor
 verb ${openvpn_conf['verb']}
 % if openvpn_conf['auxiliary']:
 ${openvpn_conf['auxiliary']}
 % endif
+
 % else:
 secret /usr/local/etc/openvpn/ta.key
 dev ${openvpn_conf['dev']}
