@@ -40,9 +40,6 @@ logger = logging.getLogger(__name__)
 
 @description('Provides OpenVPN service configuration')
 class OpenVpnProvider(Provider):
-    """ I think that some of the information here needs to be excluded using exclude()
-        I need consultaion on that.
-    """
     @returns(h.ref('ServiceOpenvpn'))
     def get_config(self):
         return ConfigNode('service.openvpn', self.configstore).__getstate__()
