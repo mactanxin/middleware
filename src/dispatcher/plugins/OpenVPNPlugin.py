@@ -148,7 +148,7 @@ class OpenVpnConfigureTask(Task):
             )
 
             if not ca_cert:
-                    raise TaskException(errno.EINVAL, 'Provided CA certificate does not exist in config database.')
+                raise TaskException(errno.EINVAL, 'Provided CA certificate does not exist in config database.')
 
             else:
                 openvpn_updated['ca'] = ca_cert
