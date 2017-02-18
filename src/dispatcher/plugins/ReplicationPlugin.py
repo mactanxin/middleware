@@ -1219,7 +1219,7 @@ class CalculateReplicationDeltaTask(Task):
                     resume=True,
                     incremental=False,
                     token=remote_ds.get('resume_token'),
-                    snapshot=token_info['toname']
+                    snapshot=token_info['toname'].split('@')[-1]
                 ))
 
                 found = first_or_default(lambda s: s['name'] == token_info['toname'], local_snapshots)
@@ -1443,7 +1443,7 @@ class ReplicateDatasetTask(ProgressTask):
                 if delta:
                     done += delta
 
-                progress = ((idx / actions_len) * 100) + ((1 / actions_len) * 100 * (done / send_size or 1))
+                progress = ((idx / actions_len) * 100) + ((1 / actions_len) * 100 * (done / (send_size or 1))
                 if progress > 100:
                     progress = 100
 
