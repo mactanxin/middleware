@@ -1397,12 +1397,16 @@ class ReplicateDatasetTask(ProgressTask):
             if i['name'].endswith('/%recv'):
                 continue
 
-            recv_dataset = first_or_default(lambda d: d['name'] == f'{i["name"]}/%recv', remote_datasets)
+            token = q.get(i, 'properties.receive_resume_token.value')
+            if not token:
+                recv_dataset = first_or_default(lambda d: d['name'] == f'{i["name"]}/%recv', remote_datasets)
+                token = q.get(recv_dataset, 'properties.receive_resume_token.value')
+
             remote_data.append({
                 'name': i['name'],
                 'created_at': int(q.get(i, 'properties.creation.rawvalue')),
                 'uuid': q.get(i, 'properties.org\\.freenas:uuid.value'),
-                'resume_token': q.get(recv_dataset, 'properties.receive_resume_token.value')
+                'resume_token': token
             })
 
         for i in remote_snapshots:
