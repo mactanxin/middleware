@@ -97,7 +97,7 @@ class FilesystemProvider(Provider):
             'gid': st.st_gid,
             'group': groupname,
             'permissions': {
-                'acls': self.dispatcher.threaded(a.__getstate__),
+                'acl': self.dispatcher.threaded(a.__getstate__),
                 'user': username,
                 'group': groupname,
                 'modes': {
