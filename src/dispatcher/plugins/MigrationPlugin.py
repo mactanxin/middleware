@@ -776,11 +776,12 @@ class ShareMigrateTask(Task):
         fn9_iscsitargetauthcreds = get_table('select * from services_iscsitargetauthcredential')
         fn9_iscsitargetauthinitiator = get_table('select * from services_iscsitargetauthorizedinitiator')
         fn9_iscsitargetextent = get_table('select * from services_iscsitargetextent')
-        fn9_iscsitargetglobalconf = get_table('select * from services_iscsitargetglobalconfiguration', dictionary=False)[0]
         fn9_iscsitargetgroups = get_table('select * from services_iscsitargetgroups')
         fn9_iscsitargetportal = get_table('select * from services_iscsitargetportal')
         fn9_iscsitargetportalip = get_table('select * from services_iscsitargetportalip')
         fn9_iscsitargettoextent = get_table('select * from services_iscsitargettoextent')
+
+        # Here we go...
 
 
 @description("Service settings migration task")
@@ -799,6 +800,25 @@ class ServiceMigrateTask(Task):
         }
 
         fn10_services = list(self.dispatcher.call_sync('service.query'))
+
+        # Migrating iSCSI service
+        fn9_iscsi = get_table('select * from services_iscsitargetglobalconfiguration', dictionary=False)[0]
+        try:
+            self.run_subtask_sync(
+                'service.update',
+                q.query(fn10_services, ("name", "=", "iscsi"), single=True)['id'],
+                {'config': {
+                    'enable': bool(fn9_services['iscsitarget']['srv_enable']),
+                    'base_name': fn9_iscsi['iscsi_basename'],
+                    'pool_space_threshold': fn9_iscsi['iscsi_pool_avail_threshold'],
+                    'isns_servers': list(filter(None, fn9_iscsi['iscsi_isns_servers'].split(' ')))
+                }}
+            )
+        except RpcException as err:
+            self.add_warning(TaskWarning(
+                errno.EINVAL,
+                'Could not migrate iSCSI service settings due to err: {0}'.format(err)
+            ))
 
         # Migrating AFP service
         fn9_afp = get_table('select * from services_afp', dictionary=False)[0]
