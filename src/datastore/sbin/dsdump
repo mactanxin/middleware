@@ -35,6 +35,12 @@ from bson import json_util
 
 
 DEFAULT_CONFIGFILE = '/usr/local/etc/middleware.conf'
+EXAMPLE_USAGE = '''
+Examples:
+
+Dump datastore to a file:
+  dsdump -o /tmp/datastore.dump
+'''
 ds = None
 
 
@@ -48,15 +54,17 @@ def init_datastore(filename):
         sys.exit(1)
 
 
-
-
-
 def main():
     global ds
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description='Dump datastore to standard output or a file',
+        epilog=EXAMPLE_USAGE,
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+
     parser.add_argument('-c', metavar='CONFIG', default=DEFAULT_CONFIGFILE, help='Config file name')
-    parser.add_argument('-t', metavar='TYPE', default='', help='Collection types to dump')
-    parser.add_argument('-x', metavar='NOMETA', help='Don\'t include metadata')
+    parser.add_argument('-t', metavar='TYPE', default='', help='Types of collections to dump')
+    parser.add_argument('-x', metavar='NOMETA', help='Do not include metadata')
     parser.add_argument('-o', metavar='OUTPUT', help='Output file name')
     parser.add_argument('collections', metavar='COLLECTION', nargs='*', default='all', help='Collections to dump or "all"')
 

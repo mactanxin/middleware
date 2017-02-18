@@ -37,6 +37,12 @@ from freenas.utils import crypted_password, nt_password
 
 
 DEFAULT_CONFIGFILE = '/usr/local/etc/middleware.conf'
+EXAMPLE_USAGE = '''
+Examples:
+
+Set password for user "alpaca" to "123456":
+  dspasswd alpaca 123456
+'''
 
 
 def init_datastore(filename):
@@ -54,10 +60,15 @@ def hash_password(plaintext):
 
 
 def main():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description='Set a user password directly in the datastore (generally, emergency use)',
+        epilog=EXAMPLE_USAGE,
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+
     parser.add_argument('-c', metavar='CONFIG', default=DEFAULT_CONFIGFILE, help='Config file name')
-    parser.add_argument('username', metavar='USERNAME', help='User name')
-    parser.add_argument('password', metavar='PASSWORD', help='Password')
+    parser.add_argument('username', metavar='USERNAME', help='Name of user in the database')
+    parser.add_argument('password', metavar='PASSWORD', help='New password for user')
     args = parser.parse_args()
     ds = init_datastore(args.c)
     user = ds.get_one('users', ('username', '=', args.username))

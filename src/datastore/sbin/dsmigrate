@@ -41,6 +41,12 @@ from freenas.dispatcher.jsonenc import dumps
 
 
 DEFAULT_CONFIGFILE = '/usr/local/etc/middleware.conf'
+EXAMPLE_USAGE = '''
+Examples:
+
+Apply migrations to datastore, even if they have already been applied:
+  dsmigrate --force
+'''
 ds = None
 logfile = None
 
@@ -168,12 +174,17 @@ def migrate_collection(dump, directory, force=False):
 def main():
     global ds
     global logfile
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description='Apply migrations to the datastore.',
+        epilog=EXAMPLE_USAGE,
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+
     parser.add_argument('-c', metavar='CONFIG', default=DEFAULT_CONFIGFILE, help='Config file name')
     parser.add_argument('-f', metavar='FILE', help='Input file path')
     parser.add_argument('-t', metavar='TYPE', default='', help='Collection types to restore')
     parser.add_argument('-d', metavar='DIR', help='Migrations directory path')
-    parser.add_argument('--force', action='store_true', help='Forcibly (re)apply migrations')
+    parser.add_argument('--force', action='store_true', help='Forcibly apply or reapply migrations')
     parser.add_argument('--alt', action='store_true', help='Use alternate DSN')
 
     args = parser.parse_args()
