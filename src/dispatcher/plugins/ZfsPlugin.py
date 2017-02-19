@@ -245,6 +245,30 @@ class ZfsDatasetProvider(Provider):
         zfs = get_zfs()
         return zfs.describe_resume_token(token)
 
+    @private
+    @accepts(str)
+    def refresh_resume_tokens(self):
+        zfs = get_zfs()
+        changed = {}
+        with self.dispatcher.get_lock('zfs-cache'):
+            for key, i in datasets.itervalid():
+                def doit():
+                    props = i['properties']
+                    prop = 'receive_resume_token'
+                    ds = zfs.get_dataset(i['id'])
+
+                    if props[prop]['rawvalue'] != ds.properties[prop].rawvalue:
+                        props[prop] = ds.properties[prop].__getstate__()
+                        return True
+
+                try:
+                    if self.dispatcher.threaded(doit):
+                        changed[key] = i
+                except libzfs.ZFSException:
+                    pass
+
+            datasets.update(**changed)
+
 
 @description('Provides information about ZFS snapshots')
 class ZfsSnapshotProvider(Provider):
