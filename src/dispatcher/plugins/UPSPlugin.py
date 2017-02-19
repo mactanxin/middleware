@@ -60,7 +60,7 @@ class UPSProvider(Provider):
     def get_config(self):
         state = ConfigNode('service.ups', self.configstore).__getstate__()
         state['monitor_password'] = Password(state['monitor_password'])
-        return
+        return state
 
     @accepts()
     @returns(h.array(h.array(str)))
