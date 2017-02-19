@@ -830,7 +830,7 @@ class ZpoolDestroyExportedTask(Task):
 class ZfsBaseTask(Task):
     def verify(self, *args, **kwargs):
         pool, _ = split_dataset(args[0])
-        return ['zpool:{0}'.format(args[0])]
+        return [f'zpool:{pool}']
 
 
 @private

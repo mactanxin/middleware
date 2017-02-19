@@ -1219,6 +1219,7 @@ class CalculateReplicationDeltaTask(Task):
                     resume=True,
                     incremental=False,
                     token=remote_ds.get('resume_token'),
+                    bytes=token_info['bytes'],
                     snapshot=token_info['toname'].split('@')[-1]
                 ))
 
@@ -1304,14 +1305,14 @@ class CalculateReplicationDeltaTask(Task):
         for action in actions:
             if action.type == ReplicationActionType.SEND_STREAM:
                 if getattr(action, 'resume', False):
-                    continue
-
-                size = self.dispatcher.call_sync(
-                    'zfs.dataset.estimate_send_size',
-                    action.localfs,
-                    action.snapshot,
-                    getattr(action, 'anchor', None)
-                )
+                    size = action.bytes
+                else:
+                    size = self.dispatcher.call_sync(
+                        'zfs.dataset.estimate_send_size',
+                        action.localfs,
+                        action.snapshot,
+                        getattr(action, 'anchor', None)
+                    )
 
                 action.send_size = size
                 total_send_size += size
