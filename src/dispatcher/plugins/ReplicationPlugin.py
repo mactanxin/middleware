@@ -1381,6 +1381,7 @@ class ReplicateDatasetTask(ProgressTask):
 
         self.set_progress(0, 'Reading replication state from remote side...')
 
+        remote_client.call_sync('zfs.dataset.refresh_resume_tokens')
         remote_datasets = remote_client.call_sync(
             'zfs.dataset.query',
             [('id', '~', '^{0}(/|$)'.format(remoteds))]

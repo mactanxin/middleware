@@ -246,7 +246,6 @@ class ZfsDatasetProvider(Provider):
         return zfs.describe_resume_token(token)
 
     @private
-    @accepts(str)
     def refresh_resume_tokens(self):
         zfs = get_zfs()
         changed = {}
