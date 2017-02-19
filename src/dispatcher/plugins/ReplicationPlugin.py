@@ -1499,7 +1499,7 @@ class ReplicateDatasetTask(ProgressTask):
                                 'nomount': nomount,
                                 'props': {'mountpoint': None}
                             },
-                            'estimated_size': send_size
+                            'estimated_size': send_size or 1
                         },
                         progress_callback=lambda p, m, e=None: self.set_progress(
                             get_progress(e),
