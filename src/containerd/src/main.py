@@ -587,7 +587,7 @@ class VirtualMachine(object):
                 except ProcessLookupError:
                     self.logger.warning('bhyve process is already dead')
 
-            self.thread.join()
+        self.thread.join(timeout=60)
 
         # Clear console
         gevent.kill(self.console_thread)
