@@ -107,6 +107,7 @@ def create_system_dataset(dispatcher, dsid, pool):
         ds = zfs.get_dataset('{0}/.system-{1}'.format(pool.name, dsid))
 
     try:
+        ds.properties['org.freenas.hidden'].value = 'yes'
         ds.properties['canmount'].value = 'noauto'
         ds.properties['mountpoint'].value = SYSTEM_DIR
     except libzfs.ZFSException as err:
