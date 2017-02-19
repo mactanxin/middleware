@@ -2295,6 +2295,9 @@ class DatasetCreateTask(Task):
         for name, value in dataset['metadata']:
             props[name] = {'value': value}
 
+        if dataset['id'].startswith('.'):
+            dataset['hidden'] = True
+
         if dataset['type'] == 'FILESYSTEM':
             props = {
                 'org.freenas:permissions_type': {'value': dataset['permissions_type']},
