@@ -41,7 +41,7 @@ logger = logging.getLogger('UPSPlugin')
 
 nut_signal_descriptions = {
     'ONLINE': 'UPS is back online',
-    'ONBATT':'UPS is on battery',
+    'ONBATT': 'UPS is on battery',
     'LOWBATT': 'UPS is on battery and has a low battery',
     'COMMOK': 'Communications established with the UPS',
     'COMMBAD': 'Communications lost to the UPS',
