@@ -487,6 +487,29 @@ class SnapshotProvider(Provider):
     def query(self, filter=None, params=None):
         return snapshots.query(*(filter or []), stream=True, **(params or {}))
 
+    @accepts(str, str)
+    @returns(str)
+    def get_snapshot_name(self, dataset, prefix=None):
+        if not prefix:
+            prefix = 'auto'
+
+        snapname = '{0}-{1:%Y%m%d.%H%M}'.format(prefix, datetime.utcnow())
+        base_snapname = snapname
+
+        # Pick another name in case snapshot already exists
+        for i in range(1, 99):
+            if self.dispatcher.call_sync(
+                'zfs.snapshot.query',
+                [('name', '=', '{0}@{1}'.format(dataset, snapname))],
+                {'count': True}
+            ):
+                snapname = '{0}-{1}'.format(base_snapname, i)
+                continue
+
+            break
+
+        return snapname
+
 
 @description("Creating a volume")
 @accepts(
@@ -2558,7 +2581,7 @@ class DatasetTemporaryUmountTask(Task):
     h.all_of(
         h.ref('VolumeSnapshot'),
         h.one_of(
-            h.required('dataset', 'name'),
+            h.required('dataset'),
             h.required('id')
         )
     ),
@@ -2570,7 +2593,7 @@ class SnapshotCreateTask(Task):
         return "Creating a snapshot"
 
     def describe(self, snapshot, recursive=False):
-        name = snapshot.get('id') or '{0}@{1}'.format(snapshot.get('name'), snapshot.get('dataset'))
+        name = snapshot.get('id') or '{0}@{1}'.format(snapshot.get('dataset'), snapshot.get('name'))
         return TaskDescription("Creating the snapshot {name}", name=name)
 
     def verify(self, snapshot, recursive=False):
@@ -2596,8 +2619,8 @@ class SnapshotCreateTask(Task):
         if snapshot.get('id'):
             dataset, name = snapshot['id'].split('@')
         else:
-            name = snapshot['name']
             dataset = snapshot['dataset']
+            name = snapshot.get('name', self.dispatcher.call_sync('volume.snapshot.get_snapshot_name', dataset))
             snapshot['id'] = '@'.join([dataset, name])
 
         self.run_subtask_sync(
