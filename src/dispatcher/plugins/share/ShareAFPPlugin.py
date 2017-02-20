@@ -184,7 +184,7 @@ class DeleteAFPShareTask(Task):
 
         self.datastore.delete('shares', id)
         self.dispatcher.call_sync('etcd.generation.generate_group', 'afp')
-        self.dispatcher.call_sync('service.reload', 'afp', timeout=60)
+        self.dispatcher.call_sync('service.restart', 'afp', timeout=60)
         self.dispatcher.dispatch_event('share.afp.changed', {
             'operation': 'delete',
             'ids': [id]
