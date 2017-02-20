@@ -71,14 +71,14 @@ class FreeIPAPlugin(DirectoryServicePlugin):
         self.cv = Condition()
         self.bind_thread.start()
 
-    def search(self, search_base, search_filter, attributes=None):
+    def search(self, search_base, search_filter, attributes=None, scope=ldap3.SUBTREE):
         if self.conn.closed:
             self.conn.bind()
 
         return self.conn.extend.standard.paged_search(
             search_base=search_base,
             search_filter=search_filter,
-            search_scope=ldap3.SUBTREE,
+            search_scope=scope,
             attributes=attributes or ldap3.ALL_ATTRIBUTES,
             paged_size=16,
             generator=True
@@ -117,21 +117,19 @@ class FreeIPAPlugin(DirectoryServicePlugin):
         if contains(entry, 'gidNumber'):
             ret = self.search_one(
                 self.group_dn,
-                '(gidNumber={0})'.format(get(entry, 'gidNumber'))
+                '(gidNumber={0})'.format(get(entry, 'gidNumber')),
+                attributes=['ipaUniqueID']
             )
 
             if ret:
                 group = dict(ret['attributes'])
 
         if get(entry, 'memberOf'):
-            builder = LdapQueryBuilder()
-            qstr = builder.build_query([
-                ('dn', 'in', get(entry, 'memberOf'))
-            ])
-
-            for r in self.search(self.base_dn, qstr):
-                r = dict(r['attributes'])
-                groups.append(get(r, 'ipaUniqueID.0'))
+            for dn in get(entry, 'memberOf'):
+                r = self.search_one(dn, '(objectclass=posixGroup)', attributes=['ipaUniqueID'], scope=ldap3.BASE)
+                if r:
+                    r = dict(r['attributes'])
+                    groups.append(get(r, 'ipaUniqueID.0'))
 
         if contains(entry, 'ipaNTHash'):
             nthash = binascii.hexlify(entry['ipaNTHash']).decode('ascii')
