@@ -109,6 +109,7 @@ class FreeIPAPlugin(DirectoryServicePlugin):
         })
 
     def convert_user(self, entry):
+        dn = entry['dn']
         entry = dict(entry['attributes'])
         groups = []
         group = None
@@ -125,11 +126,15 @@ class FreeIPAPlugin(DirectoryServicePlugin):
                 group = dict(ret['attributes'])
 
         if get(entry, 'memberOf'):
-            for dn in get(entry, 'memberOf'):
-                r = self.search_one(dn, '(objectclass=posixGroup)', attributes=['ipaUniqueID'], scope=ldap3.BASE)
-                if r:
-                    r = dict(r['attributes'])
-                    groups.append(get(r, 'ipaUniqueID.0'))
+            builder = LdapQueryBuilder()
+            qstr = builder.build_query([
+                ('member', '=*', dn),
+                ('objectClass', '=', 'posixGroup')
+            ])
+
+            for r in self.search(self.base_dn, qstr, attributes=['ipaUniqueID']):
+                r = dict(r['attributes'])
+                groups.append(get(r, 'ipaUniqueID.0'))
 
         if contains(entry, 'ipaNTHash'):
             nthash = binascii.hexlify(entry['ipaNTHash']).decode('ascii')
