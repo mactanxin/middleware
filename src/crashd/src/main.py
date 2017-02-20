@@ -143,6 +143,9 @@ class Main(object):
         except BaseException as err:
             logger.error('Cannot send telemerty data: {0}'.format(str(err)))
 
+        # Remove the collected files
+        shutil.rmtree(TELEMETRY_STAGING_PATH, ignore_errors=True)
+
     def send_report(self, path):
         name, ext = os.path.splitext(os.path.basename(path))
         body = None
