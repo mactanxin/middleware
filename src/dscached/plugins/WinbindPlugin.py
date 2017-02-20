@@ -641,7 +641,7 @@ def _init(context):
             '%type': {'enum': ['WinbindDirectoryParams']},
             'realm': {'type': 'string'},
             'username': {'type': ['string', 'null']},
-            'password': {'type': ['string', 'null']},
+            'password': {'type': ['password', 'null']},
             'krb_principal': {'type': ['string', 'null']},
             'site_name': {'type': ['string', 'null']},
             'dc_address': {'type': ['string', 'null']},

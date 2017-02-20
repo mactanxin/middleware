@@ -28,6 +28,7 @@
 import errno
 import logging
 from datastore.config import ConfigNode
+from freenas.dispatcher import Password
 from freenas.dispatcher.rpc import RpcException, accepts, returns, SchemaHelper as h, generator
 from task import Provider, Task, TaskDescription, TaskException, query
 from freenas.utils.lazy import lazy
@@ -48,6 +49,10 @@ class DirectoryProvider(Provider):
     @generator
     def query(self, filter=None, params=None):
         def extend(directory):
+            for k, v in directory['parameters'].items():
+                if k == 'password':
+                    directory['parameters'][k] = Password(v)
+
             directory['status'] = lazy(self.dispatcher.call_sync, 'dscached.management.get_status', directory['id'])
             return directory
 
@@ -126,6 +131,10 @@ class DirectoryServiceCreateTask(Task):
         # Replace passed in params with normalized ones
         directory['parameters'] = params
 
+        for k, v in directory['parameters']:
+            if k == 'password' and isinstance(v, Password):
+                directory['parameters'][k] = v.secret
+
         if directory['type'] == 'winbind':
             normalize(directory, {
                 'uid_range': [100000, 999999],
@@ -178,6 +187,11 @@ class DirectoryServiceUpdateTask(Task):
             old_name = directory['name']
             if self.datastore.exists('directories', ('name', '=', updated_params['name'])):
                 raise TaskException(errno.EEXIST, 'Directory {0} already exists'.format(directory['name']))
+
+        if 'parameters' in updated_params:
+            for k, v in updated_params['parameters'].items():
+                if k == 'password' and isinstance(v, Password):
+                    updated_params['parameters'][k] = v.secret
 
         directory.update(updated_params)
         self.datastore.update('directories', id, directory)
@@ -277,18 +291,20 @@ def _init(dispatcher, plugin):
                 ]
             },
             'parameters': {'$ref': 'DirectoryParams'},
-            'status': {
-                'type': 'object',
-                'additionalProperties': False,
-                'properties': {
-                    'state': {
-                        'type': 'string',
-                        'enum': ['DISABLED', 'JOINING', 'FAILURE', 'BOUND', 'EXITING']
-                    },
-                    'status_code': {'type': 'integer'},
-                    'status_message': {'type': 'string'}
-                }
-            }
+            'status': {'$ref': 'DirectoryStatus'}
+        }
+    })
+
+    plugin.register_schema_definition('DirectoryStatus', {
+        'type': 'object',
+        'additionalProperties': False,
+        'properties': {
+            'state': {
+                'type': 'string',
+                'enum': ['DISABLED', 'JOINING', 'FAILURE', 'BOUND', 'EXITING']
+            },
+            'status_code': {'type': 'integer'},
+            'status_message': {'type': ['string', 'null']}
         }
     })
 

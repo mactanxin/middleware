@@ -336,7 +336,7 @@ def _init(context):
             'server': {'type': 'string'},
             'base_dn': {'type': 'string'},
             'bind_dn': {'type': ['string', 'null']},
-            'password': {'type': ['string', 'null']},
+            'password': {'type': ['password', 'null']},
             'user_suffix': {'type': ['string', 'null']},
             'group_suffix': {'type': ['string', 'null']},
             'krb_principal': {'type': ['string', 'null']},

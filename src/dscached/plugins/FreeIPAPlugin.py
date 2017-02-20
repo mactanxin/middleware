@@ -308,7 +308,7 @@ def _init(context):
             'server': {'type': ['string', 'null']},
             'kdc': {'type': ['string', 'null']},
             'username': {'type': ['string', 'null']},
-            'password': {'type': ['string', 'null']},
+            'password': {'type': ['password', 'null']},
             'krb_principal': {'type': ['string', 'null']},
             'user_suffix': {'type': ['string', 'null']},
             'group_suffix': {'type': ['string', 'null']},
