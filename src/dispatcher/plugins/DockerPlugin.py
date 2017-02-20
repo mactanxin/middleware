@@ -529,7 +529,6 @@ class DockerContainerCreateTask(DockerBaseTask):
                 'Cannot connect networks to container with primary network mode: {0}'.format(network_mode)
             )
 
-
         if hostname:
             return ['docker:{0}'.format(hostname)]
         else:
