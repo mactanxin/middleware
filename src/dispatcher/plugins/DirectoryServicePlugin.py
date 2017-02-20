@@ -131,7 +131,7 @@ class DirectoryServiceCreateTask(Task):
         # Replace passed in params with normalized ones
         directory['parameters'] = params
 
-        for k, v in directory['parameters']:
+        for k, v in directory['parameters'].items():
             if k == 'password' and isinstance(v, Password):
                 directory['parameters'][k] = v.secret
 
