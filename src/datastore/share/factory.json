@@ -713,6 +713,7 @@
                 "launchd": {
                     "Label": "org.freebsd.powerd",
                     "RunAtLoad": true,
+                    "StandardOutPath": "/dev/null",
                     "ProgramArguments": [
                         "/usr/sbin/powerd",
                         "-v"
