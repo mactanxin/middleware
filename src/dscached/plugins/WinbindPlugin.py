@@ -352,6 +352,7 @@ class WinbindPlugin(DirectoryServicePlugin):
         if not entry:
             return
 
+        dn = entry['dn']
         entry = dict(entry['attributes'])
         if 'user' not in get(entry, 'objectClass'):
             # not a user
@@ -376,10 +377,11 @@ class WinbindPlugin(DirectoryServicePlugin):
         if get(entry, 'memberOf'):
             builder = LdapQueryBuilder()
             qstr = builder.build_query([
-                ('distinguishedName', 'in', get(entry, 'memberOf'))
+                ('member', '=', dn),
+                ('objectClass', '=', 'group')
             ])
 
-            for r in self.search(self.base_dn, qstr):
+            for r in self.search(self.base_dn, qstr, attributes=['objectGUID']):
                 r = dict(r['attributes'])
                 guid = uuid.UUID(get(r, 'objectGUID'))
                 groups.append(str(guid))
