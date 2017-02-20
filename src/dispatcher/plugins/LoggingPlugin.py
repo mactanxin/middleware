@@ -43,7 +43,6 @@ class SyslogProvider(Provider):
 
 
 def collect_debug(dispatcher):
-    yield AttachDirectory('var-log', '/var/log')
     yield AttachDirectory('var-tmp', '/var/tmp')
 
 
