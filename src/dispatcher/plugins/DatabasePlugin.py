@@ -56,8 +56,11 @@ class DownloadDatabaseTask(Task):
         for i in self.datastore.collection_list():
             result.append(dump_collection(self.datastore, i))
 
-        with os.fdopen(fd.fd, mode='w', closefd=False) as f:
-            dump(result, f)
+        try:
+            with os.fdopen(fd.fd, mode='w', closefd=False) as f:
+                dump(result, f)
+        except OSError as err:
+            raise TaskException(err.errno, err.strerror)
 
 
 @accepts(FileDescriptor)
