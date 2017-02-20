@@ -44,6 +44,7 @@ from freenas.dispatcher.rpc import (
 from task import Provider, Task, TaskException, TaskDescription, query
 from freenas.dispatcher.jsonenc import dumps
 from freenas.dispatcher.model import BaseStruct, BaseEnum, BaseVariantType
+from freenas.dispatcher.model.typing import Range
 from freenas.utils import normalize, query as q
 from debug import AttachData
 
@@ -119,7 +120,7 @@ class AlertPredicate(BaseStruct):
 
 class AlertFilter(BaseStruct):
     id: str
-    index: int
+    index: Range[int, 0]
     clazz: str
     emitter: str
     parameters: AlertEmitterParameters

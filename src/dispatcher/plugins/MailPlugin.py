@@ -39,6 +39,7 @@ from email.utils import formatdate
 
 from datastore.config import ConfigNode
 from freenas.dispatcher.model import BaseStruct, BaseEnum, types
+from freenas.dispatcher.model.typing import Range
 from freenas.dispatcher.rpc import RpcException, SchemaHelper as h, accepts, description, returns
 from freenas.dispatcher import Password
 from task import Provider, Task, ValidationException, TaskDescription
@@ -66,7 +67,7 @@ class AlertEmitterEmail(BaseStruct):
     from_address: str
     to: List[str]
     server: str
-    port: int
+    port: Range[int, 0, 65535]
     auth: bool
     encryption: MailEncryptionType
     user: Optional[str]
