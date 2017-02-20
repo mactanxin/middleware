@@ -739,7 +739,7 @@ class ZpoolImportTask(Task):
         if not pool:
             raise VerifyException(errno.ENOENT, 'Pool with GUID {0} not found'.format(guid))
 
-        return get_disk_names(self.dispatcher, pool)
+        return [f'disk:{d}' for d in get_disk_names(self.dispatcher, pool)]
 
     def run(self, guid, name=None, properties=None):
         zfs = get_zfs()
