@@ -27,12 +27,14 @@
 
 
 def probe(obj, ds):
-    return obj['id'] in ('service.openvpn.server_bridge_extended',
-                         'service.openvpn.server_bridge_range_end',
-                         'service.openvpn.server_bridge_netmask',
-                         'service.openvpn.server_bridge_ip',
-                         'service.openvpn.server_bridge_range_begin',
-                         'service.openvpn.server_bridge')
+    return obj['id'] in (
+        'service.openvpn.server_bridge_extended',
+        'service.openvpn.server_bridge_range_end',
+        'service.openvpn.server_bridge_netmask',
+        'service.openvpn.server_bridge_ip',
+        'service.openvpn.server_bridge_range_begin',
+        'service.openvpn.server_bridge'
+    )
 
 
 def apply(obj, ds):
