@@ -75,7 +75,7 @@ class DirectoryServicesConfigureTask(Task):
         node = ConfigNode('directory', self.configstore)
         node.update(updated_params)
 
-        self.emit_event('directoryservice.changed', {
+        self.dispatcher.emit_event('directoryservice.changed', {
             'operation': 'update'
         })
 
