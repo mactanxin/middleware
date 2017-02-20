@@ -102,8 +102,7 @@ class OpenVpnConfigureTask(Task):
             raise VerifyException(errno.EINVAL, '{0} Bad interface name. Allowed values tap/tun.'.format(node['dev']))
 
         if node['mode'] == 'pki' and (not node['ca'] or not node['cert']):
-            raise VerifyException(errno.EINVAL,
-                                  'For pki VPN mode ca and certyficate values are required')
+            raise VerifyException(errno.EINVAL, 'For pki VPN mode ca and certyficate values are required')
 
         if node['mode'] == 'psk':
             try:
@@ -114,9 +113,12 @@ class OpenVpnConfigureTask(Task):
 
         if node['mode'] == 'pki':
             if (node['keepalive_ping_interval'] * 2) >= node['keepalive_peer_down']:
-                raise VerifyException(errno.EINVAL, 'The second parameter to keepalive must be'
-                                      'at least twice the value of the first parameter.'
-                                      'Recommended setting is keepalive 10 60.')
+                raise VerifyException(
+                    errno.EINVAL,
+                    'The second parameter to keepalive must be'
+                    'at least twice the value of the first parameter.'
+                    'Recommended setting is keepalive 10 60.'
+                )
 
             try:
                 ipaddress.IPv4Network(node['server_ip'] + '/' + node['server_netmask'])
