@@ -107,7 +107,7 @@ def create_system_dataset(dispatcher, dsid, pool):
         ds = zfs.get_dataset('{0}/.system-{1}'.format(pool.name, dsid))
 
     try:
-        ds.properties['org.freenas.hidden'].value = 'yes'
+        ds.properties['org.freenas:hidden'] = libzfs.ZFSUserProperty('yes')
         ds.properties['canmount'].value = 'noauto'
         ds.properties['mountpoint'].value = SYSTEM_DIR
     except libzfs.ZFSException as err:
@@ -273,6 +273,9 @@ class SystemDatasetConfigure(ProgressTask):
                 [('id', '=', pool)],
                 {'select': 'properties.size.parsed', 'single': True}
             )
+
+            if not target_free_space or not target_total_size:
+                raise TaskException(errno.ENOENT, f'Target pool {pool} not found or not accessible')
 
             needed_free_space = int(target_total_size * 0.1) + system_dataset_size
 
