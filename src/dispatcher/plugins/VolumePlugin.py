@@ -117,7 +117,6 @@ class VolumeProvider(Provider):
 
         def extend(vol):
             config = self.dispatcher.call_sync('zfs.pool.query', [('id', '=', vol['id'])], {'single': True})
-            saved_topology = vol['topology']
             encrypted = vol.get('key_encrypted', False) or vol.get('password_encrypted', False)
 
             if not config:
@@ -132,11 +131,7 @@ class VolumeProvider(Provider):
                             [('status.data_partition_path', '=', vdev['path'])],
                             {'single': True, 'select': ('id', 'path')}
                         )
-                        if not disk_info:
-                            if encrypted:
-                                topology = saved_topology
-                                break
-                        else:
+                        if disk_info:
                             vdev['disk_id'], vdev['path'] = disk_info
 
                     return topology
