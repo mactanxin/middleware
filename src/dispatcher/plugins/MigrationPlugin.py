@@ -56,6 +56,14 @@ from freenasUI.middleware.notifier import notifier
 
 # Here we define all the constants
 NOGROUP_ID = '8980c534-6a71-4bfb-bc72-54cbd5a186db'
+
+SIZE_LOOKUP = {
+    'KB': lambda x: int(x[:-2]) * 1024,
+    'MB': lambda x: int(x[:-2]) * 1024 * 1024,
+    'GB': lambda x: int(x[:-2]) * 1024 * 1024 * 1024,
+    'TB': lambda x: int(x[:-2]) * 1024 * 1024 * 1024 * 1024
+}
+
 LAGG_PROTOCOL_MAP = {
     'failover': 'FAILOVER',
     'fec': 'ETHERCHANNEL',
@@ -552,6 +560,10 @@ class StorageMigrateTask(Task):
 
 @description("Shares migration task")
 class ShareMigrateTask(Task):
+    def __init__(self, dispatcher):
+        super(ShareMigrateTask, self).__init__(dispatcher)
+        self._notifier = notifier()
+
     @classmethod
     def early_describe(cls):
         return "Migration of FreeNAS 9.x shares to 10.x"
@@ -772,16 +784,212 @@ class ShareMigrateTask(Task):
         # Lastly lets tackle the mamoth in the room: iSCSI
 
         # getting all the information from the fn9 database
-        fn9_iscsitarget = get_table('select * from services_iscsitarget')
+        fn9_iscsitargets = get_table('select * from services_iscsitarget')
         fn9_iscsitargetauthcreds = get_table('select * from services_iscsitargetauthcredential')
-        fn9_iscsitargetauthinitiator = get_table('select * from services_iscsitargetauthorizedinitiator')
-        fn9_iscsitargetextent = get_table('select * from services_iscsitargetextent')
+        fn9_iscsitargetauthinitiators = get_table('select * from services_iscsitargetauthorizedinitiator')
+        fn9_iscsitargetextents = get_table('select * from services_iscsitargetextent')
         fn9_iscsitargetgroups = get_table('select * from services_iscsitargetgroups')
-        fn9_iscsitargetportal = get_table('select * from services_iscsitargetportal')
-        fn9_iscsitargetportalip = get_table('select * from services_iscsitargetportalip')
-        fn9_iscsitargettoextent = get_table('select * from services_iscsitargettoextent')
+        fn9_iscsitargetportals = get_table('select * from services_iscsitargetportal')
+        fn9_iscsitargetportalips = get_table('select * from services_iscsitargetportalip')
+        fn9_iscsitargettoextent_maps = get_table('select * from services_iscsitargettoextent')
 
         # Here we go...
+        for fn9_iscsitargetextent in fn9_iscsitargetextents.values():
+            try:
+                size = fn9_iscsitargetextent['iscsi_target_extent_filesize']
+                if size == "0":
+                    size = None
+                else:
+                    size = SIZE_LOOKUP.get(size[-2:], lambda x: int(x))(size)
+                if bool(fn9_iscsitargetextent['iscsi_target_extent_legacy']):
+                    vendor_id = 'FreeBSD'
+                else:
+                    vendor_id = 'FreeNAS' if self._notifier.is_freenas() else 'TrueNAS'
+                serial = fn9_iscsitargetextent['iscsi_target_extent_serial']
+                padded_serial = serial
+                if not bool(fn9_iscsitargetextent['iscsi_target_extent_xen']):
+                    for i in range(31 - len(serial)):
+                        padded_serial += " "
+                device_id = 'iSCSI Disk      {0}'.format(padded_serial)
+
+                # Fix 'iscsi_target_extent_path' (example: 'zvol/js-fn-tank/iSCSITEST')
+                extent_path = fn9_iscsitargetextent['iscsi_target_extent_path']
+                if extent_path[:5] in ['zvol/', '/mnt/']:
+                    extent_path = extent_path[5:]
+
+                self.run_subtask_sync(
+                    'share.create',
+                    {
+                        'name': fn9_iscsitargetextent['iscsi_target_extent_name'],
+                        'description': fn9_iscsitargetextent['iscsi_target_extent_comment'],
+                        'enabled': True,
+                        'immutable': False,
+                        'type': 'iscsi',
+                        'target_path': extent_path,
+                        'target_type': fn9_iscsitargetextent['iscsi_target_extent_type'],
+                        'properties': {
+                            'serial': serial,
+                            'naa': fn9_iscsitargetextent['iscsi_target_extent_naa'],
+                            'size': size,
+                            'block_size': fn9_iscsitargetextent['iscsi_target_extent_blocksize'],
+                            'physizal_block_size': bool(fn9_iscsitargetextent['iscsi_target_extent_pblocksize']),
+                            'available_space_threshold': fn9_iscsitargetextent['iscsi_target_extent_avail_threshold'],
+                            'read_only': bool(fn9_iscsitargetextent['iscsi_target_extent_ro']),
+                            'xen_compat': bool(fn9_iscsitargetextent['iscsi_target_extent_xen']),
+                            'tpc': bool(fn9_iscsitargetextent['iscsi_target_extent_insecure_tpc']),
+                            'vendor_id': vendor_id,
+                            'product_id': 'iSCSI Disk',
+                            'device_id': device_id,
+                            'rpm': fn9_iscsitargetextent['iscsi_target_extent_rpm']
+                        }
+                    }
+                )
+            except RpcException as err:
+                self.add_warning(TaskWarning(
+                    errno.EINVAL,
+                    'Cannot create iSCSI share: {0} due to error: {1}'.format(
+                        fn9_iscsitargetextent['iscsi_target_extent_name'], err
+                    )
+                ))
+
+        # required mappings
+        authgroup_to_portal_map = {}
+        authgroup_to_target_map = {}
+        target_to_portal_map = {}
+
+        for auth in fn9_iscsitargetauthcreds.values():
+            auth['auth_methods'] = {
+                'None': {'portal_ids': [], 'target_ids': []},
+                'CHAP': {'portal_ids': [], 'target_ids': []},
+                'CHAP Mutual': {'portal_ids': [], 'target_ids': []},
+            }
+            for x in fn9_iscsitargetportals.values():
+                if x['iscsi_target_portal_discoveryauthgroup'] == auth['iscsi_target_auth_tag']:
+                    auth['auth_method'][x['iscsi_target_portal_discoveryauthmethod']]['portal_ids'].append(x['id'])
+
+            for x in fn9_iscsitargetgroups.values():
+                if x['iscsi_target_authgroup'] == auth['iscsi_target_auth_tag']:
+                    auth['auth_method'][x['iscsi_target_authtype']]['target_ids'].append(x['id'])
+
+        # Now lets make them auth groups, portals, and targets
+        for fn9_targetauthcred in fn9_iscsitargetauthcreds.values():
+            # Note I am deliberately dropping group id and letting fn10 generate it
+            # this is due to the way I have to construct multiple auth groups per
+            # iscsi auth type that they are used with.
+            # i.e. in fn9 that same auth credential entry with 'group id'=1 can be used
+            # 'CHAP', 'CHAP_MUTUAL', and 'NONE' in fn9's iscsi portals, BUT, in fn10
+            # we need to create a different auth group entry per auth type in it
+            # auth_map = [
+            #     (
+            #         x['iscsi_target_portal_discoveryauthmethod'].upper().replace(' ', '_'),
+            #         x['iscsi_target_portal_tag']
+            #     )
+            #     for x in fn9_iscsitargetportals.values()
+            #     if x['iscsi_target_portal_discoveryauthgroup'] == fn9_iscsitargetauthcred['iscsi_target_auth_tag']
+            # ] or [('NONE', None)]
+            def create_auth_group(auth_type='NONE', fn9_targetauthcred=fn9_targetauthcred):
+                try:
+                    return self.run_subtask_sync(
+                        'share.iscsi.auth.create',
+                        {
+                            'description':
+                                'Migrated freenas 9.x auth group id: {0}, auth_type: {1}'.format(
+                                    fn9_targetauthcred['iscsi_target_auth_tag'], auth_type
+                                ),
+                            'type': auth_type,
+                            'users': [{
+                                'name': fn9_targetauthcred['iscsi_target_auth_user'],
+                                'secret': self._notifier.pwenc_decrypt(
+                                    fn9_targetauthcred['iscsi_target_auth_secret']
+                                ),
+                                'peer_name': fn9_targetauthcred['iscsi_target_auth_peeruser'],
+                                'peer_secret': self._notifier.pwenc_decrypt(
+                                    fn9_targetauthcred['iscsi_target_auth_peersecret']
+                                )
+                            }]
+                        }
+                    )
+                except RpcException as err:
+                    self.add_warning(TaskWarning(
+                        errno.EINVAL,
+                        'Cannot create iSCSI auth group: {0}, auth_type: {1}, error: {2}'.format(
+                            fn9_targetauthcred['iscsi_target_portal_comment'], auth_type, err
+                        )
+                    ))
+            auth_created = False
+            for auth_type, id_vals in fn9_targetauthcred['auth_methods'].items():
+                if id_vals['portal_ids'] or id_vals['target_ids']:
+                    auth_created = True
+                    auth_id = create_auth_group(auth_type=auth_type.upper().replace(' ', '_'))
+                    for portal_id in id_vals['portal_ids']:
+                        authgroup_to_portal_map[portal_id] = auth_id
+                    for target_id in id_vals['target_ids']:
+                        authgroup_to_target_map[target_id] = auth_id
+            if not auth_created:
+                # This meant that the auth group was made but nvere linked to any portal or
+                # target so lets just make it with 'NONE' authmethod
+                create_auth_group(auth_type='NONE')
+
+        for fn9_iscsitargetportal in fn9_iscsitargetportals.values():
+            try:
+                portal_id = self.run_subtask_sync(
+                    'share.iscsi.portal.create',
+                    {
+                        'tag': fn9_iscsitargetportal['iscsi_target_portal_tag'],
+                        'description': fn9_iscsitargetportal['iscsi_target_portal_comment'],
+                        'discovery_auth_group': authgroup_to_portal_map.get(
+                            fn9_iscsitargetportal['id'], None
+                        ),
+                        'listen': [
+                            {
+                                'address': p['iscsi_target_portalip_ip'],
+                                'port': p['iscsi_target_portalip_port']
+                            }
+                            for p in fn9_iscsitargetportalips.values()
+                            if p['iscsi_target_portalip_portal_id'] == fn9_iscsitargetportal['id']
+                        ]
+                    }
+                )
+                for x in fn9_iscsitargetgroups.values():
+                    if x['iscsi_target_portalgroup_id'] == fn9_iscsitargetportal['id']:
+                        target_to_portal_map[x['iscsi_target_id']] = portal_id
+
+            except RpcException as err:
+                self.add_warning(TaskWarning(
+                    errno.EINVAL,
+                    'Cannot create iSCSI portal: {0} due to error: {1}'.format(
+                        fn9_iscsitargetportal['iscsi_target_portal_tag'], err
+                    )
+                ))
+
+        for fn9_iscsitarget in fn9_iscsitargets.values():
+            try:
+                self.run_subtask_sync(
+                    'share.iscsi.target.create',
+                    {
+                        'id': fn9_iscsitarget['iscsi_target_name'],
+                        'description': fn9_iscsitarget['iscsi_target_alias'],
+                        'auth_group': authgroup_to_target_map.get(
+                            fn9_iscsitarget['id'], 'no-authentication'
+                        ),
+                        'portal_group': target_to_portal_map.get(fn9_iscsitarget['id'], 'default'),
+                        'extents': [
+                            {
+                                'name': fn9_iscsitargetextents[x['iscsi_extent_id']]['iscsi_target_extent_name'],
+                                'number': x['iscsi_lunid']
+                            }
+                            for x in fn9_iscsitargettoextent_maps.values()
+                            if x['iscsi_target_id'] == fn9_iscsitarget['id']
+                        ]
+                    }
+                )
+            except RpcException as err:
+                self.add_warning(TaskWarning(
+                    errno.EINVAL,
+                    'Cannot create iSCSI target: {0} due to error: {2}'.format(
+                        fn9_iscsitarget['iscsi_target_name'], err
+                    )
+                ))
 
 
 @description("Service settings migration task")
@@ -804,6 +1012,7 @@ class ServiceMigrateTask(Task):
         # Migrating iSCSI service
         fn9_iscsi = get_table('select * from services_iscsitargetglobalconfiguration', dictionary=False)[0]
         try:
+            # Note: `iscsi_alua` property of fn9 is not there in fn10 so not touching it below
             self.run_subtask_sync(
                 'service.update',
                 q.query(fn10_services, ("name", "=", "iscsi"), single=True)['id'],
