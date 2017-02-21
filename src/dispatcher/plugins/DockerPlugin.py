@@ -51,6 +51,7 @@ collections = None
 images = None
 containers_state = None
 containers_rename_cache = None
+hosts_status_cache = None
 
 CONTAINERS_QUERY = 'containerd.docker.query_containers'
 NETWORKS_QUERY = 'containerd.docker.query_networks'
@@ -79,6 +80,7 @@ class DockerHostProvider(Provider):
     @generator
     def query(self, filter=None, params=None):
         def extend(obj):
+            status = hosts_status_cache.get(obj['id'])
             ret = {
                 'id': obj['id'],
                 'name': obj['name'],
@@ -87,15 +89,9 @@ class DockerHostProvider(Provider):
                     'memsize': q.get(obj, 'config.memsize'),
                     'ncpus': q.get(obj, 'config.ncpus')
                 },
-                'state': 'DOWN',
-                'status': None
+                'state': 'UP' if status else 'DOWN',
+                'status': status
             }
-
-            try:
-                ret['status'] = self.dispatcher.call_sync('containerd.docker.get_host_status', obj['id'])
-                ret['state'] = 'UP'
-            except RpcException:
-                pass
 
             return ret
 
@@ -1963,6 +1959,7 @@ def _init(dispatcher, plugin):
     global images
     global containers_state
     global containers_rename_cache
+    global hosts_status_cache
 
     containers_lock = RLock()
     networks_lock = RLock()
@@ -1971,6 +1968,7 @@ def _init(dispatcher, plugin):
     collections = CacheStore()
     containers_state = CacheStore()
     containers_rename_cache = CacheStore()
+    hosts_status_cache = CacheStore()
 
     def docker_resource_create_update(name, parents):
         if first_or_default(lambda o: o['name'] == name, dispatcher.call_sync('task.list_resources')):
@@ -2091,8 +2089,16 @@ def _init(dispatcher, plugin):
 
                     if q.get(host, 'status.state') == 'RUNNING':
                         refresh_cache(host_id=id)
+                        try:
+                            hosts_status_cache.put(
+                                id,
+                                dispatcher.call_sync('containerd.docker.get_host_status', id, timeout=100)
+                            )
+                        except RpcException:
+                            hosts_status_cache.remove(id)
 
                     else:
+                        hosts_status_cache.remove(id)
                         containers = dispatcher.datastore_log.query(
                             'docker.containers',
                             ('host', '=', id),
