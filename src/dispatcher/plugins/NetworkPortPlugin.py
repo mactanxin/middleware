@@ -109,29 +109,28 @@ class NetworkPortProvider(Provider):
             for rule in p.get_rules('rdr'):
                 if rule.label.startswith('container:'):
                     _, name = rule.label.split(':', maxsplit=1)
-                    consumer = PortConsumerType.CONTAINER
+                    consumer = 'CONTAINER'
                 else:
                     name = rule.label
-                    consumer = PortConsumerType.OTHER
+                    consumer = 'OTHER'
 
-                for p in range(rule.proxy_ports[0], rule.proxy_ports[1]):
-                    yield Port(
-                        consumer_type=consumer,
-                        consumer_pid=None,
-                        consumer_name=name,
-                        af=PortAddressFamily.INET,
-                        port=p,
-                        protocol=PortProtocol.TCP
-                    )
+                yield Port(
+                    consumer_type=consumer,
+                    consumer_pid=None,
+                    consumer_name=name,
+                    af=PortAddressFamily.INET,
+                    port=rule.proxy_ports[0],
+                    protocol=PortProtocol.TCP
+                )
 
-                    yield Port(
-                        consumer_type=consumer,
-                        consumer_pid=None,
-                        consumer_name=name,
-                        af=PortAddressFamily.INET,
-                        port=p,
-                        protocol=PortProtocol.UDP
-                    )
+                yield Port(
+                    consumer_type=consumer,
+                    consumer_pid=None,
+                    consumer_name=name,
+                    af=PortAddressFamily.INET,
+                    port=rule.proxy_ports[0],
+                    protocol=PortProtocol.UDP
+                )
 
         return q.query(
             itertools.chain(collect_system(), collect_pf()),
