@@ -1938,7 +1938,7 @@ class VolumeUnlockTask(Task):
                     {'mountpoint': {'value': vol['mountpoint']}}
                 )
 
-            self.run_subtask_sync('zfs.mount', id)
+            self.run_subtask_sync('zfs.mount', id, True)
 
             self.dispatcher.dispatch_event('volume.changed', {
                 'operation': 'update',
