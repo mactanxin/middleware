@@ -2395,7 +2395,7 @@ class Main(object):
     def init_autostart(self):
         for vm in self.client.call_sync('vm.query'):
             if vm['config'].get('autostart'):
-                self.client.submit_task('vm.start', vm['id'])
+                self.client.submit_task('vm.start', vm['id'], True)
 
     def main(self):
         parser = argparse.ArgumentParser()

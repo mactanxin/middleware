@@ -1362,18 +1362,18 @@ class VMExportTask(Task):
         })
 
 
-@accepts(str)
+@accepts(str, bool)
 @description('Starts VM')
 class VMStartTask(Task):
     @classmethod
     def early_describe(cls):
         return 'Starting VM'
 
-    def describe(self, id):
+    def describe(self, id, strict=False):
         vm = self.datastore.get_by_id('vms', id)
         return TaskDescription('Starting VM {name}', name=vm.get('name', '') if vm else '')
 
-    def verify(self, id):
+    def verify(self, id, strict=False):
         vm = self.datastore.get_by_id('vms', id)
         if not vm:
             raise TaskException(errno.ENOENT, f'VM {id} does not exist')
@@ -1388,7 +1388,7 @@ class VMStartTask(Task):
             )
         return ['system']
 
-    def run(self, id):
+    def run(self, id, strict=False):
         vm = self.dispatcher.call_sync('vm.query', [('id', '=', id)], {'single': True})
         if not vm['enabled']:
             raise TaskException(errno.EACCES, "Cannot start disabled VM {0}".format(id))
@@ -1400,6 +1400,12 @@ class VMStartTask(Task):
 
         for d in dropped_devices:
             if d['type'] in ('DISK', 'VOLUME', 'CDROM'):
+                if strict and d['type'] in ('DISK', 'VOLUME'):
+                    raise TaskException(
+                        errno.EACCES,
+                        'Cannot start VM {0} - cannot connect {1} device'.format(vm['name'], d['name'])
+                    )
+
                 self.add_warning(TaskWarning(
                     errno.EACCES,
                     'Cannot access storage resources of device {0}. Cannot connect device'.format(d['name'])
