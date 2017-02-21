@@ -52,6 +52,7 @@ from task import (
 )
 from debug import AttachData, AttachCommandOutput
 from freenas.dispatcher.rpc import RpcException, accepts, returns, description, private, SchemaHelper as h, generator
+from freenas.dispatcher import Password
 
 from pySMART import Device
 
@@ -634,7 +635,7 @@ class DiskGELIInitTask(Task):
         if params is None:
             params = {}
         key = base64.b64decode(params.get('key', '') or '')
-        password = params.get('password', '') or ''
+        password = params.get('password')
         disk_info = disk_by_id(self.dispatcher, id)
         disk_status = disk_info.get('status', None)
         if disk_status is not None:
@@ -652,10 +653,11 @@ class DiskGELIInitTask(Task):
             with tempfile.NamedTemporaryFile('w') as passfile:
                 keyfile.write(key)
                 keyfile.flush()
-                passfile.write(password.secret)
-                passfile.flush()
+                if isinstance(password, Password):
+                    passfile.write(password.secret)
+                    passfile.flush()
                 try:
-                    if password and key:
+                    if isinstance(password, Password) and key:
                         system('/sbin/geli', 'init', '-s', str(4096), '-K', keyfile.name, '-J', passfile.name,
                                '-B none', data_partition_path)
                     elif key:
@@ -697,7 +699,7 @@ class DiskGELISetUserKeyTask(Task):
         if params is None:
             params = {}
         key = base64.b64decode(params.get('key', '') or '')
-        password = params.get('password', '') or ''
+        password = params.get('password')
         slot = params.get('slot', 0)
         disk_info = disk_by_id(self.dispatcher, id)
         disk_status = disk_info.get('status')
@@ -710,12 +712,13 @@ class DiskGELISetUserKeyTask(Task):
             with tempfile.NamedTemporaryFile('w') as passfile:
                 keyfile.write(key)
                 keyfile.flush()
-                passfile.write(password.secret)
-                passfile.flush()
+                if isinstance(password, Password):
+                    passfile.write(password.secret)
+                    passfile.flush()
                 try:
-                    if password and key:
-                         system('/sbin/geli', 'setkey', '-K', keyfile.name, '-J', passfile.name,
-                                '-n', str(slot), data_partition_path)
+                    if isinstance(password, Password) and key:
+                        system('/sbin/geli', 'setkey', '-K', keyfile.name, '-J', passfile.name,
+                               '-n', str(slot), data_partition_path)
                     elif key:
                         system('/sbin/geli', 'setkey', '-K', keyfile.name, '-P', '-n', str(slot),
                                data_partition_path)
@@ -870,7 +873,7 @@ class DiskGELIAttachTask(Task):
         if params is None:
             params = {}
         key = base64.b64decode(params.get('key', '') or '')
-        password = params.get('password', '') or ''
+        password = params.get('password')
         disk_info = disk_by_id(self.dispatcher, id)
         disk_status = disk_info.get('status')
         if disk_status:
@@ -882,10 +885,11 @@ class DiskGELIAttachTask(Task):
             with tempfile.NamedTemporaryFile('w') as passfile:
                 keyfile.write(key)
                 keyfile.flush()
-                passfile.write(password.secret)
-                passfile.flush()
+                if isinstance(password, Password):
+                    passfile.write(password.secret)
+                    passfile.flush()
                 try:
-                    if password and key:
+                    if isinstance(password, Password) and key:
                         system('/sbin/geli', 'attach', '-k', keyfile.name, '-j', passfile.name, data_partition_path)
                     elif key:
                         system('/sbin/geli', 'attach', '-k', keyfile.name, '-p', data_partition_path)
