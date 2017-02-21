@@ -44,12 +44,18 @@ def bootstrap():
 
 
 def shutdown():
+    """
+    Stop all services and shut down the system
+    """
     client = create_client()
     client.call_sync('serviced.management.shutdown')
     sys.exit(0)
 
 
 def list(v=False):
+    """
+    Display the current PID, status, and label of each service
+    """
     client = create_client()
     jobs = client.call_sync('serviced.job.query')
     if not v:
@@ -68,6 +74,9 @@ def list(v=False):
 
 
 def load(*filenames):
+    """
+    Load specified service definition files
+    """
     client = create_client()
     for i in filenames:
         with open(i, 'r') as f:
@@ -85,6 +94,9 @@ def load(*filenames):
 
 
 def start(label):
+    """
+    Specify the label to start a service
+    """
     client = create_client()
     try:
         client.call_sync('serviced.job.start', label)
@@ -96,6 +108,9 @@ def start(label):
 
 
 def stop(label):
+    """
+    Specify the label to stop a running service
+    """
     client = create_client()
     try:
         client.call_sync('serviced.job.stop', label, True)
@@ -107,6 +122,9 @@ def stop(label):
 
 
 def restart(label):
+    """
+    Specify the label to restart a running service
+    """
     client = create_client()
     try:
         client.call_sync('serviced.job.stop', label, True)
@@ -119,6 +137,9 @@ def restart(label):
 
 
 def wait(label, state):
+    """
+    Waits for the specified label to change status
+    """
     client = create_client()
     try:
         state = client.call_sync('serviced.job.wait', label, [state])
@@ -131,6 +152,9 @@ def wait(label, state):
 
 
 def unload(label):
+    """
+    Specify the label to remove a service
+    """
     client = create_client()
     try:
         client.call_sync('serviced.job.unload', label)
@@ -153,7 +177,7 @@ def create_client():
 
 
 def main():
-    parser = argh.ArghParser()
+    parser = argh.ArghParser(description='The servicectl utility is used to manage services')
     parser.add_commands([bootstrap, shutdown, list, load, unload, start, stop, restart, wait])
     parser.dispatch()
 
