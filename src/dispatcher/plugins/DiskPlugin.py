@@ -554,12 +554,9 @@ class DiskConfigureTask(Task):
             device_smart_handle = Device(disk_status['gdisk_name'])
             if smart_enabled_val != device_smart_handle.smart_enabled:
                 toggle_result = (None, '')
-                try:
-                    toggle_result = device_smart_handle.smart_toggle(
-                        'on' if smart_enabled_val else 'off'
-                    )
-                except AssertionError as err:
-                    toggle_result = (False, err)
+                toggle_result = device_smart_handle.smart_toggle(
+                    'on' if smart_enabled_val else 'off'
+                )
                 if not toggle_result[0]:
                     raise TaskException(
                         errno.EINVAL,
@@ -569,7 +566,7 @@ class DiskConfigureTask(Task):
                             toggle_result[1]
                         )
                     )
-                disk.update({'smart': smart_enabled_vals})
+                disk.update({'smart': smart_enabled_val})
             self.dispatcher.call_sync('disk.update_disk_cache', disk['path'], timeout=120)
 
         self.dispatcher.dispatch_event('disk.changed', {
