@@ -544,6 +544,14 @@ class WinbindPlugin(DirectoryServicePlugin):
         usid = ldap3.utils.conv.escape_bytes(bytes(wbg.sid))
         return self.convert_group(self.search_one(self.base_dn, '(objectSid={0})'.format(usid)))
 
+    def authenticate(self, username, password):
+        if '\\' in username:
+            domain, username = username.split('\\', 1)
+            if domain != self.domain_name:
+                return False
+
+        return self.wbc.authenticate(f'{self.domain_name}\\{username}', password)
+
     def configure(self, enable, directory):
         with self.cv:
             self.enabled = enable
