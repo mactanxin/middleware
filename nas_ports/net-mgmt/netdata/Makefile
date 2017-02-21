@@ -2,7 +2,7 @@
 # $FreeBSD$
 
 PORTNAME=	netdata
-PORTVERSION=	1.5.0
+PORTVERSION=	1.5.1
 CATEGORIES=	net-mgmt
 
 MAINTAINER=	mokhi64@gmail.com
@@ -36,23 +36,12 @@ SUB_LIST+=	NETDATA_CACHE=${NETDATA_CACHE} \
 PLIST_SUB+=	NETDATA_CACHE=${NETDATA_CACHE} \
 		NETDATA_LOG=${NETDATA_LOG} \
 		NETDATA_PERST=${NETDATA_PERST}
-
-USE_RC_SUBR=	${PORTNAME}
-SUB_FILES=	${PORTNAME}.conf.sample
-
-post-patch:
-	@${REINPLACE_CMD} -e 's|%%NETDATA_CACHE%%|${NETDATA_CACHE}|g' \
-	    ${PATCH_WRKSRC}/configure.ac
-	@${REINPLACE_CMD} -e 's|%%NETDATA_LOG%%|${NETDATA_LOG}|g' \
-	    ${PATCH_WRKSRC}/configure.ac
-	@${REINPLACE_CMD} -e 's|%%NETDATA_PERST%%|${NETDATA_PERST}|g' \
-	    ${PATCH_WRKSRC}/configure.ac
-	@${REINPLACE_CMD} -e 's|%%ETCDIR%%|${ETCDIR}|g' \
-	    ${PATCH_WRKSRC}/configure.ac
+SUB_FILES=      ${PORTNAME}.conf.sample
 
 post-install:
 	${MKDIR} ${STAGEDIR}${ETCDIR}
 	${INSTALL_DATA} ${WRKDIR}/netdata.conf.sample ${STAGEDIR}${ETCDIR}/netdata.conf.sample
+	${INSTALL_DATA} ${FILESDIR}/netdata.conf ${STAGEDIR}${ETCDIR}/netdata.conf
 	${MKDIR} ${STAGEDIR}${NETDATA_CACHE}
 	${MKDIR} ${STAGEDIR}${NETDATA_LOG}
 	${MKDIR} ${STAGEDIR}${NETDATA_PERST}
