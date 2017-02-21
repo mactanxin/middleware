@@ -77,6 +77,7 @@ class Handler(FileSystemEventHandler):
 class Main(object):
     def __init__(self):
         self.observer = None
+        self.last_send = None
         self.lock = RLock()
         self.hostuuid = sysctl.sysctlbyname('kern.hostuuid')[:-1]
 
@@ -145,6 +146,7 @@ class Main(object):
 
         # Remove the collected files
         shutil.rmtree(TELEMETRY_STAGING_PATH, ignore_errors=True)
+        self.last_send = datetime.datetime.now()
 
     def send_report(self, path):
         name, ext = os.path.splitext(os.path.basename(path))
@@ -223,9 +225,6 @@ class Main(object):
         configure_logging('crashd', 'DEBUG')
         logger.info('Started')
 
-        self.collect_telemetry()
-        self.send_telemetry()
-
         if not os.path.isdir(REPORTS_PATH):
             os.mkdir(REPORTS_PATH)
 
@@ -234,6 +233,10 @@ class Main(object):
         self.observer.start()
 
         while True:
+            if not self.last_send or self.last_send + datetime.timedelta(hours=24) < datetime.datetime.now():
+                self.collect_telemetry()
+                self.send_telemetry()
+
             for i in os.listdir(REPORTS_PATH):
                 with self.lock:
                     self.send_report(os.path.join(REPORTS_PATH, i))
