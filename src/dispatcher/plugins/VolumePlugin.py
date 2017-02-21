@@ -397,7 +397,13 @@ class VolumeProvider(Provider):
 
         for disk in set(disks) - set(ret.keys()):
             try:
-                label = self.get_disk_label(disk)
+                disk = self.dispatcher.call_sync(
+                    'disk.query',
+                    [('id', '=', disk), ('online', '=', True)],
+                    {'single': True}
+                )
+
+                label = self.get_disk_label(disk['path'])
                 ret[disk] = {
                     'type': 'EXPORTED_VOLUME',
                     'name': label['volume_id']
