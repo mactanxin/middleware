@@ -496,6 +496,11 @@ class DockerUpdateTask(Task):
                     TaskWarning(err.code, err.message)
                 )
 
+        self.dispatcher.dispatch_event('docker.config.changed', {
+            'operation': 'update',
+            'ids': []
+        })
+
 
 @description('Creates a Docker container')
 @accepts(
@@ -2375,6 +2380,7 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('docker.collection.get_presets', DockerCollectionGetPresetsTask)
 
     plugin.register_event_type('docker.host.changed')
+    plugin.register_event_type('docker.config.changed')
     plugin.register_event_type('docker.container.changed')
     plugin.register_event_type('docker.network.changed')
     plugin.register_event_type('docker.image.changed')
