@@ -980,7 +980,7 @@
                     "Requires": ["networking", "logging", "etc"],
                     "ProgramArguments": [
                         "/usr/local/sbin/netdata",
-                        "-c", "/usr/local/etc/netdata.conf",
+                        "-c", "/usr/local/etc/netdata/netdata.conf",
                         "-D"
                     ]
                 },
