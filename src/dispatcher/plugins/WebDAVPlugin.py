@@ -64,7 +64,7 @@ class WebDAVConfigureTask(Task):
 
     def run(self, webdav):
         node = ConfigNode('service.webdav', self.configstore).__getstate__()
-        if 'password' in webdav:
+        if isinstance(webdav.get('password'), Password):
             webdav['password'] = webdav['password'].secret
 
         for p in ('http_port', 'https_port'):
