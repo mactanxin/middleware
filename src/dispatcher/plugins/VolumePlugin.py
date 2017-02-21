@@ -128,7 +128,7 @@ class VolumeProvider(Provider):
                     for vdev, _ in iterate_vdevs(topology):
                         disk_info = self.dispatcher.call_sync(
                             'disk.query',
-                            [('status.data_partition_path', '=', vdev['path'])],
+                            [('status.data_partition_path', '=', vdev['path']), ('online', '=', True)],
                             {'single': True, 'select': ('id', 'path')}
                         )
                         if disk_info:
@@ -642,7 +642,7 @@ class VolumeCreateTask(ProgressTask):
             for vdev, _ in iterate_vdevs(volume['topology']):
                 vdev['disk_id'] = self.dispatcher.call_sync(
                     'disk.query',
-                    [('path', '=', vdev['path'])],
+                    [('path', '=', vdev['path']), ('online', '=', True)],
                     {'single': True, 'select': 'id'}
                 )
 
@@ -1141,7 +1141,7 @@ class VolumeUpdateTask(ProgressTask):
             for vdev, _ in iterate_vdevs(volume['topology']):
                 vdev['disk_id'] = self.dispatcher.call_sync(
                     'disk.query',
-                    [('path', '=', vdev['path'])],
+                    [('path', '=', vdev['path']), ('online', '=', True)],
                     {'single': True, 'select': 'id'}
                 )
 
@@ -1285,7 +1285,7 @@ class VolumeImportTask(Task):
             for vdev, _ in iterate_vdevs(new_topology):
                 vdev['disk_id'] = self.dispatcher.call_sync(
                     'disk.query',
-                    [('status.data_partition_path', '=', vdev['path'])],
+                    [('status.data_partition_path', '=', vdev['path']), ('online', '=', True)],
                     {'single': True, 'select': 'id'}
                 )
 
