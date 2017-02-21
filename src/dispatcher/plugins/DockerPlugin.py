@@ -402,7 +402,24 @@ class DockerBaseTask(ProgressTask):
                 {'single': True, 'select': 'id'}
             )
 
-            self.run_subtask_sync('vm.start', hostid)
+            def match_fn(args):
+                if args['operation'] == 'update':
+                    if hostid in args['ids']:
+                        state = self.dispatcher.call_sync(
+                            'docker.host.query',
+                            [('id', '=', hostid)],
+                            {'single': True, 'select': 'state'}
+                        )
+                        return state == 'UP'
+                else:
+                    return False
+
+            self.dispatcher.exec_and_wait_for_event(
+                'docker.host.changed',
+                match_fn,
+                lambda: self.run_subtask_sync('vm.start', hostid),
+                600
+            )
 
         if progress_cb:
             progress_cb(100, 'Found default Docker host')
