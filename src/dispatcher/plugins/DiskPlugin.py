@@ -569,7 +569,7 @@ class DiskConfigureTask(Task):
                             toggle_result[1]
                         )
                     )
-                disk.update({'smart': smart_enabled_vals})
+                disk.update({'smart': smart_enabled_val})
             self.dispatcher.call_sync('disk.update_disk_cache', disk['path'], timeout=120)
 
         self.dispatcher.dispatch_event('disk.changed', {
