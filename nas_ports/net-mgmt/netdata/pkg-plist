@@ -1,3 +1,6 @@
+@mode 0640
+@owner netdata
+@group netdata
 %%ETCDIR%%/apps_groups.conf
 %%ETCDIR%%/charts.d.conf
 %%ETCDIR%%/charts.d/ap.conf
@@ -79,6 +82,9 @@
 %%ETCDIR%%/python.d/tomcat.conf
 %%ETCDIR%%/python.d/varnish.conf
 %%ETCDIR%%/python.d/web_log.conf
+@mode
+@owner
+@group
 libexec/netdata/charts.d/README.md
 libexec/netdata/charts.d/ap.chart.sh
 libexec/netdata/charts.d/apache.chart.sh
@@ -198,6 +204,9 @@ libexec/netdata/python.d/tomcat.chart.py
 libexec/netdata/python.d/varnish.chart.py
 libexec/netdata/python.d/web_log.chart.py
 sbin/netdata
+@mode 4640
+@owner netdata
+@group netdata
 %%DATADIR%%/web/.well-known/dnt/cookies
 %%DATADIR%%/web/css/bootstrap-3.3.7.css
 %%DATADIR%%/web/css/bootstrap-slate-flat-3.3.7.css
@@ -278,6 +287,9 @@ sbin/netdata
 %%DATADIR%%/web/sitemap.xml
 %%DATADIR%%/web/tv.html
 %%DATADIR%%/web/version.txt
+@mode
+@owner
+@group
 %%NETDATA_CACHE%%/.keep
 /var/lib/netdata/.keep
 /var/lib/netdata/registry/.keep
