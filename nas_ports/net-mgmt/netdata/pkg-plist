@@ -287,9 +287,9 @@ sbin/netdata
 %%DATADIR%%/web/sitemap.xml
 %%DATADIR%%/web/tv.html
 %%DATADIR%%/web/version.txt
-@mode
-@owner
-@group
+@mode 0644
+@owner netdata
+@group netdata
 %%NETDATA_CACHE%%/.keep
 /var/lib/netdata/.keep
 /var/lib/netdata/registry/.keep
@@ -300,3 +300,4 @@ sbin/netdata
 @dir /var/lib/netdata
 @dir /var/lib
 @dir %%NETDATA_LOG%%
+@dir /var/log/netdata
