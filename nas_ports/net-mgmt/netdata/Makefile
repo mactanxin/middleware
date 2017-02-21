@@ -15,7 +15,7 @@ LIB_DEPENDS+=	libuuid.so:misc/e2fsprogs-libuuid
 
 USE_GITHUB=	yes
 GH_ACCOUNT=	firehol
-GH_TAGNAME=	3bd41a0
+GH_TAGNAME=	b5b241f
 
 NETDATA_CACHE=	/var/cache/${PORTNAME}
 NETDATA_LOG=	/var/log/${PORTNAME}
