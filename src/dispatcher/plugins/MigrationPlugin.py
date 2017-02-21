@@ -622,6 +622,8 @@ class ShareMigrateTask(Task):
                             single=True
                         ) else 'DIRECTORY',
                         'properties': {
+                            '%type': 'ShareAfp',
+                            'comment': fn9_afp_share['afp_comment'],
                             'read_only': False,
                             'time_machine': bool(fn9_afp_share['afp_timemachine']),
                             'zero_dev_numbers': bool(fn9_afp_share['afp_nodev']),
@@ -686,6 +688,8 @@ class ShareMigrateTask(Task):
                             single=True
                         ) else 'DIRECTORY',
                         'properties': {
+                            '%type': 'ShareSmb',
+                            'comment': fn9_smb_share['cifs_comment'],
                             'read_only': bool(fn9_smb_share['cifs_ro']),
                             'guest_ok': bool(fn9_smb_share['cifs_guestok']),
                             'guest_only': bool(fn9_smb_share['cifs_guestonly']),
@@ -730,6 +734,7 @@ class ShareMigrateTask(Task):
                             single=True
                         ) else 'DIRECTORY',
                         'properties': {
+                            '%type': 'ShareNfs',
                             'alldirs': bool(fn9_nfs_share['nfs_alldirs']),
                             'read_only': bool(fn9_nfs_share['nfs_ro']),
                             'maproot_user': fn9_nfs_share['nfs_maproot_user'],
@@ -768,6 +773,7 @@ class ShareMigrateTask(Task):
                             single=True
                         ) else 'DIRECTORY',
                         'properties': {
+                            '%type': 'ShareWebdav',
                             'read_only': bool(fn9_dav_share['webdav_ro']),
                             'permission': bool(fn9_dav_share['webdav_perm'])
                         }
@@ -828,6 +834,7 @@ class ShareMigrateTask(Task):
                         'target_path': extent_path,
                         'target_type': fn9_iscsitargetextent['iscsi_target_extent_type'],
                         'properties': {
+                            '%type': 'ShareIscsi'
                             'serial': serial,
                             'naa': fn9_iscsitargetextent['iscsi_target_extent_naa'],
                             'size': size,
