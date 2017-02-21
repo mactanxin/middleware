@@ -64,7 +64,7 @@ def get_available_disks(dispatcher):
 
 
 def get_swap_partition(dispatcher, disk):
-    disk = dispatcher.call_sync('disk.query', [('path', '=', disk)], {'single': True})
+    disk = dispatcher.call_sync('disk.query', [('id', '=', disk)], {'single': True})
     if not disk:
         return None
 
