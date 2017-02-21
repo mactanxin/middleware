@@ -109,10 +109,10 @@ class NetworkPortProvider(Provider):
             for rule in p.get_rules('rdr'):
                 if rule.label.startswith('container:'):
                     _, name = rule.label.split(':', maxsplit=1)
-                    consumer = 'CONTAINER'
+                    consumer = PortConsumerType.CONTAINER
                 else:
                     name = rule.label
-                    consumer = 'OTHER'
+                    consumer = PortConsumerType.OTHER
 
                 yield Port(
                     consumer_type=consumer,
