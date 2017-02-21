@@ -89,6 +89,25 @@ class TestProvider(Provider):
     def exclude_lazy(self):
         return self.lazy_query([], {'exclude': ('slow_value', 'composite_slow_value')})
 
+    def attr_query(self):
+        class Test(object):
+            pass
+
+        c = Test()
+        d = {}
+        q.set(c, 'f', True)
+        q.set(d, 'f2', Test())
+        q.set(d, 'f2.nested', True)
+
+        if q.get(c, 'f') and q.get(d, 'f2.nested') and isinstance(q.get(d, 'f2'), Test):
+            l = [d, c]
+            if q.contains(c, 'f'):
+                q.delete(c, 'f')
+
+                return bool(q.query(l, ('f2.nested', '=', True), count=True))
+
+        return False
+
 
 @description('Downloads tests')
 class TestDownloadTask(Task):
