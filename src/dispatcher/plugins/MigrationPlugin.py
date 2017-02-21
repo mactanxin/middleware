@@ -91,6 +91,20 @@ CAPABILITY_MAP = {
     'lro': ('LRO',)
 }
 
+CIFS_LOGLEVEL_MAP = {
+    '0': 'NONE',
+    '1': 'MINIMUM',
+    '2': 'NORMAL',
+    '3': 'FULL',
+    '10': 'DEBUG',
+}
+
+WEBDAV_PROTOCOL_CHOICES = {
+    'http': ['HTTP'],
+    'https': ['HTTPS'],
+    'httphttps': ['HTTP', 'HTTPS'],
+}
+
 
 def get_table(query_string, dictionary=True):
     with sqlite3.connect(FREENAS93_DATABASE_PATH) as conn:
@@ -834,7 +848,7 @@ class ShareMigrateTask(Task):
                         'target_path': extent_path,
                         'target_type': fn9_iscsitargetextent['iscsi_target_extent_type'],
                         'properties': {
-                            '%type': 'ShareIscsi'
+                            '%type': 'ShareIscsi',
                             'serial': serial,
                             'naa': fn9_iscsitargetextent['iscsi_target_extent_naa'],
                             'size': size,
@@ -1001,6 +1015,10 @@ class ShareMigrateTask(Task):
 
 @description("Service settings migration task")
 class ServiceMigrateTask(Task):
+    def __init__(self, dispatcher):
+        super(ServiceMigrateTask, self).__init__(dispatcher)
+        self._notifier = notifier()
+
     @classmethod
     def early_describe(cls):
         return "Migration of FreeNAS 9.x services' settings to 10.x"
@@ -1024,6 +1042,7 @@ class ServiceMigrateTask(Task):
                 'service.update',
                 q.query(fn10_services, ("name", "=", "iscsi"), single=True)['id'],
                 {'config': {
+                    'type': 'ServiceIscsi',
                     'enable': bool(fn9_services['iscsitarget']['srv_enable']),
                     'base_name': fn9_iscsi['iscsi_basename'],
                     'pool_space_threshold': fn9_iscsi['iscsi_pool_avail_threshold'],
@@ -1043,6 +1062,7 @@ class ServiceMigrateTask(Task):
                 'service.update',
                 q.query(fn10_services, ("name", "=", "afp"), single=True)['id'],
                 {'config': {
+                    'type': 'ServiceAfp',
                     'enable': bool(fn9_services['afp']['srv_enable']),
                     'guest_enable': bool(fn9_afp['afp_srv_guest']),
                     'guest_user': fn9_afp['afp_srv_guest_user'],
@@ -1064,14 +1084,40 @@ class ServiceMigrateTask(Task):
             ))
 
         # Migrating SMB service
-        fn9_smb = get_table('select * from services_cifs')
+        fn9_smb = get_table('select * from services_cifs', dictionary=False)[0]
         try:
+            smbconfig = {
+                'type': 'ServiceSmb',
+                'enable': bool(fn9_services['cifs']['srv_enable']),
+                'netbiosname': [fn9_smb['cifs_srv_netbiosname']],
+                'workgroup': fn9_smb['cifs_srv_workgroup'],
+                'description': fn9_smb['cifs_srv_description'],
+                'dos_charset': fn9_smb['cifs_srv_doscharset'],
+                'unix_charset': fn9_smb['cifs_srv_unixcharset'],
+                'log_level': CIFS_LOGLEVEL_MAP.get(str(fn9_smb['cifs_srv_loglevel']), 'MINIMUM'),
+                'local_master': bool(fn9_smb['cifs_srv_localmaster']),
+                'domain_logons': bool(fn9_smb['cifs_srv_domain_logons']),
+                'time_server': bool(fn9_smb['cifs_srv_timeserver']),
+                'guest_user': fn9_smb['cifs_srv_guest'],
+                'filemask': {'value': int(fn9_smb['cifs_srv_filemask'])} if fn9_smb['cifs_srv_filemask'] else None,
+                'dirmask': {'value': int(fn9_smb['cifs_srv_dirmask'])} if fn9_smb['cifs_srv_dirmask'] else None,
+                'empty_password': bool(fn9_smb['cifs_srv_nullpw']),
+                'unixext': bool(fn9_smb['cifs_srv_unixext']),
+                'zeroconf': bool(fn9_smb['cifs_srv_zeroconf']),
+                'hostlookup': bool(fn9_smb['cifs_srv_hostlookup']),
+                'max_protocol': fn9_smb['cifs_srv_max_protocol'],
+                'execute_always': bool(fn9_smb['cifs_srv_allow_execute_always']),
+                'obey_pam_restrictions': bool(fn9_smb['cifs_srv_obey_pam_restrictions']),
+                'bind_addresses': fn9_smb['cifs_srv_bindip'].split(',') if fn9_smb['cifs_srv_bindip'] else None,
+                'auxiliary': fn9_smb['cifs_srv_smb_options'] or None,
+                'sid': fn9_smb['cifs_SID']
+            }
+            if fn9_smb['cifs_srv_min_protocol']:
+                smbconfig.update({'min_protocol': fn9_smb['cifs_srv_min_protocol']})
             self.run_subtask_sync(
                 'service.update',
                 q.query(fn10_services, ("name", "=", "smb"), single=True)['id'],
-                {'config': {
-                    'enable': bool(fn9_services['cifs']['srv_enable'])
-                }}
+                {'config': smbconfig}
             )
         except RpcException as err:
             self.add_warning(TaskWarning(
@@ -1079,13 +1125,23 @@ class ServiceMigrateTask(Task):
             ))
 
         # Migrating NFS service
-        fn9_nfs = get_table('select * from services_nfs')
+        fn9_nfs = get_table('select * from services_nfs', dictionary=False)[0]
         try:
             self.run_subtask_sync(
                 'service.update',
                 q.query(fn10_services, ("name", "=", "nfs"), single=True)['id'],
                 {'config': {
-                    'enable': bool(fn9_services['nfs']['srv_enable'])
+                    'type': 'ServiceNfs',
+                    'enable': bool(fn9_services['nfs']['srv_enable']),
+                    'servers': fn9_nfs['nfs_srv_servers'],
+                    'udp': bool(fn9_nfs['nfs_srv_udp']),
+                    'nonroot': bool(fn9_nfs['nfs_srv_allow_nonroot']),
+                    'v4': bool(fn9_nfs['nfs_srv_v4']),
+                    'v4_kerberos': bool(fn9_nfs['nfs_srv_v4_krb']),
+                    'bind_addresses': fn9_nfs['nfs_srv_bindip'].split(',') if fn9_nfs['nfs_srv_bindip'] else None,
+                    'mountd_port': fn9_nfs['nfs_srv_mountd_port'],
+                    'rpcstatd_port': fn9_nfs['nfs_srv_rpcstatd_port'],
+                    'rpclockd_port': fn9_nfs['nfs_srv_rpclockd_port']
                 }}
             )
         except RpcException as err:
@@ -1094,13 +1150,20 @@ class ServiceMigrateTask(Task):
             ))
 
         # Migrating WebDAV service
-        fn9_dav = get_table('select * from services_webdav')
+        fn9_dav = get_table('select * from services_webdav', dictionary=False)[0]
         try:
             self.run_subtask_sync(
                 'service.update',
                 q.query(fn10_services, ("name", "=", "webdav"), single=True)['id'],
                 {'config': {
-                    'enable': bool(fn9_services['webdav']['srv_enable'])
+                    'type': 'ServiceWebdav',
+                    'enable': bool(fn9_services['webdav']['srv_enable']),
+                    'protocol': WEBDAV_PROTOCOL_CHOICES[fn9_dav['webdav_protocol']],
+                    'http_port': fn9_dav['webdav_tcpport'],
+                    'https_port': fn9_dav['webdav_tcpportssl'],
+                    'password': self._notifier.pwenc_decrypt(fn9_dav['webdav_password']),
+                    'authentication': fn9_dav['webdav_htauth'].upper(),
+                    'certificate': fn9_dav['webdav_certssl_id']  # Todo fix this with proper fn10 cert id lookup
                 }}
             )
         except RpcException as err:
@@ -1109,7 +1172,7 @@ class ServiceMigrateTask(Task):
             ))
 
         # Migrating SSHD service
-        fn9_sshd = get_table('select * from services_ssh')
+        fn9_sshd = get_table('select * from services_ssh', dictionary=False)[0]
         try:
             self.run_subtask_sync(
                 'service.update',
@@ -1125,7 +1188,7 @@ class ServiceMigrateTask(Task):
 
         # Template to use for adding future service migrations
         # Migrating FOO service
-        # fn9_foo = get_table('select * from services_foo')
+        # fn9_foo = get_table('select * from services_foo', dictionary=False)[0]
         # try:
         #     self.run_subtask_sync(
         #         'service.update',
