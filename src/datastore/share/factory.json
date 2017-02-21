@@ -239,6 +239,7 @@
             "service.openvpn.auxiliary" : null,
             "service.openvpn.persist_key" : true,
             "service.openvpn.persist_tun" : true,
+            "service.netdata.enable": false,
             "service.nginx.http.redirect_https": false,
             "service.nginx.http.port": 80,
             "service.nginx.http.enable": true,
@@ -967,14 +968,24 @@
                 "name": "openvpn"
             },
             "9486ab01-7c53-11e6-aefb-000c29796bea": {
-                "rcng": {
-                    "rc-scripts": "consul"
-                },
-                "pidfile": "/var/run/consul.pid",
                 "builtin": false,
                 "get_config_rpc": "service.consul.get_config",
                 "etcd-group": "consul",
                 "name": "consul"
+            },
+            "d99aa4a4-f7d8-11e6-81ff-0cc47a52350c": {
+                "launchd": {
+                    "Label": "io.my-netdata.netdata",
+                    "RunAtLoad": true,
+                    "Requires": ["networking", "logging", "etc"],
+                    "ProgramArguments": [
+                        "/usr/local/sbin/netdata",
+                        "-c", "/usr/local/etc/netdata.conf",
+                        "-D"
+                    ]
+                },
+                "builtin": false,
+                "name": "netdata"
             },
             "98d512f6-9111-11e6-91a2-000c2924b2c6": {
                 "launchd": {
