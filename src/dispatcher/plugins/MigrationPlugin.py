@@ -1269,13 +1269,13 @@ class MasterMigrateTask(ProgressTask):
         self.run_subtask_sync('migration.networkmigrate')
         self.apps_migrated.append('network')
 
-        self.migration_progess(30, 'Migrating shares app: AFP, SMB, NFS, and iSCSI')
-        self.run_subtask_sync('migration.sharemigrate')
-        self.apps_migrated.append('sharing')
-
-        self.migration_progess(40, 'Migrating services app: AFP, SMB, NFS, iSCSI, etc')
+        self.migration_progess(30, 'Migrating services app: AFP, SMB, NFS, iSCSI, etc')
         self.run_subtask_sync('migration.servicemigrate')
         self.apps_migrated.append('services')
+
+        self.migration_progess(40, 'Migrating shares app: AFP, SMB, NFS, iSCSI, and WebDAV')
+        self.run_subtask_sync('migration.sharemigrate')
+        self.apps_migrated.append('sharing')
 
         # If we reached till here migration must have succeeded
         # so lets rename the databse
