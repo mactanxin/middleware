@@ -394,6 +394,8 @@ class VMTemplateProvider(Provider):
 
                         template['template']['fetch_size'] = total_fetch_size
 
+                        template['template']['template_version'] = str(template['template']['updated_at'].date()).replace('-', '')
+
                         templates.append(template)
                     except ValueError:
                         pass
