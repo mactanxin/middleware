@@ -1240,7 +1240,7 @@
                     ["address"]
                 ] 
             },
-            "migration": "merge-preserve",
+            "migration": "keep",
             "pkey-type": "uuid",
             "name": "ntpservers"
         }
