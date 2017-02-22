@@ -610,6 +610,15 @@ class VirtualMachine(object):
 
     def run(self):
         while not self.exiting:
+            self.logger.debug('Cancelling active alerts for VM {0}'.format(self.name))
+            alert = self.context.client.call_sync(
+                'alert.get_active_alert',
+                'VirtualMachineDied',
+                self.name
+            )
+            if alert:
+                self.context.client.call_sync('alert.cancel', alert['id'])
+
             with self.run_lock:
                 self.set_state(VirtualMachineState.BOOTLOADER)
                 self.context.vm_started.set()
@@ -721,8 +730,22 @@ class VirtualMachine(object):
                 os.unlink(self.vmtools_socket)
 
             subprocess.call(['/usr/sbin/bhyvectl', '--destroy', '--vm={0}'.format(self.name)])
-            if self.bhyve_process.returncode == 0 and self.state != VirtualMachineState.STOPPING:
-                continue
+            if self.state != VirtualMachineState.STOPPING:
+                exit_code = self.bhyve_process.returncode
+
+                if exit_code not in (0, 1, 2):
+                    self.context.client.call_sync('alert.emit', {
+                        'clazz': 'VirtualMachineDied',
+                        'target': self.name,
+                        'title': 'Virtual machine {0} exited abruptly.'.format(self.name),
+                        'description': 'Virtual machine {0} has exited with status {1}'.format(
+                            self.name,
+                            exit_code
+                        )
+                    })
+
+                if exit_code == 0:
+                    continue
 
             break
 

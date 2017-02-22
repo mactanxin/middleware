@@ -1525,6 +1525,11 @@
                 "subtype": "CONTAINER",
                 "severity": "WARNING"
             },
+            "VirtualMachineDied": {
+                "type": "SYSTEM",
+                "subtype": "CONTAINER",
+                "severity": "WARNING"
+            },
             "DiskControllerFirmwareMismatch": {
                 "type": "DISK",
                 "subtype": "MPS",
