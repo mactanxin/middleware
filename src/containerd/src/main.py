@@ -55,6 +55,7 @@ import pf
 import urllib.parse
 import requests
 import contextlib
+import collections
 import dhcp.client as dhcp
 from docker.errors import NotFound, APIError
 from datetime import datetime
@@ -1040,7 +1041,7 @@ class DockerHost(object):
 
                     if ev['Type'] == 'image':
                         image = first_or_default(
-                            lambda i: ev['id'] in i['RepoTags'],
+                            lambda i: ev['id'] in i['RepoTags'] if isinstance(i['RepoTags'], collections.Iterable) else False,
                             self.connection.images(),
                             default=ev
                         )
