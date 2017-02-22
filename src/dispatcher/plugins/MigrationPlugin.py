@@ -895,11 +895,11 @@ class ShareMigrateTask(Task):
             }
             for x in fn9_iscsitargetportals.values():
                 if x['iscsi_target_portal_discoveryauthgroup'] == auth['iscsi_target_auth_tag']:
-                    auth['auth_method'][x['iscsi_target_portal_discoveryauthmethod']]['portal_ids'].append(x['id'])
+                    auth['auth_methods'][x['iscsi_target_portal_discoveryauthmethod']]['portal_ids'].append(x['id'])
 
             for x in fn9_iscsitargetgroups.values():
                 if x['iscsi_target_authgroup'] == auth['iscsi_target_auth_tag']:
-                    auth['auth_method'][x['iscsi_target_authtype']]['target_ids'].append(x['id'])
+                    auth['auth_methods'][x['iscsi_target_authtype']]['target_ids'].append(x['id'])
 
         # Now lets make them auth groups, portals, and targets
         for fn9_targetauthcred in fn9_iscsitargetauthcreds.values():
