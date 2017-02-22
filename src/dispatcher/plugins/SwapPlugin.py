@@ -100,7 +100,13 @@ def get_swap_info(dispatcher):
             prov = xml.xpath(".//provider[@id='{0}']".format(prov))[0]
             disk_geom = prov.find('geom').attrib['ref']
             disk_geom = xml.xpath(".//geom[@id='{0}']".format(disk_geom))[0]
-            swap['disks'].append(os.path.join('/dev', disk_geom.find('name').text[:-2]))
+            disk_id = dispatcher.call_sync(
+                'disk.path_to_id',
+                os.path.join('/dev', disk_geom.find('name').text[:-2])
+            )
+
+            if disk_id:
+                swap['disks'].append(disk_id)
 
         result[name] = swap
 
