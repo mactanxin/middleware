@@ -394,6 +394,8 @@ class VMTemplateProvider(Provider):
 
                         template['template']['fetch_size'] = total_fetch_size
 
+                        template['template']['template_version'] = str(template['template']['updated_at'].date()).replace('-', '')
+
                         templates.append(template)
                     except ValueError:
                         pass
@@ -2582,6 +2584,7 @@ def _init(dispatcher, plugin):
                     'path': {'type': 'string'},
                     'source': {'type': 'string'},
                     'readme': {'type': ['string', 'null']},
+                    'template_version': {'type': 'string'},
                     'cached_on': {
                         'type': 'array',
                         'items': {'type': 'string'}
