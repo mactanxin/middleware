@@ -1344,7 +1344,7 @@ class ConsoleService(RpcService):
     @private
     def request_webvnc_console(self, id):
         token = self.request_console(id)
-        return 'http://{0}/containerd/webvnc/{1}'.format(socket.gethostname(), token)
+        return f'/containerd/webvnc/{token}'
 
 
 class DockerService(RpcService):
