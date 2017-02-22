@@ -859,6 +859,36 @@ class DockerContainerStartTask(DockerBaseTask):
         if not self.datastore_log.exists('docker.containers', ('id', '=', id)):
             raise TaskException(errno.ENOENT, 'Docker container {0} does not exist'.format(id))
 
+        primary_network_mode, expose_ports, ports = self.dispatcher.call_sync(
+            'docker.container.query',
+            [('id', '=', id)],
+            {'select': ['primary_network_mode', 'expose_ports', 'ports'], 'single': True}
+        )
+
+        if primary_network_mode == 'NAT' and expose_ports:
+            required_tcp_ports = [e['host_port'] for e in ports if e['protocol'] == 'TCP']
+            required_udp_ports = [e['host_port'] for e in ports if e['protocol'] == 'UDP']
+            conflicting_tcp_ports = self.dispatcher.call_sync(
+                'network.port.query',
+                [('port', 'in', required_tcp_ports), ('protocol', '~', 'TCP')],
+                {'select': ['port', 'consumer_name']}
+            )
+            conflicting_udp_ports = self.dispatcher.call_sync(
+                'network.port.query',
+                [('port', 'in', required_udp_ports), ('protocol', '~', 'UDP')],
+                {'select': ['port', 'consumer_name']}
+            )
+            msg = ""
+            if conflicting_tcp_ports:
+                msg += "TCP port/consumer list: "+", ".join(["{0}/{1}".format(e[0], e[1]) for e in conflicting_tcp_ports])+"; "
+            if conflicting_udp_ports:
+                msg += "UDP port/consumer list: "+", ".join(["{0}/{1}".format(e[0], e[1]) for e in conflicting_udp_ports])
+            if msg:
+                raise TaskException(
+                    errno.EINVAL,
+                    'Conflicting ports detected. {0}'.format(msg)
+                )
+
         try:
             self.dispatcher.call_sync('containerd.docker.host_name_by_container_id', id)
         except RpcException:
