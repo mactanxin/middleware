@@ -2,10 +2,10 @@
 # $FreeBSD$
 
 PORTNAME=	netdata
-PORTVERSION=	1.5.1
+PORTVERSION=	1.5.0
 CATEGORIES=	net-mgmt
 
-MAINTAINER=	mokhi64@gmail.com
+MAINTAINER=	mmokhi@FreeBSD.org
 COMMENT=	Scalable distributed realtime performance and health monitoring
 
 LICENSE=	GPLv3
@@ -14,8 +14,8 @@ BUILD_DEPENDS+=	${LOCALBASE}/include/uuid/uuid.h:misc/e2fsprogs-libuuid
 LIB_DEPENDS+=	libuuid.so:misc/e2fsprogs-libuuid
 
 USE_GITHUB=	yes
-GH_ACCOUNT=	firehol
-GH_TAGNAME=	b5b241f
+GH_ACCOUNT=	vlvkobal
+GH_TAGNAME=	3bd41a0
 
 NETDATA_CACHE=	/var/cache/${PORTNAME}
 NETDATA_LOG=	/var/log/${PORTNAME}
@@ -36,7 +36,22 @@ SUB_LIST+=	NETDATA_CACHE=${NETDATA_CACHE} \
 PLIST_SUB+=	NETDATA_CACHE=${NETDATA_CACHE} \
 		NETDATA_LOG=${NETDATA_LOG} \
 		NETDATA_PERST=${NETDATA_PERST}
-SUB_FILES=      ${PORTNAME}.conf.sample
+
+USE_RC_SUBR=	${PORTNAME}
+SUB_FILES=	${PORTNAME}.conf.sample
+
+USERS=		netdata
+GROUPS=		netdata
+
+post-patch:
+	@${REINPLACE_CMD} -e 's|%%NETDATA_CACHE%%|${NETDATA_CACHE}|g' \
+	    ${PATCH_WRKSRC}/configure.ac
+	@${REINPLACE_CMD} -e 's|%%NETDATA_LOG%%|${NETDATA_LOG}|g' \
+	    ${PATCH_WRKSRC}/configure.ac
+	@${REINPLACE_CMD} -e 's|%%NETDATA_PERST%%|${NETDATA_PERST}|g' \
+	    ${PATCH_WRKSRC}/configure.ac
+	@${REINPLACE_CMD} -e 's|%%ETCDIR%%|${ETCDIR}|g' \
+	    ${PATCH_WRKSRC}/configure.ac
 
 post-install:
 	${MKDIR} ${STAGEDIR}${ETCDIR}
