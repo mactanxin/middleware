@@ -257,6 +257,7 @@ class VirtualMachine(object):
         self.network_ready = Event()
         self.logger = logging.getLogger('VM:{0}'.format(self.name))
         self.run_lock = RLock()
+        self.autostart = False
 
     @property
     def management_lease(self):
@@ -744,7 +745,7 @@ class VirtualMachine(object):
                         )
                     })
 
-                if exit_code == 0:
+                if exit_code == 0 or self.autostart:
                     continue
 
             break
@@ -1275,6 +1276,7 @@ class ManagementService(RpcService):
         vm.guest_type = container['guest_type']
         vm.config = container['config']
         vm.devices = container['devices']
+        vm.autostart = q.get(container, 'config.autostart', False)
 
         try:
             dropped_devices = vm.start()
