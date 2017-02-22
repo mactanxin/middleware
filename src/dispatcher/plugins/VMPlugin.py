@@ -2584,6 +2584,7 @@ def _init(dispatcher, plugin):
                     'path': {'type': 'string'},
                     'source': {'type': 'string'},
                     'readme': {'type': ['string', 'null']},
+                    'template_version': {'type': 'string'},
                     'cached_on': {
                         'type': 'array',
                         'items': {'type': 'string'}
