@@ -566,6 +566,13 @@ class VirtualMachine(object):
         self.console_thread = gevent.spawn(self.console_worker)
         return dropped_devices
 
+    def get_invalid_storage(self):
+        for i in self.devices:
+            if i['type'] in ('DISK', 'VOLUME'):
+                path = self.context.client.call_sync('vm.get_device_path', self.id, i['name'])
+                if not os.path.exists(path):
+                    yield i['name']
+
     def drop_invalid_devices(self):
         for i in list(self.devices):
             if i['type'] in ('DISK', 'CDROM', 'VOLUME'):
@@ -1252,7 +1259,7 @@ class ManagementService(RpcService):
         }
 
     @private
-    def start_vm(self, id):
+    def start_vm(self, id, strict=False):
         container = self.context.datastore.get_by_id('vms', id)
         if not container:
             raise RpcException(errno.ENOENT, 'VM {0} not found'.format(id))
@@ -1277,6 +1284,14 @@ class ManagementService(RpcService):
         vm.config = container['config']
         vm.devices = container['devices']
         vm.autostart = q.get(container, 'config.autostart', False)
+
+        if strict:
+            invalid = list(vm.get_invalid_storage())
+            if invalid:
+                raise RpcException(
+                    errno.EACCES,
+                    f'Cannot start VM {vm.name}. Following storage devices cannot be accessed: ' + ', '.join(invalid)
+                )
 
         try:
             dropped_devices = vm.start()
