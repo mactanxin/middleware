@@ -2478,6 +2478,10 @@ class DatasetConfigureTask(Task):
                 'volsize': {'value': int(updated_params['volsize'])}
             })
 
+        if 'hidden' in updated_params:
+            props = {'org.freenas:hidden': {'value': 'yes' if updated_params['hidden'] else 'no'}}
+            self.run_subtask_sync('zfs.update', ds['id'], props)
+
         if 'metadata' in updated_params:
             props = {name: {'value': value} for name, value in updated_params['metadata'].items()}
             self.run_subtask_sync('zfs.update', ds['id'], props)
