@@ -71,7 +71,7 @@ from datastore import DatastoreException, get_datastore
 from datastore.config import ConfigStore
 from freenas.dispatcher.client import Client, ClientError
 from freenas.dispatcher.rpc import RpcService, RpcException, private, generator
-from freenas.dispatcher.jsonenc import loads, dumps
+from freenas.dispatcher.jsonenc import loads
 from freenas.utils.debug import DebugService
 from freenas.utils import bool_to_truefalse, truefalse_to_bool, normalize, first_or_default, configure_logging, query as q
 from freenas.serviced import checkin
@@ -992,6 +992,7 @@ class DockerHost(object):
                                 rule.label = 'container:{0}'.format(name)
                                 rule.dst.port_range = [i['host_port'], 0]
                                 rule.dst.port_op = pf.RuleOperator.EQ
+                                rule.dst.address.ifname = self.context.default_if
                                 rule.action = pf.RuleAction.RDR
                                 rule.af = socket.AF_INET
                                 rule.ifname = self.context.default_if
