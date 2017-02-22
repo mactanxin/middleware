@@ -99,10 +99,19 @@ CIFS_LOGLEVEL_MAP = {
     '10': 'DEBUG',
 }
 
-WEBDAV_PROTOCOL_CHOICES = {
+PROTOCOL_CHOICES = {
     'http': ['HTTP'],
     'https': ['HTTPS'],
     'httphttps': ['HTTP', 'HTTPS'],
+}
+
+CRYPTO_TYPE = {
+    1: 'CA_EXISTING',
+    2: 'CA_INTERNAL',
+    4: 'CA_INTERMEDIATE',
+    8: 'CERT_EXISTING',
+    16: 'CERT_INTERNAL',
+    32: 'CERT_CSR'
 }
 
 
@@ -1027,6 +1036,10 @@ class ServiceMigrateTask(Task):
         return TaskDescription("Migration of FreeNAS 9.x services' settings to 10.x")
 
     def run(self):
+        # Generic stuff needed for all service migrations
+        fn10_certs_and_cas = list(self.dispatcher.call_sync('crypto.certificate.query'))
+        fn9_cas = get_table('select * from system_certificateauthority')
+        fn9_certs = get_table('select * from system_certificate')
         # dict containing service enable flags for all services
         fn9_services = {
             srv['srv_service']: srv for srv in get_table('select * from services_services').values()
@@ -1152,20 +1165,31 @@ class ServiceMigrateTask(Task):
         # Migrating WebDAV service
         fn9_dav = get_table('select * from services_webdav', dictionary=False)[0]
         try:
-            self.run_subtask_sync(
-                'service.update',
-                q.query(fn10_services, ("name", "=", "webdav"), single=True)['id'],
-                {'config': {
-                    'type': 'ServiceWebdav',
-                    'enable': bool(fn9_services['webdav']['srv_enable']),
-                    'protocol': WEBDAV_PROTOCOL_CHOICES[fn9_dav['webdav_protocol']],
-                    'http_port': fn9_dav['webdav_tcpport'],
-                    'https_port': fn9_dav['webdav_tcpportssl'],
-                    'password': self._notifier.pwenc_decrypt(fn9_dav['webdav_password']),
-                    'authentication': fn9_dav['webdav_htauth'].upper(),
-                    'certificate': fn9_dav['webdav_certssl_id']  # Todo fix this with proper fn10 cert id lookup
-                }}
+            webdav_cert = q.query(
+                fn10_certs_and_cas,
+                ('name', '=', fn9_certs[fn9_dav['webdav_certssl_id']]['cert_name']),
+                single=True
             )
+            if webdav_cert is None:
+                self.add_warning(TaskWarning(
+                    errno.EINVAL,
+                    'Could not find the certificate for setting up secure WebDAV service, skipping'
+                ))
+            else:
+                self.run_subtask_sync(
+                    'service.update',
+                    q.query(fn10_services, ("name", "=", "webdav"), single=True)['id'],
+                    {'config': {
+                        'type': 'ServiceWebdav',
+                        'enable': bool(fn9_services['webdav']['srv_enable']),
+                        'protocol': PROTOCOL_CHOICES[fn9_dav['webdav_protocol']],
+                        'http_port': fn9_dav['webdav_tcpport'],
+                        'https_port': fn9_dav['webdav_tcpportssl'],
+                        'password': self._notifier.pwenc_decrypt(fn9_dav['webdav_password']),
+                        'authentication': fn9_dav['webdav_htauth'].upper(),
+                        'certificate': webdav_cert['id']
+                    }}
+                )
         except RpcException as err:
             self.add_warning(TaskWarning(
                 errno.EINVAL, 'Could not migrate WebDAV service settings due to err: {0}'.format(err)
@@ -1202,6 +1226,96 @@ class ServiceMigrateTask(Task):
         #         errno.EINVAL, 'Could not migrate FOO service settings due to err: {0}'.format(err)
         #     ))
 
+
+@description("System (general & advanced) settings migration task")
+class SystemMigrateTask(Task):
+    def __init__(self, dispatcher):
+        super(SystemMigrateTask, self).__init__(dispatcher)
+        self._notifier = notifier()
+
+    @classmethod
+    def early_describe(cls):
+        return "Migration of FreeNAS 9.x system settings to 10"
+
+    def describe(self):
+        return TaskDescription("Migration of FreeNAS 9.x system settings to 10")
+
+    def run(self):
+        # first lets get all the fn9 data that we need
+        fn9_sys_settings = get_table('select * from system_settings', dictionary=False)[0]
+        fn9_cas = get_table('select * from system_certificateauthority')
+        fn9_certs = get_table('select * from system_certificate')
+
+        # Migrating the certificate authorities and certificates
+        fn9_to_10_crypto_id_map = {}
+        for crypto_obj in sorted(fn9_cas.values(), key=lambda x: x['cert_type']) + list(fn9_certs.values()):
+            cert_type = CRYPTO_TYPE[crypto_obj['cert_type']]
+            if cert_type == 'CERT_CSR':
+                self.add_warning(TaskWarning(
+                    errno.EINVAL,
+                    'Cannot migrate CSR: {0}. Migrating CSRs is not supported'.format(crypto_obj['cert_name'])
+                ))
+                continue
+
+            # Now since we are going to import these certs to fn10 let us mark them as
+            # CERT/CA EXISTING and nothing else, as only those will work and make sense
+            # in this migration scenario
+            cert_type = 'CERT_EXISTING' if cert_type.startswith('CERT') else 'CA_EXISTING'
+            try:
+                signed_by_ca = fn9_cas.get(crypto_obj['cert_signedby_id'])
+                fn9_to_10_crypto_id_map[crypto_obj['id']] = self.run_subtask_sync(
+                    'crypto.certificate.import',
+                    {
+                        'type': cert_type,
+                        'name': crypto_obj['cert_name'],
+                        'certificate': crypto_obj['cert_certificate'],
+                        'privatekey': crypto_obj['cert_privatekey'],
+                        'signing_ca_name': signed_by_ca['cert_name'] if signed_by_ca else None
+                    }
+                )
+            except RpcException as err:
+                self.add_warning(TaskWarning(
+                    errno.EINVAL,
+                    'Could not migrate CA/Cert: {0} due to error: {1}'.format(crypto_obj['cert_name'], err)
+                ))
+
+        # Migrating system general settings over to 10
+        try:
+            system_general_config = {
+                'language': fn9_sys_settings['stg_language'],
+                'timezone': fn9_sys_settings['stg_timezone'],
+                'syslog_server': fn9_sys_settings['stg_syslogserver'] or None
+            }
+            if fn9_sys_settings['stg_kbdmap']:
+                system_general_config.update({'console_keymap': fn9_sys_settings['stg_kbdmap']})
+
+            self.run_subtask_sync('system.general.update', system_general_config)
+        except RpcException as err:
+            self.add_warning(TaskWarning(
+                errno.EINVAL, 'Could not migrate system general settings due to error: {0}'.format(err)
+            ))
+
+        try:
+            self.run_subtask_sync(
+                'system.ui.update',
+                {
+                    'webui_protocol': PROTOCOL_CHOICES[fn9_sys_settings['stg_guiprotocol']],
+                    'webui_listen': [
+                        fn9_sys_settings['stg_guiaddress'],
+                        fn9_sys_settings['stg_guiv6address']
+                    ],
+                    'webui_http_redirect_https': bool(fn9_sys_settings['stg_guihttpsredirect']),
+                    'webui_http_port': fn9_sys_settings['stg_guiport'],
+                    'webui_https_certificate': fn9_to_10_crypto_id_map.get(
+                        fn9_sys_settings['stg_guicertificate_id'], None
+                    ),
+                    'webui_https_port': fn9_sys_settings['stg_guihttpsport']
+                }
+            )
+        except RpcException as err:
+            self.add_warning(TaskWarning(
+                errno.EINVAL, 'Could not migrate system ui settings due to error: {0}'.format(err)
+            ))
 
 
 @description("Master top level migration task for 9.x to 10.x")
@@ -1314,6 +1428,7 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('migration.storagemigrate', StorageMigrateTask)
     plugin.register_task_handler('migration.sharemigrate', ShareMigrateTask)
     plugin.register_task_handler('migration.servicemigrate', ServiceMigrateTask)
+    plugin.register_task_handler('migration.systemmigrate', SystemMigrateTask)
 
     plugin.register_event_type('migration.status')
 
