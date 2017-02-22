@@ -14,7 +14,7 @@ BUILD_DEPENDS+=	${LOCALBASE}/include/uuid/uuid.h:misc/e2fsprogs-libuuid
 LIB_DEPENDS+=	libuuid.so:misc/e2fsprogs-libuuid
 
 USE_GITHUB=	yes
-GH_ACCOUNT=	vlvkobal
+GH_ACCOUNT=	firehol
 GH_TAGNAME=	3bd41a0
 
 NETDATA_CACHE=	/var/cache/${PORTNAME}
