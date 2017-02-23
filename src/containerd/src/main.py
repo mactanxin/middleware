@@ -1578,7 +1578,7 @@ class DockerService(RpcService):
                 presets = self.labels_to_presets(labels)
                 settings = []
                 web_ui_url = None
-                command = q.get(details, 'Config.Cmd', [])
+                command = q.get(details, 'Config.Cmd') or []
                 if presets:
                     for i in presets.get('settings', []):
                         settings.append({
