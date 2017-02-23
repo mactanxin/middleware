@@ -931,11 +931,11 @@ class ShareMigrateTask(Task):
                                 'name': fn9_targetauthcred['iscsi_target_auth_user'],
                                 'secret': self._notifier.pwenc_decrypt(
                                     fn9_targetauthcred['iscsi_target_auth_secret']
-                                ),
+                                ) if fn9_targetauthcred['iscsi_target_auth_secret'] else None,
                                 'peer_name': fn9_targetauthcred['iscsi_target_auth_peeruser'],
                                 'peer_secret': self._notifier.pwenc_decrypt(
                                     fn9_targetauthcred['iscsi_target_auth_peersecret']
-                                )
+                                ) if fn9_targetauthcred['iscsi_target_auth_peersecret'] else None
                             }]
                         }
                     )
@@ -943,7 +943,7 @@ class ShareMigrateTask(Task):
                     self.add_warning(TaskWarning(
                         errno.EINVAL,
                         'Cannot create iSCSI auth group: {0}, auth_type: {1}, error: {2}'.format(
-                            fn9_targetauthcred['iscsi_target_portal_comment'], auth_type, err
+                            fn9_targetauthcred['iscsi_target_auth_tag'], auth_type, err
                         )
                     ))
             auth_created = False
@@ -1185,7 +1185,9 @@ class ServiceMigrateTask(Task):
                         'protocol': PROTOCOL_CHOICES[fn9_dav['webdav_protocol']],
                         'http_port': fn9_dav['webdav_tcpport'],
                         'https_port': fn9_dav['webdav_tcpportssl'],
-                        'password': self._notifier.pwenc_decrypt(fn9_dav['webdav_password']),
+                        'password': {
+                            '$password': self._notifier.pwenc_decrypt(fn9_dav['webdav_password'])
+                        },
                         'authentication': fn9_dav['webdav_htauth'].upper(),
                         'certificate': webdav_cert['id']
                     }}
@@ -1229,6 +1231,33 @@ class ServiceMigrateTask(Task):
         except RpcException as err:
             self.add_warning(TaskWarning(
                 errno.EINVAL, 'Could not migrate SSHD service settings due to err: {0}'.format(err)
+            ))
+
+        # Migrating DynDNS service
+        fn9_dyndns = get_table('select * from services_dynamicdns', dictionary=False)[0]
+        try:
+            self.run_subtask_sync(
+                'service.update',
+                q.query(fn10_services, ("name", "=", "dyndns"), single=True)['id'],
+                {'config': {
+                    'type': 'ServiceDyndns',
+                    'enable': bool(fn9_services['dynamicdns']['srv_enable']),
+                    'provider': fn9_dyndns['ddns_provider'] or None,
+                    'ipserver': fn9_dyndns['ddns_ipserver'] or None,
+                    'domains': fn9_dyndns['ddns_domain'].split(',') if fn9_dyndns['ddns_domain'] else [],
+                    'username': fn9_dyndns['ddns_username'],
+                    'password': {
+                        '$password': self._notifier.pwenc_decrypt(fn9_dyndns['ddns_password'])
+                    },
+                    'update_period': int(fn9_dyndns['ddns_updateperiod']) if fn9_dyndns['ddns_updateperiod'] else None,
+                    'force_update_period': int(fn9_dyndns['ddns_fupdateperiod']) if fn9_dyndns['ddns_fupdateperiod'] else None,
+                    'auxiliary': fn9_dyndns['ddns_options']
+                }}
+            )
+        except RpcException as err:
+            self.add_warning(TaskWarning(
+                errno.EINVAL,
+                'Could not migrate Dynamic DNS service settings due to err: {0}'.format(err)
             ))
 
         # Template to use for adding future service migrations
