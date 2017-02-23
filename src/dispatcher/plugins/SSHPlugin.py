@@ -98,7 +98,7 @@ def _init(dispatcher, plugin):
                 'type': 'integer',
                 'minimum': 1,
                 'maximum': 65535
-                },
+            },
             'permit_root_login': {'type': 'boolean'},
             'allow_gssapi_auth': {'type': 'boolean'},
             'allow_pubkey_auth': {'type': 'boolean'},
@@ -108,6 +108,18 @@ def _init(dispatcher, plugin):
             'sftp_log_level': {'$ref': 'ServiceSshdSftploglevel'},
             'sftp_log_facility': {'$ref': 'ServiceSshdSftplogfacility'},
             'auxiliary': {'type': ['string', 'null']},
+            'keys_dsa_private': {'type': ['string', 'null']},
+            'keys_dsa_public': {'type': ['string', 'null']},
+            'keys_dsa_certificate': {'type': ['string', 'null']},
+            'keys_ecdsa_private': {'type': ['string', 'null']},
+            'keys_ecdsa_public': {'type': ['string', 'null']},
+            'keys_ecdsa_certificate': {'type': ['string', 'null']},
+            'keys_ed25519_private': {'type': ['string', 'null']},
+            'keys_ed25519_public': {'type': ['string', 'null']},
+            'keys_ed25519_certificate': {'type': ['string', 'null']},
+            'keys_rsa_private': {'type': ['string', 'null']},
+            'keys_rsa_public': {'type': ['string', 'null']},
+            'keys_rsa_certificate': {'type': ['string', 'null']}
         },
         'additionalProperties': False,
     })
