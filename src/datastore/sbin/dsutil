@@ -43,6 +43,13 @@ DESCRIPTION = """
 The dsutil command is used to view or update information about the database contents.
 """
 EXAMPLE_USAGE = """
+Arguments:
+    create [--pkey PKEY] [--type TYPE] <name>   Designate a name for the new database collection.
+    config-get <key>                            Type the entry's key to display the desired settings.
+    config-set <key, value>                     Designate the key and new value to save.
+    query <name or filter>                      Search for entries in a specific database category.
+    update <name, pkey, fields>                 Update requires the entry name, key, and fields to update.
+
 Examples:
     # dsutil --tcp list
     ntpservers
