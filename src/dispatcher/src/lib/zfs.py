@@ -80,7 +80,7 @@ def split_snapshot_name(name):
     return pool, ds, snap
 
 
-def get_disks(topology, predicate=None):
+def get_disks(topology):
     for vdev, gname in iterate_vdevs(topology):
         if predicate and not predicate(vdev):
             continue
@@ -96,4 +96,4 @@ def get_disk_ids(topology):
 
 
 def get_resources(topology):
-    return ['disk:{0}'.format(d) for d, _ in get_disks(topology, lambda v: v.get('status') != 'UNAVAIL')]
+    return ['disk:{0}'.format(d) for d, _ in get_disk_ids(topology)]
