@@ -28,10 +28,10 @@
     if cfg['authentication'] == 'BASIC':
         with open(auth_file, "wb+") as f:
             f.write(
-                "webdav:{0}".format(crypt.crypt(cfg['password'], salt())).encode('utf8')
+                "webdav:{0}".format(crypt.crypt(cfg['password'].secret, salt())).encode('utf8')
             )
     else:
-        hexdigest = hashlib.md5('webdav:webdav:{0}'.format(cfg['password']).encode('utf8')).hexdigest()
+        hexdigest = hashlib.md5('webdav:webdav:{0}'.format(cfg['password'].secret).encode('utf8')).hexdigest()
         with open(auth_file, 'w') as f:
             f.write('webdav:webdav:{0}\n'.format(hexdigest))
 
