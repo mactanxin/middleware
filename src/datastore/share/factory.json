@@ -904,6 +904,7 @@
             "9137a2bd-c45f-4b6e-ad4e-45d2fd858cac": {
                 "launchd": {
                     "Label": "org.freebsd.rtsold",
+                    "Provides": ["rtsold"],
                     "RunAtLoad": true,
                     "ProgramArguments": [
                         "/usr/sbin/rtsold",
@@ -1038,6 +1039,7 @@
                     "RunAtLoad": true,
                     "SupportsCheckin": true,
                     "Provides": ["networking"],
+                    "Requires": ["rtsold"],
                     "Program": "/usr/local/sbin/networkd"
                 },
                 "builtin": true,
