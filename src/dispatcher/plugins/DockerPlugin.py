@@ -467,6 +467,13 @@ class DockerBaseTask(ProgressTask):
 
         return name, host_name
 
+    def get_resources(self, id):
+        res_name = f'docker:{id}'
+        if id and first_or_default(lambda r: r['name'] == res_name, self.dispatcher.call_sync('task.list_resources')):
+            return [res_name]
+
+        return ['docker']
+
 
 @description('Updates Docker general configuration settings')
 @accepts(h.ref('DockerConfig'))
@@ -519,9 +526,6 @@ class DockerContainerCreateTask(DockerBaseTask):
         return TaskDescription('Creating Docker container {name}', name=container['names'][0])
 
     def verify(self, container, nowait=False):
-        host = self.datastore.get_by_id('vms', container.get('host')) or {}
-        hostname = host.get('name')
-
         for v in container.get('volumes', []):
             if v.get('source') and v['source'] != 'HOST' and v['host_path'].startswith('/mnt'):
                 raise VerifyException(
@@ -547,10 +551,7 @@ class DockerContainerCreateTask(DockerBaseTask):
                 'Cannot connect networks to container with primary network mode: {0}'.format(network_mode)
             )
 
-        if hostname:
-            return ['docker:{0}'.format(hostname)]
-        else:
-            return ['docker']
+        return self.get_resources(container.get('host'))
 
     def run(self, container, nowait=False):
         if self.datastore_log.exists('docker.containers', ('names.0', '=', container['names'][0])):
@@ -660,8 +661,6 @@ class DockerContainerUpdateTask(DockerBaseTask):
 
     def verify(self, id, updated_fields):
         container = self.datastore_log.get_by_id('docker.containers', id) or {}
-        host = self.datastore.get_by_id('vms', container.get('host')) or {}
-        hostname = host.get('name')
 
         for v in updated_fields.get('volumes', []):
             if v.get('source') and v['source'] != 'HOST' and v['host_path'].startswith('/mnt'):
@@ -697,10 +696,7 @@ class DockerContainerUpdateTask(DockerBaseTask):
         if 'web_ui_url' in updated_fields:
             raise VerifyException(errno.EINVAL, 'Web UI URL cannot be set')
 
-        if hostname:
-            return ['docker:{0}'.format(hostname)]
-        else:
-            return ['docker']
+        return self.get_resources(container.get('host'))
 
     def run(self, id, updated_fields):
         if not self.datastore_log.exists('docker.containers', ('id', '=', id)):
@@ -780,16 +776,8 @@ class DockerContainerDeleteTask(DockerBaseTask):
         return TaskDescription('Deleting Docker container {name}', name=name or id)
 
     def verify(self, id, nowait=False):
-        hostname = None
-        try:
-            hostname = self.dispatcher.call_sync('containerd.docker.host_name_by_container_id', id)
-        except RpcException:
-            pass
-
-        if hostname:
-            return ['docker:{0}'.format(hostname)]
-        else:
-            return ['docker']
+        host_id = self.datastore_log.query('docker.containers', ('id', '=', id), single=True, select='host')
+        return self.get_resources(host_id)
 
     def run(self, id, nowait=False):
         if not self.datastore_log.exists('docker.containers', ('id', '=', id)):
@@ -844,16 +832,8 @@ class DockerContainerStartTask(DockerBaseTask):
         return TaskDescription('Starting container {name}', name=name or id)
 
     def verify(self, id):
-        hostname = None
-        try:
-            hostname = self.dispatcher.call_sync('containerd.docker.host_name_by_container_id', id)
-        except RpcException:
-            pass
-
-        if hostname:
-            return ['docker:{0}'.format(hostname)]
-        else:
-            return ['docker']
+        host_id = self.datastore_log.query('docker.containers', ('id', '=', id), single=True, select='host')
+        return self.get_resources(host_id)
 
     def run(self, id):
         if not self.datastore_log.exists('docker.containers', ('id', '=', id)):
@@ -920,16 +900,8 @@ class DockerContainerStopTask(Task):
         return TaskDescription('Stopping container {name}', name=name or id)
 
     def verify(self, id):
-        hostname = None
-        try:
-            hostname = self.dispatcher.call_sync('containerd.docker.host_name_by_container_id', id)
-        except RpcException:
-            pass
-
-        if hostname:
-            return ['docker:{0}'.format(hostname)]
-        else:
-            return ['docker']
+        host_id = self.datastore_log.query('docker.containers', ('id', '=', id), single=True, select='host')
+        return self.get_resources(host_id)
 
     def run(self, id):
         if not self.datastore_log.exists('docker.containers', ('id', '=', id)):
@@ -957,16 +929,8 @@ class DockerContainerRestartTask(DockerBaseTask):
         return TaskDescription('Restarting container {name}', name=name or id)
 
     def verify(self, id):
-        hostname = None
-        try:
-            hostname = self.dispatcher.call_sync('containerd.docker.host_name_by_container_id', id)
-        except RpcException:
-            pass
-
-        if hostname:
-            return ['docker:{0}'.format(hostname)]
-        else:
-            return ['docker']
+        host_id = self.datastore_log.query('docker.containers', ('id', '=', id), single=True, select='host')
+        return self.get_resources(host_id)
 
     def run(self, id):
         if not self.datastore_log.exists('docker.containers', ('id', '=', id)):
@@ -1006,14 +970,8 @@ class DockerContainerCloneTask(DockerBaseTask):
         )
 
     def verify(self, id, new_name):
-        container = self.datastore_log.get_by_id('docker.containers', id) or {}
-        host = self.datastore.get_by_id('vms', container.get('host')) or {}
-        hostname = host.get('name')
-
-        if hostname:
-            return ['docker:{0}'.format(hostname)]
-        else:
-            return ['docker']
+        host_id = self.datastore_log.query('docker.containers', ('id', '=', id), single=True, select='host')
+        return self.get_resources(host_id)
 
     def run(self, id, new_name):
         if not self.datastore_log.exists('docker.containers', ('id', '=', id)):
@@ -1062,14 +1020,8 @@ class DockerContainerCommitTask(DockerBaseTask):
         return TaskDescription('Committing the Docker image {name}', name=name)
 
     def verify(self, id, name, tag=None):
-        container = self.datastore_log.get_by_id('docker.containers', id) or {}
-        host = self.datastore.get_by_id('vms', container.get('host')) or {}
-        hostname = host.get('name')
-
-        if hostname:
-            return ['docker:{0}'.format(hostname)]
-        else:
-            return ['docker']
+        host_id = self.datastore_log.query('docker.containers', ('id', '=', id), single=True, select='host')
+        return self.get_resources(host_id)
 
     def run(self, id, name, tag=None):
         if not self.datastore_log.exists('docker.containers', ('id', '=', id)):
@@ -1129,13 +1081,7 @@ class DockerNetworkCreateTask(DockerBaseTask):
         if network.get('subnet') and not network.get('gateway'):
             raise TaskException(errno.EINVAL, 'Docker network gateway property is not specified')
 
-        host = self.datastore.get_by_id('vms', network.get('host')) or {}
-        hostname = host.get('name')
-
-        if hostname:
-            return ['docker:{0}'.format(hostname)]
-        else:
-            return ['docker']
+        return self.get_resources(network.get('host'))
 
     def run(self, network):
         if self.datastore_log.exists('docker.networks', ('name', '=', network['name'])):
@@ -1197,14 +1143,8 @@ class DockerNetworkUpdateTask(DockerBaseTask):
         return TaskDescription('Updating Docker network {name}', name=q.get(network, 'name', ''))
 
     def verify(self, id, updated_fields):
-        network = self.datastore_log.get_by_id('docker.networks', id) or {}
-        host = self.datastore.get_by_id('vms', network.get('host')) or {}
-        hostname = host.get('name')
-
-        if hostname:
-            return ['docker:{0}'.format(hostname)]
-        else:
-            return ['docker']
+        host_id = self.datastore_log.query('docker.networks', ('id', '=', id), single=True, select='host')
+        return self.get_resources(host_id)
 
     def run(self, id, updated_fields):
         if not self.datastore_log.exists('docker.networks', ('id', '=', id)):
@@ -1240,20 +1180,12 @@ class DockerNetworkDeleteTask(DockerBaseTask):
         return TaskDescription('Deleting Docker network {name}', name=name or id)
 
     def verify(self, id):
-        hostname = None
-        try:
-            hostname = self.dispatcher.call_sync('containerd.docker.host_name_by_network_id', id)
-        except RpcException:
-            pass
-
         name = self.dispatcher.call_sync('docker.network.query', [('id', '=', id)], {'single': True, 'select': 'name'})
         if name in ('bridge', 'external', 'host', 'none'):
             raise TaskException(errno.EINVAL, 'Cannot delete built-in network "{0}"'.format(name))
 
-        if hostname:
-            return ['docker:{0}'.format(hostname)]
-        else:
-            return ['docker']
+        host_id = self.datastore_log.query('docker.networks', ('id', '=', id), single=True, select='host')
+        return self.get_resources(host_id)
 
     def run(self, id):
         name, containers = self.dispatcher.call_sync(
@@ -1317,16 +1249,14 @@ class DockerNetworkConnectTask(DockerBaseTask):
     def verify(self, container_ids=None, network_id=None):
         if not container_ids or not network_id:
             raise TaskException(errno.EINVAL, 'Both container(s) and network must be specified')
-        hostname = None
-        try:
-            hostname = self.dispatcher.call_sync('containerd.docker.host_name_by_container_id', container_ids[0])
-        except RpcException:
-            pass
 
-        if hostname:
-            return ['docker:{0}'.format(hostname)]
-        else:
-            return ['docker']
+        host_id = self.datastore_log.query(
+            'docker.containers',
+            ('id', '=', container_ids[0]),
+            single=True,
+            select='host'
+        )
+        return self.get_resources(host_id)
 
     def run(self, container_ids, network_id):
         for id in container_ids:
@@ -1377,16 +1307,14 @@ class DockerNetworkDisconnectTask(DockerBaseTask):
     def verify(self, container_ids=None, network_id=None):
         if not container_ids or not network_id:
             raise TaskException(errno.EINVAL, 'Both container(s) and network must be specified')
-        hostname = None
-        try:
-            hostname = self.dispatcher.call_sync('containerd.docker.host_name_by_container_id', container_ids[0])
-        except RpcException:
-            pass
 
-        if hostname:
-            return ['docker:{0}'.format(hostname)]
-        else:
-            return ['docker']
+        host_id = self.datastore_log.query(
+            'docker.containers',
+            ('id', '=', container_ids[0]),
+            single=True,
+            select='host'
+        )
+        return self.get_resources(host_id)
 
     def run(self, container_ids, network_id):
         for id in container_ids:
@@ -1427,13 +1355,7 @@ class DockerImagePullTask(DockerBaseTask):
         return TaskDescription('Pulling docker image {name}', name=name)
 
     def verify(self, name, hostid=None):
-        host = self.datastore.get_by_id('vms', hostid) or {}
-        hostname = host.get('name')
-
-        if hostname:
-            return ['docker:{0}'.format(hostname)]
-        else:
-            return ['docker']
+        return self.get_resources(hostid)
 
     def run(self, name, hostid=None):
         if not hostid:
@@ -1522,13 +1444,7 @@ class DockerImageDeleteTask(DockerBaseTask):
         return TaskDescription('Deleting docker image {name}', name=name or '')
 
     def verify(self, id, hostid=None):
-        host = self.datastore.get_by_id('vms', hostid) or {}
-        hostname = host.get('name')
-
-        if hostname:
-            return ['docker:{0}'.format(hostname)]
-        else:
-            return ['docker']
+        return self.get_resources(hostid)
 
     def run(self, id, hostid=None):
         name = self.dispatcher.call_sync('docker.image.query', [('id', '=', id)], {'single': True, 'select': 'names.0'})
@@ -1770,73 +1686,6 @@ class DockerHostDeleteTask(ProgressTask):
         return self.run_subtask_sync_with_progress('vm.delete', id)
 
 
-@private
-@accepts(str, h.ref('Vm'))
-@description('Updates Docker host resource')
-class DockerUpdateHostResourceTask(Task):
-    @classmethod
-    def early_describe(cls):
-        return 'Updating Docker host resource'
-
-    def describe(self, id, updated_params):
-        vm = self.datastore.get_by_id('vms', id)
-        return TaskDescription('Updating Docker host {name} resource', name=vm.get('name', '') if vm else '')
-
-    def verify(self, id, updated_params):
-        return ['docker']
-
-    def run(self, id, updated_params):
-        host = self.datastore.query(
-            'vms',
-            ('config.docker_host', '=', True),
-            ('id', '=', id),
-            single=True
-        )
-        resource_name = 'docker:{0}'.format(host['name'])
-        self.dispatcher.task_setenv(self.environment['parent'], 'old_name', host['name'])
-
-        if first_or_default(lambda o: o['name'] == resource_name, self.dispatcher.call_sync('task.list_resources')):
-            parents = ['docker', 'zpool:{0}'.format(host['target'])]
-            self.dispatcher.unregister_resource(resource_name)
-            self.dispatcher.register_resource(
-                Resource('docker:{0}'.format(updated_params['name'])),
-                parents=parents
-            )
-
-
-@private
-@accepts(str, h.ref('Vm'))
-@description('Reverts Docker host resource state')
-class DockerRollbackHostResourceTask(Task):
-    @classmethod
-    def early_describe(cls):
-        return 'Reverting Docker host resource state'
-
-    def describe(self, id, updated_params):
-        vm = self.datastore.get_by_id('vms', id)
-        return TaskDescription('Reverting Docker host {name} resource state', name=vm.get('name', '') if vm else '')
-
-    def verify(self, id, updated_params):
-        return ['docker']
-
-    def run(self, id, updated_params):
-        host = self.datastore.query(
-            'vms',
-            ('config.docker_host', '=', True),
-            ('id', '=', id),
-            single=True
-        )
-        if host:
-            old_name = self.environment.get('old_name')
-            new_name = updated_params['name']
-            parents = ['docker', 'zpool:{0}'.format(host['target'])]
-            self.dispatcher.unregister_resource('docker:{0}'.format(new_name))
-            self.dispatcher.register_resource(
-                Resource('docker:{0}'.format(old_name)),
-                parents=parents
-            )
-
-
 @accepts(h.all_of(
     h.ref('DockerCollection'),
     h.forbidden('images')
@@ -1948,7 +1797,7 @@ class DockerCollectionGetPresetsTask(ProgressTask):
         return TaskDescription('Downloading Docker collection {name} presets', name=collection.get(''))
 
     def verify(self, id, force=False):
-        return ['docker']
+        return []
 
     def run(self, id, force=False):
         if not self.datastore.exists('docker.collections', ('id', '=', id)):
@@ -2003,7 +1852,7 @@ def collect_debug(dispatcher):
 
 
 def _depends():
-    return ['VMPlugin']
+    return ['VMPlugin', 'VolumePlugin']
 
 
 def _init(dispatcher, plugin):
@@ -2021,18 +1870,6 @@ def _init(dispatcher, plugin):
     containers_state = CacheStore()
     containers_rename_cache = CacheStore()
     hosts_status_cache = CacheStore()
-
-    def docker_resource_create_update(name, parents):
-        if first_or_default(lambda o: o['name'] == name, dispatcher.call_sync('task.list_resources')):
-            dispatcher.update_resource(
-                name,
-                new_parents=parents
-            )
-        else:
-            dispatcher.register_resource(
-                Resource(name),
-                parents=parents
-            )
 
     def on_host_event(args):
         if args['operation'] == 'create':
@@ -2069,7 +1906,6 @@ def _init(dispatcher, plugin):
             refresh_containers(args['name'])
             refresh_networks(args['name'])
             logger.debug('Docker host {0} deleted'.format(host['name']))
-            dispatcher.unregister_resource('docker:{0}'.format(host['name']))
             dispatcher.dispatch_event('docker.host.changed', {
                 'operation': 'delete',
                 'ids': [args['name']]
@@ -2085,10 +1921,7 @@ def _init(dispatcher, plugin):
                     single=True
                 )
                 if host:
-                    parents = ['docker', 'zpool:{0}'.format(host['target'])]
-
                     logger.debug('Docker host {0} created'.format(host['name']))
-                    docker_resource_create_update('docker:{0}'.format(host['name']), parents)
 
                     default_host = dispatcher.call_sync('docker.config.get_config').get('default_host')
                     if not default_host:
@@ -2131,9 +1964,6 @@ def _init(dispatcher, plugin):
                     {'single': True}
                 )
                 if host:
-                    parents = ['docker', 'zpool:{0}'.format(host['target'])]
-                    docker_resource_create_update('docker:{0}'.format(host['name']), parents)
-
                     dispatcher.dispatch_event('docker.host.changed', {
                         'operation': 'update',
                         'ids': [id]
@@ -2401,8 +2231,6 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('docker.host.create', DockerHostCreateTask)
     plugin.register_task_handler('docker.host.update', DockerHostUpdateTask)
     plugin.register_task_handler('docker.host.delete', DockerHostDeleteTask)
-    plugin.register_task_handler('docker.host.update_resource', DockerUpdateHostResourceTask)
-    plugin.register_task_handler('docker.host.rollback_resource', DockerRollbackHostResourceTask)
 
     plugin.register_task_handler('docker.collection.create', DockerCollectionCreateTask)
     plugin.register_task_handler('docker.collection.update', DockerCollectionUpdateTask)
@@ -2426,23 +2254,9 @@ def _init(dispatcher, plugin):
 
     plugin.attach_hook('vm.pre_destroy', vm_pre_destroy)
 
-    dispatcher.register_resource(Resource('docker'))
+    dispatcher.register_resource(Resource('docker'), parents=['root'])
 
     plugin.register_debug_hook(collect_debug)
-
-    def resource_hook_condition(id, updated_params):
-        return 'name' in updated_params
-
-    dispatcher.register_task_hook(
-        'vm.update:before',
-        'docker.host.update_resource',
-        resource_hook_condition
-    )
-    dispatcher.register_task_hook(
-        'vm.update:error',
-        'docker.host.rollback_resource',
-        resource_hook_condition
-    )
 
     plugin.register_schema_definition('DockerConfig', {
         'type': 'object',
@@ -2700,10 +2514,9 @@ def _init(dispatcher, plugin):
         if host_id:
             dispatcher.call_task_sync('docker.config.update', {'default_host': host_id})
 
-    for h in dispatcher.datastore.query_stream('vms', ('config.docker_host', '=', True)):
-        parents = ['docker', 'zpool:{0}'.format(h['target'])]
-        dispatcher.register_resource(
-            Resource('docker:{0}'.format(h['name'])),
-            parents=parents
-        )
-
+    dispatcher.track_resources(
+        'docker.host.query',
+        'entity-subscriber.docker.host.changed',
+        lambda id: f'docker:{id}',
+        lambda host: ['docker', f'volume:{host["target"]}']
+    )
