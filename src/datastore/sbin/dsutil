@@ -39,6 +39,49 @@ DEFAULT_CONFIGFILE = '/usr/local/etc/middleware.conf'
 ds = None
 
 
+DESCRIPTION = """
+The dsutil command is used to view or update information about the database contents.
+"""
+EXAMPLE_USAGE = """
+Examples:
+    # dsutil --tcp list
+    ntpservers
+    docker.collections
+    iscsi.targets
+    iscsi.portals
+    iscsi.auth
+    ...
+
+    # dsutil config-list | more
+    ...
+    service.rsyncd.auxiliary = null
+        service.tftpd.enable = false
+        service.tftpd.path = null
+        service.tftpd.allow_new_files = false
+        service.tftpd.port = 69
+        service.tftpd.username = "nobody"
+        service.tftpd.umask = 18
+        service.tftpd.auxiliary = null
+        service.ups.enable = false
+        service.ups.mode = "MASTER"
+        service.ups.identifier = "ups"
+        service.ups.remote_host = null
+        service.ups.remote_port = 3493
+        service.ups.driver = null
+        service.ups.driver_port = null
+        service.ups.description = null
+        service.ups.shutdown_mode = "BATT"
+        service.ups.shutdown_timer = 30
+        service.ups.monitor_user = "upsmon"
+        service.ups.monitor_password = "fixmepass"
+        service.ups.allow_remote_connections = false
+        service.ups.auxiliary_users = ""
+        service.ups.propagate_alerts = false
+        service.ups.powerdown = true
+        ...
+"""
+
+
 def strtoint(v):
     # If string is quoted, strip quotes and return
     if v[0] == '"' and v[-1] == '"':
@@ -87,6 +130,7 @@ def json_select(obj, selector=None):
 @argh.arg('--pkey')
 @argh.arg('--type')
 def create(name, pkey='uuid', type='config'):
+    """Create a new database category."""
     try:
         ds.collection_create(name, pkey_type=pkey, attributes={'type': type})
     except datastore.DatastoreException as e:
@@ -95,6 +139,7 @@ def create(name, pkey='uuid', type='config'):
 
 
 def list():
+    """Display all database categories."""
     global ds
     for coll in ds.collection_list():
         print(coll)
@@ -105,6 +150,7 @@ def list():
 @argh.arg('--limit', type=int)
 @argh.arg('filter', nargs='*')
 def query(name, filter, select=None, sort=None, limit=None):
+    """Search for entries in a specific database category"""
     params = []
     for i in filter:
         params.append(i.split())
@@ -114,23 +160,27 @@ def query(name, filter, select=None, sort=None, limit=None):
 
 
 def config_list(key=None):
+    """Lists all configuration settings."""
     cfg = ConfigStore(ds)
     for item in cfg.list_children(key):
         print("{0} = {1}".format(item['id'], dumps(item['value'])))
 
 
 def config_get(key):
+    """Displays the value of a desired configuration item from the database."""
     cfg = ConfigStore(ds)
     print(dumps(cfg.get(key)))
 
 
 def config_set(key, value):
+    """Save a new configuration value."""
     cfg = ConfigStore(ds)
     cfg.set(key, loads(value))
 
 
 @argh.arg('fields', nargs='*')
 def update(name, pkey, fields):
+    """Change a specific setting in a specific database entry."""
     replace = {}
     pkey = strtoint(pkey)
 
@@ -145,8 +195,15 @@ def update(name, pkey, fields):
 
 def main():
     parser = argh.ArghParser()
-    parser.add_argument('-c', metavar='CONFIG', default=DEFAULT_CONFIGFILE, help='Config file name')
-    parser.add_argument('--tcp', action='store_true', default=False, help='Use TCP connection')
+    parser.description = DESCRIPTION
+    parser.epilog = EXAMPLE_USAGE
+    parser.add_argument(
+        '-c',
+        metavar='CONFIG',
+        default=DEFAULT_CONFIGFILE,
+        help='Use a specific configuration file. Replace <config> with the pathway to the desired configuration file.'
+    )
+    parser.add_argument('--tcp', action='store_true', default=False, help='Use a TCP connection.')
     parser.add_commands([create, list, query, update, config_list, config_get, config_set])
     args = parser.parse_args()
     init_datastore(args.c, tcp=args.tcp)
