@@ -266,11 +266,16 @@ class VMProvider(Provider):
     def get_guest_info(self, id):
         interfaces = self.dispatcher.call_sync('containerd.management.call_vmtools', id, 'network.interfaces')
         loadavg = self.dispatcher.call_sync('containerd.management.call_vmtools', id, 'system.loadavg')
+        try:
+            version = self.dispatcher.call_sync('containerd.management.call_vmtools', id, 'system.vm_tools_version')
+        except RpcException:
+            version = None
 
         if interfaces and loadavg:
             return {
                 'interfaces': interfaces,
-                'load_avg': list(loadavg)
+                'load_avg': list(loadavg),
+                'version': version
             }
 
     @accepts(str, str)
