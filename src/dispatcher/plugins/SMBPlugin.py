@@ -208,6 +208,7 @@ def configure_params(smb, ad=False):
         conf['username map'] = '/usr/local/etc/smbusers'
         conf['idmap config *: range'] = '90000001-100000000'
         conf['idmap config *: backend'] = 'tdb'
+        conf['ntlm auth'] = 'yes'
 
         if not ad:
             conf['local master'] = yesno(smb['local_master'])
