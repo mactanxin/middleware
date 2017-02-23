@@ -33,12 +33,10 @@ import base64
 def run(context):
     for keytype in ('rsa', 'dsa', 'ecdsa', 'ed25519'):
         config = context.configstore
-        private_key = config.get('service.sshd.keys.{0}.private'.format(keytype))
-        public_key = config.get('service.sshd.keys.{0}.public'.format(keytype))
-        cert_public_key = config.get('service.sshd.keys.{0}.certificate'.format(keytype))
-        private_key_file = '/etc/ssh/ssh_host_{0}_key'.format(keytype) \
-            if keytype != 'host' \
-            else '/etc/ssh/ssh_host_key'
+        private_key = config.get('service.sshd.keys_{0}_private'.format(keytype))
+        public_key = config.get('service.sshd.keys_{0}_public'.format(keytype))
+        cert_public_key = config.get('service.sshd.keys_{0}_certificate'.format(keytype))
+        private_key_file = '/etc/ssh/ssh_host_{0}_key'.format(keytype)
 
         public_key_file = private_key_file + '.pub'
         cert_public_key_file = private_key_file + '-cert.pub'
@@ -55,10 +53,10 @@ def run(context):
 
             # Save generated keys back to config db
             with open(private_key_file, 'rb') as fd:
-                config.set('service.sshd.keys.{0}.private'.format(keytype), base64.b64encode(fd.read()))
+                config.set('service.sshd.keys_{0}_private'.format(keytype), base64.b64encode(fd.read()))
 
             with open(public_key_file, 'rb') as fd:
-                config.set('service.sshd.keys.{0}.public'.format(keytype), base64.b64encode(fd.read()))
+                config.set('service.sshd.keys_{0}_public'.format(keytype), base64.b64encode(fd.read()))
         else:
             with open(private_key_file, 'wb') as fd:
                 fd.write(base64.b64decode(private_key))
