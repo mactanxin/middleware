@@ -288,6 +288,14 @@ class SystemDatasetConfigure(ProgressTask):
                     )
                 )
 
+            key_encrypted, password_encrypted = self.dispatcher.call_sync(
+                'volume.query',
+                [('id', '=', pool)],
+                {'single': True, 'select': ('key_encrypted', 'password_encrypted')}
+            )
+            if key_encrypted or password_encrypted:
+                raise TaskException(errno.EINVAL, 'Cannot migrate .system dataset to an encrypted volume')
+
             try:
                 logger.warning('Services to be restarted: {0}'.format(', '.join(self.services)))
                 logger.warning('Migrating system dataset from pool {0} to {1}'.format(self.src_pool, pool))
