@@ -1200,9 +1200,30 @@ class ServiceMigrateTask(Task):
         try:
             self.run_subtask_sync(
                 'service.update',
-                q.query(fn10_services, ("name", "=", "webdav"), single=True)['id'],
+                q.query(fn10_services, ("name", "=", "sshd"), single=True)['id'],
                 {'config': {
-                    'enable': bool(fn9_services['webdav']['srv_enable'])
+                    'type': 'ServiceSshd',
+                    'enable': bool(fn9_services['ssh']['srv_enable']),
+                    'port': fn9_sshd['ssh_tcpport'],
+                    'permit_root_login': bool(fn9_sshd['ssh_rootlogin']),
+                    'allow_gssapi_auth': bool(fn9_sshd['ssh_kerberosauth']),
+                    'allow_password_auth': bool(fn9_sshd['ssh_passwordauth']),
+                    'compression': bool(fn9_sshd['ssh_compression']),
+                    'sftp_log_level': fn9_sshd['ssh_sftp_log_level'] or 'ERROR',
+                    'sftp_log_facility': fn9_sshd['ssh_sftp_log_facility'] or 'AUTH',
+                    'auxiliary': fn9_sshd['ssh_options'] or None,
+                    'keys_dsa_private': fn9_sshd['ssh_host_dsa_key'] or None,
+                    'keys_dsa_public': fn9_sshd['ssh_host_dsa_key_pub'] or None,
+                    'keys_dsa_certificate': fn9_sshd['ssh_host_dsa_key_cert_pub'] or None,
+                    'keys_ecdsa_private': fn9_sshd['ssh_host_ecdsa_key'] or None,
+                    'keys_ecdsa_public': fn9_sshd['ssh_host_ecdsa_key_pub'] or None,
+                    'keys_ecdsa_certificate': fn9_sshd['ssh_host_ecdsa_key_cert_pub'] or None,
+                    'keys_ed25519_private': fn9_sshd['ssh_host_ed25519_key'] or None,
+                    'keys_ed25519_public': fn9_sshd['ssh_host_ed25519_key_pub'] or None,
+                    'keys_ed25519_certificate': fn9_sshd['ssh_host_dsa_key_cert_pub'] or None,
+                    'keys_rsa_private': fn9_sshd['ssh_host_rsa_key'] or None,
+                    'keys_rsa_public': fn9_sshd['ssh_host_ecdsa_key_pub'] or None,
+                    'keys_rsa_certificate': fn9_sshd['ssh_host_ecdsa_key_cert_pub'] or None
                 }}
             )
         except RpcException as err:
