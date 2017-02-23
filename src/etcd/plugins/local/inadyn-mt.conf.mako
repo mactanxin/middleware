@@ -16,7 +16,7 @@
 % if dyndns.get('auxiliary'):
 ${dyndns['auxiliary']} \
 % endif
---syslog --username ${dyndns['username']} --password ${dyndns['password'].secret} \
+--syslog --username "${dyndns['username']}" --password "${dyndns['password'].secret}" \
 % for domain in (dyndns['domains'] or []):
 --alias ${domain} \
 % endfor
