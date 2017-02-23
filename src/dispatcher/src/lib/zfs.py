@@ -93,4 +93,4 @@ def get_disk_ids(topology):
 
 
 def get_resources(topology):
-    return ['disk:{0}'.format(d) for d, _ in get_disk_ids(topology)]
+    return [f'disk:{d}' for d in get_disk_ids(topology)]
