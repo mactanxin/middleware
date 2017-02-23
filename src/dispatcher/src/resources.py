@@ -81,7 +81,7 @@ class ResourceGraph(object):
             for p in parents:
                 node = self.get_resource(p)
                 if not node:
-                    raise ResourceError('Invalid parent resource {0}'.format(p))
+                    continue
     
                 self.resources.add_edge(node, resource)
 
@@ -137,7 +137,7 @@ class ResourceGraph(object):
             for p in new_parents:
                 node = self.get_resource(p)
                 if not node:
-                    raise ResourceError('Invalid parent resource {0}'.format(p))
+                    continue
     
                 self.resources.add_edge(node, resource)
 
