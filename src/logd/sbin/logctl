@@ -189,6 +189,12 @@ def main():
     for pid in args.pid:
         filter.append(('pid', '=', pid))
 
+    if args.first:
+        boot_id = c.call_sync('logd.logging.get_boot_id')
+        boot = c.call_sync('logd.logging.query_boots', [('id', '=', boot_id)], {'single': True})
+        delta = to_timedelta(args.first)
+        filter.append(('timestamp', '<=', boot['booted_at'] + delta))
+
     if args.last:
         delta = to_timedelta(args.last)
         filter.append(('timestamp', '>=', now - delta))
