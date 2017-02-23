@@ -489,7 +489,11 @@ class ConfigurationService(RpcService):
 
         yield from self.configure_routes()
         yield from self.configure_dns()
-        self.client.call_sync('service.restart', 'rtsold', timeout=300)
+        try:
+            self.client.call_sync('service.restart', 'rtsold', timeout=300)
+        except RpcException as err:
+            yield err.code, err.message
+
         self.client.emit_event('network.changed', {
             'operation': 'update'
         })
