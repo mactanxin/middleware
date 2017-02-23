@@ -939,7 +939,7 @@
             },
             "fd564a4e-e812-11e6-afca-0cc47a3511b4": {
                 "builtin": true,
-                "name": "virtio-iscsi",
+                "name": "virtio-scsi",
                 "dependencies": [
                     "793867c5-bf29-4464-b7f1-7b77a9e2b97c"
                 ]
