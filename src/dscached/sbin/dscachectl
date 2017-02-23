@@ -37,6 +37,21 @@ DEFAULT_SERVER = 'unix:'
 DEFAULT_TIMEOUT = 10
 
 
+DESCRIPTION = """
+The dscachectl command is used to maintain and control the Directory Services cache in numerous ways,
+including collecting statistics, initiating queries, and flushing the cache.
+"""
+EXAMPLE_USAGE = """
+Examples:
+
+Query the root user cache:
+dscachectl query --user=root
+
+Display the size and number of hits and misses for the cached users, groups, and hosts:
+dscachectl stats
+"""
+
+
 def get_user(s):
     client = create_client()
 
@@ -58,6 +73,10 @@ def get_host(s):
 
 
 def stats():
+    """
+    Collect Directory Services cache statistics such as
+    the number of cached users, groups, hosts, cache hits, and misses.
+    """
     def print_cache(name, cache):
         print("Cache <{0}>:".format(name))
         print("  Size: {0}".format(cache['size']))
@@ -74,11 +93,14 @@ def directories():
 
 
 def flush():
+    """Flush the Directory Services cache."""
     client = create_client()
     client.call_sync('dscached.management.flush')
     print("Caches flushed sucessfully")
 
+
 def query(user=None, group=None, host=None):
+    """Query a single account, group, or host entry in Directory Services subsystem."""
     if user:
         o = get_user(user)
         print("Account information:")
@@ -142,6 +164,8 @@ def create_client():
 
 def main():
     parser = argh.ArghParser()
+    parser.description = DESCRIPTION
+    parser.epilog = EXAMPLE_USAGE
     parser.add_commands([stats, flush, query])
     parser.dispatch()
 
