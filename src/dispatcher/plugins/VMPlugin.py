@@ -103,8 +103,9 @@ class VMProvider(Provider):
                 return size
 
             def get_status():
-                if obj['target'] in datastores:
-                    return self.dispatcher.call_sync('containerd.management.get_status', obj['id'])
+                vm_id = obj['id']
+                if obj['target'] in datastores and os.path.isdir(self.dispatcher.call_sync('vm.get_vm_root', vm_id)):
+                    return self.dispatcher.call_sync('containerd.management.get_status', vm_id)
                 else:
                     return {'state': 'ORPHANED'}
 
