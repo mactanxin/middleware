@@ -80,7 +80,7 @@ def split_snapshot_name(name):
     return pool, ds, snap
 
 
-def get_disks(topology):
+def get_disks(topology, predicate=None):
     for vdev, gname in iterate_vdevs(topology):
         if predicate and not predicate(vdev):
             continue
