@@ -85,7 +85,7 @@ class VolumeDatastoreProvider(Provider):
     @returns(h.array(str))
     @description('Returns list of resources which have to be locked to safely perform VM datastore operations')
     def get_resources(self, datastore_id):
-        return ['zpool:{0}'.format(datastore_id)]
+        return ['volume:{0}'.format(datastore_id)]
 
     @private
     @accepts(str, str)
