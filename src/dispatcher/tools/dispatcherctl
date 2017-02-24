@@ -223,6 +223,14 @@ def loglevel(level, server=DEFAULT_SERVER, timeout=DEFAULT_TIMEOUT):
     c.call_sync('management.set_logging_level', level, timeout=timeout)
 
 
+@argh.arg('--server')
+@argh.arg('--timeout')
+def dump_stacks(server=DEFAULT_SERVER, timeout=DEFAULT_TIMEOUT):
+    c = create_client(server)
+    for t in c.call_sync('debug.dump_stacks', timeout=timeout):
+        print(t)
+
+
 def create_client(server):
     try:
         c = Client()
@@ -252,7 +260,7 @@ def strtoint(v):
 
 def main():
     parser = argh.ArghParser()
-    parser.add_commands([enum, call, emit, wait_server, listen, submit, poll, tasks, loglevel])
+    parser.add_commands([enum, call, emit, wait_server, listen, submit, poll, tasks, loglevel, dump_stacks])
     parser.dispatch()
 
 
