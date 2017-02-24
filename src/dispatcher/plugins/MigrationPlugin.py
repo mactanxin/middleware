@@ -116,6 +116,28 @@ CRYPTO_TYPE = {
     32: 'CERT_CSR'
 }
 
+FTP_TLS_OPTS_MAP = {
+    'ftp_tls_opt_allow_client_renegotiations': 'ALLOW_CLIENT_RENEGOTIATIONS',
+    'ftp_tls_opt_allow_dot_login': 'ALLOW_DOT_LOGIN',
+    'ftp_tls_opt_allow_per_user': 'ALLOW_PER_USER',
+    'ftp_tls_opt_common_name_required': 'COMMON_NAME_REQUIRED',
+    'ftp_tls_opt_enable_diags': 'ENABLE_DIAGNOSTICS',
+    'ftp_tls_opt_export_cert_data': 'EXPORT_CERTIFICATE_DATA',
+    'ftp_tls_opt_no_cert_request': 'NO_CERTIFICATE_REQUEST',
+    'ftp_tls_opt_no_empty_fragments': 'NO_EMPTY_FRAGMENTS',
+    'ftp_tls_opt_no_session_reuse_required': 'NO_SESSION_REUSE_REQUIRED',
+    'ftp_tls_opt_stdenvvars': 'STANDARD_ENV_VARS',
+    'ftp_tls_opt_dns_name_required': 'DNS_NAME_REQUIRED',
+    'ftp_tls_opt_ip_address_required': 'IP_ADDRESS_REQUIRED'
+}
+
+
+RSYNCD_MODULE_MODE_MAP = {
+    'ro': 'READONLY',
+    'wo': 'WRITEONLY',
+    'rw': 'READWRITE'
+}
+
 
 def get_table(query_string, dictionary=True):
     with sqlite3.connect(FREENAS93_DATABASE_PATH) as conn:
@@ -1169,33 +1191,34 @@ class ServiceMigrateTask(Task):
         # Migrating WebDAV service
         fn9_dav = get_table('select * from services_webdav', dictionary=False)[0]
         try:
-            webdav_cert = q.query(
-                fn10_certs_and_cas,
-                ('name', '=', fn9_certs[fn9_dav['webdav_certssl_id']]['cert_name']),
-                single=True
-            )
-            if webdav_cert is None:
-                self.add_warning(TaskWarning(
-                    errno.EINVAL,
-                    'Could not find the certificate for setting up secure WebDAV service, skipping'
-                ))
-            else:
-                self.run_subtask_sync(
-                    'service.update',
-                    q.query(fn10_services, ("name", "=", "webdav"), single=True)['id'],
-                    {'config': {
-                        'type': 'ServiceWebdav',
-                        'enable': bool(fn9_services['webdav']['srv_enable']),
-                        'protocol': PROTOCOL_CHOICES[fn9_dav['webdav_protocol']],
-                        'http_port': fn9_dav['webdav_tcpport'],
-                        'https_port': fn9_dav['webdav_tcpportssl'],
-                        'password': {
-                            '$password': self._notifier.pwenc_decrypt(fn9_dav['webdav_password'])
-                        },
-                        'authentication': fn9_dav['webdav_htauth'].upper(),
-                        'certificate': webdav_cert['id']
-                    }}
+            webdav_cert = None
+            if fn9_dav['webdav_certssl_id']:
+                webdav_cert = q.query(
+                    fn10_certs_and_cas,
+                    ('name', '=', fn9_certs[fn9_dav['webdav_certssl_id']]['cert_name']),
+                    single=True
                 )
+                if webdav_cert is None:
+                    self.add_warning(TaskWarning(
+                        errno.EINVAL,
+                        'Could not find the certificate for setting up secure WebDAV service'
+                    ))
+            self.run_subtask_sync(
+                'service.update',
+                q.query(fn10_services, ("name", "=", "webdav"), single=True)['id'],
+                {'config': {
+                    'type': 'ServiceWebdav',
+                    'enable': bool(fn9_services['webdav']['srv_enable']),
+                    'protocol': PROTOCOL_CHOICES[fn9_dav['webdav_protocol']],
+                    'http_port': fn9_dav['webdav_tcpport'],
+                    'https_port': fn9_dav['webdav_tcpportssl'],
+                    'password': {
+                        '$password': self._notifier.pwenc_decrypt(fn9_dav['webdav_password'])
+                    },
+                    'authentication': fn9_dav['webdav_htauth'].upper(),
+                    'certificate': webdav_cert['id'] if webdav_cert else None
+                }}
+            )
         except RpcException as err:
             self.add_warning(TaskWarning(
                 errno.EINVAL, 'Could not migrate WebDAV service settings due to err: {0}'.format(err)
@@ -1263,6 +1286,218 @@ class ServiceMigrateTask(Task):
             self.add_warning(TaskWarning(
                 errno.EINVAL,
                 'Could not migrate Dynamic DNS service settings due to err: {0}'.format(err)
+            ))
+
+        fn9_ftp = get_table('select * from services_ftp', dictionary=False)[0]
+        try:
+            ftp_cert = None
+            if fn9_ftp['ftp_ssltls_certificate_id']:
+                ftp_cert = q.query(
+                    fn10_certs_and_cas,
+                    ('name', '=', fn9_certs[fn9_ftp['ftp_ssltls_certificate_id']]['cert_name']),
+                    single=True
+                )
+                if ftp_cert is None:
+                    self.add_warning(TaskWarning(
+                        errno.EINVAL,
+                        'Could not find the certificate for setting up secure FTP service'
+                    ))
+            self.run_subtask_sync(
+                'service.update',
+                q.query(fn10_services, ("name", "=", "ftp"), single=True)['id'],
+                {'config': {
+                    'type': 'ServiceFtp',
+                    'enable': bool(fn9_services['ftp']['srv_enable']),
+                    'port': fn9_ftp['ftp_port'],
+                    'max_clients': fn9_ftp['ftp_clients'],
+                    'ip_connections': fn9_ftp['ftp_ipconnections'],
+                    'login_attempt': fn9_ftp['ftp_loginattempt'],
+                    'timeout': fn9_ftp['ftp_timeout'],
+                    'root_login': bool(fn9_ftp['ftp_rootlogin']),
+                    'anonymous_path': fn9_ftp['ftp_anonpath'],
+                    'only_anonymous': bool(fn9_ftp['ftp_onlyanonymous']),
+                    'only_local': bool(fn9_ftp['ftp_onlylocal']),
+                    'display_login': fn9_ftp['ftp_banner'] or None,
+                    'filemask': {'value': int(fn9_ftp['ftp_filemask'])},
+                    'dirmask': {'value': int(fn9_ftp['ftp_dirmask'])},
+                    'fxp': bool(fn9_ftp['ftp_fxp']),
+                    'resume': bool(fn9_ftp['ftp_resume']),
+                    'chroot': bool(fn9_ftp['ftp_defaultroot']),
+                    'ident': bool(fn9_ftp['ftp_ident']),
+                    'reverse_dns': bool(fn9_ftp['ftp_reversedns']),
+                    'masquerade_address': fn9_ftp['ftp_masqaddress'] or None,
+                    'passive_ports_min': fn9_ftp['ftp_passiveportsmin'] or None,  # fn9 sets this as 0 for none hence doing this 'or'
+                    'passive_ports_max': fn9_ftp['ftp_passiveportsmax'] or None,
+                    'local_up_bandwidth': fn9_ftp['ftp_localuserbw'] or None,
+                    'local_down_bandwidth': fn9_ftp['ftp_localuserdlbw'] or None,
+                    'anon_up_bandwidth': fn9_ftp['ftp_anonuserbw'] or None,
+                    'anon_down_bandwidth': fn9_ftp['ftp_anonuserdlbw'] or None,
+                    'tls': bool(fn9_ftp['ftp_tls']),
+                    'tls_policy': fn9_ftp['ftp_tls_policy'].upper(),
+                    'tls_options': [
+                        v for k, v in FTP_TLS_OPTS_MAP.items() if fn9_ftp[k] not in ['False', 0]
+                    ],
+                    'tls_ssl_certificate': ftp_cert['id'] if ftp_cert else None,
+                    'auxiliary': fn9_ftp['ftp_options'] or None
+                }}
+            )
+        except RpcException as err:
+            self.add_warning(TaskWarning(
+                errno.EINVAL, 'Could not migrate FTP service settings due to err: {0}'.format(err)
+            ))
+
+        fn9_lldp = get_table('select * from services_lldp', dictionary=False)[0]
+        try:
+            self.run_subtask_sync(
+                'service.update',
+                q.query(fn10_services, ("name", "=", "lldp"), single=True)['id'],
+                {'config': {
+                    'type': 'ServiceLldp',
+                    'enable': bool(fn9_services['lldp']['srv_enable']),
+                    'save_description': bool(fn9_lldp['lldp_intdesc']),
+                    'country_code': fn9_lldp['lldp_country'] or None,
+                    'location': fn9_lldp['lldp_location'] or None,
+                }}
+            )
+        except RpcException as err:
+            self.add_warning(TaskWarning(
+                errno.EINVAL, 'Could not migrate LLDP service settings due to err: {0}'.format(err)
+            ))
+
+        # Migrating RSYNCD service and modules
+        fn9_rsyncd = get_table('select * from services_rsyncd', dictionary=False)[0]
+        try:
+            self.run_subtask_sync(
+                'service.update',
+                q.query(fn10_services, ("name", "=", "rsyncd"), single=True)['id'],
+                {'config': {
+                    'type': 'ServiceRsyncd',
+                    'enable': bool(fn9_services['rsync']['srv_enable']),
+                    'port': fn9_rsyncd['rsyncd_port'],
+                    'auxiliary': fn9_rsyncd['rsyncd_auxiliary']
+                }}
+            )
+        except RpcException as err:
+            self.add_warning(TaskWarning(
+                errno.EINVAL, 'Could not migrate RSYNCD service settings due to err: {0}'.format(err)
+            ))
+
+        fn9_rsyncd_mods = get_table('select * from services_rsyncmod')
+        for rsyncd_mod in fn9_rsyncd_mods.values():
+            try:
+                self.run_subtask_sync(
+                    'rsyncd.module.create',
+                    {
+                        'name': rsyncd_mod['rsyncmod_name'],
+                        'description': rsyncd_mod['comment'],
+                        'path': rsyncd_mod['path'],
+                        'mode': RSYNCD_MODULE_MODE_MAP[rsyncd_mod['rsyncmod_mode']],
+                        'max_connections': rsyncd_mod['rsyncmod_maxconn'] or None,
+                        'user': rsyncd_mod['rsyncmod_user'],
+                        'group': rsyncd_mod['rsyncmod_group'],
+                        'hosts_allow': list(filter(
+                            None, rsyncd_mod['rsyncmod_hostsallow'].replace('\t', ',').replace(' ', ',').split(','))
+                        ) or None,
+                        'hosts_deny': list(filter(
+                            None, rsyncd_mod['rsyncmod_hostsdeny'].replace('\t', ',').replace(' ', ',').split(','))
+                        ) or None,
+                        'auxiliary': rsyncd_mod['rsyncmod_auxiliary'] or None,
+                    }
+                )
+            except RpcException as err:
+                self.add_warning(TaskWarning(
+                    errno.EINVAL,
+                    'Could not migrate rsyncd module: {0} due to err: {1}'.format(
+                        rsyncd_mod['rsyncmod_name'], err
+                    )
+                ))
+
+        # Migrating SNMP service
+        fn9_snmp = get_table('select * from services_snmp', dictionary=False)[0]
+        try:
+            # Note currently the snmp v3 password (fn9 property "snmp_v3_password") is not
+            # encrypted in the fn9 database, if this changes make it go through notifier's
+            # pwenc_decrypt routine before handing it to the task (see other password examples)
+            snmp_config = {
+                'type': 'ServiceSnmp',
+                'enable': bool(fn9_services['snmp']['srv_enable']),
+                'location': fn9_snmp['snmp_location'] or None,
+                'contact': fn9_snmp['snmp_contact'] or None,
+                'community': fn9_snmp['snmp_community'] or None,
+                'v3': bool(fn9_snmp['snmp_v3']),
+                'v3_username': fn9_snmp['snmp_v3_username'] or None,
+                'v3_password': {
+                    '$password': fn9_snmp['snmp_v3_password']
+                } if fn9_snmp['snmp_v3_password'] else None,
+                'v3_auth_type': fn9_snmp['snmp_v3_authtype'],
+                'v3_privacy_passphrase': fn9_snmp['snmp_v3_privpassphrase'] or None,
+                'auxiliary': fn9_snmp['snmp_options'] or None,
+            }
+            if fn9_snmp['snmp_v3_privproto']:
+                snmp_config.update({'v3_privacy_protocol': fn9_snmp['snmp_v3_privproto']})
+            self.run_subtask_sync(
+                'service.update',
+                q.query(fn10_services, ("name", "=", "snmp"), single=True)['id'],
+                {'config': snmp_config}
+            )
+        except RpcException as err:
+            self.add_warning(TaskWarning(
+                errno.EINVAL, 'Could not migrate SNMP service settings due to err: {0}'.format(err)
+            ))
+
+        # Migrating TFTP service
+        fn9_tftp = get_table('select * from services_tftp', dictionary=False)[0]
+        try:
+            self.run_subtask_sync(
+                'service.update',
+                q.query(fn10_services, ("name", "=", "tftpd"), single=True)['id'],
+                {'config': {
+                    'type': 'ServiceTftpd',
+                    'enable': bool(fn9_services['tftp']['srv_enable']),
+                    'port': fn9_tftp['tftp_port'],
+                    'path': fn9_tftp['tftp_directory'],
+                    'allow_new_files': bool(fn9_tftp['tftp_newfiles']),
+                    'username': fn9_tftp['tftp_username'],
+                    'umask': {'value': int(fn9_tftp['tftp_umask'])},
+                    'auxiliary': fn9_tftp['tftp_options'] or None
+                }}
+            )
+        except RpcException as err:
+            self.add_warning(TaskWarning(
+                errno.EINVAL, 'Could not migrate TFTP service settings due to err: {0}'.format(err)
+            ))
+
+        # Migrating UPS (YAY LAST SERVICE TO MIGRATE!!!)
+        fn9_ups = get_table('select * from services_ups', dictionary=False)[0]
+        try:
+            self.run_subtask_sync(
+                'service.update',
+                q.query(fn10_services, ("name", "=", "ups"), single=True)['id'],
+                {'config': {
+                    'type': 'ServiceUps',
+                    'enable': bool(fn9_services['ups']['srv_enable']),
+                    'mode': fn9_ups['ups_mode'].upper(),
+                    'identifier': fn9_ups['ups_identifier'],
+                    'remote_host': fn9_ups['ups_remotehost'] or None,
+                    'remote_port': fn9_ups['ups_remoteport'],
+                    'driver': fn9_ups['ups_driver'] or None,
+                    'driver_port': fn9_ups['ups_port'] or None,
+                    'description': fn9_ups['ups_description'] or None,
+                    'shutdown_mode': fn9_ups['ups_shutdown'],
+                    'shutdown_timer': fn9_ups['ups_shutdowntimer'],
+                    'monitor_user': fn9_ups['ups_monuser'],
+                    'monitor_password': {
+                        '$password': self._notifier.pwenc_decrypt(fn9_ups['ups_monpwd'])
+                    },
+                    'allow_remote_connections': bool(fn9_ups['ups_rmonitor']),
+                    'auxiliary_users': fn9_ups['ups_extrausers'] or None,
+                    'powerdown': True if fn9_ups['ups_powerdown'] in ['True', 1] else False,
+                    'auxiliary': fn9_ups['ups_options'] or None
+                }}
+            )
+        except RpcException as err:
+            self.add_warning(TaskWarning(
+                errno.EINVAL, 'Could not migrate UPS service settings due to err: {0}'.format(err)
             ))
 
         # Template to use for adding future service migrations
@@ -1432,17 +1667,21 @@ class MasterMigrateTask(ProgressTask):
         self.run_subtask_sync('migration.accountsmigrate')
         self.apps_migrated.append('accounts')
 
+        self.migration_progess(20, 'Migrating system app')
+        self.run_subtask_sync('migration.systemmigrate')
+        self.apps_migrated.append('system')
+
         self.migration_progess(
-            20, 'Migrating netwrok app: network config, interfaces, vlans, bridges, and laggs'
+            30, 'Migrating netwrok app: network config, interfaces, vlans, bridges, and laggs'
         )
         self.run_subtask_sync('migration.networkmigrate')
         self.apps_migrated.append('network')
 
-        self.migration_progess(30, 'Migrating services app: AFP, SMB, NFS, iSCSI, etc')
+        self.migration_progess(40, 'Migrating services app: AFP, SMB, NFS, iSCSI, etc')
         self.run_subtask_sync('migration.servicemigrate')
         self.apps_migrated.append('services')
 
-        self.migration_progess(40, 'Migrating shares app: AFP, SMB, NFS, iSCSI, and WebDAV')
+        self.migration_progess(50, 'Migrating shares app: AFP, SMB, NFS, iSCSI, and WebDAV')
         self.run_subtask_sync('migration.sharemigrate')
         self.apps_migrated.append('sharing')
 
