@@ -46,6 +46,17 @@ class VolumeDatastoreProvider(Provider):
             }
 
     @private
+    @accepts(str)
+    @returns(str)
+    def get_state(self, datastore_id):
+        status = self.dispatcher.call_sync(
+            'volume.query',
+            [('id', '=', datastore_id)],
+            {'single': True, 'select': 'status'}
+        )
+        return 'ONLINE' if status == 'ONLINE' else 'OFFLINE'
+
+    @private
     @description('Lists files or ZVOLs')
     @accepts(h.ref('VmDatastorePathType'), str, str)
     @returns(h.array(h.ref('VmDatastoreItem')))

@@ -30,7 +30,7 @@ import contextlib
 from task import ProgressTask, TaskException, Provider, query, TaskDescription
 from freenas.dispatcher.rpc import RpcException, accepts, returns, private, description, generator
 from freenas.dispatcher.rpc import SchemaHelper as h
-from freenas.utils import query as q, first_or_default
+from freenas.utils import query as q
 
 
 @description('Provides information about VM datastores')
@@ -42,6 +42,7 @@ class DatastoreProvider(Provider):
 
         def extend(obj):
             obj['capabilities'] = drivers[obj['type']]
+            obj['state'] = self.dispatcher.call_sync('vm.datastore.get_state', obj['id'])
             return obj
 
         def doit():
@@ -65,6 +66,13 @@ class DatastoreProvider(Provider):
                 }
 
         return result
+
+    @private
+    @accepts(str)
+    @returns(str)
+    def get_state(self, datastore_id):
+        driver = self.get_driver(datastore_id)
+        return self.dispatcher.call_sync(f'vm.datastore.{driver}.get_state', datastore_id)
 
     @description('Lists disks or files or block devices')
     @accepts(h.ref('VmDatastorePathType'), h.one_of(str, None), str)
