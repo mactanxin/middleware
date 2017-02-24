@@ -64,7 +64,15 @@ def dump_collection(ds, name):
         'migrations': ds.collection_get_migrations(name)
     }
 
+    configstore = metadata['attributes'].get('configstore', False)
+
+    def collect():
+        return {x['id']: exclude(x, 'id') for x in ds.query(name)}
+
+    def collect_configstore():
+        return {x['id']: x['value'] for x in ds.query(name)}
+
     return {
         'metadata': metadata,
-        'data': {x['id']: exclude(x, 'id') for x in ds.query(name)}
+        'data': collect_configstore() if configstore else collect()
     }
