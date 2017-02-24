@@ -535,12 +535,31 @@ class VolumeCreateTask(ProgressTask):
         return TaskDescription("Creating volume {name}", name=volume['id'])
 
     def verify(self, volume, password=None, dataset_properties=None):
-        return ['disk:{0}'.format(disk_spec_to_id(self.dispatcher, i)) for i, _ in get_disks(volume['topology'])]
+        missing = []
+        resources = []
+        for i, _ in get_disks(volume['topology']):
+            disk_id = disk_spec_to_id(self.dispatcher, i)
+            if not disk_id:
+                missing.append(i)
+                continue
+
+            resources.append(f'disk:{disk_id}')
+
+        if volume.get('type', 'zfs') != 'zfs':
+            raise TaskException(errno.EINVAL, 'Invalid volume type')
+
+        if missing:
+            raise VerifyException(errno.ENOENT, f'Following disks were not found: {", ".join(missing)}')
+
+        return resources
 
     def run(self, volume, password=None, dataset_properties=None):
         if self.datastore.exists('volumes', ('id', '=', volume['id'])):
             raise TaskException(errno.EEXIST, 'Volume with same name already exists')
 
+        key = None
+        salt = None
+        digest = None
         fsopts = dataset_properties or {}
         name = volume['id']
         type = volume.get('type', 'zfs')
@@ -549,10 +568,8 @@ class VolumeCreateTask(ProgressTask):
         key_encryption = volume.pop('key_encrypted', False)
         password_encryption = volume.pop('password_encrypted', False)
         auto_unlock = volume.pop('auto_unlock', None)
-        mountpoint = params.pop(
-            'mountpoint',
-            os.path.join(VOLUMES_ROOT, volume['id'])
-        )
+        mountpoint = params.pop('mountpoint', os.path.join(VOLUMES_ROOT, volume['id']))
+        available_disks = self.dispatcher.call_sync('volume.get_available_disks')
 
         if auto_unlock and (not key_encryption or password_encryption):
             raise TaskException(
@@ -563,25 +580,20 @@ class VolumeCreateTask(ProgressTask):
         self.dispatcher.run_hook('volume.pre_create', {'name': name})
         if key_encryption:
             key = base64.b64encode(os.urandom(256)).decode('utf-8')
-        else:
-            key = None
 
         if password_encryption:
             if not password:
                 raise TaskException(errno.EINVAL, 'Please provide a password when choosing a password based encryption')
             salt, digest = get_digest(password)
-        else:
-            salt = None
-            digest = None
-
-        if type != 'zfs':
-            raise TaskException(errno.EINVAL, 'Invalid volume type')
 
         self.set_progress(10)
 
         subtasks = []
         for dname, dgroup in get_disks(volume['topology']):
             disk_id = self.dispatcher.call_sync('disk.path_to_id', dname)
+            if disk_id not in available_disks:
+                raise TaskException(errno.EBUSY, f'Disk {dname} is not available to use')
+
             if self.dispatcher.call_sync('disk.is_geli_provider', disk_id):
                 self.run_subtask_sync('disk.geli.kill', disk_id)
 
@@ -805,8 +817,12 @@ class VolumeDestroyTask(Task):
         with self.dispatcher.get_lock('volumes'):
             if config:
                 try:
-                    action = 'export' if vol['status'] in ('UNAVAIL', 'LOCKED') else 'destroy'
                     self.run_subtask_sync('zfs.umount', id)
+                except RpcException as err:
+                    pass
+
+                try:
+                    action = 'export' if vol['status'] in ('UNAVAIL', 'LOCKED') else 'destroy'
                     self.run_subtask_sync('zfs.pool.{0}'.format(action), id)
                 except RpcException as err:
                     if err.code == errno.EBUSY:
@@ -902,6 +918,7 @@ class VolumeUpdateTask(ProgressTask):
             password = Password('')
 
         volume = self.dispatcher.call_sync('volume.query', [('id', '=', id)], {'single': True})
+        available_disks = self.dispatcher.call_sync('volume.get_available_disks')
         remove_unchanged(updated_params, volume)
 
         encryption = volume.get('encryption')
@@ -1038,13 +1055,13 @@ class VolumeUpdateTask(ProgressTask):
                        len(old_vdev['children']) + 1 != len(vdev['children']):
                         raise TaskException(
                             errno.EINVAL,
-                            'Cannot extend mirror vdev {0} by more than one disk at once'.format(vdev['guid'])
+                            'Cannot extend mirror vdev by more than one disk at once'.format(vdev['guid'])
                         )
 
                     if old_vdev['type'] == 'disk' and vdev['type'] == 'mirror' and len(vdev['children']) != 2:
                         raise TaskException(
                             errno.EINVAL,
-                            'Cannot extend disk vdev {0} by more than one disk at once'.format(vdev['guid'])
+                            'Cannot extend disk vdev by more than one disk at once'.format(vdev['guid'])
                         )
 
                     updated_vdevs.append({
@@ -1056,10 +1073,17 @@ class VolumeUpdateTask(ProgressTask):
                 self.run_subtask_sync('zfs.pool.detach', id, vdev)
 
             for vdev, group in iterate_vdevs(new_vdevs):
+                disk_id = self.dispatcher.call_sync('disk.path_to_id', vdev['path'])
+                if not disk_id:
+                    raise TaskException(errno.ENOENT, f'Disk {vdev["path"]} not found')
+
+                if disk_id not in available_disks:
+                    raise TaskException(errno.EBUSY, f'Disk {vdev["path"]} is not available to use')
+
                 if vdev['type'] == 'disk':
                     subtasks.append(self.run_subtask(
                         'disk.format.gpt',
-                        self.dispatcher.call_sync('disk.path_to_id', vdev['path']),
+                        disk_id,
                         'freebsd-zfs',
                         {
                             'blocksize': params.get('blocksize', 4096),
@@ -1068,9 +1092,16 @@ class VolumeUpdateTask(ProgressTask):
                     ))
 
             for vdev in updated_vdevs:
+                disk_id = self.dispatcher.call_sync('disk.path_to_id', vdev['vdev']['path'])
+                if not disk_id:
+                    raise TaskException(errno.ENOENT, f'Disk {vdev["vdev"]["path"]} not found')
+
+                if disk_id not in available_disks:
+                    raise TaskException(errno.EBUSY, f'Disk {vdev["vdev"]["path"]} is not available to use')
+
                 subtasks.append(self.run_subtask(
                     'disk.format.gpt',
-                    self.dispatcher.call_sync('disk.path_to_id', vdev['vdev']['path']),
+                    disk_id,
                     'freebsd-zfs',
                     {
                         'blocksize': params.get('blocksize', 4096),

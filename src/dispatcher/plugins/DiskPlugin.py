@@ -305,6 +305,9 @@ class DiskGPTFormatTask(Task):
 
     def verify(self, id, fstype, params=None):
         disk = disk_by_id(self.dispatcher, id)
+        if not disk:
+            raise VerifyException(f'Disk {id} not found')
+
         if not get_disk_by_path(disk['path']):
             raise VerifyException(errno.ENOENT, "Disk {0} not found".format(id))
 
