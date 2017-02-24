@@ -3168,13 +3168,13 @@ def _init(dispatcher, plugin):
 
         if ds['mountpoint'] and '.system' not in ds['name'] and ds['name'] != ds['pool'] and local_mountpoint:
             # Correct mountpoint of a non-root dataset
-            dispatcher.call_task_sync('zfs.update', ds['name'], {'mountpoint': {'source': 'INHERITED'}})
+            dispatcher.call_sync('zfs.dataset.inherit_property', ds['name'], 'mountpoint')
 
         if ds['name'] == ds['pool']:
             # Correct mountpoint of a root dataset
             desired_mountpoint = os.path.join(VOLUMES_ROOT, ds['pool'])
             if q.get(ds, 'properties.mountpoint.parsed') != desired_mountpoint:
-                dispatcher.call_task_sync('zfs.update', ds['name'], {'mountpoint': {'value': desired_mountpoint}})
+                dispatcher.call_sync('zfs.dataset.set_property', ds['name'], 'mountpoint', desired_mountpoint)
 
         prop = q.get(ds, 'properties.org\\.freenas:last_replicated_at')
         if prop and prop['source'] == 'LOCAL':
@@ -3271,9 +3271,12 @@ def _init(dispatcher, plugin):
                     logger.info('New volume {0} <{1}>'.format(i['name'], i['guid']))
 
                     # Set correct mountpoint
-                    dispatcher.call_task_sync('zfs.update', i['name'], {
-                        'mountpoint': {'value': os.path.join(VOLUMES_ROOT, i['name'])}
-                    })
+                    dispatcher.call_sync(
+                        'zfs.dataset.set_property',
+                        i['name'],
+                        'mountpoint',
+                        os.path.join(VOLUMES_ROOT, i['name'])
+                    )
 
                     if q.get(i, 'properties.altroot.source') != 'DEFAULT':
                         # Ouch. That pool is created or imported with altroot.
