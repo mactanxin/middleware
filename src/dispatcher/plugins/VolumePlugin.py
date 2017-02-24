@@ -2621,7 +2621,7 @@ class DatasetTemporaryUmountTask(Task):
 @accepts(
     h.all_of(
         h.ref('VolumeSnapshot'),
-        h.one_of(
+        h.any_of(
             h.required('dataset'),
             h.required('id')
         )
