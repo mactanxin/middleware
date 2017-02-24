@@ -888,7 +888,7 @@ class DockerContainerStartTask(DockerBaseTask):
 
 @description('Stops a Docker container')
 @accepts(str)
-class DockerContainerStopTask(Task):
+class DockerContainerStopTask(DockerBaseTask):
     @classmethod
     def early_describe(cls):
         return 'Stopping container'
