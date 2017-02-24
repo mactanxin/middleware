@@ -156,6 +156,15 @@ class ZpoolProvider(Provider):
         pool = pools.get(name)
         return vdev_by_path(pool['groups'], path)
 
+    @private
+    def set_property(self, pool_name, property_name, value):
+        def doit():
+            zfs = get_zfs()
+            pool = zfs.get(pool_name)
+            pool.properties[property_name].value = value
+
+        self.dispatcher.threaded(doit)
+
 
 @description('Provides information about ZFS datasets')
 class ZfsDatasetProvider(Provider):
@@ -267,6 +276,24 @@ class ZfsDatasetProvider(Provider):
                     pass
 
             datasets.update(**changed)
+
+    @private
+    def set_property(self, dataset_name, property_name, value):
+        def doit():
+            zfs = get_zfs()
+            pool = zfs.get_dataset(dataset_name)
+            pool.properties[property_name].value = value
+
+        self.dispatcher.threaded(doit)
+
+    @private
+    def inherit_property(self, dataset_name, property_name):
+        def doit():
+            zfs = get_zfs()
+            pool = zfs.get_dataset(dataset_name)
+            pool.properties[property_name].inherit()
+
+        self.dispatcher.threaded(doit)
 
 
 @description('Provides information about ZFS snapshots')
