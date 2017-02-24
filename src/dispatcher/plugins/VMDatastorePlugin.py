@@ -42,7 +42,7 @@ class DatastoreProvider(Provider):
 
         def extend(obj):
             obj['capabilities'] = drivers[obj['type']]
-            obj['state'] = self.dispatcher.call_sync('vm.datastore.get_state', obj['id'])
+            obj['state'] = self.dispatcher.call_sync(f'vm.datastore.{obj["type"]}.get_state', obj['id'])
             return obj
 
         def doit():
