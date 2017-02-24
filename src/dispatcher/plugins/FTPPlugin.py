@@ -78,6 +78,13 @@ class FTPConfigureTask(Task):
             elif pmax and pmin and pmin >= pmax:
                 errors.add((0, 'passive_ports_max'),  'This value must be higher than minimum passive port.')
 
+        if not all((pmax, pmin)) and any((pmax, pmin)):
+            errors.add(
+                (0, 'passive_ports_max' if pmin else 'passive_ports_min'),
+                'You cannot just supply only one of "passive_ports_max" or "passive_ports_min"' +
+                'Either both stay none or both have valid values in them'
+            )
+
         if node['only_anonymous'] and not node['anonymous_path']:
             errors.add(
                 (0, 'anonymous_path'), 'This field is required for anonymous login.'
