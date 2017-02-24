@@ -404,6 +404,9 @@ class AlertFilterUpdateTask(Task):
         if not alertfilter:
             raise RpcException(errno.ENOENT, 'Alert filter doesn\'t exist')
 
+        if 'id' in updated_fields and updated_fields['id'] != alertfilter['id']:
+            raise TaskException(errno.EINVAL, 'Cannot change alert filter id')
+
         try:
             if 'index' in updated_fields:
                 index = updated_fields.pop('index')
