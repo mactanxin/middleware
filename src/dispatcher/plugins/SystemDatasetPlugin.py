@@ -489,6 +489,7 @@ def _init(dispatcher, plugin):
         logger.error('Reverting back to boot pool')
         create_system_dataset(dispatcher, dsid, boot_pool)
         mount_system_dataset(dispatcher, dsid, boot_pool, SYSTEM_DIR)
+        dispatcher.configstore.set('system.dataset.pool', boot_pool)
 
     link_directories(dispatcher)
 
