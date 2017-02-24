@@ -36,7 +36,7 @@ def restore_collection(ds, dump):
 
     ds.collection_delete(name)
     ds.collection_create(name, metadata['pkey-type'], metadata['attributes'])
-    configstore = False
+    configstore = metadata['attributes'].get('configstore', False)
 
     for key, row in list(data.items()):
         pkey = int(key) if integer else key
