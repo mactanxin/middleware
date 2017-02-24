@@ -1740,7 +1740,7 @@ def _init(dispatcher, plugin):
             'bytes_to_process': {'type': ['integer', 'null']},
             'state': {'type': ['string', 'null']},
             'end_time': {'type': ['datetime', 'null']},
-            'function': {'type': ['integer', 'null']},
+            'function': {'type': ['string', 'null']},
             'bytes_processed': {'type': ['integer', 'null']},
             'percentage': {'type': ['number', 'null']},
         }
