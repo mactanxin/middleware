@@ -1811,7 +1811,7 @@ class DockerCollectionGetPresetsTask(ProgressTask):
         self.set_progress(0, 'Downloading {0} collection presets'.format(name))
 
         with dockerhub.DockerHub() as hub:
-            collection_len = len([i for i in hub.get_repositories(name) if collection['match_expr'] in i['name']])
+            collection_len = len([i for i in hub.get_repositories(cn_name) if collection['match_expr'] in i['name']])
 
         for i in self.dispatcher.call_sync('docker.image.get_collection_images', cn_name, force):
             result.append(i)
