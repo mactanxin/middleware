@@ -476,12 +476,20 @@ def _init(dispatcher, plugin):
     plugin.register_event_handler('volume.changed', on_volumes_changed)
     plugin.register_event_handler('entity-subscriber.zfs.dataset.changed', on_datasets_changed)
 
+    boot_pool = dispatcher.configstore.get('system.boot_pool_name')
     pool = dispatcher.configstore.get('system.dataset.pool')
     dsid = dispatcher.configstore.get('system.dataset.id')
 
     logger.info('Mounting system dataset')
-    create_system_dataset(dispatcher, dsid, pool)
-    mount_system_dataset(dispatcher, dsid, pool, SYSTEM_DIR)
+    try:
+        create_system_dataset(dispatcher, dsid, pool)
+        mount_system_dataset(dispatcher, dsid, pool, SYSTEM_DIR)
+    except Exception as err:
+        logger.error(f'Cannot mount system dataset on pool {pool}: {err}')
+        logger.error('Reverting back to boot pool')
+        create_system_dataset(dispatcher, dsid, boot_pool)
+        mount_system_dataset(dispatcher, dsid, boot_pool, SYSTEM_DIR)
+
     link_directories(dispatcher)
 
     logger.info('Starting log database')
