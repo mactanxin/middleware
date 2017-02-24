@@ -304,18 +304,21 @@ class Directory(object):
             'ids': [self.id]
         })
 
-        alert = self.context.client.call_sync('alert.get_active_alert', 'DirectoryServiceBindFailed', self.id)
-        if alert:
-            self.context.client.call_sync('alert.cancel', alert['id'])
+        try:
+            alert = self.context.client.call_sync('alert.get_active_alert', 'DirectoryServiceBindFailed', self.id)
+            if alert:
+                self.context.client.call_sync('alert.cancel', alert['id'])
 
-        if state == DirectoryState.FAILURE:
-            self.context.client.call_sync('alert.emit', {
-                'clazz': 'DirectoryServiceBindFailed',
-                'active': True,
-                'target': self.id,
-                'title': 'Binding to directory {0} failed'.format(self.name),
-                'description': self.status_message
-            })
+            if state == DirectoryState.FAILURE:
+                self.context.client.call_sync('alert.emit', {
+                    'clazz': 'DirectoryServiceBindFailed',
+                    'active': True,
+                    'target': self.id,
+                    'title': 'Binding to directory {0} failed'.format(self.name),
+                    'description': self.status_message
+                })
+        except RpcException as err:
+            self.context.logger.warning(f'Failed to emit an alert for directory {self.name}: {err}')
 
     def put_status(self, code, message):
         code_str = os.strerror(code) if code else 'OK'
