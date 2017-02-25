@@ -38,6 +38,7 @@ import itertools
 import time
 import errno
 import datastore
+import datastore.config
 from datetime import datetime
 from bsd import setproctitle
 from bsd import kinfo_getproc
@@ -211,6 +212,16 @@ class SyslogForwarder(object):
         self.host = host
         self.port = port
         self.context = context
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+
+    def close(self):
+        self.sock.close()
+
+    def forward(self, msg):
+        try:
+            self.sock.sendto(msg, (self.host, self.port))
+        except:
+            pass
 
 
 class Context(object):
@@ -223,15 +234,21 @@ class Context(object):
         self.exiting = False
         self.server = None
         self.servers = []
+        self.forwarders = []
         self.klog_reader = None
         self.flush = False
         self.flush_thread = None
         self.datastore = None
+        self.configstore = None
         self.started_at = datetime.utcnow()
         self.rpc = RpcContext()
         self.rpc.register_service_instance('logd.logging', LoggingService(self))
         self.rpc.register_service_instance('logd.debug', DebugService())
         self.cv = threading.Condition()
+
+    def init_configstore(self):
+        ds = datastore.get_datastore()
+        self.configstore = datastore.config.ConfigStore(ds)
 
     def init_datastore(self):
         try:
@@ -270,6 +287,26 @@ class Context(object):
         self.flush_thread = threading.Thread(target=self.do_flush, name='Flush thread')
         self.flush_thread.start()
 
+    def load_configuration(self):
+        syslog_server = self.configstore.get('system.syslog_server')
+
+        if not syslog_server:
+            if self.forwarders:
+                for i in self.forwarders:
+                    i.close()
+
+                self.forwarders.clear()
+
+            return
+
+        if ':' in syslog_server:
+            host, port = syslog_server.split(':')
+        else:
+            host = syslog_server
+            port = 514
+
+        self.forwarders.append(SyslogForwarder(host, port, self))
+
     def push(self, item):
         if not item:
             return
@@ -298,7 +335,22 @@ class Context(object):
             })
             self.store.append(item)
             self.seqno += 1
-            self.server.broadcast_event('logd.logging.message', item)
+
+        self.server.broadcast_event('logd.logging.message', item)
+        self.forward(item)
+
+    def forward(self, item):
+        hostname = socket.gethostname()
+        prio = SyslogPriority.INFO
+
+        try:
+            prio = int(getattr(SyslogPriority, item['priority']))
+        except:
+            pass
+
+        msg = f'<{prio}>{item["timestamp"]:%b %d %H:%M:%S} {hostname} {item["identifier"]}: {item["message"]}'
+        for i in self.forwarders:
+            i.forward(msg.encode('utf-8', 'ignore'))
 
     def do_flush(self):
         logging.debug('Flush thread initialized')
@@ -337,20 +389,29 @@ class Context(object):
 
     def main(self):
         setproctitle('logd')
+        self.init_configstore()
         self.init_syslog_server()
         self.init_klog()
         self.init_rpc_server()
         self.init_flush()
+        self.load_configuration()
         checkin()
         signal.signal(signal.SIGUSR1, signal.SIG_DFL)
+        signal.signal(signal.SIGHUP, signal.SIG_DFL)
+
         while True:
-            sig = signal.sigwait([signal.SIGTERM, signal.SIGUSR1])
+            sig = signal.sigwait([signal.SIGTERM, signal.SIGUSR1, signal.SIGHUP])
             if sig == signal.SIGUSR1:
                 with self.cv:
                     logging.info('Flushing logs on signal')
                     self.flush = True
                     self.cv.notify_all()
 
+                continue
+
+            if sig == signal.SIGHUP:
+                logging.info('Reloading configuration on SIGHUP')
+                self.load_configuration()
                 continue
 
             if sig == signal.SIGTERM:
