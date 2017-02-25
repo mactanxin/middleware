@@ -1396,13 +1396,13 @@ class VMStartTask(Task):
             )
         return ['system']
 
-    def run(self, id, strict=False):
+    def run(self, id):
         vm = self.dispatcher.call_sync('vm.query', [('id', '=', id)], {'single': True})
         if not vm['enabled']:
             raise TaskException(errno.EACCES, "Cannot start disabled VM {0}".format(id))
 
         try:
-            dropped_devices = self.dispatcher.call_sync('containerd.management.start_vm', id, strict)
+            dropped_devices = self.dispatcher.call_sync('containerd.management.start_vm', id)
         except RpcException as err:
             raise TaskException(err.code, err.message)
 
