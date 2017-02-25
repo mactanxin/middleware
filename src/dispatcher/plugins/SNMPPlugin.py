@@ -62,7 +62,7 @@ class SNMPConfigureTask(Task):
 
     def run(self, snmp):
         node = ConfigNode('service.snmp', self.configstore).__getstate__()
-        if 'v3_password' in snmp:
+        if 'v3_password' in snmp and isinstance(snmp['v3_password'], Password):
             snmp['v3_password'] = snmp['v3_password'].secret
 
         node.update(snmp)
