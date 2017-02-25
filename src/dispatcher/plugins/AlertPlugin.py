@@ -483,6 +483,7 @@ class SendAlertTask(Task):
 
 def collect_debug(dispatcher):
     yield AttachData('alert-filter-query', dumps(list(dispatcher.call_sync('alert.filter.query')), indent=4))
+    yield AttachData('alert-emitter-query', dumps(list(dispatcher.call_sync('alert.emitter.query')), indent=4))
 
 
 def _init(dispatcher, plugin):
