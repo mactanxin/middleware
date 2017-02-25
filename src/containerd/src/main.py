@@ -571,14 +571,14 @@ class VirtualMachine(object):
         for i in self.devices:
             if i['type'] in ('DISK', 'VOLUME'):
                 path = self.context.client.call_sync('vm.get_device_path', self.id, i['name'])
-                if not os.path.exists(path):
+                if not path or not os.path.exists(path):
                     yield i['name']
 
     def drop_invalid_devices(self):
         for i in list(self.devices):
             if i['type'] in ('DISK', 'CDROM', 'VOLUME'):
                 path = self.context.client.call_sync('vm.get_device_path', self.id, i['name'])
-                if not os.path.exists(path):
+                if not path or not os.path.exists(path):
                     self.devices.remove(i)
                     yield i
 
