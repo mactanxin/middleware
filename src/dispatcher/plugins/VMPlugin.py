@@ -1370,18 +1370,18 @@ class VMExportTask(Task):
         })
 
 
-@accepts(str, bool)
+@accepts(str)
 @description('Starts VM')
 class VMStartTask(Task):
     @classmethod
     def early_describe(cls):
         return 'Starting VM'
 
-    def describe(self, id, strict=False):
+    def describe(self, id):
         vm = self.datastore.get_by_id('vms', id)
         return TaskDescription('Starting VM {name}', name=vm.get('name', '') if vm else '')
 
-    def verify(self, id, strict=False):
+    def verify(self, id):
         vm = self.datastore.get_by_id('vms', id)
         if not vm:
             raise TaskException(errno.ENOENT, f'VM {id} does not exist')
