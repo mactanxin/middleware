@@ -1401,6 +1401,9 @@ class VMStartTask(Task):
         if not vm['enabled']:
             raise TaskException(errno.EACCES, "Cannot start disabled VM {0}".format(id))
 
+        if q.get(vm, 'status.state') == 'ORPHANED':
+            raise TaskException(errno.EACCES, 'Cannot start orphaned VM. Check datastore')
+
         try:
             dropped_devices = self.dispatcher.call_sync('containerd.management.start_vm', id)
         except RpcException as err:
