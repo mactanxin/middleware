@@ -340,9 +340,9 @@ class Context(object):
         except:
             pass
 
-        msg = f'<{prio}>{item["timestamp"]:%b %d %H:%M:%S} {hostname} {item["ident"]}: {item["message"]}'
+        msg = f'<{prio}>{item["timestamp"]:%b %d %H:%M:%S} {hostname} {item["identifier"]}: {item["message"]}'
         for i in self.forwarders:
-            i.forward(msg)
+            i.forward(msg.encode('utf-8', 'ignore'))
 
     def do_flush(self):
         logging.debug('Flush thread initialized')
