@@ -1241,6 +1241,7 @@ class ManagementService(RpcService):
     def __init__(self, context):
         super(ManagementService, self).__init__()
         self.context = context
+        self.retry_lock = RLock()
 
     @private
     def get_status(self, id):
@@ -1306,6 +1307,14 @@ class ManagementService(RpcService):
             self.context.cv.notify_all()
 
         return dropped_devices
+
+    @private
+    def retry_autostart(self, id):
+        with self.retry_lock:
+            if id in self.context.failed_autostart_vms:
+                self.context.logger.debug(f'Retrying VM {id} autostart')
+                if not self.start_vm(id, True):
+                    self.context.failed_autostart_vms.remove(id)
 
     @private
     def stop_vm(self, id, force=False):
@@ -2193,6 +2202,7 @@ class Main(object):
         self.nat = None
         self.vm_started = Event()
         self.vms = {}
+        self.failed_autostart_vms = []
         self.docker_hosts = {}
         self.tokens = {}
         self.logger = logging.getLogger('containerd')
@@ -2434,7 +2444,8 @@ class Main(object):
     def init_autostart(self):
         for vm in self.client.call_sync('vm.query'):
             if vm['config'].get('autostart'):
-                self.client.submit_task('vm.start', vm['id'], True)
+                if self.client.call_sync('containerd.management.start_vm', vm['id'], True):
+                    self.failed_autostart_vms.append(vm['id'])
 
     def main(self):
         parser = argparse.ArgumentParser()
