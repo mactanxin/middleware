@@ -2893,7 +2893,7 @@ def _init(dispatcher, plugin):
                         logger.debug('Removed {0} VM snapshot'.format(i['name']))
 
     def on_datastore_change(args):
-        if args['operation'] == 'delete':
+        if args['operation'] in ('delete', 'update'):
             vm_ids = dispatcher.datastore.query('vms', ('target', 'in', args['ids']), select='id')
 
             if vm_ids:
