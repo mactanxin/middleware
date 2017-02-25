@@ -214,6 +214,9 @@ class SyslogForwarder(object):
         self.context = context
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
 
+    def close(self):
+        self.sock.close()
+
     def forward(self, msg):
         try:
             self.sock.sendto(msg, (self.host, self.port))
@@ -285,10 +288,15 @@ class Context(object):
         self.flush_thread.start()
 
     def load_configuration(self):
-        self.forwarders.clear()
         syslog_server = self.configstore.get('system.syslog_server')
 
         if not syslog_server:
+            if self.forwarders:
+                for i in self.forwarders:
+                    i.close()
+
+                self.forwarders.clear()
+
             return
 
         if ':' in syslog_server:
@@ -402,6 +410,7 @@ class Context(object):
                 continue
 
             if sig == signal.SIGHUP:
+                logging.info('Reloading configuration on SIGHUP')
                 self.load_configuration()
                 continue
 
