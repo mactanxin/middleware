@@ -1289,10 +1289,7 @@ class ManagementService(RpcService):
         if strict:
             invalid = list(vm.get_invalid_storage())
             if invalid:
-                raise RpcException(
-                    errno.EACCES,
-                    f'Cannot start VM {vm.name}. Following storage devices cannot be accessed: ' + ', '.join(invalid)
-                )
+                return invalid
 
         try:
             dropped_devices = vm.start()
