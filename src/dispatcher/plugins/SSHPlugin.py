@@ -98,7 +98,7 @@ def _init(dispatcher, plugin):
                 'type': 'integer',
                 'minimum': 1,
                 'maximum': 65535
-                },
+            },
             'permit_root_login': {'type': 'boolean'},
             'allow_gssapi_auth': {'type': 'boolean'},
             'allow_pubkey_auth': {'type': 'boolean'},
@@ -107,7 +107,7 @@ def _init(dispatcher, plugin):
             'compression': {'type': 'boolean'},
             'sftp_log_level': {'$ref': 'ServiceSshdSftploglevel'},
             'sftp_log_facility': {'$ref': 'ServiceSshdSftplogfacility'},
-            'auxiliary': {'type': ['string', 'null']},
+            'auxiliary': {'type': ['string', 'null']}
         },
         'additionalProperties': False,
     })

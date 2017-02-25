@@ -70,7 +70,7 @@ class ISCSIConfigureTask(Task):
             self.dispatcher.call_sync('etcd.generation.generate_group', 'ctl')
         except RpcException as e:
             raise TaskException(errno.ENXIO, 'Cannot reconfigure iSCSI: {0}'.format(str(e)))
-            
+
         return 'RELOAD'
 
 

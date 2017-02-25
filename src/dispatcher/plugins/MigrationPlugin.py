@@ -36,9 +36,10 @@ import errno
 from lib.system import system, SubprocessException
 from freenas.serviced import push_status
 from freenas.utils import query as q
-from bsd import geom
 from lxml import etree
 from freenas.dispatcher.rpc import RpcException, description
+from datastore import get_datastore
+from datastore.config import ConfigStore, ConfigNode
 from task import (
     Task,
     ProgressTask,
@@ -57,6 +58,14 @@ from freenasUI.middleware.notifier import notifier
 
 # Here we define all the constants
 NOGROUP_ID = '8980c534-6a71-4bfb-bc72-54cbd5a186db'
+
+SIZE_LOOKUP = {
+    'KB': lambda x: int(x[:-2]) * 1024,
+    'MB': lambda x: int(x[:-2]) * 1024 * 1024,
+    'GB': lambda x: int(x[:-2]) * 1024 * 1024 * 1024,
+    'TB': lambda x: int(x[:-2]) * 1024 * 1024 * 1024 * 1024
+}
+
 LAGG_PROTOCOL_MAP = {
     'failover': 'FAILOVER',
     'fec': 'ETHERCHANNEL',
@@ -82,6 +91,51 @@ CAPABILITY_MAP = {
     'tso4': ('TSO4',),
     'tso6': ('TSO6',),
     'lro': ('LRO',)
+}
+
+CIFS_LOGLEVEL_MAP = {
+    '0': 'NONE',
+    '1': 'MINIMUM',
+    '2': 'NORMAL',
+    '3': 'FULL',
+    '10': 'DEBUG',
+}
+
+PROTOCOL_CHOICES = {
+    'http': ['HTTP'],
+    'https': ['HTTPS'],
+    'httphttps': ['HTTP', 'HTTPS'],
+}
+
+CRYPTO_TYPE = {
+    1: 'CA_EXISTING',
+    2: 'CA_INTERNAL',
+    4: 'CA_INTERMEDIATE',
+    8: 'CERT_EXISTING',
+    16: 'CERT_INTERNAL',
+    32: 'CERT_CSR'
+}
+
+FTP_TLS_OPTS_MAP = {
+    'ftp_tls_opt_allow_client_renegotiations': 'ALLOW_CLIENT_RENEGOTIATIONS',
+    'ftp_tls_opt_allow_dot_login': 'ALLOW_DOT_LOGIN',
+    'ftp_tls_opt_allow_per_user': 'ALLOW_PER_USER',
+    'ftp_tls_opt_common_name_required': 'COMMON_NAME_REQUIRED',
+    'ftp_tls_opt_enable_diags': 'ENABLE_DIAGNOSTICS',
+    'ftp_tls_opt_export_cert_data': 'EXPORT_CERTIFICATE_DATA',
+    'ftp_tls_opt_no_cert_request': 'NO_CERTIFICATE_REQUEST',
+    'ftp_tls_opt_no_empty_fragments': 'NO_EMPTY_FRAGMENTS',
+    'ftp_tls_opt_no_session_reuse_required': 'NO_SESSION_REUSE_REQUIRED',
+    'ftp_tls_opt_stdenvvars': 'STANDARD_ENV_VARS',
+    'ftp_tls_opt_dns_name_required': 'DNS_NAME_REQUIRED',
+    'ftp_tls_opt_ip_address_required': 'IP_ADDRESS_REQUIRED'
+}
+
+
+RSYNCD_MODULE_MODE_MAP = {
+    'ro': 'READONLY',
+    'wo': 'WRITEONLY',
+    'rw': 'READWRITE'
 }
 
 
@@ -423,6 +477,7 @@ class StorageMigrateTask(Task):
         super(StorageMigrateTask, self).__init__(dispatcher)
         self.__confxml = None
         self._notifier = notifier()
+        self.fn10_disks = []
 
     @classmethod
     def early_describe(cls):
@@ -464,12 +519,11 @@ class StorageMigrateTask(Task):
                 return search[0].text
             return None
 
-        elif tp == 'serial':
-            for devname in self.__get_disks():
-                serial = self._notifier.serial_from_device(devname)
-                if serial == value:
-                    return devname
-            return None
+        elif tp.startswith('serial'):
+            if tp == 'serial_lunid':
+                value = value.split('_')[0]
+            dev = q.query(self.fn10_disks, ('serial', '=', value), single=True)
+            return dev['status']['gdisk_name'] if dev else None
 
         elif tp == 'devicename':
             search = doc.xpath("//class[name = 'DEV']/geom[name = '%s']" % value)
@@ -477,35 +531,12 @@ class StorageMigrateTask(Task):
                 return value
             return None
 
-    def device_to_identifier(name, serial=None):
-        gdisk = geom.geom_by_name('DISK', name)
-        if not gdisk:
-            return None
-
-        if 'lunid' in gdisk.provider.config:
-            return "lunid:{0}".format(gdisk.provider.config['lunid'])
-
-        if serial:
-            return "serial:{0}".format(serial)
-
-        gpart = geom.geom_by_name('PART', name)
-        if gpart:
-            for i in gpart.providers:
-                if i.config['type'] in ('freebsd-zfs', 'freebsd-ufs'):
-                    return "uuid:{0}".format(i.config['rawuuid'])
-
-        glabel = geom.geom_by_name('LABEL', name)
-        if glabel and glabel.provider:
-            return "label:{0}".format(glabel.provider.name)
-
-        return "devicename:{0}".format(os.path.join('/dev', name))
-
     def run(self):
 
         # Migrate disk settings
         disk_subtasks = []
         fn9_disks = get_table('select * from storage_disk', dictionary=False)
-        fn10_disks = self.dispatcher.call_sync('disk.query')
+        self.fn10_disks = list(self.dispatcher.call_sync('disk.query'))
 
         for fn9_disk in fn9_disks:
             dev = self.identifier_to_device(fn9_disk['disk_identifier'])
@@ -517,19 +548,27 @@ class StorageMigrateTask(Task):
                     )
                 ))
                 continue
-            newident = self.device_to_identifier(dev, serial=(fn9_disk['disk_serial'] or None))
-            if not newident:
-                self.add_warning(TaskWarning('Failed to convert {0} to id, skipping'.format(dev)))
+            newident = None
+            newident_err = None
+            try:
+                newident = self.dispatcher.call_sync(
+                    'disk.device_to_identifier', dev, fn9_disk['disk_serial'] or None
+                )
+            except RpcException as err:
+                newident_err = err
+            if newident is None:
+                self.add_warning(TaskWarning(
+                    'Skipping {0} since failed to convert it to id{1}'.format(
+                        dev, ' due to error: {0}'.format(newident_err) if newident_err else ''
+                    )
+                ))
                 continue
 
-            fn10_disk = None
-            fn10_disk = q.query(fn10_disks, ('id', '=', newident), single=True)
+            fn10_disk = q.query(self.fn10_disks, ('id', '=', newident), single=True)
 
             if fn10_disk is None:
                 self.add_warning(TaskWarning(
-                    'Failed to lookup id: {0} for fn9 disk id: {1}, skipping'.format(
-                        newident, dev
-                    )
+                    'Failed to lookup id: {0} for fn9 disk id: {1}, skipping'.format(newident, dev)
                 ))
                 continue
 
@@ -568,6 +607,10 @@ class StorageMigrateTask(Task):
 
 @description("Shares migration task")
 class ShareMigrateTask(Task):
+    def __init__(self, dispatcher):
+        super(ShareMigrateTask, self).__init__(dispatcher)
+        self._notifier = notifier()
+
     @classmethod
     def early_describe(cls):
         return "Migration of FreeNAS 9.x shares to 10.x"
@@ -626,6 +669,8 @@ class ShareMigrateTask(Task):
                             single=True
                         ) else 'DIRECTORY',
                         'properties': {
+                            '%type': 'ShareAfp',
+                            'comment': fn9_afp_share['afp_comment'],
                             'read_only': False,
                             'time_machine': bool(fn9_afp_share['afp_timemachine']),
                             'zero_dev_numbers': bool(fn9_afp_share['afp_nodev']),
@@ -654,9 +699,361 @@ class ShareMigrateTask(Task):
                     )
                 ))
 
+        # Now SMB shares
+        fn9_smb_shares = get_table('select * from sharing_cifs_share')
+        for fn9_smb_share in fn9_smb_shares.values():
+            # Why does fn9 allow comma, space, or TAB delimiters in the same field!!!
+            hosts_allow = list(filter(
+                None,
+                fn9_smb_share['cifs_hostsallow'].replace('\t', ',').replace(' ', ',').split(','))
+            ) or None
+            hosts_deny = list(filter(
+                None,
+                fn9_smb_share['cifs_hostsdeny'].replace('\t', ',').replace(' ', ',').split(','))
+            ) or None
+            # Note: 'cifs_storage_task_id' property of the share in fn9 is what tracked
+            # whether the share was snapshotted or not and provided the 'windows shadow copies'
+            # feature but in fn10 this has changed and is provided on a per share basis via the
+            # 'previous_versions' boolean property which picks up *any* snapshots (if present)
+            # of said dataset (or in the case of a shared directory it's parent dataset)
+
+            # Also omitting 'cifs_auxsmbconf' property completely, if you know how to properly
+            # parse it to fn10's `extra_parameters` object's key:value string format please do so
+            try:
+                self.run_subtask_sync(
+                    'share.create',
+                    {
+                        'name': fn9_smb_share['cifs_name'],
+                        'description': fn9_smb_share['cifs_comment'],
+                        'enabled': True,
+                        'immutable': False,
+                        'type': 'smb',
+                        'target_path': fn9_smb_share['cifs_path'][5:],  # to remove leading /mnt
+                        'target_type': 'DATASET' if q.query(
+                            fn10_datasets,
+                            ('mountpoint', '=', fn9_smb_share['cifs_path']),
+                            single=True
+                        ) else 'DIRECTORY',
+                        'properties': {
+                            '%type': 'ShareSmb',
+                            'comment': fn9_smb_share['cifs_comment'],
+                            'read_only': bool(fn9_smb_share['cifs_ro']),
+                            'guest_ok': bool(fn9_smb_share['cifs_guestok']),
+                            'guest_only': bool(fn9_smb_share['cifs_guestonly']),
+                            'browseable': bool(fn9_smb_share['cifs_browsable']),
+                            'recyclebin': bool(fn9_smb_share['cifs_recyclebin']),
+                            'show_hidden_files': bool(fn9_smb_share['cifs_showhiddenfiles']),
+                            'previous_versions': True,  # see comment above for explanation
+                            'home_share': bool(fn9_smb_share['cifs_home']),
+                            'vfs_objects': fn9_smb_share['cifs_vfsobjects'].split(','),
+                            'hosts_allow': hosts_allow,
+                            'hosts_deny': hosts_deny
+                        }
+                    }
+                )
+            except RpcException as err:
+                self.add_warning(TaskWarning(
+                    errno.EINVAL,
+                    'Cannot create SMB share: {0} due to error: {1}'.format(
+                        fn9_smb_share['cifs_name'], err
+                    )
+                ))
+
+        # Now NFS shares
+        fn9_nfs_shares = get_table('select * from sharing_nfs_share')
+        for nfs_path in get_table('select * from sharing_nfs_share_path').values():
+            fn9_nfs_shares[nfs_path['share_id']]['path'] = nfs_path['path']
+
+        for fn9_nfs_share in fn9_nfs_shares.values():
+            try:
+                self.run_subtask_sync(
+                    'share.create',
+                    {
+                        'name': os.path.basename(fn9_nfs_shares[1]['path']),  # Had to use something
+                        'description': fn9_nfs_share['nfs_comment'],
+                        'enabled': True,
+                        'immutable': False,
+                        'type': 'nfs',
+                        'target_path': fn9_nfs_share['path'][5:],  # to remove leading /mnt
+                        'target_type': 'DATASET' if q.query(
+                            fn10_datasets,
+                            ('mountpoint', '=', fn9_nfs_share['path']),
+                            single=True
+                        ) else 'DIRECTORY',
+                        'properties': {
+                            '%type': 'ShareNfs',
+                            'alldirs': bool(fn9_nfs_share['nfs_alldirs']),
+                            'read_only': bool(fn9_nfs_share['nfs_ro']),
+                            'maproot_user': fn9_nfs_share['nfs_maproot_user'],
+                            'maproot_group': fn9_nfs_share['nfs_maproot_group'],
+                            'mapall_user': fn9_nfs_share['nfs_mapall_user'],
+                            'mapall_group': fn9_nfs_share['nfs_mapall_group'],
+                            'hosts': fn9_nfs_share['nfs_hosts'].replace('\t', ',').replace(' ', ',').split(','),
+                            'security': [fn9_nfs_share['nfs_security']] if fn9_nfs_share['nfs_security'] else []
+                        }
+                    }
+                )
+            except RpcException as err:
+                self.add_warning(TaskWarning(
+                    errno.EINVAL,
+                    'Cannot create NFS share: {0} due to error: {1}'.format(
+                        fn9_nfs_share['path'], err
+                    )
+                ))
+
+        # Now WebDAV shares (que rico!)
+        fn9_dav_shares = get_table('select * from sharing_webdav_share')
+        for fn9_dav_share in fn9_dav_shares.values():
+            try:
+                self.run_subtask_sync(
+                    'share.create',
+                    {
+                        'name': fn9_dav_share['webdav_name'],
+                        'description': fn9_dav_share['webdav_comment'],
+                        'enabled': True,
+                        'immutable': False,
+                        'type': 'webdav',
+                        'target_path': fn9_dav_share['webdav_path'][5:],  # to remove leading /mnt
+                        'target_type': 'DATASET' if q.query(
+                            fn10_datasets,
+                            ('mountpoint', '=', fn9_dav_share['webdav_path']),
+                            single=True
+                        ) else 'DIRECTORY',
+                        'properties': {
+                            '%type': 'ShareWebdav',
+                            'read_only': bool(fn9_dav_share['webdav_ro']),
+                            'permission': bool(fn9_dav_share['webdav_perm'])
+                        }
+                    }
+                )
+            except RpcException as err:
+                self.add_warning(TaskWarning(
+                    errno.EINVAL,
+                    'Cannot create SMB share: {0} due to error: {1}'.format(
+                        fn9_dav_share['webdav_name'], err
+                    )
+                ))
+
+        # Lastly lets tackle the mamoth in the room: iSCSI
+
+        # getting all the information from the fn9 database
+        fn9_iscsitargets = get_table('select * from services_iscsitarget')
+        fn9_iscsitargetauthcreds = get_table('select * from services_iscsitargetauthcredential')
+        fn9_iscsitargetauthinitiators = get_table('select * from services_iscsitargetauthorizedinitiator')
+        fn9_iscsitargetextents = get_table('select * from services_iscsitargetextent')
+        fn9_iscsitargetgroups = get_table('select * from services_iscsitargetgroups')
+        fn9_iscsitargetportals = get_table('select * from services_iscsitargetportal')
+        fn9_iscsitargetportalips = get_table('select * from services_iscsitargetportalip')
+        fn9_iscsitargettoextent_maps = get_table('select * from services_iscsitargettoextent')
+
+        # Here we go...
+        for fn9_iscsitargetextent in fn9_iscsitargetextents.values():
+            try:
+                size = fn9_iscsitargetextent['iscsi_target_extent_filesize']
+                if size == "0":
+                    size = None
+                else:
+                    size = SIZE_LOOKUP.get(size[-2:], lambda x: int(x))(size)
+                if bool(fn9_iscsitargetextent['iscsi_target_extent_legacy']):
+                    vendor_id = 'FreeBSD'
+                else:
+                    vendor_id = 'FreeNAS' if self._notifier.is_freenas() else 'TrueNAS'
+                serial = fn9_iscsitargetextent['iscsi_target_extent_serial']
+                padded_serial = serial
+                if not bool(fn9_iscsitargetextent['iscsi_target_extent_xen']):
+                    for i in range(31 - len(serial)):
+                        padded_serial += " "
+                device_id = 'iSCSI Disk      {0}'.format(padded_serial)
+
+                # Fix 'iscsi_target_extent_path' (example: 'zvol/js-fn-tank/iSCSITEST')
+                extent_path = fn9_iscsitargetextent['iscsi_target_extent_path']
+                if extent_path[:5] in ['zvol/', '/mnt/']:
+                    extent_path = extent_path[5:]
+
+                self.run_subtask_sync(
+                    'share.create',
+                    {
+                        'name': fn9_iscsitargetextent['iscsi_target_extent_name'],
+                        'description': fn9_iscsitargetextent['iscsi_target_extent_comment'],
+                        'enabled': True,
+                        'immutable': False,
+                        'type': 'iscsi',
+                        'target_path': extent_path,
+                        'target_type': fn9_iscsitargetextent['iscsi_target_extent_type'],
+                        'properties': {
+                            '%type': 'ShareIscsi',
+                            'serial': serial,
+                            'naa': fn9_iscsitargetextent['iscsi_target_extent_naa'],
+                            'size': size,
+                            'block_size': fn9_iscsitargetextent['iscsi_target_extent_blocksize'],
+                            'physizal_block_size': bool(fn9_iscsitargetextent['iscsi_target_extent_pblocksize']),
+                            'available_space_threshold': fn9_iscsitargetextent['iscsi_target_extent_avail_threshold'],
+                            'read_only': bool(fn9_iscsitargetextent['iscsi_target_extent_ro']),
+                            'xen_compat': bool(fn9_iscsitargetextent['iscsi_target_extent_xen']),
+                            'tpc': bool(fn9_iscsitargetextent['iscsi_target_extent_insecure_tpc']),
+                            'vendor_id': vendor_id,
+                            'product_id': 'iSCSI Disk',
+                            'device_id': device_id,
+                            'rpm': fn9_iscsitargetextent['iscsi_target_extent_rpm']
+                        }
+                    }
+                )
+            except RpcException as err:
+                self.add_warning(TaskWarning(
+                    errno.EINVAL,
+                    'Cannot create iSCSI share: {0} due to error: {1}'.format(
+                        fn9_iscsitargetextent['iscsi_target_extent_name'], err
+                    )
+                ))
+
+        # required mappings
+        authgroup_to_portal_map = {}
+        authgroup_to_target_map = {}
+        target_to_portal_map = {}
+
+        for auth in fn9_iscsitargetauthcreds.values():
+            auth['auth_methods'] = {
+                'None': {'portal_ids': [], 'target_ids': []},
+                'CHAP': {'portal_ids': [], 'target_ids': []},
+                'CHAP Mutual': {'portal_ids': [], 'target_ids': []},
+            }
+            for x in fn9_iscsitargetportals.values():
+                if x['iscsi_target_portal_discoveryauthgroup'] == auth['iscsi_target_auth_tag']:
+                    auth['auth_methods'][x['iscsi_target_portal_discoveryauthmethod']]['portal_ids'].append(x['id'])
+
+            for x in fn9_iscsitargetgroups.values():
+                if x['iscsi_target_authgroup'] == auth['iscsi_target_auth_tag']:
+                    auth['auth_methods'][x['iscsi_target_authtype']]['target_ids'].append(x['id'])
+
+        # Now lets make them auth groups, portals, and targets
+        for fn9_targetauthcred in fn9_iscsitargetauthcreds.values():
+            # Note I am deliberately dropping group id and letting fn10 generate it
+            # this is due to the way I have to construct multiple auth groups per
+            # iscsi auth type that they are used with.
+            # i.e. in fn9 that same auth credential entry with 'group id'=1 can be used
+            # 'CHAP', 'CHAP_MUTUAL', and 'NONE' in fn9's iscsi portals, BUT, in fn10
+            # we need to create a different auth group entry per auth type in it
+            # auth_map = [
+            #     (
+            #         x['iscsi_target_portal_discoveryauthmethod'].upper().replace(' ', '_'),
+            #         x['iscsi_target_portal_tag']
+            #     )
+            #     for x in fn9_iscsitargetportals.values()
+            #     if x['iscsi_target_portal_discoveryauthgroup'] == fn9_iscsitargetauthcred['iscsi_target_auth_tag']
+            # ] or [('NONE', None)]
+            def create_auth_group(auth_type='NONE', fn9_targetauthcred=fn9_targetauthcred):
+                try:
+                    return self.run_subtask_sync(
+                        'share.iscsi.auth.create',
+                        {
+                            'description':
+                                'Migrated freenas 9.x auth group id: {0}, auth_type: {1}'.format(
+                                    fn9_targetauthcred['iscsi_target_auth_tag'], auth_type
+                                ),
+                            'type': auth_type,
+                            'users': [{
+                                'name': fn9_targetauthcred['iscsi_target_auth_user'],
+                                'secret': self._notifier.pwenc_decrypt(
+                                    fn9_targetauthcred['iscsi_target_auth_secret']
+                                ) if fn9_targetauthcred['iscsi_target_auth_secret'] else None,
+                                'peer_name': fn9_targetauthcred['iscsi_target_auth_peeruser'],
+                                'peer_secret': self._notifier.pwenc_decrypt(
+                                    fn9_targetauthcred['iscsi_target_auth_peersecret']
+                                ) if fn9_targetauthcred['iscsi_target_auth_peersecret'] else None
+                            }]
+                        }
+                    )
+                except RpcException as err:
+                    self.add_warning(TaskWarning(
+                        errno.EINVAL,
+                        'Cannot create iSCSI auth group: {0}, auth_type: {1}, error: {2}'.format(
+                            fn9_targetauthcred['iscsi_target_auth_tag'], auth_type, err
+                        )
+                    ))
+            auth_created = False
+            for auth_type, id_vals in fn9_targetauthcred['auth_methods'].items():
+                if id_vals['portal_ids'] or id_vals['target_ids']:
+                    auth_created = True
+                    auth_id = create_auth_group(auth_type=auth_type.upper().replace(' ', '_'))
+                    for portal_id in id_vals['portal_ids']:
+                        authgroup_to_portal_map[portal_id] = auth_id
+                    for target_id in id_vals['target_ids']:
+                        authgroup_to_target_map[target_id] = auth_id
+            if not auth_created:
+                # This meant that the auth group was made but nvere linked to any portal or
+                # target so lets just make it with 'NONE' authmethod
+                create_auth_group(auth_type='NONE')
+
+        for fn9_iscsitargetportal in fn9_iscsitargetportals.values():
+            try:
+                portal_id = self.run_subtask_sync(
+                    'share.iscsi.portal.create',
+                    {
+                        'tag': fn9_iscsitargetportal['iscsi_target_portal_tag'],
+                        'description': fn9_iscsitargetportal['iscsi_target_portal_comment'],
+                        'discovery_auth_group': authgroup_to_portal_map.get(
+                            fn9_iscsitargetportal['id'], None
+                        ),
+                        'listen': [
+                            {
+                                'address': p['iscsi_target_portalip_ip'],
+                                'port': p['iscsi_target_portalip_port']
+                            }
+                            for p in fn9_iscsitargetportalips.values()
+                            if p['iscsi_target_portalip_portal_id'] == fn9_iscsitargetportal['id']
+                        ]
+                    }
+                )
+                for x in fn9_iscsitargetgroups.values():
+                    if x['iscsi_target_portalgroup_id'] == fn9_iscsitargetportal['id']:
+                        target_to_portal_map[x['iscsi_target_id']] = portal_id
+
+            except RpcException as err:
+                self.add_warning(TaskWarning(
+                    errno.EINVAL,
+                    'Cannot create iSCSI portal: {0} due to error: {1}'.format(
+                        fn9_iscsitargetportal['iscsi_target_portal_tag'], err
+                    )
+                ))
+
+        for fn9_iscsitarget in fn9_iscsitargets.values():
+            try:
+                self.run_subtask_sync(
+                    'share.iscsi.target.create',
+                    {
+                        'id': fn9_iscsitarget['iscsi_target_name'],
+                        'description': fn9_iscsitarget['iscsi_target_alias'],
+                        'auth_group': authgroup_to_target_map.get(
+                            fn9_iscsitarget['id'], 'no-authentication'
+                        ),
+                        'portal_group': target_to_portal_map.get(fn9_iscsitarget['id'], 'default'),
+                        'extents': [
+                            {
+                                'name': fn9_iscsitargetextents[x['iscsi_extent_id']]['iscsi_target_extent_name'],
+                                'number': x['iscsi_lunid']
+                            }
+                            for x in fn9_iscsitargettoextent_maps.values()
+                            if x['iscsi_target_id'] == fn9_iscsitarget['id']
+                        ]
+                    }
+                )
+            except RpcException as err:
+                self.add_warning(TaskWarning(
+                    errno.EINVAL,
+                    'Cannot create iSCSI target: {0} due to error: {2}'.format(
+                        fn9_iscsitarget['iscsi_target_name'], err
+                    )
+                ))
+
 
 @description("Service settings migration task")
 class ServiceMigrateTask(Task):
+    def __init__(self, dispatcher):
+        super(ServiceMigrateTask, self).__init__(dispatcher)
+        self._notifier = notifier()
+        self.ds = get_datastore()
+        self.cs = ConfigStore(self.ds)
+
     @classmethod
     def early_describe(cls):
         return "Migration of FreeNAS 9.x services' settings to 10.x"
@@ -665,12 +1062,37 @@ class ServiceMigrateTask(Task):
         return TaskDescription("Migration of FreeNAS 9.x services' settings to 10.x")
 
     def run(self):
+        # Generic stuff needed for all service migrations
+        fn10_certs_and_cas = list(self.dispatcher.call_sync('crypto.certificate.query'))
+        fn9_cas = get_table('select * from system_certificateauthority')
+        fn9_certs = get_table('select * from system_certificate')
         # dict containing service enable flags for all services
         fn9_services = {
             srv['srv_service']: srv for srv in get_table('select * from services_services').values()
         }
 
         fn10_services = list(self.dispatcher.call_sync('service.query'))
+
+        # Migrating iSCSI service
+        fn9_iscsi = get_table('select * from services_iscsitargetglobalconfiguration', dictionary=False)[0]
+        try:
+            # Note: `iscsi_alua` property of fn9 is not there in fn10 so not touching it below
+            self.run_subtask_sync(
+                'service.update',
+                q.query(fn10_services, ("name", "=", "iscsi"), single=True)['id'],
+                {'config': {
+                    'type': 'ServiceIscsi',
+                    'enable': bool(fn9_services['iscsitarget']['srv_enable']),
+                    'base_name': fn9_iscsi['iscsi_basename'],
+                    'pool_space_threshold': fn9_iscsi['iscsi_pool_avail_threshold'],
+                    'isns_servers': list(filter(None, fn9_iscsi['iscsi_isns_servers'].split(' ')))
+                }}
+            )
+        except RpcException as err:
+            self.add_warning(TaskWarning(
+                errno.EINVAL,
+                'Could not migrate iSCSI service settings due to err: {0}'.format(err)
+            ))
 
         # Migrating AFP service
         fn9_afp = get_table('select * from services_afp', dictionary=False)[0]
@@ -679,6 +1101,7 @@ class ServiceMigrateTask(Task):
                 'service.update',
                 q.query(fn10_services, ("name", "=", "afp"), single=True)['id'],
                 {'config': {
+                    'type': 'ServiceAfp',
                     'enable': bool(fn9_services['afp']['srv_enable']),
                     'guest_enable': bool(fn9_afp['afp_srv_guest']),
                     'guest_user': fn9_afp['afp_srv_guest_user'],
@@ -696,7 +1119,492 @@ class ServiceMigrateTask(Task):
             )
         except RpcException as err:
             self.add_warning(TaskWarning(
-                errno.EINVAL, 'Could not update AFP service settings due to err: {0}'.format(err)
+                errno.EINVAL, 'Could not migrate AFP service settings due to err: {0}'.format(err)
+            ))
+
+        # Migrating SMB service
+        fn9_smb = get_table('select * from services_cifs', dictionary=False)[0]
+        try:
+            smbconfig = {
+                'type': 'ServiceSmb',
+                'enable': bool(fn9_services['cifs']['srv_enable']),
+                'netbiosname': [fn9_smb['cifs_srv_netbiosname']],
+                'workgroup': fn9_smb['cifs_srv_workgroup'],
+                'description': fn9_smb['cifs_srv_description'],
+                'dos_charset': fn9_smb['cifs_srv_doscharset'],
+                'unix_charset': fn9_smb['cifs_srv_unixcharset'],
+                'log_level': CIFS_LOGLEVEL_MAP.get(str(fn9_smb['cifs_srv_loglevel']), 'MINIMUM'),
+                'local_master': bool(fn9_smb['cifs_srv_localmaster']),
+                'domain_logons': bool(fn9_smb['cifs_srv_domain_logons']),
+                'time_server': bool(fn9_smb['cifs_srv_timeserver']),
+                'guest_user': fn9_smb['cifs_srv_guest'],
+                'filemask': {'value': int(fn9_smb['cifs_srv_filemask'])} if fn9_smb['cifs_srv_filemask'] else None,
+                'dirmask': {'value': int(fn9_smb['cifs_srv_dirmask'])} if fn9_smb['cifs_srv_dirmask'] else None,
+                'empty_password': bool(fn9_smb['cifs_srv_nullpw']),
+                'unixext': bool(fn9_smb['cifs_srv_unixext']),
+                'zeroconf': bool(fn9_smb['cifs_srv_zeroconf']),
+                'hostlookup': bool(fn9_smb['cifs_srv_hostlookup']),
+                'max_protocol': fn9_smb['cifs_srv_max_protocol'],
+                'execute_always': bool(fn9_smb['cifs_srv_allow_execute_always']),
+                'obey_pam_restrictions': bool(fn9_smb['cifs_srv_obey_pam_restrictions']),
+                'bind_addresses': fn9_smb['cifs_srv_bindip'].split(',') if fn9_smb['cifs_srv_bindip'] else None,
+                'auxiliary': fn9_smb['cifs_srv_smb_options'] or None,
+                'sid': fn9_smb['cifs_SID']
+            }
+            if fn9_smb['cifs_srv_min_protocol']:
+                smbconfig.update({'min_protocol': fn9_smb['cifs_srv_min_protocol']})
+            self.run_subtask_sync(
+                'service.update',
+                q.query(fn10_services, ("name", "=", "smb"), single=True)['id'],
+                {'config': smbconfig}
+            )
+        except RpcException as err:
+            self.add_warning(TaskWarning(
+                errno.EINVAL, 'Could not migrate SMB service settings due to err: {0}'.format(err)
+            ))
+
+        # Migrating NFS service
+        fn9_nfs = get_table('select * from services_nfs', dictionary=False)[0]
+        try:
+            self.run_subtask_sync(
+                'service.update',
+                q.query(fn10_services, ("name", "=", "nfs"), single=True)['id'],
+                {'config': {
+                    'type': 'ServiceNfs',
+                    'enable': bool(fn9_services['nfs']['srv_enable']),
+                    'servers': fn9_nfs['nfs_srv_servers'],
+                    'udp': bool(fn9_nfs['nfs_srv_udp']),
+                    'nonroot': bool(fn9_nfs['nfs_srv_allow_nonroot']),
+                    'v4': bool(fn9_nfs['nfs_srv_v4']),
+                    'v4_kerberos': bool(fn9_nfs['nfs_srv_v4_krb']),
+                    'bind_addresses': fn9_nfs['nfs_srv_bindip'].split(',') if fn9_nfs['nfs_srv_bindip'] else None,
+                    'mountd_port': fn9_nfs['nfs_srv_mountd_port'],
+                    'rpcstatd_port': fn9_nfs['nfs_srv_rpcstatd_port'],
+                    'rpclockd_port': fn9_nfs['nfs_srv_rpclockd_port']
+                }}
+            )
+        except RpcException as err:
+            self.add_warning(TaskWarning(
+                errno.EINVAL, 'Could not migrate NFS service settings due to err: {0}'.format(err)
+            ))
+
+        # Migrating WebDAV service
+        fn9_dav = get_table('select * from services_webdav', dictionary=False)[0]
+        try:
+            webdav_cert = None
+            if fn9_dav['webdav_certssl_id']:
+                webdav_cert = q.query(
+                    fn10_certs_and_cas,
+                    ('name', '=', fn9_certs[fn9_dav['webdav_certssl_id']]['cert_name']),
+                    single=True
+                )
+                if webdav_cert is None:
+                    self.add_warning(TaskWarning(
+                        errno.EINVAL,
+                        'Could not find the certificate for setting up secure WebDAV service'
+                    ))
+            self.run_subtask_sync(
+                'service.update',
+                q.query(fn10_services, ("name", "=", "webdav"), single=True)['id'],
+                {'config': {
+                    'type': 'ServiceWebdav',
+                    'enable': bool(fn9_services['webdav']['srv_enable']),
+                    'protocol': PROTOCOL_CHOICES[fn9_dav['webdav_protocol']],
+                    'http_port': fn9_dav['webdav_tcpport'],
+                    'https_port': fn9_dav['webdav_tcpportssl'],
+                    'password': {
+                        '$password': self._notifier.pwenc_decrypt(fn9_dav['webdav_password'])
+                    },
+                    'authentication': fn9_dav['webdav_htauth'].upper(),
+                    'certificate': webdav_cert['id'] if webdav_cert else None
+                }}
+            )
+        except RpcException as err:
+            self.add_warning(TaskWarning(
+                errno.EINVAL, 'Could not migrate WebDAV service settings due to err: {0}'.format(err)
+            ))
+
+        # Migrating SSHD service
+        fn9_sshd = get_table('select * from services_ssh', dictionary=False)[0]
+        try:
+            sshd_node = ConfigNode('service.sshd', self.cs)
+            for keytype in ('rsa', 'dsa', 'ecdsa', 'ed25519'):
+                pubkey = fn9_sshd['ssh_host_{0}_key'.format(keytype)]
+                privkey = fn9_sshd['ssh_host_{0}_key_pub'.format(keytype)]
+                certfile = fn9_sshd['ssh_host_{0}_key_cert_pub'.format(keytype)]
+                if pubkey and privkey:
+                    sshd_node.update({
+                        'service.sshd.keys.{0}.private'.format(keytype): pubkey,
+                        'service.sshd.keys.{0}.public'.format(keytype): privkey,
+                        'service.sshd.keys.{0}.certificate'.format(keytype): certfile or None,
+                    })
+            # Note not sending etcd regeneration event for sshd_keys because the service config
+            # task below will already do that so lets just rely on that
+            self.run_subtask_sync(
+                'service.update',
+                q.query(fn10_services, ("name", "=", "sshd"), single=True)['id'],
+                {'config': {
+                    'type': 'ServiceSshd',
+                    'enable': bool(fn9_services['ssh']['srv_enable']),
+                    'port': fn9_sshd['ssh_tcpport'],
+                    'permit_root_login': bool(fn9_sshd['ssh_rootlogin']),
+                    'allow_gssapi_auth': bool(fn9_sshd['ssh_kerberosauth']),
+                    'allow_password_auth': bool(fn9_sshd['ssh_passwordauth']),
+                    'compression': bool(fn9_sshd['ssh_compression']),
+                    'sftp_log_level': fn9_sshd['ssh_sftp_log_level'] or 'ERROR',
+                    'sftp_log_facility': fn9_sshd['ssh_sftp_log_facility'] or 'AUTH',
+                    'auxiliary': fn9_sshd['ssh_options'] or None
+                }}
+            )
+        except RpcException as err:
+            self.add_warning(TaskWarning(
+                errno.EINVAL, 'Could not migrate SSHD service settings due to err: {0}'.format(err)
+            ))
+
+        # Migrating DynDNS service
+        fn9_dyndns = get_table('select * from services_dynamicdns', dictionary=False)[0]
+        try:
+            self.run_subtask_sync(
+                'service.update',
+                q.query(fn10_services, ("name", "=", "dyndns"), single=True)['id'],
+                {'config': {
+                    'type': 'ServiceDyndns',
+                    'enable': bool(fn9_services['dynamicdns']['srv_enable']),
+                    'provider': fn9_dyndns['ddns_provider'] or None,
+                    'ipserver': fn9_dyndns['ddns_ipserver'] or None,
+                    'domains': fn9_dyndns['ddns_domain'].split(',') if fn9_dyndns['ddns_domain'] else [],
+                    'username': fn9_dyndns['ddns_username'],
+                    'password': {
+                        '$password': self._notifier.pwenc_decrypt(fn9_dyndns['ddns_password'])
+                    },
+                    'update_period': int(fn9_dyndns['ddns_updateperiod']) if fn9_dyndns['ddns_updateperiod'] else None,
+                    'force_update_period': int(fn9_dyndns['ddns_fupdateperiod']) if fn9_dyndns['ddns_fupdateperiod'] else None,
+                    'auxiliary': fn9_dyndns['ddns_options']
+                }}
+            )
+        except RpcException as err:
+            self.add_warning(TaskWarning(
+                errno.EINVAL,
+                'Could not migrate Dynamic DNS service settings due to err: {0}'.format(err)
+            ))
+
+        fn9_ftp = get_table('select * from services_ftp', dictionary=False)[0]
+        try:
+            ftp_cert = None
+            if fn9_ftp['ftp_ssltls_certificate_id']:
+                ftp_cert = q.query(
+                    fn10_certs_and_cas,
+                    ('name', '=', fn9_certs[fn9_ftp['ftp_ssltls_certificate_id']]['cert_name']),
+                    single=True
+                )
+                if ftp_cert is None:
+                    self.add_warning(TaskWarning(
+                        errno.EINVAL,
+                        'Could not find the certificate for setting up secure FTP service'
+                    ))
+            self.run_subtask_sync(
+                'service.update',
+                q.query(fn10_services, ("name", "=", "ftp"), single=True)['id'],
+                {'config': {
+                    'type': 'ServiceFtp',
+                    'enable': bool(fn9_services['ftp']['srv_enable']),
+                    'port': fn9_ftp['ftp_port'],
+                    'max_clients': fn9_ftp['ftp_clients'],
+                    'ip_connections': fn9_ftp['ftp_ipconnections'],
+                    'login_attempt': fn9_ftp['ftp_loginattempt'],
+                    'timeout': fn9_ftp['ftp_timeout'],
+                    'root_login': bool(fn9_ftp['ftp_rootlogin']),
+                    'anonymous_path': fn9_ftp['ftp_anonpath'],
+                    'only_anonymous': bool(fn9_ftp['ftp_onlyanonymous']),
+                    'only_local': bool(fn9_ftp['ftp_onlylocal']),
+                    'display_login': fn9_ftp['ftp_banner'] or None,
+                    'filemask': {'value': int(fn9_ftp['ftp_filemask'])},
+                    'dirmask': {'value': int(fn9_ftp['ftp_dirmask'])},
+                    'fxp': bool(fn9_ftp['ftp_fxp']),
+                    'resume': bool(fn9_ftp['ftp_resume']),
+                    'chroot': bool(fn9_ftp['ftp_defaultroot']),
+                    'ident': bool(fn9_ftp['ftp_ident']),
+                    'reverse_dns': bool(fn9_ftp['ftp_reversedns']),
+                    'masquerade_address': fn9_ftp['ftp_masqaddress'] or None,
+                    'passive_ports_min': fn9_ftp['ftp_passiveportsmin'] or None,  # fn9 sets this as 0 for none hence doing this 'or'
+                    'passive_ports_max': fn9_ftp['ftp_passiveportsmax'] or None,
+                    'local_up_bandwidth': fn9_ftp['ftp_localuserbw'] or None,
+                    'local_down_bandwidth': fn9_ftp['ftp_localuserdlbw'] or None,
+                    'anon_up_bandwidth': fn9_ftp['ftp_anonuserbw'] or None,
+                    'anon_down_bandwidth': fn9_ftp['ftp_anonuserdlbw'] or None,
+                    'tls': bool(fn9_ftp['ftp_tls']),
+                    'tls_policy': fn9_ftp['ftp_tls_policy'].upper(),
+                    'tls_options': [
+                        v for k, v in FTP_TLS_OPTS_MAP.items() if fn9_ftp[k] not in ['False', 0]
+                    ],
+                    'tls_ssl_certificate': ftp_cert['id'] if ftp_cert else None,
+                    'auxiliary': fn9_ftp['ftp_options'] or None
+                }}
+            )
+        except RpcException as err:
+            self.add_warning(TaskWarning(
+                errno.EINVAL, 'Could not migrate FTP service settings due to err: {0}'.format(err)
+            ))
+
+        fn9_lldp = get_table('select * from services_lldp', dictionary=False)[0]
+        try:
+            self.run_subtask_sync(
+                'service.update',
+                q.query(fn10_services, ("name", "=", "lldp"), single=True)['id'],
+                {'config': {
+                    'type': 'ServiceLldp',
+                    'enable': bool(fn9_services['lldp']['srv_enable']),
+                    'save_description': bool(fn9_lldp['lldp_intdesc']),
+                    'country_code': fn9_lldp['lldp_country'] or None,
+                    'location': fn9_lldp['lldp_location'] or None,
+                }}
+            )
+        except RpcException as err:
+            self.add_warning(TaskWarning(
+                errno.EINVAL, 'Could not migrate LLDP service settings due to err: {0}'.format(err)
+            ))
+
+        # Migrating RSYNCD service and modules
+        fn9_rsyncd = get_table('select * from services_rsyncd', dictionary=False)[0]
+        try:
+            self.run_subtask_sync(
+                'service.update',
+                q.query(fn10_services, ("name", "=", "rsyncd"), single=True)['id'],
+                {'config': {
+                    'type': 'ServiceRsyncd',
+                    'enable': bool(fn9_services['rsync']['srv_enable']),
+                    'port': fn9_rsyncd['rsyncd_port'],
+                    'auxiliary': fn9_rsyncd['rsyncd_auxiliary']
+                }}
+            )
+        except RpcException as err:
+            self.add_warning(TaskWarning(
+                errno.EINVAL, 'Could not migrate RSYNCD service settings due to err: {0}'.format(err)
+            ))
+
+        fn9_rsyncd_mods = get_table('select * from services_rsyncmod')
+        for rsyncd_mod in fn9_rsyncd_mods.values():
+            try:
+                self.run_subtask_sync(
+                    'rsyncd.module.create',
+                    {
+                        'name': rsyncd_mod['rsyncmod_name'],
+                        'description': rsyncd_mod['comment'],
+                        'path': rsyncd_mod['path'],
+                        'mode': RSYNCD_MODULE_MODE_MAP[rsyncd_mod['rsyncmod_mode']],
+                        'max_connections': rsyncd_mod['rsyncmod_maxconn'] or None,
+                        'user': rsyncd_mod['rsyncmod_user'],
+                        'group': rsyncd_mod['rsyncmod_group'],
+                        'hosts_allow': list(filter(
+                            None, rsyncd_mod['rsyncmod_hostsallow'].replace('\t', ',').replace(' ', ',').split(','))
+                        ) or None,
+                        'hosts_deny': list(filter(
+                            None, rsyncd_mod['rsyncmod_hostsdeny'].replace('\t', ',').replace(' ', ',').split(','))
+                        ) or None,
+                        'auxiliary': rsyncd_mod['rsyncmod_auxiliary'] or None,
+                    }
+                )
+            except RpcException as err:
+                self.add_warning(TaskWarning(
+                    errno.EINVAL,
+                    'Could not migrate rsyncd module: {0} due to err: {1}'.format(
+                        rsyncd_mod['rsyncmod_name'], err
+                    )
+                ))
+
+        # Migrating SNMP service
+        fn9_snmp = get_table('select * from services_snmp', dictionary=False)[0]
+        try:
+            # Note currently the snmp v3 password (fn9 property "snmp_v3_password") is not
+            # encrypted in the fn9 database, if this changes make it go through notifier's
+            # pwenc_decrypt routine before handing it to the task (see other password examples)
+            snmp_config = {
+                'type': 'ServiceSnmp',
+                'enable': bool(fn9_services['snmp']['srv_enable']),
+                'location': fn9_snmp['snmp_location'] or None,
+                'contact': fn9_snmp['snmp_contact'] or None,
+                'community': fn9_snmp['snmp_community'] or None,
+                'v3': bool(fn9_snmp['snmp_v3']),
+                'v3_username': fn9_snmp['snmp_v3_username'] or None,
+                'v3_password': {
+                    '$password': fn9_snmp['snmp_v3_password']
+                } if fn9_snmp['snmp_v3_password'] else None,
+                'v3_auth_type': fn9_snmp['snmp_v3_authtype'],
+                'v3_privacy_passphrase': fn9_snmp['snmp_v3_privpassphrase'] or None,
+                'auxiliary': fn9_snmp['snmp_options'] or None,
+            }
+            if fn9_snmp['snmp_v3_privproto']:
+                snmp_config.update({'v3_privacy_protocol': fn9_snmp['snmp_v3_privproto']})
+            self.run_subtask_sync(
+                'service.update',
+                q.query(fn10_services, ("name", "=", "snmp"), single=True)['id'],
+                {'config': snmp_config}
+            )
+        except RpcException as err:
+            self.add_warning(TaskWarning(
+                errno.EINVAL, 'Could not migrate SNMP service settings due to err: {0}'.format(err)
+            ))
+
+        # Migrating TFTP service
+        fn9_tftp = get_table('select * from services_tftp', dictionary=False)[0]
+        try:
+            self.run_subtask_sync(
+                'service.update',
+                q.query(fn10_services, ("name", "=", "tftpd"), single=True)['id'],
+                {'config': {
+                    'type': 'ServiceTftpd',
+                    'enable': bool(fn9_services['tftp']['srv_enable']),
+                    'port': fn9_tftp['tftp_port'],
+                    'path': fn9_tftp['tftp_directory'],
+                    'allow_new_files': bool(fn9_tftp['tftp_newfiles']),
+                    'username': fn9_tftp['tftp_username'],
+                    'umask': {'value': int(fn9_tftp['tftp_umask'])},
+                    'auxiliary': fn9_tftp['tftp_options'] or None
+                }}
+            )
+        except RpcException as err:
+            self.add_warning(TaskWarning(
+                errno.EINVAL, 'Could not migrate TFTP service settings due to err: {0}'.format(err)
+            ))
+
+        # Migrating UPS (YAY LAST SERVICE TO MIGRATE!!!)
+        fn9_ups = get_table('select * from services_ups', dictionary=False)[0]
+        try:
+            self.run_subtask_sync(
+                'service.update',
+                q.query(fn10_services, ("name", "=", "ups"), single=True)['id'],
+                {'config': {
+                    'type': 'ServiceUps',
+                    'enable': bool(fn9_services['ups']['srv_enable']),
+                    'mode': fn9_ups['ups_mode'].upper(),
+                    'identifier': fn9_ups['ups_identifier'],
+                    'remote_host': fn9_ups['ups_remotehost'] or None,
+                    'remote_port': fn9_ups['ups_remoteport'],
+                    'driver': fn9_ups['ups_driver'] or None,
+                    'driver_port': fn9_ups['ups_port'] or None,
+                    'description': fn9_ups['ups_description'] or None,
+                    'shutdown_mode': fn9_ups['ups_shutdown'],
+                    'shutdown_timer': fn9_ups['ups_shutdowntimer'],
+                    'monitor_user': fn9_ups['ups_monuser'],
+                    'monitor_password': {
+                        '$password': self._notifier.pwenc_decrypt(fn9_ups['ups_monpwd'])
+                    },
+                    'allow_remote_connections': bool(fn9_ups['ups_rmonitor']),
+                    'auxiliary_users': fn9_ups['ups_extrausers'] or None,
+                    'powerdown': True if fn9_ups['ups_powerdown'] in ['True', 1] else False,
+                    'auxiliary': fn9_ups['ups_options'] or None
+                }}
+            )
+        except RpcException as err:
+            self.add_warning(TaskWarning(
+                errno.EINVAL, 'Could not migrate UPS service settings due to err: {0}'.format(err)
+            ))
+
+        # Template to use for adding future service migrations
+        # Migrating FOO service
+        # fn9_foo = get_table('select * from services_foo', dictionary=False)[0]
+        # try:
+        #     self.run_subtask_sync(
+        #         'service.update',
+        #         q.query(fn10_services, ("name", "=", "foo"), single=True)['id'],
+        #         {'config': {
+        #             'enable': bool(fn9_services['foo']['srv_enable'])
+        #         }}
+        #     )
+        # except RpcException as err:
+        #     self.add_warning(TaskWarning(
+        #         errno.EINVAL, 'Could not migrate FOO service settings due to err: {0}'.format(err)
+        #     ))
+
+
+@description("System (general & advanced) settings migration task")
+class SystemMigrateTask(Task):
+    def __init__(self, dispatcher):
+        super(SystemMigrateTask, self).__init__(dispatcher)
+        self._notifier = notifier()
+
+    @classmethod
+    def early_describe(cls):
+        return "Migration of FreeNAS 9.x system settings to 10"
+
+    def describe(self):
+        return TaskDescription("Migration of FreeNAS 9.x system settings to 10")
+
+    def run(self):
+        # first lets get all the fn9 data that we need
+        fn9_sys_settings = get_table('select * from system_settings', dictionary=False)[0]
+        fn9_cas = get_table('select * from system_certificateauthority')
+        fn9_certs = get_table('select * from system_certificate')
+
+        # Migrating the certificate authorities and certificates
+        fn9_to_10_crypto_id_map = {}
+        for crypto_obj in sorted(fn9_cas.values(), key=lambda x: x['cert_type']) + list(fn9_certs.values()):
+            cert_type = CRYPTO_TYPE[crypto_obj['cert_type']]
+            if cert_type == 'CERT_CSR':
+                self.add_warning(TaskWarning(
+                    errno.EINVAL,
+                    'Cannot migrate CSR: {0}. Migrating CSRs is not supported'.format(crypto_obj['cert_name'])
+                ))
+                continue
+
+            # Now since we are going to import these certs to fn10 let us mark them as
+            # CERT/CA EXISTING and nothing else, as only those will work and make sense
+            # in this migration scenario
+            cert_type = 'CERT_EXISTING' if cert_type.startswith('CERT') else 'CA_EXISTING'
+            try:
+                signed_by_ca = fn9_cas.get(crypto_obj['cert_signedby_id'])
+                fn9_to_10_crypto_id_map[crypto_obj['id']] = self.run_subtask_sync(
+                    'crypto.certificate.import',
+                    {
+                        'type': cert_type,
+                        'name': crypto_obj['cert_name'],
+                        'certificate': crypto_obj['cert_certificate'],
+                        'privatekey': crypto_obj['cert_privatekey'],
+                        'signing_ca_name': signed_by_ca['cert_name'] if signed_by_ca else None
+                    }
+                )
+            except RpcException as err:
+                self.add_warning(TaskWarning(
+                    errno.EINVAL,
+                    'Could not migrate CA/Cert: {0} due to error: {1}'.format(crypto_obj['cert_name'], err)
+                ))
+
+        # Migrating system general settings over to 10
+        try:
+            system_general_config = {
+                'language': fn9_sys_settings['stg_language'],
+                'timezone': fn9_sys_settings['stg_timezone'],
+                'syslog_server': fn9_sys_settings['stg_syslogserver'] or None
+            }
+            if fn9_sys_settings['stg_kbdmap']:
+                system_general_config.update({'console_keymap': fn9_sys_settings['stg_kbdmap']})
+
+            self.run_subtask_sync('system.general.update', system_general_config)
+        except RpcException as err:
+            self.add_warning(TaskWarning(
+                errno.EINVAL, 'Could not migrate system general settings due to error: {0}'.format(err)
+            ))
+
+        try:
+            self.run_subtask_sync(
+                'system.ui.update',
+                {
+                    'webui_protocol': PROTOCOL_CHOICES[fn9_sys_settings['stg_guiprotocol']],
+                    'webui_listen': [
+                        fn9_sys_settings['stg_guiaddress'],
+                        fn9_sys_settings['stg_guiv6address']
+                    ],
+                    'webui_http_redirect_https': bool(fn9_sys_settings['stg_guihttpsredirect']),
+                    'webui_http_port': fn9_sys_settings['stg_guiport'],
+                    'webui_https_certificate': fn9_to_10_crypto_id_map.get(
+                        fn9_sys_settings['stg_guicertificate_id'], None
+                    ),
+                    'webui_https_port': fn9_sys_settings['stg_guihttpsport']
+                }
+            )
+        except RpcException as err:
+            self.add_warning(TaskWarning(
+                errno.EINVAL, 'Could not migrate system ui settings due to error: {0}'.format(err)
             ))
 
 
@@ -759,19 +1667,23 @@ class MasterMigrateTask(ProgressTask):
         self.run_subtask_sync('migration.accountsmigrate')
         self.apps_migrated.append('accounts')
 
+        self.migration_progess(20, 'Migrating system app')
+        self.run_subtask_sync('migration.systemmigrate')
+        self.apps_migrated.append('system')
+
         self.migration_progess(
-            20, 'Migrating netwrok app: network config, interfaces, vlans, bridges, and laggs'
+            30, 'Migrating netwrok app: network config, interfaces, vlans, bridges, and laggs'
         )
         self.run_subtask_sync('migration.networkmigrate')
         self.apps_migrated.append('network')
 
-        self.migration_progess(30, 'Migrating shares app: AFP, SMB, NFS, and iSCSI')
-        self.run_subtask_sync('migration.sharemigrate')
-        self.apps_migrated.append('sharing')
-
         self.migration_progess(40, 'Migrating services app: AFP, SMB, NFS, iSCSI, etc')
         self.run_subtask_sync('migration.servicemigrate')
         self.apps_migrated.append('services')
+
+        self.migration_progess(50, 'Migrating shares app: AFP, SMB, NFS, iSCSI, and WebDAV')
+        self.run_subtask_sync('migration.sharemigrate')
+        self.apps_migrated.append('sharing')
 
         # If we reached till here migration must have succeeded
         # so lets rename the databse
@@ -783,19 +1695,6 @@ class MasterMigrateTask(ProgressTask):
         ]
         self.status = 'FINISHED'
         self.migration_progess(100, 'Migration of FreeNAS 9.x database config and settings done')
-
-
-def _depends():
-    return [
-        'UserPlugin', 'NetworkPlugin', 'VolumePlugin', 'AlertPlugin',
-        'ShareISCSIPlugin', 'ShareNFSPlugin', 'ShareAFPPlugin', 'ShareSMBPlugin',
-        'ShareWebDAVPlugin', 'IPMIPlugin', 'NTPPlugin', 'SupportPlugin',
-        'SystemDatasetPlugin', 'SystemInfoPlugin', 'FTPPlugin', 'TFTPPlugin',
-        'UpdatePlugin', 'CryptoPlugin', 'UPSPlugin', 'BootPlugin',
-        'KerberosPlugin', 'KerberosPlugin', 'CalendarTasksPlugin', 'RsyncdPlugin',
-        'ServiceManagePlugin', 'SNMPPlugin', 'SSHPlugin', 'TunablePlugin',
-        'MailPlugin', 'LLDPPlugin', 'DynDNSPlugin', 'DirectoryServicePlugin'
-    ]
 
 
 def _init(dispatcher, plugin):
@@ -823,6 +1722,7 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('migration.storagemigrate', StorageMigrateTask)
     plugin.register_task_handler('migration.sharemigrate', ShareMigrateTask)
     plugin.register_task_handler('migration.servicemigrate', ServiceMigrateTask)
+    plugin.register_task_handler('migration.systemmigrate', SystemMigrateTask)
 
     plugin.register_event_type('migration.status')
 

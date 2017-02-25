@@ -566,6 +566,10 @@ def _metadata():
     }
 
 
+def _depends():
+    return ['SharingPlugin']
+
+
 def _init(dispatcher, plugin):
     plugin.register_schema_definition('ShareIscsi', {
         'type': 'object',
@@ -575,10 +579,10 @@ def _init(dispatcher, plugin):
             'serial': {'type': 'string'},
             'ctl_lun': {'type': 'integer'},
             'naa': {'type': 'string'},
-            'size': {'type': 'integer'},
+            'size': {'type': ['integer', 'null']},
             'block_size': {'$ref': 'ShareIscsiBlocksize'},
             'physical_block_size': {'type': 'boolean'},
-            'available_space_threshold': {'type': 'integer'},
+            'available_space_threshold': {'type': ['integer', 'null']},
             'read_only': {'type': 'boolean'},
             'xen_compat': {'type': 'boolean'},
             'tpc': {'type': 'boolean'},
@@ -629,7 +633,7 @@ def _init(dispatcher, plugin):
             'id': {'type': 'string'},
             'tag': {'type': 'integer'},
             'description': {'type': 'string'},
-            'discovery_auth_group': {'type': 'string'},
+            'discovery_auth_group': {'type': ['string', 'null']},
             'listen': {'$ref': 'ShareIscsiPortalListen'}
         }
     })

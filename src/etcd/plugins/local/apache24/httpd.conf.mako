@@ -21,17 +21,17 @@
 
     certificate = None
     if cfg['certificate']:
-        certificate = dispatcher.call_sync('crypto.certificate.query', [('name', '=', cfg['certificate'])], {'single': True})
+        certificate = dispatcher.call_sync('crypto.certificate.query', [('id', '=', cfg['certificate'])], {'single': True})
 
     auth_file = '/usr/local/etc/apache24/webdavauth'
 
     if cfg['authentication'] == 'BASIC':
         with open(auth_file, "wb+") as f:
             f.write(
-                "webdav:{0}".format(crypt.crypt(cfg['password'], salt())).encode('utf8')
+                "webdav:{0}".format(crypt.crypt(cfg['password'].secret, salt())).encode('utf8')
             )
     else:
-        hexdigest = hashlib.md5('webdav:webdav:{0}'.format(cfg['password']).encode('utf8')).hexdigest()
+        hexdigest = hashlib.md5('webdav:webdav:{0}'.format(cfg['password'].secret).encode('utf8')).hexdigest()
         with open(auth_file, 'w') as f:
             f.write('webdav:webdav:{0}\n'.format(hexdigest))
 

@@ -40,7 +40,7 @@ def convert_rpm(rpm):
 
 
 def redact(config):
-    for i in config['auth-group']:
+    for i in config['auth-group'].values():
         i['secret'] = 'REDACTED'
         i['peer-secret'] = 'REDACTED'
 

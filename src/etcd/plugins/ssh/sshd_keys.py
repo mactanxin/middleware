@@ -36,9 +36,7 @@ def run(context):
         private_key = config.get('service.sshd.keys.{0}.private'.format(keytype))
         public_key = config.get('service.sshd.keys.{0}.public'.format(keytype))
         cert_public_key = config.get('service.sshd.keys.{0}.certificate'.format(keytype))
-        private_key_file = '/etc/ssh/ssh_host_{0}_key'.format(keytype) \
-            if keytype != 'host' \
-            else '/etc/ssh/ssh_host_key'
+        private_key_file = '/etc/ssh/ssh_host_{0}_key'.format(keytype)
 
         public_key_file = private_key_file + '.pub'
         cert_public_key_file = private_key_file + '-cert.pub'

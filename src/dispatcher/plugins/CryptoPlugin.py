@@ -386,6 +386,17 @@ class CertificateImportTask(Task):
         new_cert_db_entry['name'] = certificate['name']
         new_cert_db_entry['type'] = certificate['type']
 
+        if certificate.get(certificate['signing_ca_name']):
+            signing_cert_db_entry = self.datastore.get_one(
+                'crypto.certificates', ('name', '=', certificate['signing_ca_name'])
+            )
+            if not signing_cert_db_entry:
+                raise TaskException(
+                    errno.ENOENT,
+                    'Signing CA "{0}" not found'.format(certificate['signing_ca_name'])
+                )
+            new_cert_db_entry['signing_ca_id'] = signing_cert_db_entry['id']
+
         if certificate.get('certificate_path'):
             imported_cert = crypto.load_certificate(
                 crypto.FILETYPE_PEM, get_file_contents(certificate['certificate_path']).encode('utf-8'))

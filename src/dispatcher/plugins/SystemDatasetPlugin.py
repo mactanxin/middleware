@@ -435,7 +435,7 @@ class SystemDatasetImport(Task):
 
 
 def _depends():
-    return ['ZfsPlugin', 'VolumePlugin']
+    return ['VolumePlugin']
 
 
 def _init(dispatcher, plugin):
