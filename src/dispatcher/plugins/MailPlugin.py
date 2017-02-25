@@ -161,7 +161,7 @@ class MailProvider(Provider):
             raise RpcException(errno.EFAULT, 'Unexpected error')
 
 
-@accepts(h.ref('Mail'))
+@accepts(h.ref('AlertEmitterEmail'))
 @description('Updates mail configuration')
 class MailConfigureTask(Task):
     @classmethod

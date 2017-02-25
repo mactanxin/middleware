@@ -339,13 +339,14 @@
             "system.upload_crash": true,
             "system.home_directory_root": null,
             "system.graphite_servers": [],
-            "mail.from": "",
+            "mail.from_address": "",
             "mail.server": "",
             "mail.port": 25,
             "mail.encryption": "PLAIN",
             "mail.auth": false,
             "mail.user": "",
             "mail.password": "",
+            "mail.to": [],
             "pushbullet.api_key": null,
             "network.autoconfigure": true,
             "network.gateway.ipv4": null,
@@ -1584,7 +1585,7 @@
                 "emitter": "email",
                 "predicates": [],
                 "parameters": {
-                    "%type": "AlertEmitterParameters",
+                    "%type": "AlertEmitterParametersEmail",
                     "addresses": []
                 }
             },
@@ -1593,7 +1594,7 @@
                 "emitter": "email",
                 "predicates": [],
                 "parameters": {
-                    "%type": "AlertEmitterParameters",
+                    "%type": "AlertEmitterParametersEmail",
                     "addresses": []
                 }
             },
@@ -1602,7 +1603,7 @@
                 "emitter": "email",
                 "predicates": [],
                 "parameters": {
-                    "%type": "AlertEmitterParameters",
+                    "%type": "AlertEmitterParametersEmail",
                     "addresses": []
                 }
             },
@@ -1611,7 +1612,7 @@
                 "emitter": "email",
                 "predicates": [],
                 "parameters": {
-                    "%type": "AlertEmitterParameters",
+                    "%type": "AlertEmitterParametersEmail",
                     "addresses": []
                 }
             },
@@ -1620,7 +1621,7 @@
                 "emitter": "email",
                 "predicates": [],
                 "parameters": {
-                    "%type": "AlertEmitterParameters",
+                    "%type": "AlertEmitterParametersEmail",
                     "addresses": []
                 }
             },
@@ -1629,7 +1630,7 @@
                 "emitter": "email",
                 "predicates": [],
                 "parameters": {
-                    "%type": "AlertEmitterParameters",
+                    "%type": "AlertEmitterParametersEmail",
                     "addresses": []
                 }
             }
