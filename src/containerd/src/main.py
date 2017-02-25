@@ -411,6 +411,9 @@ class VirtualMachine(object):
             self.vmtools_ready = True
             self.changed()
 
+        def vmtools_state_changed():
+            self.context.client.emit_event('vmtools.state.changed', {'state': self.health, 'id': self.id})
+
         self.vmtools_client = Client()
         self.vmtools_client.connect('unix://{0}'.format(self.vmtools_socket))
         self.vmtools_client.register_event_handler('vmtools.ready', vmtools_ready)
@@ -425,16 +428,19 @@ class VirtualMachine(object):
                 if self.health in ('HEALTHY', 'UNKNOWN'):
                     self.health = 'HEALTHY'
                     self.changed()
+                    vmtools_state_changed()
             except RpcException as err:
                 self.logger.warning('Ping VM {0} failed: {1}'.format(self.name, str(err)))
                 if self.health == 'HEALTHY':
                     self.health = 'DYING'
                     self.changed()
+                    vmtools_state_changed()
                     continue
 
                 if self.health == 'DYING':
                     self.health = 'DEAD'
                     self.changed()
+                    vmtools_state_changed()
                     continue
 
     def call_vmtools(self, method, *args, timeout=None):
