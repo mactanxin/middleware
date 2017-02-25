@@ -2902,6 +2902,12 @@ def _init(dispatcher, plugin):
                     'ids': vm_ids
                 })
 
+        if args['operation'] == 'update':
+            for vm in dispatcher.call_sync('vm.query', [('target', 'in', args['ids'])]):
+                if q.get(vm, 'config.autostart') and q.get(vm, 'status.state') == 'STOPPED':
+                    if dispatcher.call_sync('vm.datastore.get_state', vm['target']) == 'ONLINE':
+                        dispatcher.call_sync('containerd.management.retry_autostart', vm['id'])
+
     plugin.register_provider('vm', VMProvider)
     plugin.register_provider('vm.config', VMConfigProvider)
     plugin.register_provider('vm.snapshot', VMSnapshotProvider)
