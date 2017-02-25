@@ -40,7 +40,7 @@ from email.utils import formatdate
 from datastore.config import ConfigNode
 from freenas.dispatcher.model import BaseStruct, BaseEnum, types
 from freenas.dispatcher.model.typing import Range
-from freenas.dispatcher.rpc import RpcException, SchemaHelper as h, accepts, description, returns
+from freenas.dispatcher.rpc import RpcException, SchemaHelper as h, accepts, description, private
 from freenas.dispatcher import Password
 from task import Provider, Task, ValidationException, TaskDescription
 
@@ -163,6 +163,7 @@ class MailProvider(Provider):
 
 @accepts(h.ref('AlertEmitterEmail'))
 @description('Updates mail configuration')
+@private
 class MailConfigureTask(Task):
     @classmethod
     def early_describe(cls):
