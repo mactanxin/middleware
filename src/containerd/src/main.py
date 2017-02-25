@@ -754,6 +754,16 @@ class VirtualMachine(object):
                     })
 
                 if exit_code == 0 or self.autostart:
+                    new_vm = self.context.client.call_sync('vm.query', [('id', '=', self.id)], {'single': True})
+                    if new_vm:
+                        self.logger.debug(f'Reinitializing VM {self.name} with new settings')
+                        self.name = new_vm['name']
+                        self.id = new_vm['id']
+                        self.guest_type = new_vm['guest_type']
+                        self.config = new_vm['config']
+                        self.devices = new_vm['devices']
+                        self.autostart = q.get(new_vm, 'config.autostart', False)
+                        list(self.drop_invalid_devices())
                     continue
 
             break
@@ -1827,7 +1837,7 @@ class DockerService(RpcService):
             network_mode = 'host'
         if primary_network_mode == 'NONE':
             network_mode = 'none'
-        host_config= host.connection.create_host_config(
+        host_config = host.connection.create_host_config(
             port_bindings=port_bindings,
             binds={
                 i['host_path'].replace('/mnt', '/host'): {
