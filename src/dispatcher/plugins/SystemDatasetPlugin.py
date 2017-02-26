@@ -328,7 +328,8 @@ class SystemDatasetConfigure(ProgressTask):
                     tmpath,
                     symlinks=True,
                     error_cb=copy_error_cb,
-                    exclude=['freenas-log.db']
+                    exclude=['freenas-log.db'],
+                    badfile_cb=lambda _: True
                 )
 
                 self.set_progress(70, 'Copying freenas-log database and switching to the new system dataset')
@@ -339,7 +340,8 @@ class SystemDatasetConfigure(ProgressTask):
                     copytree(
                         os.path.join(SYSTEM_DIR, 'freenas-log.db'),
                         os.path.join(tmpath, 'freenas-log.db'),
-                        symlinks=True
+                        symlinks=True,
+                        badfile_cb=lambda _: True
                     )
                 except shutil.Error as err:
                     log_errors(err)
