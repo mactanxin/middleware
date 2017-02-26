@@ -37,7 +37,8 @@ from datetime import datetime, timedelta
 from freenas.dispatcher.client import Client
 from paramiko import AuthenticationException, RSAKey
 from utils import get_freenas_peer_client, call_task_and_check_state
-from freenas.utils import exclude, query as q, first_or_default, unpassword
+from freenas.utils import exclude, query as q, first_or_default
+from freenas.utils.password import unpassword
 from freenas.utils.decorators import limit
 from freenas.utils.url import wrap_address, is_ip
 from freenas.utils.lazy import lazy

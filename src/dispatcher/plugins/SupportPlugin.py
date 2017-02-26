@@ -37,7 +37,7 @@ from task import Task, Provider, TaskException, TaskDescription
 from freenas.dispatcher import Password
 from freenas.dispatcher.rpc import RpcException, accepts, description, returns
 from freenas.dispatcher.rpc import SchemaHelper as h
-from freenas.utils import unpassword
+from freenas.utils.password import unpassword
 
 
 logger = logging.getLogger('SupportPlugin')

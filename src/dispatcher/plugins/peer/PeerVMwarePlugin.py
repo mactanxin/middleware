@@ -33,7 +33,8 @@ from pyVim import connect
 from freenas.dispatcher import Password
 from freenas.dispatcher.rpc import RpcException, SchemaHelper as h, description, accepts, returns, private, generator
 from task import Task, Provider, TaskException, VerifyException, query, TaskDescription
-from freenas.utils import query as q, unpassword
+from freenas.utils import query as q
+from freenas.utils.password import unpassword
 from freenas.utils.lazy import lazy
 
 

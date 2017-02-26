@@ -43,7 +43,7 @@ from freenas.dispatcher.model.typing import Range
 from freenas.dispatcher.rpc import RpcException, SchemaHelper as h, accepts, description, private
 from freenas.dispatcher import Password
 from task import Provider, Task, ValidationException, TaskDescription
-from freenas.utils import unpassword
+from freenas.utils.password import unpassword
 
 
 logger = logging.getLogger('MailPlugin')

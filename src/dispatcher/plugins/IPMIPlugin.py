@@ -36,7 +36,8 @@ from freenas.dispatcher.rpc import SchemaHelper as h
 from task import Provider, Task, TaskException, query, TaskDescription
 from lib.system import system, SubprocessException
 from bsd import kld
-from freenas.utils import query as q, unpassword
+from freenas.utils import query as q
+from freenas.utils.password import unpassword
 
 
 RE_ATTRS = re.compile(r'^(?P<key>^.+?)\s+?:\s+?(?P<val>.+?)\r?$', re.M)

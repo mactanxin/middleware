@@ -30,7 +30,7 @@ import errno
 import socket
 from task import Task, ProgressTask, TaskException, TaskDescription
 from freenas.dispatcher.rpc import description
-from freenas.utils import unpassword
+from freenas.utils.password import unpassword
 from paramiko import transport, sftp_client, ssh_exception, rsakey, dsskey
 
 

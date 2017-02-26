@@ -32,7 +32,7 @@ from freenas.dispatcher import Password
 from freenas.dispatcher.rpc import RpcException, accepts, returns, SchemaHelper as h, generator
 from task import Provider, Task, TaskDescription, TaskException, query
 from freenas.utils.lazy import lazy
-from freenas.utils import unpassword
+from freenas.utils.password import unpassword
 
 
 from freenas.utils import normalize, query as q

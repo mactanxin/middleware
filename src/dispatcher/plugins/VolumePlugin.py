@@ -56,7 +56,8 @@ from freenas.dispatcher.rpc import (
 )
 from utils import first_or_default, load_config, split_dataset
 from datastore import DuplicateKeyException
-from freenas.utils import include, exclude, normalize, chunks, yesno_to_bool, remove_unchanged, query as q, unpassword
+from freenas.utils import include, exclude, normalize, chunks, yesno_to_bool, remove_unchanged, query as q
+from freenas.utils.password import unpassword
 from freenas.utils.copytree import count_files, copytree
 from freenas.utils.lazy import lazy, unlazy
 from cryptography.fernet import Fernet, InvalidToken

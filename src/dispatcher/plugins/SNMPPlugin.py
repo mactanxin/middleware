@@ -32,7 +32,7 @@ from datastore.config import ConfigNode
 from freenas.dispatcher import Password
 from freenas.dispatcher.rpc import RpcException, SchemaHelper as h, description, accepts, returns, private
 from task import Task, Provider, TaskException, TaskDescription
-from freenas.utils import unpassword
+from freenas.utils.password import unpassword
 
 
 logger = logging.getLogger('SNMPPlugin')
