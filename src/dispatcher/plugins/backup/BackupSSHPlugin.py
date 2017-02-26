@@ -30,6 +30,7 @@ import errno
 import socket
 from task import Task, ProgressTask, TaskException, TaskDescription
 from freenas.dispatcher.rpc import description
+from freenas.utils import unpassword
 from paramiko import transport, sftp_client, ssh_exception, rsakey, dsskey
 
 
@@ -210,7 +211,7 @@ def open_ssh_connection(dispatcher, backup):
             else:
                 raise Exception('Cannot authenticate using keys')
 
-        session.auth_password(creds['username'], creds['password'].secret)
+        session.auth_password(creds['username'], unpassword(creds['password']))
         return session
 
     except socket.gaierror as err:

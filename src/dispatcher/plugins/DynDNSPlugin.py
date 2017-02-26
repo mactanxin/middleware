@@ -30,6 +30,8 @@ from datastore.config import ConfigNode
 from freenas.dispatcher import Password
 from freenas.dispatcher.rpc import RpcException, SchemaHelper as h, description, accepts, returns, private
 from task import Task, Provider, TaskException, ValidationException, TaskDescription
+from freenas.utils import unpassword
+
 
 logger = logging.getLogger('DynDNSPlugin')
 
@@ -91,7 +93,7 @@ class DynDNSConfigureTask(Task):
         try:
             node = ConfigNode('service.dyndns', self.configstore)
             if 'password' in dyndns:
-                dyndns['password'] = dyndns['password'].secret
+                dyndns['password'] = unpassword(dyndns['password'])
 
             node.update(dyndns)
             self.dispatcher.call_sync('etcd.generation.generate_group', 'dyndns')

@@ -31,6 +31,7 @@ import logging
 from datastore.config import ConfigNode
 from freenas.dispatcher import Password
 from freenas.dispatcher.rpc import RpcException, SchemaHelper as h, description, accepts, returns, private
+from freenas.utils import unpassword
 from task import Task, Provider, TaskException, TaskDescription
 from utils import is_port_open
 
@@ -65,7 +66,7 @@ class WebDAVConfigureTask(Task):
     def run(self, webdav):
         node = ConfigNode('service.webdav', self.configstore).__getstate__()
         if 'password' in webdav:
-            webdav['password'] = webdav['password'].secret
+            webdav['password'] = unpassword(webdav['password'])
 
         for p in ('http_port', 'https_port'):
             port = webdav.get(p)

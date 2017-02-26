@@ -36,6 +36,8 @@ from freenas.dispatcher import Password
 from freenas.dispatcher.rpc import RpcException, SchemaHelper as h, description, accepts, private, returns
 from lib.system import system, SubprocessException
 from task import Task, Provider, TaskException, TaskDescription
+from freenas.utils import unpassword
+
 
 logger = logging.getLogger('UPSPlugin')
 
@@ -125,7 +127,7 @@ class UPSConfigureTask(Task):
     def run(self, ups):
         node = ConfigNode('service.ups', self.configstore).__getstate__()
         if 'monitor_password' in ups:
-            ups['monitor_password'] = ups['monitor_password'].secret
+            ups['monitor_password'] = unpassword(ups['monitor_password'])
 
         node.update(ups)
 

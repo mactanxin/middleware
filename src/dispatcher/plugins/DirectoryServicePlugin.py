@@ -32,6 +32,7 @@ from freenas.dispatcher import Password
 from freenas.dispatcher.rpc import RpcException, accepts, returns, SchemaHelper as h, generator
 from task import Provider, Task, TaskDescription, TaskException, query
 from freenas.utils.lazy import lazy
+from freenas.utils import unpassword
 
 
 from freenas.utils import normalize, query as q
@@ -132,8 +133,8 @@ class DirectoryServiceCreateTask(Task):
         directory['parameters'] = params
 
         for k, v in directory['parameters'].items():
-            if k == 'password' and isinstance(v, Password):
-                directory['parameters'][k] = v.secret
+            if k == 'password':
+                directory['parameters'][k] = unpassword(v)
 
         if directory['type'] == 'winbind':
             normalize(directory, {
@@ -190,8 +191,8 @@ class DirectoryServiceUpdateTask(Task):
 
         if 'parameters' in updated_params:
             for k, v in updated_params['parameters'].items():
-                if k == 'password' and isinstance(v, Password):
-                    updated_params['parameters'][k] = v.secret
+                if k == 'password':
+                    updated_params['parameters'][k] = unpassword(v)
 
         directory.update(updated_params)
         self.datastore.update('directories', id, directory)

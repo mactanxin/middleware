@@ -32,6 +32,8 @@ from datastore.config import ConfigNode
 from freenas.dispatcher import Password
 from freenas.dispatcher.rpc import RpcException, SchemaHelper as h, description, accepts, returns, private
 from task import Task, Provider, TaskException, TaskDescription
+from freenas.utils import unpassword
+
 
 logger = logging.getLogger('SNMPPlugin')
 
@@ -62,8 +64,8 @@ class SNMPConfigureTask(Task):
 
     def run(self, snmp):
         node = ConfigNode('service.snmp', self.configstore).__getstate__()
-        if 'v3_password' in snmp and isinstance(snmp['v3_password'], Password):
-            snmp['v3_password'] = snmp['v3_password'].secret
+        if 'v3_password' in snmp:
+            snmp['v3_password'] = unpassword(snmp['v3_password'])
 
         node.update(snmp)
 

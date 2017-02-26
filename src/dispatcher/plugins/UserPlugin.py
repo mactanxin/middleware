@@ -34,10 +34,9 @@ from datetime import datetime
 from task import Provider, Task, TaskException, TaskDescription, TaskWarning, ValidationException, VerifyException, query
 from debug import AttachFile
 from freenas.dispatcher.rpc import RpcException, description, accepts, returns, SchemaHelper as h, generator
-from freenas.dispatcher import Password
 from datastore import DuplicateKeyException, DatastoreException
 from lib.system import SubprocessException, system
-from freenas.utils import normalize, crypted_password, nt_password, query as q
+from freenas.utils import normalize, crypted_password, nt_password, query as q, unpassword
 
 EMAIL_REGEX = re.compile(r"^\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]*[a-zA-Z0-9]\.[a-zA-Z]{2,4}\b$")
 SKEL_PATH = '/usr/share/skel/'
@@ -313,8 +312,8 @@ class UserCreateTask(Task):
         password = user.pop('password', None)
         if password:
             user.update({
-                'unixhash': crypted_password(password.secret),
-                'nthash': nt_password(password.secret),
+                'unixhash': crypted_password(unpassword(password)),
+                'nthash': nt_password(unpassword(password)),
                 'password_changed_at': datetime.utcnow()
             })
 
@@ -644,8 +643,8 @@ class UserUpdateTask(Task):
             password = user.pop('password', None)
             if password:
                 user.update({
-                    'unixhash': crypted_password(password.secret),
-                    'nthash': nt_password(password.secret),
+                    'unixhash': crypted_password(unpassword(password)),
+                    'nthash': nt_password(unpassword(password)),
                     'password_changed_at': datetime.utcnow()
                 })
 

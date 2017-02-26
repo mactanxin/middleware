@@ -43,6 +43,8 @@ from freenas.dispatcher.model.typing import Range
 from freenas.dispatcher.rpc import RpcException, SchemaHelper as h, accepts, description, private
 from freenas.dispatcher import Password
 from task import Provider, Task, ValidationException, TaskDescription
+from freenas.utils import unpassword
+
 
 logger = logging.getLogger('MailPlugin')
 
@@ -193,7 +195,7 @@ class MailConfigureTask(Task):
     def run(self, mail):
         node = ConfigNode('mail', self.configstore)
         if 'password' in mail:
-            mail['password'] = mail['password'].secret
+            mail['password'] = unpassword(mail['password'])
 
         node.update(mail)
 

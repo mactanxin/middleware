@@ -32,7 +32,7 @@ from datetime import datetime
 from freenas.dispatcher import Password
 from freenas.dispatcher.rpc import SchemaHelper as h, description, accepts, returns, private, generator
 from task import Task, Provider, TaskException, VerifyException, query, TaskDescription
-from freenas.utils import normalize, query as q
+from freenas.utils import normalize, query as q, unpassword
 from freenas.utils.lazy import lazy
 
 
@@ -116,7 +116,7 @@ class SSHPeerCreateTask(Task):
 
         password = q.get(peer, 'credentials.password')
         if password:
-            q.get(peer, 'credentials.password', password.secret)
+            q.get(peer, 'credentials.password', unpassword(password))
 
         if self.datastore.exists('peers', ('name', '=', peer['name'])):
             raise TaskException(errno.EINVAL, 'Peer entry {0} already exists'.format(peer['name']))
@@ -149,7 +149,7 @@ class SSHPeerUpdateTask(Task):
 
         password = q.get(updated_fields, 'credentials.password')
         if password:
-            q.set(updated_fields, 'credentials.password', password.secret)
+            q.set(updated_fields, 'credentials.password', unpassword(password))
 
         peer.update(updated_fields)
         if 'name' in updated_fields and self.datastore.exists('peers', ('name', '=', peer['name'])):

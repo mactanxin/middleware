@@ -37,6 +37,8 @@ from task import Task, Provider, TaskException, TaskDescription
 from freenas.dispatcher import Password
 from freenas.dispatcher.rpc import RpcException, accepts, description, returns
 from freenas.dispatcher.rpc import SchemaHelper as h
+from freenas.utils import unpassword
+
 
 logger = logging.getLogger('SupportPlugin')
 
@@ -72,7 +74,7 @@ class SupportProvider(Provider):
                 'https://%s/%s/api/v1.0/categories' % (PROXY_ADDRESS, sw_name),
                 data=json.dumps({
                     'user': user,
-                    'password': password.secret,
+                    'password': unpassword(password),
                     'project': project_name,
                 }),
                 headers={'Content-Type': 'application/json'},
@@ -145,7 +147,7 @@ class SupportSubmitTask(Task):
             rm_connection = redmine.Redmine(
                 BUGTRACKER_ADDRESS,
                 username=ticket['username'],
-                password=ticket['password'].secret
+                password=unpassword(ticket['password'])
             )
             rm_connection.auth()
 

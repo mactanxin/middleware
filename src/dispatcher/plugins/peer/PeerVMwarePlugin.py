@@ -33,7 +33,7 @@ from pyVim import connect
 from freenas.dispatcher import Password
 from freenas.dispatcher.rpc import RpcException, SchemaHelper as h, description, accepts, returns, private, generator
 from task import Task, Provider, TaskException, VerifyException, query, TaskDescription
-from freenas.utils import query as q
+from freenas.utils import query as q, unpassword
 from freenas.utils.lazy import lazy
 
 
@@ -120,7 +120,7 @@ class VMwarePeerCreateTask(Task):
 
         password = q.get(peer, 'credentials.password')
         if password:
-            q.set(peer, 'credentials.password', password.secret)
+            q.set(peer, 'credentials.password', unpassword(password))
 
         return self.datastore.insert('peers', peer)
 
@@ -150,7 +150,7 @@ class VMwarePeerUpdateTask(Task):
 
         password = q.get(updated_fields, 'credentials.password')
         if password:
-            q.set(updated_fields, 'credentials.password', password.secret)
+            q.set(updated_fields, 'credentials.password', unpassword(password))
 
         peer.update(updated_fields)
         if 'name' in updated_fields and self.datastore.exists('peers', ('name', '=', peer['name'])):

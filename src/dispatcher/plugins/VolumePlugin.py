@@ -56,7 +56,7 @@ from freenas.dispatcher.rpc import (
 )
 from utils import first_or_default, load_config, split_dataset
 from datastore import DuplicateKeyException
-from freenas.utils import include, exclude, normalize, chunks, yesno_to_bool, remove_unchanged, query as q
+from freenas.utils import include, exclude, normalize, chunks, yesno_to_bool, remove_unchanged, query as q, unpassword
 from freenas.utils.copytree import count_files, copytree
 from freenas.utils.lazy import lazy, unlazy
 from cryptography.fernet import Fernet, InvalidToken
@@ -2838,7 +2838,7 @@ def get_digest(password, salt=None):
     if salt is None:
         salt = base64.b64encode(os.urandom(256)).decode('utf-8')
 
-    hmac = hashlib.pbkdf2_hmac('sha256', bytes(str(password.secret), 'utf-8'), salt.encode('utf-8'), 200000)
+    hmac = hashlib.pbkdf2_hmac('sha256', bytes(str(unpassword(password)), 'utf-8'), salt.encode('utf-8'), 200000)
     digest = base64.b64encode(hmac).decode('utf-8')
     return salt, digest
 

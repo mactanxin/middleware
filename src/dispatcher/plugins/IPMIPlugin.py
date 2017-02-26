@@ -36,7 +36,7 @@ from freenas.dispatcher.rpc import SchemaHelper as h
 from task import Provider, Task, TaskException, query, TaskDescription
 from lib.system import system, SubprocessException
 from bsd import kld
-from freenas.utils import query as q
+from freenas.utils import query as q, unpassword
 
 
 RE_ATTRS = re.compile(r'^(?P<key>^.+?)\s+?:\s+?(?P<val>.+?)\r?$', re.M)
@@ -140,7 +140,7 @@ class ConfigureIPMITask(Task):
                 system('/usr/local/bin/ipmitool', 'lan', 'set', channel, 'arp', 'generate', 'on')
 
             if 'password' in updated_params:
-                system('/usr/local/bin/ipmitool', 'user', 'set', 'password', '2', updated_params['password'].secret)
+                system('/usr/local/bin/ipmitool', 'user', 'set', 'password', '2', unpassword(updated_params['password']))
                 system('/usr/local/bin/ipmitool', 'user', 'enable', '2')
 
         except SubprocessException as err:
