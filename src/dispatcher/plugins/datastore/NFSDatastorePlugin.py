@@ -49,7 +49,7 @@ class NFSDatastoreProvider(Provider):
     @accepts(str)
     @returns(str)
     def get_state(self, datastore_id):
-        path = self.dispatcher.call_sync('vm.datastore.get_filesystem_path', datastore_id, '/')
+        path = self.dispatcher.call_sync('vm.datastore.nfs.get_filesystem_path', datastore_id, '/')
         return 'ONLINE' if os.path.isdir(path) else 'OFFLINE'
 
     @private
