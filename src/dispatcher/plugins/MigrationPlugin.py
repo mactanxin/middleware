@@ -1537,7 +1537,6 @@ class SystemMigrateTask(Task):
         fn9_certs = get_table('select * from system_certificate')
 
         # Migrating the certificate authorities and certificates
-        fn9_to_10_crypto_id_map = {}
         for crypto_obj in sorted(fn9_cas.values(), key=lambda x: x['cert_type']) + list(fn9_certs.values()):
             cert_type = CRYPTO_TYPE[crypto_obj['cert_type']]
             if cert_type == 'CERT_CSR':
@@ -1553,7 +1552,7 @@ class SystemMigrateTask(Task):
             cert_type = 'CERT_EXISTING' if cert_type.startswith('CERT') else 'CA_EXISTING'
             try:
                 signed_by_ca = fn9_cas.get(crypto_obj['cert_signedby_id'])
-                fn9_to_10_crypto_id_map[crypto_obj['id']] = self.run_subtask_sync(
+                self.run_subtask_sync(
                     'crypto.certificate.import',
                     {
                         'type': cert_type,
@@ -1586,6 +1585,12 @@ class SystemMigrateTask(Task):
             ))
 
         try:
+            fn10_certs_and_cas = list(self.dispatcher.call_sync('crypto.certificate.query'))
+            webgui_cert = q.query(
+                fn10_certs_and_cas,
+                ('name', '=', fn9_certs[fn9_sys_settings['stg_guicertificate_id']]['cert_name']),
+                single=True
+            )
             self.run_subtask_sync(
                 'system.ui.update',
                 {
@@ -1596,15 +1601,107 @@ class SystemMigrateTask(Task):
                     ],
                     'webui_http_redirect_https': bool(fn9_sys_settings['stg_guihttpsredirect']),
                     'webui_http_port': fn9_sys_settings['stg_guiport'],
-                    'webui_https_certificate': fn9_to_10_crypto_id_map.get(
-                        fn9_sys_settings['stg_guicertificate_id'], None
-                    ),
+                    'webui_https_certificate': webgui_cert['id'] if webgui_cert else None,
                     'webui_https_port': fn9_sys_settings['stg_guihttpsport']
                 }
             )
         except RpcException as err:
             self.add_warning(TaskWarning(
                 errno.EINVAL, 'Could not migrate system ui settings due to error: {0}'.format(err)
+            ))
+
+        # Migrating email settings
+        fn9_email = get_table('select * from system_email', dictionary=False)[0]
+        try:
+            self.run_subtask_sync(
+                'alert.emitter.update',
+                self.dispatcher.call_sync(
+                    'alert.emitter.query', [("name", "=", "email")], {'single': True}
+                )['id'],
+                {
+                    'config': {
+                        'from_address': fn9_email['em_fromemail'],
+                        'server': fn9_email['em_outgoingserver'],
+                        'port': fn9_email['em_port'],
+                        'auth': bool(fn9_email['em_smtp']),
+                        'encryption': fn9_email['em_security'].upper(),
+                        'user': fn9_email['em_user'] or None,
+                        'password': {
+                            '$password': self._notifier.pwenc_decrypt(fn9_email['em_pass'])
+                        } if fn9_email['em_pass'] else None
+                    }
+                }
+            )
+        except RpcException as err:
+            self.add_warning(TaskWarning(
+                errno.EINVAL, 'Could not migrate email settings due to error: {0}'.format(err)
+            ))
+
+        # Migrating ntpservers' settings
+        fn9_ntp_servers = get_table('select * from system_ntpserver')
+        fn10_ntp_servers = list(self.dispatcher.call_sync('ntp_server.query'))
+
+        for fn9_ntp in fn9_ntp_servers.values():
+            try:
+                fn10_ntp = q.query(
+                    fn10_ntp_servers, ("address", "=", fn9_ntp['ntp_address']), single=True
+                )
+                ntp_task_args = [
+                    'ntp_server.update' if fn10_ntp else 'ntp_server.create',
+                    fn10_ntp['id'] if fn10_ntp else None,
+                    {
+                        'address': fn9_ntp['ntp_address'],
+                        'burst': bool(fn9_ntp['ntp_burst']),
+                        'iburst': bool(fn9_ntp['ntp_iburst']),
+                        'prefer': bool(fn9_ntp['ntp_prefer']),
+                        'minpoll': fn9_ntp['ntp_minpoll'],
+                        'maxpoll': fn9_ntp['ntp_maxpoll'],
+                        'pool': fn10_ntp['pool'] if fn10_ntp else True,
+                    },
+                    True
+                ]
+                self.run_subtask_sync(*list(filter(None, ntp_task_args)))
+            except RpcException as err:
+                self.add_warning(TaskWarning(
+                    errno.EINVAL, 'Could not migrate npt_server: {0} due to error: {1}'.format(
+                        fn9_ntp['ntp_address'], err
+                    )
+                ))
+
+        # Migrating system tunables
+        fn9_tunables = get_table('select * from system_tunable')
+        for fn9_tunable in fn9_tunables.values():
+            try:
+                if fn9_tunable['tun_type'].upper() == 'RC':
+                    raise ValueError('RC tunables are no longer supported')
+                self.run_subtask_sync(
+                    'tunable.create',
+                    {
+                        'type': fn9_tunable['tun_type'].upper(),
+                        'var': fn9_tunable['tun_var'],
+                        'value': fn9_tunable['tun_value'],
+                        'comment': fn9_tunable['tun_comment'],
+                        'enabled': bool(fn9_tunable['tun_enabled']),
+                    }
+                )
+            except RpcException as err:
+                self.add_warning(TaskWarning(
+                    errno.EINVAL,
+                    'Could not migrate {0} tunable: {1} due to error: {2}'.format(
+                        fn9_tunable['type'].upper(), fn9_tunable['tun_var'], err
+                    )
+                ))
+
+        # Migrate system dataset (only pool setting is migrated though)
+        fn9_sysdataset = get_table('select * from system_systemdataset', dictionary=False)[0]
+        try:
+            self.run_subtask_sync('system_dataset.migrate', fn9_sysdataset['sys_pool'])
+        except RpcException as err:
+            self.add_warning(TaskWarning(
+                errno.EINVAL,
+                'Failed to migrate system dataset to pool: {0} due to error'.format(
+                    fn9_sysdataset['sys_pool'], err
+                )
             ))
 
 
