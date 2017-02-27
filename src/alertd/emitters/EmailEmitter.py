@@ -40,7 +40,7 @@ class EmailEmitter(AlertEmitter):
         to = options.get('addresses')
 
         if to:
-            self.context.client.call_sync('mail.send', {
+            self.context.client.call_sync('alert.emitter.email.send', {
                 'to': to,
                 'subject': '{0}: {1}'.format(socket.gethostname(), alert['title']),
                 'message': tmpl.render(cls=alert['clazz'], **alert),
@@ -51,7 +51,7 @@ class EmailEmitter(AlertEmitter):
         to = options.get('addresses')
 
         if to:
-            self.context.client.call_sync('mail.send', {
+            self.context.client.call_sync('alert.emitter.email.send', {
                 'to': to,
                 'subject': '{0}: {1}'.format(socket.gethostname(), alert['title']),
                 'message': tmpl.render(cls=alert['clazz'], **alert),
@@ -62,7 +62,7 @@ class EmailEmitter(AlertEmitter):
         to = options.get('addresses')
 
         if to:
-            self.context.client.call_sync('mail.send', {
+            self.context.client.call_sync('alert.emitter.email.send', {
                 'to': to,
                 'subject': '{0}: {1} cancelled'.format(socket.gethostname(), alert['title']),
                 'message': tmpl.render(cls=alert['clazz'], **alert),
