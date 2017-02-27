@@ -54,7 +54,7 @@ class SMBSharesProvider(Provider):
                 'host': i.machine,
                 'share': i.service_name,
                 'user': user,
-                'connected_at': datetime.datetime.fromtimestamp(i.start),
+                'connected_at': datetime.datetime.utcfromtimestamp(i.start),
                 'extra': {}
             })
 
