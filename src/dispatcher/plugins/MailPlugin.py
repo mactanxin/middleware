@@ -172,15 +172,7 @@ class MailConfigureTask(Task):
         return 'Updating mail configuration'
 
     def describe(self, mail):
-        name = ''
-        if mail:
-            # Doing this since the task can be provided with an actual None
-            # value for user/server, at which point mail.get('user', '') still
-            # results gets you None and then errors out when trying to add None to a str
-            user = mail.get('user') or ''
-            server = mail.get('server') or ''
-            name = '{0}@{1}'.format(user, server) if user else server
-        return TaskDescription('Updating {name} mail configuration', name=name)
+        return TaskDescription('Configuring email emitter settings')
 
     def verify(self, mail):
         errors = ValidationException()
