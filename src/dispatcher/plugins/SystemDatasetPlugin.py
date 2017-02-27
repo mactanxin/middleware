@@ -244,6 +244,7 @@ class SystemDatasetConfigure(ProgressTask):
 
         self.set_progress(0, 'Checking free space on target pool {0}'.format(pool))
 
+        boot_pool = dispatcher.configstore.get('system.boot_pool_name')
         status = self.dispatcher.call_sync('system_dataset.status')
         related_services = self.configstore.get('system.dataset.services')
         self.services = [s for s in related_services if self.configstore.get('service.{0}.enable'.format(s))]
@@ -288,13 +289,14 @@ class SystemDatasetConfigure(ProgressTask):
                     )
                 )
 
-            key_encrypted, password_encrypted = self.dispatcher.call_sync(
-                'volume.query',
-                [('id', '=', pool)],
-                {'single': True, 'select': ('key_encrypted', 'password_encrypted')}
-            )
-            if key_encrypted or password_encrypted:
-                raise TaskException(errno.EINVAL, 'Cannot migrate .system dataset to an encrypted volume')
+            if pool != boot_pool:
+                key_encrypted, password_encrypted = self.dispatcher.call_sync(
+                    'volume.query',
+                    [('id', '=', pool)],
+                    {'single': True, 'select': ('key_encrypted', 'password_encrypted')}
+                )
+                if key_encrypted or password_encrypted:
+                    raise TaskException(errno.EINVAL, 'Cannot migrate .system dataset to an encrypted volume')
 
             try:
                 logger.warning('Services to be restarted: {0}'.format(', '.join(self.services)))
