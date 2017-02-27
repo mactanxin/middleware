@@ -522,10 +522,10 @@ class DockerContainerCreateTask(DockerBaseTask):
     def early_describe(cls):
         return 'Creating a Docker container'
 
-    def describe(self, container, nowait=False):
+    def describe(self, container, update=False):
         return TaskDescription('Creating Docker container {name}', name=container['names'][0])
 
-    def verify(self, container, nowait=False):
+    def verify(self, container, update=False):
         for v in container.get('volumes', []):
             if v.get('source') and v['source'] != 'HOST' and v['host_path'].startswith('/mnt'):
                 raise VerifyException(
@@ -553,8 +553,8 @@ class DockerContainerCreateTask(DockerBaseTask):
 
         return self.get_resources(container.get('host'))
 
-    def run(self, container, nowait=False):
-        if self.datastore_log.exists('docker.containers', ('names.0', '=', container['names'][0])):
+    def run(self, container, update=False):
+        if not update and self.datastore_log.exists('docker.containers', ('names.0', '=', container['names'][0])):
             raise TaskException(errno.EEXIST, 'Docker container {0} already exists'.format(container['names'][0]))
 
         self.set_progress(0, 'Checking Docker host state')
@@ -615,25 +615,19 @@ class DockerContainerCreateTask(DockerBaseTask):
         def match_fn(args):
             if args['operation'] == 'create':
                 return self.dispatcher.call_sync(
-                    'docker.container.query',
+                    'containerd.docker.query_containers',
                     [('id', 'in', args['ids']), ('names.0', '=', container['name'])],
                     {'count': True}
                 )
             else:
                 return False
 
-        def call():
-            return self.dispatcher.call_sync('containerd.docker.create_container', container, timeout=100)
-
-        if nowait:
-            call()
-        else:
-            self.dispatcher.exec_and_wait_for_event(
-                'docker.container.changed',
-                match_fn,
-                call,
-                600
-            )
+        self.dispatcher.exec_and_wait_for_event(
+            'containerd.docker.container.changed',
+            match_fn,
+            lambda: self.dispatcher.call_sync('containerd.docker.create_container', container, timeout=100),
+            600
+        )
 
         if container.get('networks'):
             self.set_progress(95, 'Connecting to networks')
@@ -741,7 +735,6 @@ class DockerContainerUpdateTask(DockerBaseTask):
                 self.run_subtask_sync(
                     'docker.container.delete',
                     id,
-                    True,
                     progress_callback=lambda p, m, e: self.chunk_progress(40, 70, 'Deleting the old container:', p, m, e)
                 )
                 self.run_subtask_sync(
@@ -763,23 +756,23 @@ class DockerContainerUpdateTask(DockerBaseTask):
 
 
 @description('Deletes a Docker container')
-@accepts(str, bool)
+@accepts(str)
 class DockerContainerDeleteTask(DockerBaseTask):
     @classmethod
     def early_describe(cls):
         return 'Deleting a Docker container'
 
-    def describe(self, id, nowait=False):
+    def describe(self, id):
         name = self.dispatcher.call_sync(
             'docker.container.query', [('id', '=', id)], {'single': True, 'select': 'names.0'}
         )
         return TaskDescription('Deleting Docker container {name}', name=name or id)
 
-    def verify(self, id, nowait=False):
+    def verify(self, id):
         host_id = self.datastore_log.query('docker.containers', ('id', '=', id), single=True, select='host')
         return self.get_resources(host_id)
 
-    def run(self, id, nowait=False):
+    def run(self, id):
         if not self.datastore_log.exists('docker.containers', ('id', '=', id)):
             raise TaskException(errno.ENOENT, 'Docker container {0} does not exist'.format(id))
 
@@ -804,18 +797,12 @@ class DockerContainerDeleteTask(DockerBaseTask):
 
             return
 
-        def call():
-            return self.dispatcher.call_sync('containerd.docker.delete_container', id)
-
-        if nowait:
-            call()
-        else:
-            self.dispatcher.exec_and_wait_for_event(
-                'docker.container.changed',
-                lambda args: args['operation'] == 'delete' and id in args['ids'],
-                call,
-                600
-            )
+        self.dispatcher.exec_and_wait_for_event(
+            'containerd.docker.container.changed',
+            lambda args: args['operation'] == 'delete' and id in args['ids'],
+            lambda: self.dispatcher.call_sync('containerd.docker.delete_container', id),
+            600
+        )
 
 
 @description('Starts a Docker container')
