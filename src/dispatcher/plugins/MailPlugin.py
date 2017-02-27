@@ -57,7 +57,7 @@ class MailEncryptionType(BaseEnum):
 
 class MailMessage(BaseStruct):
     from_address: str
-    to: str
+    to: List[str]
     subject: str
     message: str
     attachments: List[str]
@@ -90,9 +90,9 @@ class MailProvider(Provider):
 
     @accepts(h.ref('MailMessage'), h.ref('Mail'))
     def send(self, mailmessage, mail=None):
-
         if mail is None:
             mail = ConfigNode('mail', self.configstore).__getstate__()
+
         if not mail.get('server') or not mail.get('port'):
             raise RpcException(
                 errno.EINVAL,
