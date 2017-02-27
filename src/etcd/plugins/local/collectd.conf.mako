@@ -5,8 +5,6 @@ PluginDir "/usr/local/lib/collectd"
 
 LoadPlugin aggregation
 LoadPlugin cpu
-LoadPlugin df
-LoadPlugin disk
 LoadPlugin cputemp
 LoadPlugin interface
 LoadPlugin load
@@ -41,13 +39,6 @@ LoadPlugin write_graphite
     Interface "lo0"
     Interface "plip0"
     Interface "/^usbus/"
-    IgnoreSelected true
-</Plugin>
-
-<Plugin "disk">
-    Disk "/^gptid/"
-    Disk "/^md/"
-    Disk "/^pass/"
     IgnoreSelected true
 </Plugin>
 
