@@ -636,7 +636,11 @@ class ShareTerminateConnectionTask(Task):
         return ['system']
 
     def run(self, share_type, address):
-        self.run_subtask_sync('share.{0}.terminate_connection'.format(share_type), address)
+        try:
+            self.run_subtask_sync('share.{0}.terminate_connection'.format(share_type), address)
+        except RpcException as err:
+            if err.code not in (errno.ENOTSUP, errno.ENXIO):
+                raise
 
 
 def _depends():
