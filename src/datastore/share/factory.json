@@ -285,7 +285,7 @@
             "middleware.streaming_burst_size": 16,
             "middleware.zfs_refresh_interval": 60,
             "middleware.snapshot_scrub_interval": 300,
-            "system.console.keymap": "us.iso",
+            "system.console.keymap": "us",
             "system.syslog_server": null,
             "system.timezone": "America/Los_Angeles",
             "system.hostname": "freenas.local",
