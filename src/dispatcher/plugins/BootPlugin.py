@@ -345,8 +345,25 @@ def _init(dispatcher, plugin):
     boot_pool_name = dispatcher.configstore.get('system.boot_pool_name')
     bootenvs = EventCacheStore(dispatcher, 'boot.environment')
 
+    plugin.register_schema_definition('BootPool', {
+        'type': 'object',
+        'additionalProperties': False,
+        'properties': {
+            'name': {'type': 'string'},
+            'guid': {'type': 'string'},
+            'status': {'$ref': 'VolumeStatus'},
+            'scan': {'$ref': 'ZfsScan'},
+            'properties': {'$ref': 'VolumeProperties'},
+            'disks': {
+                'type': 'array',
+                'items': {'$type': 'string'}
+            }
+        }
+    })
+
     plugin.register_schema_definition('BootEnvironment', {
         'type': 'object',
+        'additionalProperties': False,
         'properties': {
             'id': {'type': 'string'},
             'realname': {'type': 'string', 'readOnly': True},
