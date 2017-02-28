@@ -182,7 +182,7 @@ class AlertsProvider(Provider):
         if alert_ids:
             self.dispatcher.dispatch_event('alert.changed', {
                 'operation': 'update',
-                'ids': [alert_ids]
+                'ids': alert_ids
             })
 
     @private
