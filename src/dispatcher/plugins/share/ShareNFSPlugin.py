@@ -43,18 +43,20 @@ class NFSSharesProvider(Provider):
     def get_connected_clients(self, share_id=None):
         share = self.datastore.get_one('shares', ('type', '=', 'nfs'), ('id', '=', share_id))
         result = []
-        f = open('/var/db/mountdtab')
-        for line in f:
-            host, path = line.split()
-            if share['target_path'] in path:
-                result.append({
-                    'host': host,
-                    'share': share_id,
-                    'user': None,
-                    'connected_at': None
-                })
+        try:
+            with open('/var/db/mountdtab') as f:
+                for line in f:
+                    host, path = line.split()
+                    if share['target_path'] in path:
+                        result.append({
+                            'host': host,
+                            'share': share_id,
+                            'user': None,
+                            'connected_at': None
+                        })
+        except (IOError, OSError):
+            pass
 
-        f.close()
         return result
 
 
