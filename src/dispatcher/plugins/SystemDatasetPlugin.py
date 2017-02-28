@@ -244,7 +244,7 @@ class SystemDatasetConfigure(ProgressTask):
 
         self.set_progress(0, 'Checking free space on target pool {0}'.format(pool))
 
-        boot_pool = dispatcher.configstore.get('system.boot_pool_name')
+        boot_pool = self.dispatcher.configstore.get('system.boot_pool_name')
         status = self.dispatcher.call_sync('system_dataset.status')
         related_services = self.configstore.get('system.dataset.services')
         self.services = [s for s in related_services if self.configstore.get('service.{0}.enable'.format(s))]
