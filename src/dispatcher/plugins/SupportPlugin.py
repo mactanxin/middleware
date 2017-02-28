@@ -139,11 +139,14 @@ class SupportSubmitTask(Task):
         return ['system']
 
     def run(self, ticket):
-        try:
-            version = self.dispatcher.call_sync('system.info.version')
-            project_name = '-'.join(version.split('-')[:2]).lower()
-            attachments = []
+        version = self.dispatcher.call_sync('system.info.version')
+        project_name = '-'.join(version.split('-')[:2]).lower()
+        attachments = []
+        debug_file_name = os.path.join(
+                DEFAULT_DEBUG_DUMP_DIR, version + '_' + time.strftime('%Y%m%d%H%M%S') + '.tar.gz'
+        )
 
+        try:
             rm_connection = redmine.Redmine(
                 BUGTRACKER_ADDRESS,
                 username=ticket['username'],
@@ -158,9 +161,6 @@ class SupportSubmitTask(Task):
                     raise TaskException(errno.ENOENT, 'File {} does not exists.'.format(attachment))
 
             if ticket.get('debug'):
-                debug_file_name = os.path.join(
-                    DEFAULT_DEBUG_DUMP_DIR, version + '_' + time.strftime('%Y%m%d%H%M%S') + '.tar.gz'
-                )
                 self.run_subtask_sync('debug.save_to_file', debug_file_name)
                 attachments.append({'path': debug_file_name, 'filename': os.path.split(debug_file_name)[-1]})
 
@@ -182,6 +182,7 @@ class SupportSubmitTask(Task):
                 os.remove(debug_file_name)
 
         return redmine_response.id
+
 
 
 def _depends():
