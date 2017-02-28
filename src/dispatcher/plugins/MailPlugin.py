@@ -88,7 +88,7 @@ class MailProvider(Provider):
         node['password'] = Password(node['password'])
         return AlertEmitterEmail(node)
 
-    @accepts(h.ref('MailMessage'), h.ref('Mail'))
+    @accepts(h.ref('MailMessage'), h.one_of(h.ref('AlertEmitterEmail'), None))
     def send(self, mailmessage, mail=None):
         if mail is None:
             mail = ConfigNode('mail', self.configstore).__getstate__()
