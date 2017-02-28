@@ -385,7 +385,7 @@ def _init(dispatcher, plugin):
             'properties': {'$ref': 'VolumeProperties'},
             'disks': {
                 'type': 'array',
-                'items': {'$type': 'string'}
+                'items': {'type': 'string'}
             }
         }
     })
