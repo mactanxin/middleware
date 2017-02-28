@@ -45,20 +45,31 @@ def system(*args, **kwargs):
     decode = kwargs.pop('decode', True)
     stdin = kwargs.pop('stdin', None)
     merge_stderr = kwargs.pop('merge_stderr', False)
+    file_obj_stdin = kwargs.pop('file_obj_stdin', False)
 
     if stdin:
-        stdin = stdin.encode('utf-8')
+        stdin_data = stdin.encode('utf-8')
+        stdin = subprocess.PIPE
+
+    elif file_obj_stdin:
+        stdin = file_obj_stdin
+        stdin_data = None
+
+    else:
+        stdin = None
+        stdin_data = None
+
 
     proc = subprocess.Popen(
         [a.encode('utf-8') for a in args],
-        stdin=subprocess.PIPE if stdin else None,
+        stdin=stdin,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT if merge_stderr else subprocess.PIPE,
         close_fds=True,
         shell=sh
     )
 
-    out, err = proc.communicate(input=stdin)
+    out, err = proc.communicate(input=stdin_data)
     logger.log(TRACE, "Running command: %s", ' '.join(args))
 
     if decode:
