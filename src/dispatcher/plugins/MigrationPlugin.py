@@ -1581,7 +1581,8 @@ class SystemMigrateTask(Task):
             self.run_subtask_sync('system.general.update', system_general_config)
         except RpcException as err:
             self.add_warning(TaskWarning(
-                errno.EINVAL, 'Could not migrate system general settings due to error: {0}'.format(err)
+                errno.EINVAL,
+                'Could not migrate system general settings due to error: {0}'.format(err)
             ))
 
         try:
@@ -1608,6 +1609,33 @@ class SystemMigrateTask(Task):
         except RpcException as err:
             self.add_warning(TaskWarning(
                 errno.EINVAL, 'Could not migrate system ui settings due to error: {0}'.format(err)
+            ))
+
+        # Migrating system advanced settings over to 10
+        fn9_adv_settings = get_table('select * from system_advanced', dictionary=False)[0]
+        try:
+            # Note not migrating the `powerd` property since it is automagically managed by fn10
+            # also not carrying forward periodic_notify_user as there is no use for it in 10
+            self.run_subtask_sync(
+                'system.advanced.update',
+                {
+                    'console_cli': bool(fn9_adv_settings['adv_consolemenu']),
+                    'console_screensaver': bool(fn9_adv_settings['adv_consolescreensaver']),
+                    'serial_console': bool(fn9_adv_settings['adv_serialconsole']),
+                    'serial_port': fn9_adv_settings['adv_serialport'],
+                    'serial_speed': fn9_adv_settings['adv_serialspeed'],
+                    'swapondrive': fn9_adv_settings['adv_swapondrive'],
+                    'debugkernel': bool(fn9_adv_settings['adv_debugkernel']),
+                    'uploadcrash': bool(fn9_adv_settings['adv_uploadcrash']),
+                    'motd': fn9_adv_settings['adv_motd'],
+                    'boot_scrub_internal': fn9_adv_settings['adv_boot_scrub'],
+                    'graphite_servers': [fn9_adv_settings['adv_graphite']] if fn9_adv_settings['adv_graphite'] else []
+                }
+            )
+        except RpcException as err:
+            self.add_warning(TaskWarning(
+                errno.EINVAL,
+                'Could not migrate system advanced settings due to error: {0}'.format(err)
             ))
 
         # Migrating email settings
