@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python
 # Copyright (c) 2015 iXsystems, Inc.
 # All rights reserved.
 #
@@ -84,7 +84,7 @@ def main(*args):
     if to_addrs:
         margs['to'] = to_addrs
 
-    connection.call_sync('mail.send', margs)
+    connection.call_sync('alert.emitter.email.send', margs)
     connection.disconnect()
 
 
