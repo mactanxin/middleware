@@ -55,12 +55,13 @@ from task import (
     ValidationException, TaskDescription, TaskWarning,
 )
 from debug import AttachCommandOutput, AttachData
+from lib.system import system, SubprocessException
 
 if '/usr/local/lib' not in sys.path:
     sys.path.append('/usr/local/lib')
 from freenasOS import Configuration
 
-KEYMAPS_INDEX = "/usr/share/syscons/keymaps/INDEX.keymaps"
+KEYMAPS_INDEX = "/usr/share/vt/keymaps/INDEX.keymaps"
 ZONEINFO_DIR = "/usr/share/zoneinfo"
 VERSION_FILE = "/etc/version"
 logger = logging.getLogger('SystemInfoPlugin')
@@ -284,10 +285,12 @@ class SystemGeneralConfigureTask(Task):
             os.environ['TZ'] = new
 
         if 'console_keymap' in props:
-            self.configstore.set(
-                'system.console.keymap',
-                props['console_keymap'],
-            )
+            new = props['console_keymap']
+            old = self.configstore.get('system.console.keymap')
+            if new != old:
+                with open ('/dev/console') as fd:
+                    system('/usr/sbin/kbdcontrol', '-l', props['console_keymap'], file_obj_stdin=fd)
+                self.configstore.set('system.console.keymap', new)
 
         syslog_changed = False
         if 'syslog_server' in props:
@@ -661,6 +664,12 @@ def _init(dispatcher, plugin):
                     {'webui_https_certificate': None, 'webui_protocol': ['HTTP']}
                 )
                 return
+
+    try:
+        with open('/dev/console') as fd:
+            system('/usr/sbin/kbdcontrol', '-l', dispatcher.configstore.get('system.console.keymap'), file_obj_stdin=fd)
+    except SubprocessException as e:
+        logger.error('Setting console keymap failed: {}'.format(str(e)))
 
     # Register schemas
     plugin.register_schema_definition('SystemAdvanced', {
