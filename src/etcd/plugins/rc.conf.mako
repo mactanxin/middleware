@@ -109,11 +109,6 @@ rpc_lockd_flags="${nfs_ips}\
 rpcbind_flags="${nfs_ips}"
 % endif
 
-
-% if gen_config['console_keymap']:
-keymap="${gen_config['console_keymap']}"
-% endif
-
 % for ctl in dispatcher.call_sync('tunable.query', [('type', '=', 'RC')]):
 % if ctl.get('enabled', True):
 ${ctl['var']}="${ctl['value']}"
