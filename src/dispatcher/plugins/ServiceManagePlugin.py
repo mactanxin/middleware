@@ -54,6 +54,7 @@ class ServiceInfoProvider(Provider):
             entry = {
                 'id': i['id'],
                 'name': i['name'],
+                'dependencies': i.get('dependencies', []),
                 'labels': None,
                 'state': lazy(lambda: lazy_status()[0]),
                 'error': lazy(lambda: lazy_status()[1]),
@@ -534,6 +535,10 @@ def _init(dispatcher, plugin):
             },
             'labels': {
                 'type': ['array', 'null'],
+                'items': {'type': 'string'}
+            },
+            'dependencies': {
+                'type': 'array',
                 'items': {'type': 'string'}
             },
             'builtin': {'type': 'boolean'},
