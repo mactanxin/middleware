@@ -41,6 +41,10 @@ from freenas.utils import include, first_or_default, query as q
 
 sys.path.append('/usr/local/lib')
 from freenasOS.Update import ListClones, FindClone, RenameClone, ActivateClone, DeleteClone, CreateClone, CloneSetAttr
+from freenas.dispatcher.rpc import RpcException
+from freenas.utils import include
+from freenas.utils.lazy import lazy
+from lib.zfs import iterate_vdevs
 
 
 logger = logging.getLogger(__name__)
@@ -51,7 +55,32 @@ bootenvs = None
 class BootPoolProvider(Provider):
     @returns(h.ref('ZfsPool'))
     def get_config(self):
-        return self.dispatcher.call_sync('zfs.pool.get_boot_pool')
+        pool = self.dispatcher.call_sync('zfs.pool.get_boot_pool')
+
+        @lazy
+        def collect_disks():
+            disks = []
+            for vdev, _ in iterate_vdevs(pool['groups']):
+                try:
+                    disks.append(self.dispatcher.call_sync('disk.partition_to_disk', vdev['path']))
+                except RpcException:
+                    continue
+
+            return disks
+
+        return {
+            'name': pool['id'],
+            'guid': pool['guid'],
+            'status': pool['status'],
+            'scan': pool['scan'],
+            'properties': include(
+                pool['properties'],
+                'size', 'capacity', 'health', 'version', 'delegation', 'failmode',
+                'autoreplace', 'dedupratio', 'free', 'allocated', 'readonly',
+                'comment', 'expandsize', 'fragmentation', 'leaked'
+            ),
+            'disks': collect_disks
+        }
 
 
 @description("Provides information on Boot Environments")
@@ -345,8 +374,25 @@ def _init(dispatcher, plugin):
     boot_pool_name = dispatcher.configstore.get('system.boot_pool_name')
     bootenvs = EventCacheStore(dispatcher, 'boot.environment')
 
+    plugin.register_schema_definition('BootPool', {
+        'type': 'object',
+        'additionalProperties': False,
+        'properties': {
+            'name': {'type': 'string'},
+            'guid': {'type': 'string'},
+            'status': {'$ref': 'VolumeStatus'},
+            'scan': {'$ref': 'ZfsScan'},
+            'properties': {'$ref': 'VolumeProperties'},
+            'disks': {
+                'type': 'array',
+                'items': {'type': 'string'}
+            }
+        }
+    })
+
     plugin.register_schema_definition('BootEnvironment', {
         'type': 'object',
+        'additionalProperties': False,
         'properties': {
             'id': {'type': 'string'},
             'realname': {'type': 'string', 'readOnly': True},
