@@ -62,7 +62,11 @@ class BootPoolProvider(Provider):
             disks = []
             for vdev, _ in iterate_vdevs(pool['groups']):
                 try:
-                    disks.append(self.dispatcher.call_sync('disk.partition_to_disk', vdev['path']))
+                    disks.append({
+                        'disk_id': self.dispatcher.call_sync('disk.partition_to_disk', vdev['path']),
+                        'guid': vdev['guid'],
+                        'status': vdev['status']
+                    })
                 except RpcException:
                     continue
 
@@ -385,8 +389,18 @@ def _init(dispatcher, plugin):
             'properties': {'$ref': 'VolumeProperties'},
             'disks': {
                 'type': 'array',
-                'items': {'type': 'string'}
+                'items': {'$ref': 'BootPoolDisk'}
             }
+        }
+    })
+
+    plugin.register_schema_definition('BootPoolDisk', {
+        'type': 'object',
+        'additionalProperties': False,
+        'properties': {
+            'disk_id': {'type': 'string'},
+            'guid': {'type': 'string'},
+            'status': {'type': 'string'}
         }
     })
 
