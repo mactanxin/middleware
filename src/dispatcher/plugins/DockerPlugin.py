@@ -594,19 +594,22 @@ class DockerContainerCreateTask(DockerBaseTask):
             {'single': True}
         )
 
-        if not image:
+        if not image and not update:
             image = container['image']
             if ':' not in image:
                 image += ':latest'
 
-            self.run_subtask_sync(
-                'docker.image.pull',
-                image,
-                container['host'],
-                progress_callback=lambda p, m, e=None: self.chunk_progress(
-                    30, 90, 'Pulling container {0} image:'.format(image), p, m, e
+            try:
+                self.run_subtask_sync(
+                    'docker.image.pull',
+                    image,
+                    container['host'],
+                    progress_callback=lambda p, m, e=None: self.chunk_progress(
+                        30, 90, 'Pulling container {0} image:'.format(image), p, m, e
+                    )
                 )
-            )
+            except TaskException:
+                raise TaskException(errno.ENETDOWN, 'Cannot pull container image. Check DockerHub connectivity')
 
         container['name'] = container['names'][0]
 
