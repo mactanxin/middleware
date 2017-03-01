@@ -26,13 +26,16 @@
 #####################################################################
 
 import os
-import sys
 import re
 import ipaddress
 import logging
 import sqlite3
 import datetime
 import errno
+import base64
+from Crypto.Random import get_random_bytes
+from Crypto.Util import Counter
+from Crypto.Cipher import AES
 from lib.system import system, SubprocessException
 from freenas.serviced import push_status
 from freenas.utils import query as q
@@ -50,11 +53,56 @@ from task import (
 )
 
 logger = logging.getLogger('MigrationPlugin')
-sys.path.append('/usr/local/lib/migrate93')
 FREENAS93_DATABASE_PATH = '/data/freenas-v1.db'
-# We need to set this env var before any migrate93 based imports
-os.environ['93_DATABASE_PATH'] = FREENAS93_DATABASE_PATH
-from freenasUI.middleware.notifier import notifier
+PWENC_FILE_SECRET = '/data/pwenc_secret'
+PWENC_BLOCK_SIZE = 32
+PWENC_PADDING = '{'
+PWENC_CHECK = 'Donuts!'
+VERSION_FILE = '/etc/version'
+GELI_KEYPATH = '/data/geli'
+GELI_KEY_SLOT = 0
+GELI_RECOVERY_SLOT = 1
+
+
+class notifier(object):
+
+    def is_freenas(self):
+        if os.path.exists('/etc/version'):
+            with open('/etc/version', 'r') as f:
+                version = f.read().lower()
+            if 'truenas' in version:
+                return False
+        return True
+
+    def pwenc_get_secret(self):
+        with open(PWENC_FILE_SECRET, 'rb') as f:
+            secret = f.read()
+        return secret
+
+    def pwenc_encrypt(self, text):
+        pad = lambda x: x + (PWENC_BLOCK_SIZE - len(x) % PWENC_BLOCK_SIZE) * PWENC_PADDING
+
+        nonce = get_random_bytes(8)
+        cipher = AES.new(
+            self.pwenc_get_secret(),
+            AES.MODE_CTR,
+            counter=Counter.new(64, prefix=nonce),
+        )
+        encoded = base64.b64encode(nonce + cipher.encrypt(pad(text)))
+        return encoded
+
+    def pwenc_decrypt(self, encrypted=None):
+        if not encrypted:
+            return ""
+        encrypted = base64.b64decode(encrypted)
+        nonce = encrypted[:8]
+        encrypted = encrypted[8:]
+        cipher = AES.new(
+            self.pwenc_get_secret(),
+            AES.MODE_CTR,
+            counter=Counter.new(64, prefix=nonce),
+        )
+        return cipher.decrypt(encrypted).decode('utf8').rstrip(PWENC_PADDING)
 
 
 # Here we define all the constants
