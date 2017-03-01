@@ -43,8 +43,7 @@ from datastore.config import ConfigNode
 from freenas.utils import normalize, query as q, first_or_default, exclude
 from freenas.utils.decorators import throttle
 from freenas.dispatcher.rpc import generator, accepts, returns, SchemaHelper as h, RpcException, description, private
-from freenas.dispatcher.jsonenc import loads, dumps
-from debug import AttachData
+from debug import AttachRPC
 
 logger = logging.getLogger(__name__)
 collections = None
@@ -1843,14 +1842,14 @@ def normalize_image_name(name):
 
 
 def collect_debug(dispatcher):
-    yield AttachData('hosts-query', dumps(list(dispatcher.call_sync('docker.host.query')), indent=4))
-    yield AttachData('containers-query', dumps(list(dispatcher.call_sync('docker.container.query')), indent=4))
-    yield AttachData('networks-query', dumps(list(dispatcher.call_sync('docker.network.query')), indent=4))
-    yield AttachData('images-query', dumps(list(dispatcher.call_sync('docker.image.query')), indent=4))
-    yield AttachData('collections-query', dumps(list(dispatcher.call_sync('docker.collection.query')), indent=4))
-    yield AttachData('containerd-containers', dumps(list(dispatcher.call_sync(CONTAINERS_QUERY)), indent=4))
-    yield AttachData('containerd-networks', dumps(list(dispatcher.call_sync(NETWORKS_QUERY)), indent=4))
-    yield AttachData('containerd-images', dumps(list(dispatcher.call_sync(IMAGES_QUERY)), indent=4))
+    yield AttachRPC('hosts-query', 'docker.host.query')
+    yield AttachRPC('containers-query', 'docker.container.query')
+    yield AttachRPC('networks-query', 'docker.network.query')
+    yield AttachRPC('images-query', 'docker.image.query')
+    yield AttachRPC('collections-query', 'docker.collection.query')
+    yield AttachRPC('containerd-containers', CONTAINERS_QUERY)
+    yield AttachRPC('containerd-networks', NETWORKS_QUERY)
+    yield AttachRPC('containerd-images', IMAGES_QUERY)
 
 
 def _depends():

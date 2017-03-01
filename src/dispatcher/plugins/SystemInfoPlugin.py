@@ -48,13 +48,12 @@ from freenas.dispatcher.rpc import (
     returns,
     private
 )
-from lib.system import SubprocessException, system
 from lib.freebsd import get_sysctl
 from task import (
     Provider, Task, TaskException, VerifyException, TaskAbortException,
     ValidationException, TaskDescription, TaskWarning,
 )
-from debug import AttachCommandOutput, AttachData
+from debug import AttachCommandOutput, AttachRPC
 from lib.system import system, SubprocessException
 
 if '/usr/local/lib' not in sys.path:
@@ -622,7 +621,7 @@ def collect_debug(dispatcher):
     yield AttachCommandOutput('procstat', ['/usr/bin/procstat', '-akk'])
     yield AttachCommandOutput('vmstat', ['/usr/bin/vmstat', '-i'])
     yield AttachCommandOutput('dmidecode', ['/usr/local/sbin/dmidecode'])
-    yield AttachData('version', dispatcher.call_sync('system.info.version'))
+    yield AttachRPC('version', 'system.info.version')
 
 
 def _depends():

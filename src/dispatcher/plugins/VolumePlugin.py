@@ -64,7 +64,7 @@ from cryptography.fernet import Fernet, InvalidToken
 from freenas.dispatcher.fd import FileDescriptor
 from freenas.dispatcher.jsonenc import loads, dumps
 from freenas.dispatcher import Password
-from debug import AttachData
+from debug import AttachRPC, AttachData
 
 
 VOLUME_LAYOUTS = {
@@ -3105,7 +3105,7 @@ def register_property_schemas(plugin):
 
 
 def collect_debug(dispatcher):
-    yield AttachData('volume-query', dumps(list(dispatcher.call_sync('volume.query')), indent=4))
+    yield AttachRPC('volume-query', 'volume.query')
     yield AttachData('volumes', dumps(list(dispatcher.datastore.query('volumes')), indent=4))
 
 

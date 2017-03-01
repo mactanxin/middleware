@@ -42,11 +42,10 @@ from freenas.dispatcher.rpc import (
     generator
 )
 from task import Provider, Task, TaskException, TaskDescription, query
-from freenas.dispatcher.jsonenc import dumps
 from freenas.dispatcher.model import BaseStruct, BaseEnum, BaseVariantType
 from freenas.dispatcher.model.typing import Range
 from freenas.utils import normalize, query as q
-from debug import AttachData
+from debug import AttachRPC
 
 
 logger = logging.getLogger('AlertPlugin')
@@ -482,8 +481,8 @@ class SendAlertTask(Task):
 
 
 def collect_debug(dispatcher):
-    yield AttachData('alert-filter-query', dumps(list(dispatcher.call_sync('alert.filter.query')), indent=4))
-    yield AttachData('alert-emitter-query', dumps(list(dispatcher.call_sync('alert.emitter.query')), indent=4))
+    yield AttachRPC('alert-filter-query', 'alert.filter.query')
+    yield AttachRPC('alert-emitter-query', 'alert.emitter.query')
 
 
 def _init(dispatcher, plugin):

@@ -28,7 +28,6 @@
 import ipaddress
 import errno
 import os
-import copy
 import random
 import gzip
 import uuid
@@ -55,7 +54,7 @@ from freenas.utils import sha256, exclude, query as q
 from utils import save_config, load_config, delete_config
 from freenas.utils.decorators import throttle
 from freenas.utils.lazy import lazy
-from debug import AttachData, AttachDirectory
+from debug import AttachRPC, AttachDirectory
 
 
 VM_OUI = '02:a0:98'  # NetApp
@@ -2526,11 +2525,11 @@ def fetch_templates(dispatcher):
 
 def collect_debug(dispatcher):
     yield AttachDirectory('vm-templates', dispatcher.call_sync('system_dataset.request_directory', 'vm_templates'))
-    yield AttachData('vm-query', dumps(list(dispatcher.call_sync('vm.query')), indent=4))
-    yield AttachData('vm-config', dumps(dispatcher.call_sync('vm.config.get_config'), indent=4))
-    yield AttachData('vm-templates-query', dumps(list(dispatcher.call_sync('vm.template.query')), indent=4))
-    yield AttachData('vm-snapshot-query', dumps(list(dispatcher.call_sync('vm.snapshot.query')), indent=4))
-    yield AttachData('hw-support', dumps(dispatcher.call_sync('vm.get_hw_vm_capabilities'), indent=4))
+    yield AttachRPC('vm-query', 'vm.query')
+    yield AttachRPC('vm-config', 'vm.config.get_config')
+    yield AttachRPC('vm-templates-query', 'vm.template.query')
+    yield AttachRPC('vm-snapshot-query', 'vm.snapshot.query')
+    yield AttachRPC('hw-support', 'vm.get_hw_vm_capabilities')
 
 
 def _depends():
