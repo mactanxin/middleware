@@ -1733,6 +1733,30 @@ class SystemMigrateTask(Task):
             ))
 
 
+@description("Calendar task settings migration task")
+class CalendarMigrateTask(Task):
+    def __init__(self, dispatcher):
+        super(CalendarMigrateTask, self).__init__(dispatcher)
+        self._notifier = notifier()
+
+    @classmethod
+    def early_describe(cls):
+        return "Migration of 9.x calendar tasks to 10"
+
+    def describe(self):
+        return TaskDescription("Migration of 9.x calendar tasks to 10")
+
+    def run(self):
+        # Lets get the fn9.x tasks data
+        fn9_smarttasks = get_table('select * from tasks_smarttest')
+        fn9_smart_disk_map = get_table('select * from tasks_smarttest_smarttest_disks')
+        fn9_rsync_tasks = get_table('select * from tasks_rsync')
+        fn9_shutdown_tasks = get_table('select * from tasks_initshutdown')
+        fn9_cron_tasks = get_table('select * from tasks_cronjob')
+        fn9_storage_tasks = get_table('select * from storage_task')
+        fn9_scrub_tasks = get_table('select * from storage_scrub')
+
+
 @description("Master top level migration task for 9.x to 10.x")
 class MasterMigrateTask(ProgressTask):
     def __init__(self, dispatcher):
@@ -1810,13 +1834,17 @@ class MasterMigrateTask(ProgressTask):
         self.run_subtask_sync('migration.sharemigrate')
         self.apps_migrated.append('sharing')
 
+        self.migration_progess(60, 'Migrating calendar tasks: cron, rsync, scrub, snapshot, smart')
+        self.run_subtask_sync('migration.calendarmigrate')
+        self.apps_migrated.append('calendar')
+
         # If we reached till here migration must have succeeded
         # so lets rename the databse
         os.rename(FREENAS93_DATABASE_PATH, "{0}.done".format(FREENAS93_DATABASE_PATH))
 
         self.apps_migrated = [
             'accounts', 'network', 'directoryservice', 'support', 'services', 'sharing', 'storage',
-            'system', 'tasks'
+            'system', 'calendar'
         ]
         self.status = 'FINISHED'
         self.migration_progess(100, 'Migration of FreeNAS 9.x database config and settings done')
@@ -1848,6 +1876,7 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('migration.sharemigrate', ShareMigrateTask)
     plugin.register_task_handler('migration.servicemigrate', ServiceMigrateTask)
     plugin.register_task_handler('migration.systemmigrate', SystemMigrateTask)
+    plugin.register_task_handler('migration.calendarmigrate', CalendarMigrateTask)
 
     plugin.register_event_type('migration.status')
 
