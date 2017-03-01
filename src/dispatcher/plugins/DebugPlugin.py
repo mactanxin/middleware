@@ -31,6 +31,7 @@ import tarfile
 import errno
 import logging
 from freenas.dispatcher.rpc import RpcException, SchemaHelper as h, description, accepts, returns, private
+from freenas.dispatcher.jsonenc import dumps
 from freenas.dispatcher.fd import FileDescriptor
 from lib.system import system, SubprocessException
 from debug import AttachCommandOutput, AttachDirectory
@@ -63,6 +64,21 @@ class CollectDebugTask(ProgressTask):
 
     def process_hook(self, cmd, plugin, tar):
         if cmd['type'] == 'AttachData':
+            info = tarfile.TarInfo(os.path.join(plugin, cmd['name']))
+            info.size = len(cmd['data'])
+            tar.addfile(
+                info,
+                io.BytesIO(
+                    cmd['data'] if isinstance(cmd['data'], bytes) else cmd['data'].encode('utf-8')
+                )
+            )
+
+        if cmd['type'] == 'AttachRPC':
+            result = self.dispatcher.call_sync(cmd['rpc'], *cmd['args'])
+            if hasattr(result, '__next__'):
+                result = list(result)
+
+            data = dumps(result, debug=True, indent=4)
             info = tarfile.TarInfo(os.path.join(plugin, cmd['name']))
             info.size = len(cmd['data'])
             tar.addfile(
