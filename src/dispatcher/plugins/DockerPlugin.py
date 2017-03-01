@@ -1226,15 +1226,21 @@ class DockerNetworkConnectTask(DockerBaseTask):
         return 'Connecting containers to network'
 
     def describe(self, container_ids, network_id):
-        contnames = self.dispatcher.call_sync(
-            'docker.container.query', [('id', 'in', container_ids)], {'select': 'name'}
-        )
+        contnames = list(self.dispatcher.call_sync(
+            'docker.container.query',
+            [('id', 'in', container_ids)],
+            {'select': 'name'}
+        ))
         netname = self.dispatcher.call_sync(
-            'docker.network.query', [('id', '=', network_id)], {'single': True, 'select': 'name'}
+            'docker.network.query',
+            [('id', '=', network_id)],
+            {'single': True, 'select': 'name'}
         )
-        return TaskDescription('Connecting containers {contnames} to network {netname}',
-                               contnames=','.join(contnames) or ','.join(container_ids),
-                               netname=netname or network_id)
+        return TaskDescription(
+            'Connecting containers {contnames} to network {name}',
+            contnames=','.join(contnames or container_ids),
+            name=netname or network_id
+        )
 
     def verify(self, container_ids=None, network_id=None):
         if not container_ids or not network_id:
@@ -1284,15 +1290,21 @@ class DockerNetworkDisconnectTask(DockerBaseTask):
         return 'Disconnecting containers from network'
 
     def describe(self, container_ids, network_id):
-        contnames = self.dispatcher.call_sync(
-            'docker.container.query', [('id', 'in', container_ids)], {'select': 'name'}
-        )
+        contnames = list(self.dispatcher.call_sync(
+            'docker.container.query',
+            [('id', 'in', container_ids)],
+            {'select': 'name'}
+        ))
         netname = self.dispatcher.call_sync(
-            'docker.network.query', [('id', '=', network_id)], {'single': True, 'select': 'name'}
+            'docker.network.query',
+            [('id', '=', network_id)],
+            {'single': True, 'select': 'name'}
         )
-        return TaskDescription('Disconnecting containers {contnames} from network {netname}',
-                               contnames=','.join(contnames) or ','.join(container_ids),
-                               netname=netname or network_id)
+        return TaskDescription(
+            'Disconnecting containers {contnames} from network {name}',
+            contnames=','.join(contnames or container_ids),
+            name=netname or network_id
+        )
 
     def verify(self, container_ids=None, network_id=None):
         if not container_ids or not network_id:
