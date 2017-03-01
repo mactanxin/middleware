@@ -75,7 +75,9 @@ class ZpoolProvider(Provider):
     @returns(h.array(h.ref('ZfsPool')))
     def find(self, name=None):
         zfs = get_zfs()
-        return self.dispatcher.threaded(lambda: [p.__getstate__() for p in zfs.find_import(name=name)])
+        return self.dispatcher.threaded(lambda: [
+            p.__getstate__() for p in zfs.find_import(name=name, search_paths=['/dev/gptid'])
+        ])
 
     @accepts()
     @returns(h.ref('ZfsPool'))
