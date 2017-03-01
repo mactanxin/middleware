@@ -37,6 +37,7 @@ from lib.system import system, SubprocessException
 from freenas.serviced import push_status
 from freenas.utils import query as q
 from lxml import etree
+from bsd import sysctl
 from freenas.dispatcher.rpc import RpcException, description
 from datastore import get_datastore
 from datastore.config import ConfigStore, ConfigNode
@@ -488,7 +489,7 @@ class StorageMigrateTask(Task):
 
     def _geom_confxml(self):
         if self.__confxml is None:
-            self.__confxml = etree.fromstring(notifier().sysctl('kern.geom.confxml'))
+            self.__confxml = etree.fromstring(sysctl.sysctlbyname('kern.geom.confxml'))
         return self.__confxml
 
     def identifier_to_device(self, ident):
