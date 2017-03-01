@@ -86,7 +86,7 @@ class AttachData(object):
 
 
 class AttachRPC(object):
-    def __init__(self, name, rpc, args):
+    def __init__(self, name, rpc, args=()):
         self.name = name
         self.rpc = rpc
         self.args = args
