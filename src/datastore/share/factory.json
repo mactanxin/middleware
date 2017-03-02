@@ -1598,7 +1598,7 @@
                 "predicates": [],
                 "parameters": {
                     "%type": "AlertEmitterParametersEmail",
-                    "addresses": []
+                    "to": []
                 }
             },
             "2ff8c660-f263-11e6-af4f-000c2921ac63": {
@@ -1607,7 +1607,7 @@
                 "predicates": [],
                 "parameters": {
                     "%type": "AlertEmitterParametersEmail",
-                    "addresses": []
+                    "to": []
                 }
             },
             "89320bfb-f263-11e6-af4f-000c2921ac63": {
@@ -1616,7 +1616,7 @@
                 "predicates": [],
                 "parameters": {
                     "%type": "AlertEmitterParametersEmail",
-                    "addresses": []
+                    "to": []
                 }
             },
             "403d4c81-f263-11e6-af4f-000c2921ac63": {
@@ -1625,7 +1625,7 @@
                 "predicates": [],
                 "parameters": {
                     "%type": "AlertEmitterParametersEmail",
-                    "addresses": []
+                    "to": []
                 }
             },
             "515e1026-f263-11e6-af4f-000c2921ac63": {
@@ -1634,7 +1634,7 @@
                 "predicates": [],
                 "parameters": {
                     "%type": "AlertEmitterParametersEmail",
-                    "addresses": []
+                    "to": []
                 }
             },
             "5c9b5a98-f263-11e6-af4f-000c2921ac63": {
@@ -1643,7 +1643,7 @@
                 "predicates": [],
                 "parameters": {
                     "%type": "AlertEmitterParametersEmail",
-                    "addresses": []
+                    "to": []
                 }
             }
         }
