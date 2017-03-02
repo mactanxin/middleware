@@ -571,6 +571,7 @@ class VolumeCreateTask(ProgressTask):
         auto_unlock = volume.pop('auto_unlock', None)
         mountpoint = params.pop('mountpoint', os.path.join(VOLUMES_ROOT, volume['id']))
         available_disks = self.dispatcher.call_sync('volume.get_available_disks')
+        swapsize = self.configstore.get('system.swapondrive') * 1024
 
         if auto_unlock and (not key_encryption or password_encryption):
             raise TaskException(
@@ -600,7 +601,7 @@ class VolumeCreateTask(ProgressTask):
 
             subtasks.append(self.run_subtask('disk.format.gpt', disk_id, 'freebsd-zfs', {
                 'blocksize': params.get('blocksize', 4096),
-                'swapsize': params.get('swapsize', 2048) if dgroup == 'data' else 0
+                'swapsize': params.get('swapsize', swapsize) if dgroup == 'data' else 0
             }))
 
         self.join_subtasks(*subtasks)
@@ -971,6 +972,7 @@ class VolumeUpdateTask(ProgressTask):
             updated_vdevs = []
             params = {}
             subtasks = []
+            swapsize = self.configstore.get('system.swapondrive') * 1024
             new_topology = updated_params['topology']
             old_topology = self.dispatcher.call_sync(
                 'volume.query',
@@ -1101,7 +1103,7 @@ class VolumeUpdateTask(ProgressTask):
                         'freebsd-zfs',
                         {
                             'blocksize': params.get('blocksize', 4096),
-                            'swapsize': params.get('swapsize', 2048) if group == 'data' else 0
+                            'swapsize': params.get('swapsize', swapsize) if group == 'data' else 0
                         }
                     ))
 
@@ -1119,7 +1121,7 @@ class VolumeUpdateTask(ProgressTask):
                     'freebsd-zfs',
                     {
                         'blocksize': params.get('blocksize', 4096),
-                        'swapsize': params.get('swapsize', 2048)
+                        'swapsize': params.get('swapsize', swapsize)
                     }
                 ))
 
@@ -1550,6 +1552,7 @@ class VolumeReplaceTask(ProgressTask):
         return [f'volume:{id}', f'disk:{disk_id}']
 
     def run(self, id, vdev, path, password=None):
+        swapsize = self.configstore.get('system.swapondrive') * 1024
         vol = self.dispatcher.call_sync('volume.query', [('id', '=', id)], {'single': True})
         if not vol:
             raise TaskException(errno.ENOENT, 'Volume {0} not found'.format(id))
@@ -1568,7 +1571,7 @@ class VolumeReplaceTask(ProgressTask):
             spare = True
         else:
             spare = False
-            self.run_subtask_sync('disk.format.gpt', disk['id'], 'freebsd-zfs', {'swapsize': 2048})
+            self.run_subtask_sync('disk.format.gpt', disk['id'], 'freebsd-zfs', {'swapsize': swapsize})
             disk = self.dispatcher.call_sync('disk.query', [('id', '=', disk['id'])], {'single': True})
 
         if vol.get('key_encrypted') or vol.get('password_encrypted'):
@@ -1664,6 +1667,7 @@ class VolumeAutoReplaceTask(ProgressTask):
         return [f'volume:{id}']
 
     def run(self, id, failed_vdev, password=None):
+        swapsize = self.configstore.get('system.swapondrive') * 1024
         vol = self.dispatcher.call_sync('volume.query', [('id', '=', id)], {'single': True})
         if not vol:
             raise TaskException(errno.ENOENT, 'Volume {0} not found'.format(id))
@@ -1696,7 +1700,7 @@ class VolumeAutoReplaceTask(ProgressTask):
             matching_disks = sorted(empty_disks, key=lambda d: d['mediasize'])
             disk = first_or_default(lambda d: d['mediasize'] >= minsize, matching_disks)
             if disk:
-                self.run_subtask_sync('disk.format.gpt', disk['id'], 'freebsd-zfs', {'swapsize': 2048})
+                self.run_subtask_sync('disk.format.gpt', disk['id'], 'freebsd-zfs', {'swapsize': swapsize})
                 self.run_subtask_sync(
                     'volume.vdev.replace',
                     id, failed_vdev, disk['path'], password,
