@@ -172,10 +172,7 @@ class MailConfigureTask(Task):
         return 'Updating mail configuration'
 
     def describe(self, mail):
-        return TaskDescription(
-            'Updating {name} mail configuration',
-            name=mail.get('user', '') + '@' + mail.get('server', '') if mail else ''
-        )
+        return TaskDescription('Configuring email emitter settings')
 
     def verify(self, mail):
         errors = ValidationException()

@@ -26,17 +26,21 @@
 #####################################################################
 
 import os
-import sys
 import re
 import ipaddress
 import logging
 import sqlite3
 import datetime
 import errno
+import base64
+from Crypto.Random import get_random_bytes
+from Crypto.Util import Counter
+from Crypto.Cipher import AES
 from lib.system import system, SubprocessException
 from freenas.serviced import push_status
 from freenas.utils import query as q
 from lxml import etree
+from bsd import sysctl
 from freenas.dispatcher.rpc import RpcException, description
 from datastore import get_datastore
 from datastore.config import ConfigStore, ConfigNode
@@ -49,11 +53,56 @@ from task import (
 )
 
 logger = logging.getLogger('MigrationPlugin')
-sys.path.append('/usr/local/lib/migrate93')
 FREENAS93_DATABASE_PATH = '/data/freenas-v1.db'
-# We need to set this env var before any migrate93 based imports
-os.environ['93_DATABASE_PATH'] = FREENAS93_DATABASE_PATH
-from freenasUI.middleware.notifier import notifier
+PWENC_FILE_SECRET = '/data/pwenc_secret'
+PWENC_BLOCK_SIZE = 32
+PWENC_PADDING = '{'
+PWENC_CHECK = 'Donuts!'
+VERSION_FILE = '/etc/version'
+GELI_KEYPATH = '/data/geli'
+GELI_KEY_SLOT = 0
+GELI_RECOVERY_SLOT = 1
+
+
+class notifier(object):
+
+    def is_freenas(self):
+        if os.path.exists('/etc/version'):
+            with open('/etc/version', 'r') as f:
+                version = f.read().lower()
+            if 'truenas' in version:
+                return False
+        return True
+
+    def pwenc_get_secret(self):
+        with open(PWENC_FILE_SECRET, 'rb') as f:
+            secret = f.read()
+        return secret
+
+    def pwenc_encrypt(self, text):
+        pad = lambda x: x + (PWENC_BLOCK_SIZE - len(x) % PWENC_BLOCK_SIZE) * PWENC_PADDING
+
+        nonce = get_random_bytes(8)
+        cipher = AES.new(
+            self.pwenc_get_secret(),
+            AES.MODE_CTR,
+            counter=Counter.new(64, prefix=nonce),
+        )
+        encoded = base64.b64encode(nonce + cipher.encrypt(pad(text)))
+        return encoded
+
+    def pwenc_decrypt(self, encrypted=None):
+        if not encrypted:
+            return ""
+        encrypted = base64.b64decode(encrypted)
+        nonce = encrypted[:8]
+        encrypted = encrypted[8:]
+        cipher = AES.new(
+            self.pwenc_get_secret(),
+            AES.MODE_CTR,
+            counter=Counter.new(64, prefix=nonce),
+        )
+        return cipher.decrypt(encrypted).decode('utf8').rstrip(PWENC_PADDING)
 
 
 # Here we define all the constants
@@ -488,7 +537,7 @@ class StorageMigrateTask(Task):
 
     def _geom_confxml(self):
         if self.__confxml is None:
-            self.__confxml = etree.fromstring(notifier().sysctl('kern.geom.confxml'))
+            self.__confxml = etree.fromstring(sysctl.sysctlbyname('kern.geom.confxml'))
         return self.__confxml
 
     def identifier_to_device(self, ident):
@@ -1537,7 +1586,6 @@ class SystemMigrateTask(Task):
         fn9_certs = get_table('select * from system_certificate')
 
         # Migrating the certificate authorities and certificates
-        fn9_to_10_crypto_id_map = {}
         for crypto_obj in sorted(fn9_cas.values(), key=lambda x: x['cert_type']) + list(fn9_certs.values()):
             cert_type = CRYPTO_TYPE[crypto_obj['cert_type']]
             if cert_type == 'CERT_CSR':
@@ -1553,7 +1601,7 @@ class SystemMigrateTask(Task):
             cert_type = 'CERT_EXISTING' if cert_type.startswith('CERT') else 'CA_EXISTING'
             try:
                 signed_by_ca = fn9_cas.get(crypto_obj['cert_signedby_id'])
-                fn9_to_10_crypto_id_map[crypto_obj['id']] = self.run_subtask_sync(
+                self.run_subtask_sync(
                     'crypto.certificate.import',
                     {
                         'type': cert_type,
@@ -1582,10 +1630,17 @@ class SystemMigrateTask(Task):
             self.run_subtask_sync('system.general.update', system_general_config)
         except RpcException as err:
             self.add_warning(TaskWarning(
-                errno.EINVAL, 'Could not migrate system general settings due to error: {0}'.format(err)
+                errno.EINVAL,
+                'Could not migrate system general settings due to error: {0}'.format(err)
             ))
 
         try:
+            fn10_certs_and_cas = list(self.dispatcher.call_sync('crypto.certificate.query'))
+            webgui_cert = q.query(
+                fn10_certs_and_cas,
+                ('name', '=', fn9_certs[fn9_sys_settings['stg_guicertificate_id']]['cert_name']),
+                single=True
+            )
             self.run_subtask_sync(
                 'system.ui.update',
                 {
@@ -1596,9 +1651,7 @@ class SystemMigrateTask(Task):
                     ],
                     'webui_http_redirect_https': bool(fn9_sys_settings['stg_guihttpsredirect']),
                     'webui_http_port': fn9_sys_settings['stg_guiport'],
-                    'webui_https_certificate': fn9_to_10_crypto_id_map.get(
-                        fn9_sys_settings['stg_guicertificate_id'], None
-                    ),
+                    'webui_https_certificate': webgui_cert['id'] if webgui_cert else None,
                     'webui_https_port': fn9_sys_settings['stg_guihttpsport']
                 }
             )
@@ -1606,6 +1659,151 @@ class SystemMigrateTask(Task):
             self.add_warning(TaskWarning(
                 errno.EINVAL, 'Could not migrate system ui settings due to error: {0}'.format(err)
             ))
+
+        # Migrating system advanced settings over to 10
+        fn9_adv_settings = get_table('select * from system_advanced', dictionary=False)[0]
+        try:
+            # Note not migrating the `powerd` property since it is automagically managed by fn10
+            # also not carrying forward periodic_notify_user as there is no use for it in 10
+            self.run_subtask_sync(
+                'system.advanced.update',
+                {
+                    'console_cli': bool(fn9_adv_settings['adv_consolemenu']),
+                    'console_screensaver': bool(fn9_adv_settings['adv_consolescreensaver']),
+                    'serial_console': bool(fn9_adv_settings['adv_serialconsole']),
+                    'serial_port': fn9_adv_settings['adv_serialport'],
+                    'serial_speed': fn9_adv_settings['adv_serialspeed'],
+                    'swapondrive': fn9_adv_settings['adv_swapondrive'],
+                    'debugkernel': bool(fn9_adv_settings['adv_debugkernel']),
+                    'uploadcrash': bool(fn9_adv_settings['adv_uploadcrash']),
+                    'motd': fn9_adv_settings['adv_motd'],
+                    'boot_scrub_internal': fn9_adv_settings['adv_boot_scrub'],
+                    'graphite_servers': [fn9_adv_settings['adv_graphite']] if fn9_adv_settings['adv_graphite'] else []
+                }
+            )
+        except RpcException as err:
+            self.add_warning(TaskWarning(
+                errno.EINVAL,
+                'Could not migrate system advanced settings due to error: {0}'.format(err)
+            ))
+
+        # Migrating email settings
+        fn9_email = get_table('select * from system_email', dictionary=False)[0]
+        try:
+            self.run_subtask_sync(
+                'alert.emitter.update',
+                self.dispatcher.call_sync(
+                    'alert.emitter.query', [("name", "=", "email")], {'single': True}
+                )['id'],
+                {
+                    'config': {
+                        'from_address': fn9_email['em_fromemail'],
+                        'server': fn9_email['em_outgoingserver'],
+                        'port': fn9_email['em_port'],
+                        'auth': bool(fn9_email['em_smtp']),
+                        'encryption': fn9_email['em_security'].upper(),
+                        'user': fn9_email['em_user'] or None,
+                        'password': {
+                            '$password': self._notifier.pwenc_decrypt(fn9_email['em_pass'])
+                        } if fn9_email['em_pass'] else None
+                    }
+                }
+            )
+        except RpcException as err:
+            self.add_warning(TaskWarning(
+                errno.EINVAL, 'Could not migrate email settings due to error: {0}'.format(err)
+            ))
+
+        # Migrating ntpservers' settings
+        fn9_ntp_servers = get_table('select * from system_ntpserver')
+        fn10_ntp_servers = list(self.dispatcher.call_sync('ntp_server.query'))
+
+        for fn9_ntp in fn9_ntp_servers.values():
+            try:
+                fn10_ntp = q.query(
+                    fn10_ntp_servers, ("address", "=", fn9_ntp['ntp_address']), single=True
+                )
+                ntp_task_args = [
+                    'ntp_server.update' if fn10_ntp else 'ntp_server.create',
+                    fn10_ntp['id'] if fn10_ntp else None,
+                    {
+                        'address': fn9_ntp['ntp_address'],
+                        'burst': bool(fn9_ntp['ntp_burst']),
+                        'iburst': bool(fn9_ntp['ntp_iburst']),
+                        'prefer': bool(fn9_ntp['ntp_prefer']),
+                        'minpoll': fn9_ntp['ntp_minpoll'],
+                        'maxpoll': fn9_ntp['ntp_maxpoll'],
+                        'pool': fn10_ntp['pool'] if fn10_ntp else True,
+                    },
+                    True
+                ]
+                self.run_subtask_sync(*list(filter(None, ntp_task_args)))
+            except RpcException as err:
+                self.add_warning(TaskWarning(
+                    errno.EINVAL, 'Could not migrate npt_server: {0} due to error: {1}'.format(
+                        fn9_ntp['ntp_address'], err
+                    )
+                ))
+
+        # Migrating system tunables
+        fn9_tunables = get_table('select * from system_tunable')
+        for fn9_tunable in fn9_tunables.values():
+            try:
+                if fn9_tunable['tun_type'].upper() == 'RC':
+                    raise ValueError('RC tunables are no longer supported')
+                self.run_subtask_sync(
+                    'tunable.create',
+                    {
+                        'type': fn9_tunable['tun_type'].upper(),
+                        'var': fn9_tunable['tun_var'],
+                        'value': fn9_tunable['tun_value'],
+                        'comment': fn9_tunable['tun_comment'],
+                        'enabled': bool(fn9_tunable['tun_enabled']),
+                    }
+                )
+            except RpcException as err:
+                self.add_warning(TaskWarning(
+                    errno.EINVAL,
+                    'Could not migrate {0} tunable: {1} due to error: {2}'.format(
+                        fn9_tunable['type'].upper(), fn9_tunable['tun_var'], err
+                    )
+                ))
+
+        # Migrate system dataset (only pool setting is migrated though)
+        fn9_sysdataset = get_table('select * from system_systemdataset', dictionary=False)[0]
+        try:
+            self.run_subtask_sync('system_dataset.migrate', fn9_sysdataset['sys_pool'])
+        except RpcException as err:
+            self.add_warning(TaskWarning(
+                errno.EINVAL,
+                'Failed to migrate system dataset to pool: {0} due to error'.format(
+                    fn9_sysdataset['sys_pool'], err
+                )
+            ))
+
+
+@description("Calendar task settings migration task")
+class CalendarMigrateTask(Task):
+    def __init__(self, dispatcher):
+        super(CalendarMigrateTask, self).__init__(dispatcher)
+        self._notifier = notifier()
+
+    @classmethod
+    def early_describe(cls):
+        return "Migration of 9.x calendar tasks to 10"
+
+    def describe(self):
+        return TaskDescription("Migration of 9.x calendar tasks to 10")
+
+    def run(self):
+        # Lets get the fn9.x tasks data
+        fn9_smarttasks = get_table('select * from tasks_smarttest')
+        fn9_smart_disk_map = get_table('select * from tasks_smarttest_smarttest_disks')
+        fn9_rsync_tasks = get_table('select * from tasks_rsync')
+        fn9_shutdown_tasks = get_table('select * from tasks_initshutdown')
+        fn9_cron_tasks = get_table('select * from tasks_cronjob')
+        fn9_storage_tasks = get_table('select * from storage_task')
+        fn9_scrub_tasks = get_table('select * from storage_scrub')
 
 
 @description("Master top level migration task for 9.x to 10.x")
@@ -1685,13 +1883,17 @@ class MasterMigrateTask(ProgressTask):
         self.run_subtask_sync('migration.sharemigrate')
         self.apps_migrated.append('sharing')
 
+        self.migration_progess(60, 'Migrating calendar tasks: cron, rsync, scrub, snapshot, smart')
+        self.run_subtask_sync('migration.calendarmigrate')
+        self.apps_migrated.append('calendar')
+
         # If we reached till here migration must have succeeded
         # so lets rename the databse
         os.rename(FREENAS93_DATABASE_PATH, "{0}.done".format(FREENAS93_DATABASE_PATH))
 
         self.apps_migrated = [
             'accounts', 'network', 'directoryservice', 'support', 'services', 'sharing', 'storage',
-            'system', 'tasks'
+            'system', 'calendar'
         ]
         self.status = 'FINISHED'
         self.migration_progess(100, 'Migration of FreeNAS 9.x database config and settings done')
@@ -1723,6 +1925,7 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('migration.sharemigrate', ShareMigrateTask)
     plugin.register_task_handler('migration.servicemigrate', ServiceMigrateTask)
     plugin.register_task_handler('migration.systemmigrate', SystemMigrateTask)
+    plugin.register_task_handler('migration.calendarmigrate', CalendarMigrateTask)
 
     plugin.register_event_type('migration.status')
 
