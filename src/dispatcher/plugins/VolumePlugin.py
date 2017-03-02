@@ -3007,6 +3007,9 @@ def register_property_schemas(plugin):
         'refreservation': {
             'type': ['integer', 'null'],
         },
+        'recordsize': {
+            'type': 'integer',
+        },
         'casesensitivity': {
             'type': ['string', 'null'],
             'enum': ['sensitive', 'insensitive', 'mixed', None]
@@ -3222,7 +3225,8 @@ def _init(dispatcher, plugin):
                 'casesensitivity', 'volsize', 'volblocksize', 'refcompressratio',
                 'numclones', 'compressratio', 'written', 'referenced',
                 'usedbyrefreservation', 'usedbysnapshots', 'usedbydataset',
-                'usedbychildren', 'logicalused', 'logicalreferenced', 'origin', 'readonly'
+                'usedbychildren', 'logicalused', 'logicalreferenced', 'origin',
+                'readonly', 'recordsize'
             ),
             'permissions_type': q.get(ds, 'properties.org\\.freenas:permissions_type.value'),
             'permissions': perms['permissions'] if perms else None,
@@ -3321,7 +3325,7 @@ def _init(dispatcher, plugin):
         volume = dispatcher.call_sync('volume.query', [('guid', '=', guid)], {'single': True})
         if not volume:
             return
-        
+
         if volume['status'] in ('UNKNOWN', 'LOCKED'):
             return
 
