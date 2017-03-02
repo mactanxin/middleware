@@ -345,6 +345,11 @@ class ManagementService(RpcService):
 
         return realms
 
+    def get_default_realm(self):
+        r = first_or_default(None, self.get_realms())
+        if r:
+            return r['realm']
+
     def get_cache_stats(self):
         return {
             'users': self.context.users_cache.__getstate__(),

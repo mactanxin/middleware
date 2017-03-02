@@ -27,6 +27,7 @@
 
 import errno
 import krb5
+from typing import Optional
 from freenas.dispatcher.rpc import SchemaHelper as h, accepts, generator
 from task import Task, TaskException, Provider, query
 from debug import AttachFile, AttachCommandOutput
@@ -34,6 +35,9 @@ from freenas.utils import query as q
 
 
 class KerberosRealmsProvider(Provider):
+    def get_default_realm(self) -> Optional[str]:
+        return self.dispatcher.call_sync('dscached.management.get_default_realm')
+
     @query('KerberosRealm')
     @generator
     def query(self, filter=None, params=None):
@@ -199,6 +203,7 @@ def collect_debug(dispatcher):
 def _init(dispatcher, plugin):
     plugin.register_schema_definition('KerberosRealm', {
         'type': 'object',
+        'additionalProperties': False,
         'properties': {
             'id': {'type': 'string'},
             'realm': {'type': 'string'},

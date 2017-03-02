@@ -1,3 +1,6 @@
+<%
+    default_realm = dispatcher.call_sync('kerberos.realm.get_default_realm')
+%>
 [appdefaults]
     pam = {
         forwardable = true
@@ -12,6 +15,9 @@
     ticket_lifetime = 24h
     clockskew = 300
     forwardable = yes
+% if default_realm:
+    default_realm = ${default_realm}
+% endif
 
 [domain_realm]
 % for realm in dispatcher.call_sync('kerberos.realm.query'):
