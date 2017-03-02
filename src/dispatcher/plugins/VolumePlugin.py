@@ -689,7 +689,7 @@ class VolumeCreateTask(ProgressTask):
 
 
 @description("Creates new volume and automatically guesses disks layout")
-@accepts(str, str, str, h.one_of(h.array(str), str), h.array(str), h.array(str), h.one_of(bool, None), h.one_of(Password, None), h.one_of(bool, None))
+@accepts(str, str, str, h.array(str), h.array(str), h.array(str), h.one_of(bool, None), h.one_of(Password, None), h.one_of(bool, None))
 class VolumeAutoCreateTask(ProgressTask):
     @classmethod
     def early_describe(cls):
@@ -702,10 +702,23 @@ class VolumeAutoCreateTask(ProgressTask):
         if not disks:
             raise VerifyException('No disks provided')
 
-        if isinstance(disks, str) and disks == 'auto':
-            return ['disk:{0}'.format(disk) for disk in self.dispatcher.call_sync('disk.query', {'select': 'path'})]
+        if disks == ['auto']:
+            return ['disk:{0}'.format(disk) for disk in self.dispatcher.call_sync('disk.query', {'select': 'id'})]
         else:
-            return ['disk:{0}'.format(disk_spec_to_id(self.dispatcher, i)) for i in disks]
+            missing = []
+            resources = []
+            for i in itertools.chain(disks, cache_disks or [], log_disks or []):
+                disk_id = disk_spec_to_id(self.dispatcher, i)
+                if not disk_id:
+                    missing.append(i)
+                    continue
+
+                resources.append(f'disk:{disk_id}')
+
+            if missing:
+                raise VerifyException(errno.ENOENT, f'Following disks were not found: {", ".join(missing)}')
+
+            return resources
 
     def run(self, name, type, layout, disks, cache_disks=None, log_disks=None, key_encryption=False, password=None, auto_unlock=None):
         if self.datastore.exists('volumes', ('id', '=', name)):
@@ -718,7 +731,7 @@ class VolumeAutoCreateTask(ProgressTask):
         ltype = VOLUME_LAYOUTS[layout]
         ndisks = DISKS_PER_VDEV[ltype]
 
-        if isinstance(disks, str) and disks == 'auto':
+        if disks == ['auto']:
             available_disks = self.dispatcher.call_sync(
                 'disk.query',
                 [('id', 'in', self.dispatcher.call_sync('volume.get_available_disks'))]
