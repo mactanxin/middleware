@@ -2202,7 +2202,10 @@ def _init(dispatcher, plugin):
 
     def init_collections(args):
         for c in dispatcher.datastore.query_stream('docker.collections', select='collection'):
-            dispatcher.call_sync('docker.image.update_collection', c, True)
+            try:
+                dispatcher.call_sync('docker.image.update_collection', c, True)
+            except RpcException:
+                pass
 
     plugin.register_provider('docker.config', DockerConfigProvider)
     plugin.register_provider('docker.host', DockerHostProvider)
