@@ -1559,7 +1559,7 @@ class VolumeReplaceTask(ProgressTask):
 
         vdev_config = vdev_by_guid(vol['topology'], vdev)
 
-        disk = self.dispatcher.call_sync('disk.query', [('path', '=', path), ('online', '=', True)], {'single': True})
+        disk = self.dispatcher.call_sync('disk.query', [('id', '=', path), ('online', '=', True)], {'single': True})
         spares = vol['topology'].get('spare', [])
 
         if not disk:
