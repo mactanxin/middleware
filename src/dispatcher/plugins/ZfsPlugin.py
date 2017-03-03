@@ -1895,7 +1895,7 @@ def _init(dispatcher, plugin):
                 # Mount the volume
                 logger.info('Mounting pool {0}'.format(pool.name))
                 ds = dispatcher.threaded(zfs.get_dataset, pool.name)
-                dispatcher.threaded(ds.mount_recursive)
+                dispatcher.threaded(ds.mount_recursive, True)
             except libzfs.ZFSException as err:
                 logger.error('Cannot import user pool {0}: {1}'.format(pool.name, str(err)))
                 continue
@@ -1962,7 +1962,7 @@ def _init(dispatcher, plugin):
                         # Mount the volume
                         logger.info('Mounting pool {0}'.format(vol['id']))
                         ds = dispatcher.threaded(zfs.get_dataset, vol['id'])
-                        dispatcher.threaded(ds.mount_recursive)
+                        dispatcher.threaded(ds.mount_recursive, True)
                     except libzfs.ZFSException as err:
                         logger.error('Cannot import pool {0} <{1}>: {2}'.format(
                             pool_to_import.name,
@@ -1989,7 +1989,7 @@ def _init(dispatcher, plugin):
                     if cachefile.source == libzfs.PropertySource.DEFAULT:
                         cachefile.value = USER_CACHE_FILE
                         ds = zfs.get_dataset(pool.name)
-                        ds.mount_recursive()
+                        ds.mount_recursive(True)
 
                 dispatcher.threaded(doit)
             except libzfs.ZFSException:
