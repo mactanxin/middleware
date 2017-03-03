@@ -1467,6 +1467,12 @@ class VMRebootTask(Task):
         return []
 
     def run(self, id, force=False):
+        state = self.dispatcher.call_sync('vm.query', [('id', '=', id)], {'single': True, 'select': 'status.state'})
+        if not state:
+            raise TaskException(errno.ENOENT, f'VM {id} does not exist')
+        elif state in ('STOPPED', 'ORPHANED'):
+            raise TaskException(errno.EACCES, 'Cannot restart a stopped VM')
+
         try:
             self.run_subtask_sync('vm.stop', id, force)
             self.run_subtask_sync('vm.start', id)
