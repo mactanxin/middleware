@@ -59,7 +59,7 @@
         "data": {
         }
     },
-        {
+    {
         "metadata": {
             "name": "docker.containers",
             "migration": "keep",
