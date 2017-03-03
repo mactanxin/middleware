@@ -80,7 +80,7 @@ class CollectDebugTask(ProgressTask):
 
             data = dumps(result, debug=True, indent=4)
             info = tarfile.TarInfo(os.path.join(plugin, cmd['name']))
-            info.size = len(cmd['data'])
+            info.size = len(data)
             tar.addfile(
                 info,
                 io.BytesIO(
