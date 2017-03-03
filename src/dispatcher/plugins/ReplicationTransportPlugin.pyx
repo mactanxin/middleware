@@ -419,20 +419,20 @@ class TransportSendTask(TransportBase):
             subtasks = []
             raw_subtasks = []
 
-            for type in ['compress', 'encrypt', 'throttle']:
+            for type in ['Compress', 'Encrypt', 'Throttle']:
                 plugin = first_or_default(lambda p: p['%type'].startswith(type), plugins)
                 if plugin:
                     rd, wr = os.pipe()
                     self.fds.append(rd)
                     self.fds.append(wr)
-                    plugin['%type'] = type + 'ReplicationTransportPlugin'
+                    plugin['%type'] = f'{type}ReplicationTransportPlugin'
                     plugin['read_fd'] = FileDescriptor(last_rd_fd)
                     plugin['write_fd'] = FileDescriptor(wr)
                     last_rd_fd = rd
-                    if type == 'encrypt':
+                    if type == 'Encrypt':
                         plugin['auth_token'] = token
                         plugin['remote'] = client_address
-                    raw_subtasks.append(['replication.transport.{0}'.format(type), plugin])
+                    raw_subtasks.append(['replication.transport.{0}'.format(type.lower()), plugin])
                     logger.debug('Registered {0} transport layer plugin for {1}:{2} connection'.format(type, *addr))
 
             if len(raw_subtasks):
@@ -650,11 +650,11 @@ class TransportReceiveTask(TransportBase):
             last_rd_fd = conn_fd
             subtasks = []
 
-            for type in ['encrypt', 'compress']:
+            for type in ['Encrypt', 'Compress']:
                 plugin = first_or_default(lambda p: p['%type'].startswith(type), plugins)
                 if plugin:
-                    plugin['%type'] = type + 'ReplicationTransportPlugin'
-                    if type == 'encrypt':
+                    plugin['%type'] = f'{type}ReplicationTransportPlugin'
+                    if type == 'Encrypt':
                         plugin['auth_token'] = transport.get('auth_token')
                     rd, wr = os.pipe()
                     self.fds.append(rd)
@@ -664,13 +664,13 @@ class TransportReceiveTask(TransportBase):
                     last_rd_fd = rd
                     subtasks.append(self.run_subtask(
                         'replication.transport.{0}'.format(
-                            'decrypt' if plugin['%type'].startswith('encrypt') else 'decompress'
+                            'decrypt' if plugin['%type'].startswith('Encrypt') else 'decompress'
                         ),
                         plugin
                     ))
                     logger.debug(
                         'Registered {0} transport layer plugin for {1}:{2} connection'.format(
-                            'decrypt' if plugin['%type'].startswith('encrypt') else 'decompress',
+                            'decrypt' if plugin['%type'].startswith('Encrypt') else 'decompress',
                             *addr
                         )
                     )
