@@ -364,7 +364,7 @@ class NetworkMigrateTask(Task):
             else:
                 self.add_warning(TaskWarning(
                     errno.EINVAL,
-                    'Skipping FreeNAS 9.x netwrok interface: {0} as it is not found'.format(
+                    'Skipping FreeNAS 9.x network interface: {0} as it is not found'.format(
                         fn9_iface['int_interface']
                     )
                 ))
@@ -1242,9 +1242,10 @@ class ServiceMigrateTask(Task):
         try:
             webdav_cert = None
             if fn9_dav['webdav_certssl_id']:
+                webdav_cert9 = fn9_certs.get(fn9_dav['webdav_certssl_id'], {})
                 webdav_cert = q.query(
                     fn10_certs_and_cas,
-                    ('name', '=', fn9_certs[fn9_dav['webdav_certssl_id']]['cert_name']),
+                    ('name', '=', webdav_cer9t.get('cert_name')),
                     single=True
                 )
                 if webdav_cert is None:
@@ -1341,9 +1342,10 @@ class ServiceMigrateTask(Task):
         try:
             ftp_cert = None
             if fn9_ftp['ftp_ssltls_certificate_id']:
+                ftp_cert9 = fn9_certs.get(fn9_ftp['ftp_ssltls_certificate_id'], {})
                 ftp_cert = q.query(
                     fn10_certs_and_cas,
-                    ('name', '=', fn9_certs[fn9_ftp['ftp_ssltls_certificate_id']]['cert_name']),
+                    ('name', '=', ftp_cert9.get('cert_name')),
                     single=True
                 )
                 if ftp_cert is None:
@@ -1636,9 +1638,10 @@ class SystemMigrateTask(Task):
 
         try:
             fn10_certs_and_cas = list(self.dispatcher.call_sync('crypto.certificate.query'))
+            webui_cert9 = fn9_certs.get(fn9_sys_settings['stg_guicertificate_id'], {})
             webgui_cert = q.query(
                 fn10_certs_and_cas,
-                ('name', '=', fn9_certs[fn9_sys_settings['stg_guicertificate_id']]['cert_name']),
+                ('name', '=', webui_cert9.get('cert_name')),
                 single=True
             )
             self.run_subtask_sync(
@@ -1797,13 +1800,29 @@ class CalendarMigrateTask(Task):
 
     def run(self):
         # Lets get the fn9.x tasks data
-        fn9_smarttasks = get_table('select * from tasks_smarttest')
+        fn9_smart_tasks = get_table('select * from tasks_smarttest')
         fn9_smart_disk_map = get_table('select * from tasks_smarttest_smarttest_disks')
         fn9_rsync_tasks = get_table('select * from tasks_rsync')
         fn9_shutdown_tasks = get_table('select * from tasks_initshutdown')
         fn9_cron_tasks = get_table('select * from tasks_cronjob')
         fn9_storage_tasks = get_table('select * from storage_task')
         fn9_scrub_tasks = get_table('select * from storage_scrub')
+
+        # # migrating SMART TEST tasks
+        # for fn9_smart_task in fn9_smart_tasks.values():
+        #     try:
+        #         self.call_subtask_sync(
+        #             'calendar_task.create',
+        #             {
+        #                 'name': ,
+        #                 'task': 
+        #             }
+        #         )
+        #     except RpcException as err:
+        #         self.add_warning(TaskWarning(
+        #             errno.EINVAL,
+        #             'Failed to migrate calendar task: {0} due to error: {1}'.format(, err)
+        #         ))
 
 
 @description("Master top level migration task for 9.x to 10.x")
@@ -1870,7 +1889,7 @@ class MasterMigrateTask(ProgressTask):
         self.apps_migrated.append('system')
 
         self.migration_progess(
-            30, 'Migrating netwrok app: network config, interfaces, vlans, bridges, and laggs'
+            30, 'Migrating network app: network config, interfaces, vlans, bridges, and laggs'
         )
         self.run_subtask_sync('migration.networkmigrate')
         self.apps_migrated.append('network')
