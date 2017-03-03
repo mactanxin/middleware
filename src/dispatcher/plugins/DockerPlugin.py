@@ -234,73 +234,17 @@ class DockerImagesProvider(Provider):
     @accepts(str, bool)
     @generator
     def get_collection_images(self, collection='freenas', force=False):
-        def update_collection(c, q):
-            parser = dockerfile_parse.DockerfileParser()
-            items = []
+        queue = Queue()
+        gevent.spawn(self.update_collection, collection, force, queue)
 
-            with dockerhub.DockerHub() as hub:
-                with self.update_collection_lock:
-                    try:
-                        for i in hub.get_repositories(c):
-                            presets = None
-                            icon = None
-                            repo_name = '{0}/{1}'.format(i['user'], i['name'])
-
-                            if i['is_automated']:
-                                # Fetch dockerfile
-                                try:
-                                    parser.content = hub.get_dockerfile(repo_name)
-                                    presets = self.dispatcher.call_sync(
-                                        'containerd.docker.labels_to_presets',
-                                        parser.labels
-                                    )
-                                except:
-                                    pass
-
-                            item = {
-                                'name': repo_name,
-                                'description': i['description'],
-                                'star_count': i['star_count'],
-                                'pull_count': i['pull_count'],
-                                'icon': icon,
-                                'presets': presets,
-                                'version': '0' if not presets else presets.get('version', '0')
-                            }
-                            items.append(item)
-                            q.put(item)
-                    except TimeoutError as e:
-                        raise RpcException(errno.ETIMEDOUT, e)
-                    except ConnectionError as e:
-                        raise RpcException(errno.ECONNABORTED, e)
-                    finally:
-                        q.put(StopIteration)
-
-                    collections.put(c, {
-                        'update_time': datetime.now(),
-                        'items': items
-                    })
-
-        outdated_collections = []
-        now = datetime.now()
-        for k, v in collections.itervalid():
-            time_since_last_update = now - v['update_time']
-            if time_since_last_update > self.collection_cache_lifetime:
-                outdated_collections.append(k)
-
-        collections.remove_many(outdated_collections)
-
-        collection_data = collections.get(collection, {})
-        time_since_last_update = now - collection_data.get('update_time', now)
-
-        if force or not collections.is_valid(collection) or time_since_last_update > self.throttle_period:
-            queue = Queue()
-            gevent.spawn(update_collection, collection, queue)
+        if not collections.is_valid(collection):
             for i in queue:
                 yield i
-        else:
-            collection_data = collections.get(collection)
-            for i in collection_data['items']:
-                yield i
+            return
+
+        collection_data = collections.get(collection)
+        for i in collection_data['items']:
+            yield i
 
     @description('Returns a full description of specified Docker container image')
     @accepts(str)
@@ -311,6 +255,61 @@ class DockerImagesProvider(Provider):
                 return hub.get_repository(repo_name).get('full_description')
             except ValueError:
                 return None
+
+    @private
+    def update_collection(self, collection, force=False, queue=None):
+        parser = dockerfile_parse.DockerfileParser()
+        items = []
+
+        with dockerhub.DockerHub() as hub:
+            with self.update_collection_lock:
+                now = datetime.now()
+                collection_data = collections.get(collection, {})
+                time_since_last_update = now - collection_data.get('update_time', now)
+                if not force and collections.is_valid(collection) and time_since_last_update < self.throttle_period:
+                    return
+
+                try:
+                    for i in hub.get_repositories(collection):
+                        presets = None
+                        icon = None
+                        repo_name = '{0}/{1}'.format(i['user'], i['name'])
+
+                        if i['is_automated']:
+                            # Fetch dockerfile
+                            try:
+                                parser.content = hub.get_dockerfile(repo_name)
+                                presets = self.dispatcher.call_sync(
+                                    'containerd.docker.labels_to_presets',
+                                    parser.labels
+                                )
+                            except:
+                                pass
+
+                        item = {
+                            'name': repo_name,
+                            'description': i['description'],
+                            'star_count': i['star_count'],
+                            'pull_count': i['pull_count'],
+                            'icon': icon,
+                            'presets': presets,
+                            'version': '0' if not presets else presets.get('version', '0')
+                        }
+                        items.append(item)
+                        if queue:
+                            queue.put(item)
+                except TimeoutError as e:
+                    raise RpcException(errno.ETIMEDOUT, e)
+                except ConnectionError as e:
+                    raise RpcException(errno.ECONNABORTED, e)
+                finally:
+                    if queue:
+                        queue.put(StopIteration)
+
+                collections.put(collection, {
+                    'update_time': datetime.now(),
+                    'items': items
+                })
 
 
 @description('Provides information about cached Docker container collections')
@@ -2201,6 +2200,10 @@ def _init(dispatcher, plugin):
             logger.trace('Docker images cache initialized')
             images.ready = True
 
+    def init_collections(args):
+        for c in dispatcher.datastore.query_stream('docker.collections', select='collection'):
+            dispatcher.call_sync('docker.image.update_collection', c, True)
+
     plugin.register_provider('docker.config', DockerConfigProvider)
     plugin.register_provider('docker.host', DockerHostProvider)
     plugin.register_provider('docker.container', DockerContainerProvider)
@@ -2252,6 +2255,8 @@ def _init(dispatcher, plugin):
     plugin.register_event_handler('containerd.docker.client.disconnected', lambda a: refresh_cache(host_id=a['id']))
     plugin.register_event_handler('vm.changed', on_vm_change)
     plugin.register_event_handler('server.ready', lambda a: refresh_cache())
+
+    dispatcher.register_event_handler_once('network.changed', init_collections)
 
     plugin.attach_hook('vm.pre_destroy', vm_pre_destroy)
 
