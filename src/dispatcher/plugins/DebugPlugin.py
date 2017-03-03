@@ -84,7 +84,7 @@ class CollectDebugTask(ProgressTask):
             tar.addfile(
                 info,
                 io.BytesIO(
-                    cmd['data'] if isinstance(cmd['data'], bytes) else cmd['data'].encode('utf-8')
+                    data if isinstance(data, bytes) else data.encode('utf-8')
                 )
             )
 
