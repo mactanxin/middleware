@@ -112,6 +112,11 @@ class DockerContainerProvider(Provider):
                 'reachable': obj['host'] in hosts,
                 'hub_url': 'https://hub.docker.com/r/{0}'.format(obj['image'].split(':')[0])
             })
+
+            for i in obj['volumes']:
+                if i['host_path'].startswith('/host'):
+                    i['host_path'] = i['host_path'].replace('/host', '/mnt')
+
             return obj
 
         reachable_hosts = list(self.dispatcher.call_sync('docker.host.query', [('state', '=', 'UP')], {'select': 'id'}))
