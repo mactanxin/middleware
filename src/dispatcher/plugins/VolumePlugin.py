@@ -1652,10 +1652,13 @@ class VolumeAutoReplaceTask(ProgressTask):
         return "Replacing failed disk in a volume"
 
     def describe(self, id, failed_vdev, password=None):
-        vdev = self.dispatcher.call_sync('volume.vdev_by_guid', id, failed_vdev)
         vdev_path = None
-        if vdev:
-            vdev_path = vdev['path']
+        try:
+            vdev = self.dispatcher.call_sync('volume.vdev_by_guid', id, failed_vdev)
+            if vdev:
+                vdev_path = vdev['path']
+        except RpcException:
+            pass
 
         return TaskDescription(
             "Replacing the failed disk {vdev} in the volume {name}",
@@ -1690,7 +1693,7 @@ class VolumeAutoReplaceTask(ProgressTask):
             if not disk or not disk['online']:
                 continue
 
-            self.run_subtask_sync('volume.vdev.replace', id, failed_vdev, disk['path'])
+            self.run_subtask_sync('volume.vdev.replace', id, failed_vdev, disk['id'])
             return
 
         # Now into global hot-sparing mode
@@ -1703,7 +1706,7 @@ class VolumeAutoReplaceTask(ProgressTask):
                 self.run_subtask_sync('disk.format.gpt', disk['id'], 'freebsd-zfs', {'swapsize': swapsize})
                 self.run_subtask_sync(
                     'volume.vdev.replace',
-                    id, failed_vdev, disk['path'], password,
+                    id, failed_vdev, disk['id'], password,
                     progress_callback=self.set_progress
                 )
                 return
