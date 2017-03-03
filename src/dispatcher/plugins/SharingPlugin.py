@@ -521,21 +521,29 @@ class ShareSetImmutableTask(Task):
 
 
 @description("Deletes share")
-@accepts(str)
+@accepts(str, bool)
 class DeleteShareTask(Task):
     @classmethod
     def early_describe(cls):
         return "Deleting share"
 
-    def describe(self, id):
+    def describe(self, id, delete_dataset=False):
         share = self.datastore.get_by_id('shares', id)
         return TaskDescription("Deleting share {name}", name=share.get('name', id) if share else id)
 
-    def verify(self, id):
+    def verify(self, id, delete_params=False):
         return ['system']
 
-    def run(self, id):
+    def run(self, id, delete_dataset=False):
         share = self.datastore.get_by_id('shares', id)
+        target_type = share['target_type']
+        dataset = None
+
+        if target_type == 'DATASET' or target_type == 'ZVOL':
+            dataset = share['target_path']
+        elif delete_dataset:
+            raise TaskException(errno.EINVAL, 'Cannot delete dataset for non-dataset share')
+
         if not share:
             raise TaskException(errno.ENOENT, 'Share not found')
 
@@ -554,6 +562,8 @@ class DeleteShareTask(Task):
             'operation': 'delete',
             'ids': [id]
         })
+        if dataset and delete_dataset:
+            self.run_subtask_sync('volume.dataset.delete', dataset)
 
 
 @description("Export share")
