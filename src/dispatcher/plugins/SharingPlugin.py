@@ -531,7 +531,7 @@ class DeleteShareTask(Task):
         share = self.datastore.get_by_id('shares', id)
         return TaskDescription("Deleting share {name}", name=share.get('name', id) if share else id)
 
-    def verify(self, id, delete_params=False):
+    def verify(self, id, delete_dataset=False):
         return ['system']
 
     def run(self, id, delete_dataset=False):
