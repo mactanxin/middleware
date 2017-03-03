@@ -350,14 +350,14 @@ class BootPoolScrubTask(ProgressTask):
         return TaskDescription("Performing a scrub of the boot pool")
 
     def verify(self):
-        boot_pool_id = self.dispatcher.call_sync('boot.pool.get_config')['id']
+        boot_pool_id = self.configstore.get('system.boot_pool_name')
         return ['zpool:{}'.format(boot_pool_id)]
 
     def abort(self):
         self.abort_subtasks()
 
     def run(self):
-        boot_pool_id = self.dispatcher.call_sync('boot.pool.get_config')['id']
+        boot_pool_id = self.configstore.get('system.boot_pool_name')
         self.run_subtask_sync(
             'zfs.pool.scrub', boot_pool_id,
             progress_callback=self.set_progress
