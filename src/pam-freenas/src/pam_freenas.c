@@ -102,35 +102,8 @@ call_dispatcher(const char *method, json_t *args, json_t **result)
 		return (-1);
 	}
 
-	json_incref(*result);
-	dispatcher_close(conn);
-	return (0);
-}
-
-static int
-emit_event(const char *event, json_t *args)
-{
-	connection_t *conn;
-	int err;
-
-	conn = dispatcher_open("unix");
-	if (conn == NULL) {
-		PAM_LOG("Cannot open unix domain socket connection");
-		return (-1);
-	}
-
-	if (dispatcher_login_service(conn, "pam-freenas") < 0) {
-		PAM_LOG("Cannot log in as pam-freenas");
-		dispatcher_close(conn);
-		return (-1);
-	}
-
-	err = dispatcher_emit_event(conn, event, args);
-	if (err != 0) {
-		PAM_LOG("Cannot emit event %s: %s", event, strerror(errno));
-		dispatcher_close(conn);
-		return (-1);
-	}
+	if (result != NULL)
+		json_incref(*result);
 
 	dispatcher_close(conn);
 	return (0);
@@ -156,13 +129,13 @@ pam_sm_open_session(struct pam_handle *pamh, int flags, int argc,
 	if (err != PAM_SUCCESS)
 		return (err);
 
-	args = json_pack("{ssssss}",
-		"username", username,
-		"tty", tty,
-		"service", service
+	args = json_pack("[{ssss?ss?}]",
+	    "username", username,
+	    "tty", tty,
+	    "service", service
 	);
 
-	if (emit_event("system.session.open", args) != 0)
+	if (call_dispatcher("dscached.management.session_open", args, NULL) != 0)
 		return (PAM_SERVICE_ERR);
 
 	return (PAM_SUCCESS);
@@ -188,13 +161,13 @@ pam_sm_close_session(struct pam_handle *pamh, int flags, int argc,
 	if (err != PAM_SUCCESS)
 		return (err);
 
-	args = json_pack("{ssssss}",
+	args = json_pack("[{ssss?ss?}]",
 	    "username", username,
 	    "tty", tty,
 	    "service", service
 	);
 
-	if (emit_event("system.session.close", args) != 0)
+	if (call_dispatcher("dscached.management.session_close", args, NULL) != 0)
 		return (PAM_SERVICE_ERR);
 
 	return (PAM_SUCCESS);
@@ -267,9 +240,12 @@ pam_sm_authenticate(struct pam_handle *pamh, int flags, int argc,
 	PAM_LOG("Result: %s", result_s);
 	free(result_s);
 
-	if (json_is_true(result))
+	if (json_is_true(result)) {
+		json_decref(result);
 		return (PAM_SUCCESS);
+	}
 
+	json_decref(result);
 	return (PAM_AUTH_ERR);
 }
 
@@ -327,6 +303,7 @@ pam_sm_chauthtok(struct pam_handle *pamh, int flags, int argc,
 
 	}
 
+	json_decref(result);
 	return (retval);
 }
 
