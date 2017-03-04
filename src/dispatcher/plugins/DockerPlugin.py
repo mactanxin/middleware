@@ -80,6 +80,18 @@ class DockerHostProvider(Provider):
     def query(self, filter=None, params=None):
         def extend(obj):
             status = hosts_status_cache.get(obj['id'])
+            state = 'UP'
+            if not status:
+                vm_state = self.dispatcher.call_sync(
+                    'vm.query',
+                    [('id', '=', obj['id'])],
+                    {'single': True, 'select': 'status.state'}
+                )
+                if vm_state in ('BOOTLOADER', 'RUNNING'):
+                    state = 'CONNECTING'
+                else:
+                    state = 'DOWN'
+
             ret = {
                 'id': obj['id'],
                 'name': obj['name'],
@@ -88,7 +100,7 @@ class DockerHostProvider(Provider):
                     'memsize': q.get(obj, 'config.memsize'),
                     'ncpus': q.get(obj, 'config.ncpus')
                 },
-                'state': 'UP' if status else 'DOWN',
+                'state': state,
                 'status': status
             }
 
@@ -1981,6 +1993,10 @@ def _init(dispatcher, plugin):
                                 id,
                                 dispatcher.call_sync('containerd.docker.get_host_status', id, timeout=100)
                             )
+                            dispatcher.dispatch_event('docker.host.changed', {
+                                'operation': 'update',
+                                'ids': [id]
+                            })
                         except RpcException:
                             hosts_status_cache.remove(id)
 
@@ -2320,7 +2336,7 @@ def _init(dispatcher, plugin):
 
     plugin.register_schema_definition('DockerHostState', {
         'type': 'string',
-        'enum': ['UP', 'DOWN']
+        'enum': ['UP', 'CONNECTING', 'DOWN']
     })
 
     plugin.register_schema_definition('DockerHostStatus', {
