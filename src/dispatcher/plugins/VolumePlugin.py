@@ -3250,7 +3250,7 @@ def _init(dispatcher, plugin):
                 'usedbychildren', 'logicalused', 'logicalreferenced', 'origin',
                 'readonly', 'recordsize'
             ),
-            'permissions_type': permissions_type,
+            'permissions_type': q.get(ds, 'properties.org\\.freenas:permissions_type.value'),
             'permissions': perms['permissions'] if perms else None,
             'last_replicated_by': last_replicated_by,
             'last_replicated_at': last_replicated_at,
