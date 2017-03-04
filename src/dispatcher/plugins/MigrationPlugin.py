@@ -961,11 +961,15 @@ class ShareMigrateTask(Task):
         target_to_portal_map = {}
 
         for auth in fn9_iscsitargetauthcreds.values():
-            auth['auth_methods'] = {
-                'None': {'portal_ids': [], 'target_ids': []},
-                'CHAP': {'portal_ids': [], 'target_ids': []},
-                'CHAP Mutual': {'portal_ids': [], 'target_ids': []},
-            }
+            auth.update({
+                'auth_methods': {
+                    'None': {'portal_ids': [], 'target_ids': []},
+                    'CHAP': {'portal_ids': [], 'target_ids': []},
+                    'CHAP Mutual': {'portal_ids': [], 'target_ids': []},
+                },
+                'initiators': None,
+                'networks': None
+            })
             for x in fn9_iscsitargetportals.values():
                 if x['iscsi_target_portal_discoveryauthgroup'] == auth['iscsi_target_auth_tag']:
                     auth['auth_methods'][x['iscsi_target_portal_discoveryauthmethod']]['portal_ids'].append(x['id'])
@@ -973,6 +977,17 @@ class ShareMigrateTask(Task):
             for x in fn9_iscsitargetgroups.values():
                 if x['iscsi_target_authgroup'] == auth['iscsi_target_auth_tag']:
                     auth['auth_methods'][x['iscsi_target_authtype']]['target_ids'].append(x['id'])
+                    auth_initiator9 = fn9_iscsitargetauthinitiators.get(auth['iscsi_target_initiatorgroup_id'])
+                    # if (
+                    #     auth_initiator9 and
+                    #     not (
+                    #         auth_initiator9['iscsi_target_initiator_initiators'] == 'ALL' and
+                    #         auth_initiator9['iscsi_target_initiator_auth_network'] == 'ALL'
+                    #     )
+                    # ):
+                    #     auth
+
+
 
         # Now lets make them auth groups, portals, and targets
         for fn9_targetauthcred in fn9_iscsitargetauthcreds.values():
@@ -982,14 +997,6 @@ class ShareMigrateTask(Task):
             # i.e. in fn9 that same auth credential entry with 'group id'=1 can be used
             # 'CHAP', 'CHAP_MUTUAL', and 'NONE' in fn9's iscsi portals, BUT, in fn10
             # we need to create a different auth group entry per auth type in it
-            # auth_map = [
-            #     (
-            #         x['iscsi_target_portal_discoveryauthmethod'].upper().replace(' ', '_'),
-            #         x['iscsi_target_portal_tag']
-            #     )
-            #     for x in fn9_iscsitargetportals.values()
-            #     if x['iscsi_target_portal_discoveryauthgroup'] == fn9_iscsitargetauthcred['iscsi_target_auth_tag']
-            # ] or [('NONE', None)]
             def create_auth_group(auth_type='NONE', fn9_targetauthcred=fn9_targetauthcred):
                 try:
                     return self.run_subtask_sync(
@@ -1848,11 +1855,15 @@ class MasterMigrateTask(ProgressTask):
                 'status': self.status
             }
         )
-        push_status(
-            'MigrationPlugin: status: {0}, apps migrated: {1}'.format(
-                self.status, ', '.join(self.apps_migrated)
+        try:
+            push_status(
+                'MigrationPlugin: status: {0}, apps migrated: {1}'.format(
+                    self.status, ', '.join(self.apps_migrated)
+                )
             )
-        )
+        except:
+            # don't fail if you cannot set status d'oh
+            pass
 
     def verify(self):
         return ['root']
