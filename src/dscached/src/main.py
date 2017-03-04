@@ -419,6 +419,28 @@ class ManagementService(RpcService):
             'status_message': directory.status_message
         }
 
+    def session_open(self, session):
+        logging.debug(f'Session opened: user {session["username"]}, service {session["service"]}')
+
+        # Create home dir if needed
+        user = self.context.account_service.getpwnam(session['username'])
+        if not user:
+            return
+
+        if not user['home'] or user['home'] == '/nonexistent':
+            return
+
+        if not os.path.exists(user['home']):
+            try:
+                os.makedirs(user['home'], mode=0o755, exist_ok=True)
+                os.chown(user['home'], user['uid'], user['gid'])
+                logging.info(f'Created home directory for {user["username"]} at {user["home"]}')
+            except OSError as err:
+                logging.warning(f'Cannot create home directory for user {user["username"]}: {err}')
+
+    def session_close(self, session):
+        logging.debug(f'Session closed: user {session["username"]}, service {session["service"]}')
+
     def reload_config(self):
         self.context.load_config()
 
