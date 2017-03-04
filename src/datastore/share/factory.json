@@ -224,33 +224,6 @@
             "service.sshd.keys.rsa.public": null,
             "service.sshd.keys.rsa.certificate": null,
             "service.sshd.auxiliary": null,
-            "service.openvpn.enable": false,
-            "service.openvpn.mode": "psk",
-            "service.openvpn.psk_server_ip": "10.8.0.1",
-            "service.openvpn.psk_remote_ip": "10.8.0.2",
-            "service.openvpn.dev": "tun",
-            "service.openvpn.ca": "",
-            "service.openvpn.port" : 1194,
-            "service.openvpn.cert": "",
-            "service.openvpn.key": "",
-            "service.openvpn.dh" : "",
-            "service.openvpn.cipher": "BF-CBC",
-            "service.openvpn.tls_auth": null,
-            "service.openvpn.server_ip": null,
-            "service.openvpn.server_netmask": null,
-            "service.openvpn.push_routes": [],
-            "service.openvpn.max_clients": 20,
-            "service.openvpn.crl_verify": null,
-            "service.openvpn.keepalive_ping_interval": 10,
-            "service.openvpn.keepalive_peer_down": 60,
-            "service.openvpn.user": "root",
-            "service.openvpn.group": "wheel",
-            "service.openvpn.proto": "udp",
-            "service.openvpn.comp_lzo" : true,
-            "service.openvpn.verb" : 3,
-            "service.openvpn.auxiliary" : null,
-            "service.openvpn.persist_key" : true,
-            "service.openvpn.persist_tun" : true,
             "service.nginx.http.redirect_https": false,
             "service.nginx.http.port": 80,
             "service.nginx.http.enable": true,
@@ -559,15 +532,6 @@
                     "plugin:ctl"
                 ],
                 "name": "ctl"
-            },
-            "4f8f208c-046d-41d0-9628-d0699a4e4cdb":{
-                "dependencies": [
-                    "group:services",
-                    "file:local/openvpn/openvpn.conf",
-                    "file:local/openvpn/openvpn_client",
-                    "plugin:local/openvpn/gen_crypto_files"
-                ],
-                "name": "openvpn"
             },
             "ec021fab-7c53-11e6-aefb-000c29796bea": {
                 "dependencies": [
@@ -963,22 +927,6 @@
                 "dependencies": [
                     "793867c5-bf29-4464-b7f1-7b77a9e2b97c"
                 ]
-            },
-            "0a4792b5-e670-456a-a714-6806de235dea": {
-                "launchd": {
-                    "Label": "net.openvpn.openvpn",
-                    "RunAtLoad": true,
-                    "Requires": ["networking", "logging", "etc"],
-                    "ProgramArguments": [
-                        "/usr/local/sbin/openvpn",
-                        "--config",
-                        "/usr/local/etc/openvpn/openvpn.conf"
-                    ]
-                },
-                "builtin": false,
-                "task": "service.openvpn.update",
-                "get_config_rpc": "service.openvpn.get_config",
-                "name": "openvpn"
             },
             "9486ab01-7c53-11e6-aefb-000c29796bea": {
                 "builtin": false,
