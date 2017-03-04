@@ -3340,7 +3340,7 @@ def _init(dispatcher, plugin):
         if not vdev:
             return
 
-        if args['status'] in ('FAULTED', 'REMOVED', 'OFFLINE'):
+        if args['status'] in ('FAULTED', 'REMOVED'):
             logger.warning('Vdev {0} of pool {1} is now in {2} state - attempting to replace'.format(
                 args['vdev_guid'],
                 volume['id'],
