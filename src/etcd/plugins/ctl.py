@@ -172,6 +172,14 @@ def generate_auth_groups(context):
             'secret': user['secret']
         }
 
+    def generate_mutual_chap_user(user):
+        return {
+            'user': user['name'],
+            'secret': user['secret'],
+            'mutual-user': user['peer_name'],
+            'mutual-secret': user['peer_secret']
+        }
+
     for i in context.datastore.query('iscsi.auth'):
         group = {}
 
@@ -180,8 +188,10 @@ def generate_auth_groups(context):
             continue
 
         if i.get('users'):
-            group['chap'] = list(map(generate_chap_user, i['users']))
-            group['chap-mutual'] = list(map(generate_chap_user, i['users']))
+            if i['type'] == 'CHAP_MUTUAL':
+                group['chap-mutual'] = list(map(generate_mutual_chap_user, i['users']))
+            elif i['type'] == 'CHAP':
+                group['chap'] = list(map(generate_chap_user, i['users']))
 
         if i.get('initiators'):
             group['initiator-name'] = i['initiators']
