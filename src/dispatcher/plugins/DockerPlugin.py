@@ -2262,8 +2262,10 @@ def _init(dispatcher, plugin):
     plugin.register_event_handler('containerd.docker.image.changed', on_image_event)
     plugin.register_event_handler('containerd.docker.client.disconnected', lambda a: refresh_cache(host_id=a['id']))
     plugin.register_event_handler('vm.changed', on_vm_change)
-    plugin.register_event_handler('server.ready', lambda a: refresh_cache())
-
+    plugin.register_event_handler(
+        'plugin.service_registered',
+        lambda a: refresh_cache() if a['service-name'] == 'containerd.docker' else None
+    )
     dispatcher.register_event_handler_once('network.changed', init_collections)
 
     plugin.attach_hook('vm.pre_destroy', vm_pre_destroy)
