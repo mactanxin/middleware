@@ -30,6 +30,8 @@ import errno
 import os
 import random
 import gzip
+import hashlib
+import gevent
 import uuid
 import pygit2
 import urllib.request
@@ -40,6 +42,7 @@ import tarfile
 import logging
 import datetime
 import tempfile
+from cache import EventCacheStore
 from bsd.copy import copytree
 from bsd import sysctl
 from task import Provider, Task, ProgressTask, VerifyException, TaskException, query, TaskWarning, TaskDescription
@@ -65,6 +68,9 @@ MAX_VM_TOOLS_FILE_SIZE = 102400
 
 
 logger = logging.getLogger(__name__)
+
+
+templates = None
 
 
 @description('Provides information about VMs')
@@ -354,16 +360,16 @@ class VMTemplateProvider(Provider):
     @query('Vm')
     @generator
     def query(self, filter=None, params=None):
-        fetch_lock = self.dispatcher.get_lock('vm_templates')
-        try:
-            fetch_lock.acquire(1)
-            fetch_templates(self.dispatcher)
-        except RpcException:
-            pass
-        finally:
-            fetch_lock.release()
+        def extend(obj):
+            obj['template']['cached_on'] = []
+            for d, c in cache_dirs:
+                if os.path.isdir(os.path.join(c, obj['template']['name'])):
+                    obj['template']['cached_on'].append(d)
 
-        templates_dir = self.dispatcher.call_sync('system_dataset.request_directory', 'vm_templates')
+            return obj
+
+        gevent.spawn(self.update)
+
         datastores = self.dispatcher.call_sync('vm.datastore.query', [], {'select': 'id'})
         cache_dirs = []
         for d in datastores:
@@ -372,7 +378,34 @@ class VMTemplateProvider(Provider):
             except RpcException:
                 pass
 
-        templates = []
+        return q.query(
+            q.filter_and_map(extend, templates.validvalues()),
+            *(filter or []),
+            stream=True,
+            **(params or {})
+        )
+
+    @private
+    def update(self, force=False):
+        fetch_lock = self.dispatcher.get_lock('vm_templates')
+        templates_updated = False
+        with fetch_lock:
+            try:
+                if force:
+                    self.dispatcher.call_task_sync('vm.template.fetch')
+                    templates_updated = True
+                else:
+                    templates_updated = fetch_templates(self.dispatcher)
+            except RpcException:
+                pass
+
+        if not templates_updated:
+            return
+
+        result = {}
+        templates_dir = self.dispatcher.call_sync('system_dataset.request_directory', 'vm_templates')
+
+        ids = []
         for root, dirs, files in os.walk(templates_dir):
             if 'template.json' in files:
                 with open(os.path.join(root, 'template.json'), encoding='utf-8') as template_file:
@@ -389,23 +422,33 @@ class VMTemplateProvider(Provider):
                             with open(os.path.join(root, 'hash')) as ipfs_hash:
                                 template['template']['hash'] = ipfs_hash.read()
 
-                        template['template']['cached_on'] = []
-                        for d, c in cache_dirs:
-                            if os.path.isdir(os.path.join(c, template['template']['name'])):
-                                template['template']['cached_on'].append(d)
                         total_fetch_size = 0
                         for file in template['template']['fetch']:
                             total_fetch_size += file.get('size', 0)
 
                         template['template']['fetch_size'] = total_fetch_size
 
-                        template['template']['template_version'] = str(template['template']['updated_at'].date()).replace('-', '')
+                        template['template']['template_version'] = str(
+                            template['template']['updated_at'].date()).replace('-', '')
 
-                        templates.append(template)
+                        hash = hashlib.sha256(
+                            '{}{}'.format(
+                                q.get(template, 'template.source'),
+                                q.get(template, 'template.name')
+                            ).encode('utf-8')
+                        )
+                        id = hash.hexdigest()
+                        template['id'] = id
+
+                        result[id] = template
+                        ids.append(id)
                     except ValueError:
                         pass
 
-        return q.query(templates, *(filter or []), stream=True, **(params or {}))
+            removed = templates.query(['id', 'nin', ids], {'select': 'id'})
+            templates.update(**result)
+            if removed:
+                templates.remove_many(removed)
 
 
 class VMConfigProvider(Provider):
@@ -453,7 +496,7 @@ class VMConfigUpdateTask(Task):
                     if t not in valid_sources:
                         shutil.rmtree(os.path.join(templates_dir, t))
 
-                self.run_subtask_sync('vm.template.fetch')
+                self.dispatcher.call_sync('vm.template.update', True)
 
 
 class VMBaseTask(ProgressTask):
@@ -901,6 +944,7 @@ class VMCreateTask(VMBaseTask):
             vm['template']['name'] = template['template']['name']
             template['template'].pop('readme', None)
             template['config'].pop('minmemsize', None)
+            template.pop('id', None)
 
             result = {}
             for key in vm:
@@ -2527,6 +2571,7 @@ def convert_device_type(device):
 @throttle(minutes=10)
 def fetch_templates(dispatcher):
     dispatcher.call_task_sync('vm.template.fetch')
+    return True
 
 
 def collect_debug(dispatcher):
@@ -2543,6 +2588,9 @@ def _depends():
 
 
 def _init(dispatcher, plugin):
+    global templates
+    templates = EventCacheStore(dispatcher, 'vm.template')
+
     plugin.register_schema_definition('VmStatus', {
         'type': 'object',
         'readOnly': True,
@@ -2913,6 +2961,12 @@ def _init(dispatcher, plugin):
                     if dispatcher.call_sync('vm.datastore.get_state', vm['target']) == 'ONLINE':
                         dispatcher.call_sync('containerd.management.retry_autostart', vm['id'])
 
+    def init_templates(args):
+        try:
+            dispatcher.call_sync('vm.template.update', True)
+        except RpcException:
+            pass
+
     plugin.register_provider('vm', VMProvider)
     plugin.register_provider('vm.config', VMConfigProvider)
     plugin.register_provider('vm.snapshot', VMSnapshotProvider)
@@ -2947,9 +3001,11 @@ def _init(dispatcher, plugin):
     plugin.register_hook('vm.pre_destroy')
 
     plugin.register_event_type('vm.changed')
+    plugin.register_event_type('vm.template.changed')
     plugin.register_event_type('vm.snapshot.changed')
 
     plugin.register_event_handler('vm.datastore.snapshot.changed', on_snapshot_change)
     plugin.register_event_handler('vm.datastore.changed', on_datastore_change)
+    dispatcher.register_event_handler_once('network.changed', init_templates)
 
     plugin.register_debug_hook(collect_debug)
