@@ -259,6 +259,7 @@ class VirtualMachine(object):
         self.logger = logging.getLogger('VM:{0}'.format(self.name))
         self.run_lock = RLock()
         self.autostart = False
+        self.dropped_devices = []
 
     @property
     def management_lease(self):
@@ -581,10 +582,27 @@ class VirtualMachine(object):
                     yield i['name']
 
     def drop_invalid_devices(self):
+        def _add_dropped(device):
+            self.dropped_devices.extend([device['name']])
+
         for i in list(self.devices):
             if i['type'] in ('DISK', 'CDROM', 'VOLUME'):
                 path = self.context.client.call_sync('vm.get_device_path', self.id, i['name'])
                 if not path or not os.path.exists(path):
+                    _add_dropped(i)
+                    self.devices.remove(i)
+                    yield i
+            if i['type'] == 'NIC' and q.get(i, 'properties.mode') == 'BRIDGED':
+                iface_name = q.get(i, 'properties.bridge')
+                iface_id = self.context.default_if if iface_name == 'default' else iface_name
+                mtu = self.context.client.call_sync(
+                    'network.interface.query',
+                    [('id', '=', iface_id)],
+                    {'select': 'mtu', 'single': True}
+                )
+                # bhyve limitation
+                if mtu > 1500:
+                    _add_dropped(i)
                     self.devices.remove(i)
                     yield i
 
