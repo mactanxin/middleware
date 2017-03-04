@@ -1295,6 +1295,19 @@ class ManagementService(RpcService):
         }
 
     @private
+    def get_devices_status(self, id):
+        res = {}
+        vm = self.context.vms.get(id)
+        if not vm:
+            return res
+
+        if vm.devices:
+            res.update({d['name']: 'CONNECTED' for d in vm.devices})
+        if vm.dropped_devices:
+            res.update({d: 'ERROR' for d in vm.dropped_devices})
+        return res
+
+    @private
     def start_vm(self, id, strict=False):
         container = self.context.datastore.get_by_id('vms', id)
         if not container:
