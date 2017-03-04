@@ -888,12 +888,18 @@ class ShareMigrateTask(Task):
         # getting all the information from the fn9 database
         fn9_iscsitargets = get_table('select * from services_iscsitarget')
         fn9_iscsitargetauthcreds = get_table('select * from services_iscsitargetauthcredential')
-        fn9_iscsitargetauthinitiators = get_table('select * from services_iscsitargetauthorizedinitiator')
         fn9_iscsitargetextents = get_table('select * from services_iscsitargetextent')
         fn9_iscsitargetgroups = get_table('select * from services_iscsitargetgroups')
         fn9_iscsitargetportals = get_table('select * from services_iscsitargetportal')
         fn9_iscsitargetportalips = get_table('select * from services_iscsitargetportalip')
         fn9_iscsitargettoextent_maps = get_table('select * from services_iscsitargettoextent')
+
+        # Get non 'ALL' initiators
+        fn9_initiators = {
+            k: v
+            for k, v in get_table('select * from services_iscsitargetauthorizedinitiator').items()
+            if not v['iscsi_target_initiator_initiators'] == v['iscsi_target_initiator_auth_network'] == 'ALL'
+        }
 
         # Here we go...
         for fn9_iscsitargetextent in fn9_iscsitargetextents.values():
@@ -967,8 +973,8 @@ class ShareMigrateTask(Task):
                     'CHAP': {'portal_ids': [], 'target_ids': []},
                     'CHAP Mutual': {'portal_ids': [], 'target_ids': []},
                 },
-                'initiators': None,
-                'networks': None
+                'initiators': [],
+                'networks': []
             })
             for x in fn9_iscsitargetportals.values():
                 if x['iscsi_target_portal_discoveryauthgroup'] == auth['iscsi_target_auth_tag']:
@@ -977,17 +983,18 @@ class ShareMigrateTask(Task):
             for x in fn9_iscsitargetgroups.values():
                 if x['iscsi_target_authgroup'] == auth['iscsi_target_auth_tag']:
                     auth['auth_methods'][x['iscsi_target_authtype']]['target_ids'].append(x['id'])
-                    auth_initiator9 = fn9_iscsitargetauthinitiators.get(auth['iscsi_target_initiatorgroup_id'])
-                    # if (
-                    #     auth_initiator9 and
-                    #     not (
-                    #         auth_initiator9['iscsi_target_initiator_initiators'] == 'ALL' and
-                    #         auth_initiator9['iscsi_target_initiator_auth_network'] == 'ALL'
-                    #     )
-                    # ):
-                    #     auth
-
-
+                    auth_initiator9 = fn9_initiators.get(x['iscsi_target_initiatorgroup_id'])
+                    if auth_initiator9:
+                        for initiator in filter(
+                            lambda val: val and val != 'ALL',
+                            auth_initiator9['iscsi_target_initiator_initiators'].replace('\n', ',').replace(' ', ',').split(',')
+                        ):
+                            auth['initiators'].append(initiator)
+                        for network in filter(
+                            lambda val: val and val != 'ALL',
+                            auth_initiator9['iscsi_target_initiator_auth_network'].replace('\n', ',').replace(' ', ',').split(',')
+                        ):
+                            auth['networs'].append(network)
 
         # Now lets make them auth groups, portals, and targets
         for fn9_targetauthcred in fn9_iscsitargetauthcreds.values():
@@ -1016,7 +1023,9 @@ class ShareMigrateTask(Task):
                                 'peer_secret': self._notifier.pwenc_decrypt(
                                     fn9_targetauthcred['iscsi_target_auth_peersecret']
                                 ) if fn9_targetauthcred['iscsi_target_auth_peersecret'] else None
-                            }]
+                            }],
+                            'initiators': fn9_targetauthcred['initiators'] or None,
+                            'networks': fn9_targetauthcred['networks'] or None
                         }
                     )
                 except RpcException as err:
@@ -1074,14 +1083,51 @@ class ShareMigrateTask(Task):
 
         for fn9_iscsitarget in fn9_iscsitargets.values():
             try:
+                auth_group = authgroup_to_target_map.get(fn9_iscsitarget['id'])
+                if auth_group is None:
+                    # If this is none that means that we still need to map the initiators
+                    # by creating an auth group just for the 'initiators' and 'networks' fields
+                    for x in fn9_iscsitargetgroups.values():
+                        if x['iscsi_target_id'] == fn9_iscsitarget['id']:
+                            initiator_obj = fn9_initiators.get(x['iscsi_target_initiatorgroup_id'])
+                            if initiator_obj:
+                                target_initiators = []
+                                target_networks = []
+                                for initiator in filter(
+                                    lambda val: val and val != 'ALL',
+                                    initiator_obj['iscsi_target_initiator_initiators'].replace('\n', ',').replace(' ', ',').split(',')
+                                ):
+                                    target_initiators.append(initiator)
+                                for network in filter(
+                                    lambda val: val and val != 'ALL',
+                                    initiator_obj['iscsi_target_initiator_auth_network'].replace('\n', ',').replace(' ', ',').split(',')
+                                ):
+                                    target_networks.append(network)
+                                try:
+                                    auth_group = self.run_subtask_sync(
+                                        'share.iscsi.auth.create',
+                                        {
+                                            'description': '{0} auth group for initiators and networks only'.format(fn9_iscsitarget['iscsi_target_alias']),
+                                            'type': 'NONE',
+                                            'initiators': target_initiators or None,
+                                            'networks': target_networks or None,
+                                        }
+                                    )
+                                except RpcException as err:
+                                    self.add_warning(TaskWarning(
+                                        errno.EINVAL,
+                                        "Cannot create iSCSI auth group for {0} target's initiators and networks, error: {2}".format(
+                                            fn9_iscsitarget['iscsi_target_name'], err
+                                        )
+                                    ))
+                            break
+
                 self.run_subtask_sync(
                     'share.iscsi.target.create',
                     {
                         'id': fn9_iscsitarget['iscsi_target_name'],
                         'description': fn9_iscsitarget['iscsi_target_alias'],
-                        'auth_group': authgroup_to_target_map.get(
-                            fn9_iscsitarget['id'], 'no-authentication'
-                        ),
+                        'auth_group': auth_group or 'no-authentication',
                         'portal_group': target_to_portal_map.get(fn9_iscsitarget['id'], 'default'),
                         'extents': [
                             {
@@ -1822,7 +1868,7 @@ class CalendarMigrateTask(Task):
         #             'calendar_task.create',
         #             {
         #                 'name': ,
-        #                 'task': 
+        #                 'task':
         #             }
         #         )
         #     except RpcException as err:
