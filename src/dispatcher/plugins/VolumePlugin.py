@@ -3192,13 +3192,19 @@ def _init(dispatcher, plugin):
 
         if ds['mountpoint'] and '.system' not in ds['name'] and ds['name'] != ds['pool'] and local_mountpoint:
             # Correct mountpoint of a non-root dataset
-            dispatcher.call_sync('zfs.dataset.inherit_property', ds['name'], 'mountpoint')
+            try:
+                dispatcher.call_sync('zfs.dataset.inherit_property', ds['name'], 'mountpoint')
+            except RpcException as err:
+                logger.warning(f'Failed to fix mountpoint on dataset {ds["name"]}: {err}')
 
         if ds['name'] == ds['pool']:
             # Correct mountpoint of a root dataset
             desired_mountpoint = os.path.join(VOLUMES_ROOT, ds['pool'])
             if q.get(ds, 'properties.mountpoint.parsed') != desired_mountpoint:
-                dispatcher.call_sync('zfs.dataset.set_property', ds['name'], 'mountpoint', desired_mountpoint)
+                try:
+                    dispatcher.call_sync('zfs.dataset.set_property', ds['name'], 'mountpoint', desired_mountpoint)
+                except RpcException as err:
+                    logger.warning(f'Failed fix mountpoint dataset {ds["name"]}: {err}')
 
         prop = q.get(ds, 'properties.org\\.freenas:last_replicated_at')
         if prop and prop['source'] == 'LOCAL':
@@ -3210,6 +3216,19 @@ def _init(dispatcher, plugin):
         prop = q.get(ds, 'properties.org\\.freenas:last_replicated_by')
         if prop and prop['source'] == 'LOCAL':
             last_replicated_by = prop['value']
+
+        perm_type = q.get(ds, 'properties.org\\.freenas:permissions_type')
+        if ds['type'] == 'FILESYSTEM' and q.get(perm_type, 'source') != 'LOCAL':
+            aclmode = q.get(ds, 'properties.aclmode.parsed')
+            try:
+                dispatcher.call_sync(
+                    'zfs.dataset.set_property',
+                    ds['name'],
+                    'org.freenas:permissions_type',
+                    'ACL' if aclmode == 'restricted' else 'PERM'
+                )
+            except RpcException as err:
+                logger.warning(f'Failed to set permissions type on dataset {ds["name"]}: {err}')
 
         return {
             'id': ds['name'],
@@ -3231,7 +3250,7 @@ def _init(dispatcher, plugin):
                 'usedbychildren', 'logicalused', 'logicalreferenced', 'origin',
                 'readonly', 'recordsize'
             ),
-            'permissions_type': q.get(ds, 'properties.org\\.freenas:permissions_type.value'),
+            'permissions_type': permissions_type,
             'permissions': perms['permissions'] if perms else None,
             'last_replicated_by': last_replicated_by,
             'last_replicated_at': last_replicated_at,

@@ -163,7 +163,7 @@ class ZpoolProvider(Provider):
         def doit():
             zfs = get_zfs()
             pool = zfs.get(pool_name)
-            pool.properties[property_name].value = value
+            pool.properties[property_name] = value
 
         self.dispatcher.threaded(doit)
 
@@ -284,7 +284,10 @@ class ZfsDatasetProvider(Provider):
         def doit():
             zfs = get_zfs()
             pool = zfs.get_dataset(dataset_name)
-            pool.properties[property_name].value = value
+            if ':' in property_name:
+                pool.properties[property_name] = libzfs.ZFSUserProperty(value)
+            else:
+                pool.properties[property_name].value = value
 
         self.dispatcher.threaded(doit)
 
