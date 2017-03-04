@@ -114,9 +114,15 @@ class VMProvider(Provider):
                 else:
                     return {'state': 'ORPHANED'}
 
+            def get_devices_status():
+                vm_id = obj['id']
+                return self.dispatcher.call_sync('containerd.management.get_devices_status', vm_id)
+
             obj['status'] = lazy(get_status)
             obj['config']['readme'] = lazy(read_readme)
+            devices_status = get_devices_status()
             for d in obj['devices']:
+                d.update({'status': devices_status.get(d['name'], 'UNKNOWN')})
                 if d['type'] == 'DISK':
                     type = q.get(d, 'properties.target_type')
                     q.set(d, 'properties.size', lazy(get_disk_size, obj['id'], obj['target'], d['name'], type))
@@ -2703,6 +2709,7 @@ def _init(dispatcher, plugin):
         'properties': {
             'id': {'type': 'string'},
             'name': {'type': 'string'},
+            'status': {'$ref': 'VmDeviceStatus'},
             'type': {'$ref': 'VmDeviceType'},
             'properties': {
                 'discriminator': '%type',
@@ -2718,6 +2725,12 @@ def _init(dispatcher, plugin):
             }
         },
         'required': ['name', 'type', 'properties']
+    })
+
+    plugin.register_schema_definition('VmDeviceStatus', {
+        'type': 'string',
+        'enum': ['CONNECTED', 'DISCONNECTED', 'ERROR', 'UNKNOWN'],
+        'readOnly': True
     })
 
     plugin.register_schema_definition('VmDeviceType', {
