@@ -582,14 +582,11 @@ class VirtualMachine(object):
                     yield i['name']
 
     def drop_invalid_devices(self):
-        def _add_dropped(device):
-            self.dropped_devices.extend([device['name']])
-
         for i in list(self.devices):
             if i['type'] in ('DISK', 'CDROM', 'VOLUME'):
                 path = self.context.client.call_sync('vm.get_device_path', self.id, i['name'])
                 if not path or not os.path.exists(path):
-                    _add_dropped(i)
+                    self.dropped_devices.append(i['name'])
                     self.devices.remove(i)
                     yield i
             if i['type'] == 'NIC' and q.get(i, 'properties.mode') == 'BRIDGED':
@@ -602,7 +599,7 @@ class VirtualMachine(object):
                 )
                 # bhyve limitation
                 if mtu > 1500:
-                    _add_dropped(i)
+                    self.dropped_devices.append(i['name'])
                     self.devices.remove(i)
                     yield i
 
