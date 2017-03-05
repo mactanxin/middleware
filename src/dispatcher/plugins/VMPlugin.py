@@ -899,6 +899,7 @@ class VMCreateTask(VMBaseTask):
     def __init__(self, dispatcher):
         super(VMCreateTask, self).__init__(dispatcher)
         self.id = None
+        self.root_dir_created = False
 
     @classmethod
     def early_describe(cls):
@@ -1037,6 +1038,8 @@ class VMCreateTask(VMBaseTask):
 
         self.set_progress(50, 'Initializing VM root directory')
         self.init_root_dir(vm)
+        self.root_dir_created = True
+
         devices_len = len(vm['devices'])
         for idx, res in enumerate(vm['devices']):
             res.pop('id', None)
@@ -1068,7 +1071,7 @@ class VMCreateTask(VMBaseTask):
     def rollback(self, vm):
         vm_root_dir = get_vm_path(vm['name'])
 
-        if self.dispatcher.call_sync('vm.datastore.directory_exists', vm['target'], vm_root_dir):
+        if self.root_dir_created and self.dispatcher.call_sync('vm.datastore.directory_exists', vm['target'], vm_root_dir):
             self.run_subtask_sync('vm.datastore.directory.delete', vm['target'], vm_root_dir)
 
         if self.id:
