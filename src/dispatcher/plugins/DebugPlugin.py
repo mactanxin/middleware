@@ -74,19 +74,25 @@ class CollectDebugTask(ProgressTask):
             )
 
         if cmd['type'] == 'AttachRPC':
-            result = self.dispatcher.call_sync(cmd['rpc'], *cmd['args'])
-            if hasattr(result, '__next__'):
-                result = list(result)
-
-            data = dumps(result, debug=True, indent=4)
-            info = tarfile.TarInfo(os.path.join(plugin, cmd['name']))
-            info.size = len(data)
-            tar.addfile(
-                info,
-                io.BytesIO(
-                    data if isinstance(data, bytes) else data.encode('utf-8')
+            try:
+                result = self.dispatcher.call_sync(cmd['rpc'], *cmd['args'])
+                if hasattr(result, '__next__'):
+                    result = list(result)
+            except RpcException as err:
+                self.add_warning(TaskWarning(
+                    err.code,
+                    f'{plugin}: Cannot add output of {cmd["rpc"]} call, error: {err.message}'
+                ))
+            else:
+                data = dumps(result, debug=True, indent=4)
+                info = tarfile.TarInfo(os.path.join(plugin, cmd['name']))
+                info.size = len(data)
+                tar.addfile(
+                    info,
+                    io.BytesIO(
+                        data if isinstance(data, bytes) else data.encode('utf-8')
+                    )
                 )
-            )
 
         if cmd['type'] == 'AttachCommandOutput':
             try:
@@ -115,6 +121,7 @@ class CollectDebugTask(ProgressTask):
                     err.errno,
                     '{0}: Cannot add file {1}, error: {2}'.format(plugin, cmd['path'], err.strerror)
                 ))
+
                 logger.error(
                     "Error occured when adding {0} to the tarfile for plugin: {1}".format(cmd['path'], plugin),
                     exc_info=True
