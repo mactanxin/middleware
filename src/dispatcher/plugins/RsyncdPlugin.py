@@ -284,7 +284,7 @@ class RsyncCopyTask(ProgressTask):
         if remote_host in [None, ''] or remote_host.isspace():
             errors.add('remote_host', errno.EINVAL, 'A Remote Host needs to be specified')
         if errors:
-            raise ValidationException(errors)
+            raise errors
 
         return []
 
