@@ -599,6 +599,23 @@ class DockerContainerCreateTask(DockerBaseTask):
                 lambda p, m, e=None: self.chunk_progress(0, 30, 'Looking for default Docker host:', p, m, e)
             )
 
+        if container.get('primary_network_mode') == 'BRIDGED':
+            devices = self.dispatcher.call_sync(
+                'vm.query',
+                [('id', '=', container.get('host'))],
+                {'select': 'devices', 'single': True}
+            )
+            bridge_connected = first_or_default(
+                lambda o: o['type'] == 'NIC' and q.get(o, 'properties.mode') == 'BRIDGED' and o['status'] == 'CONNECTED',
+                devices,
+                False
+            )
+            if not bridge_connected:
+                raise TaskException(
+                    errno.ENODEV,
+                    'Cannot create BRIDGED container. Docker host bridged interface not connected'
+                )
+
         self.check_host_state(container['host'])
 
         self.set_progress(30, 'Pulling container {0} image'.format(container['image']))
