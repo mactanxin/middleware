@@ -1704,7 +1704,10 @@ class DockerService(RpcService):
             for c in containers:
                 network_names = list(q.get(c, 'NetworkSettings.Networks', {}).keys())
                 for n in network_names:
-                    networks_containers_map[n].append(c['Id'])
+                    try:
+                        networks_containers_map[n].append(c['Id'])
+                    except KeyError:
+                        pass
 
             for network in networks:
                 details = host.connection.inspect_network(network['Id'])
