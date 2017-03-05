@@ -1671,7 +1671,10 @@ class DockerService(RpcService):
                     'networks': networks,
                 })
                 if presets and presets.get('web_ui_protocol'):
-                    port = int(presets['web_ui_port'])
+                    try:
+                        port = int(presets['web_ui_port'])
+                    except ValueError:
+                        port = ''
                     port_configuration = first_or_default(
                         lambda o: o['host_port'] == port and o['protocol'] == 'TCP',
                         obj['ports']
