@@ -2011,6 +2011,10 @@ class VMSnapshotCloneTask(VMSnapshotBaseTask):
         new_vm['name'] = new_name
         new_vm['parent'] = vm['id']
 
+        for d in new_vm['devices']:
+            if d['type'] == 'NIC':
+                q.set(d, 'properties.link_address', self.dispatcher.call_sync('vm.generate_mac'))
+
         self.datastore.insert('vms', new_vm)
         self.dispatcher.dispatch_event('vm.changed', {
             'operation': 'create',
