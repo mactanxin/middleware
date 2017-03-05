@@ -42,7 +42,7 @@ from freenas.utils import include, first_or_default, query as q
 sys.path.append('/usr/local/lib')
 from freenasOS.Update import ListClones, FindClone, RenameClone, ActivateClone, DeleteClone, CreateClone, CloneSetAttr
 from freenas.dispatcher.rpc import RpcException
-from freenas.utils import include
+from freenas.utils import include, query as q
 from freenas.utils.lazy import lazy
 from lib.zfs import iterate_vdevs
 
@@ -62,8 +62,16 @@ class BootPoolProvider(Provider):
             disks = []
             for vdev, _ in iterate_vdevs(pool['groups']):
                 try:
+                    disk_id = self.dispatcher.call_sync('disk.partition_to_disk', vdev['path'])
+                    disk = self.dispatcher.call_sync(
+                        'disk.query',
+                        [('id', '=', disk_id), ('online', '=', True)],
+                        {'single': True}
+                    )
+
                     disks.append({
-                        'disk_id': self.dispatcher.call_sync('disk.partition_to_disk', vdev['path']),
+                        'disk_id': disk_id,
+                        'path': q.get(disk, 'path'),
                         'guid': vdev['guid'],
                         'status': vdev['status']
                     })
@@ -400,7 +408,8 @@ def _init(dispatcher, plugin):
         'properties': {
             'disk_id': {'type': 'string'},
             'guid': {'type': 'string'},
-            'status': {'type': 'string'}
+            'status': {'type': 'string'},
+            'path': {'type': 'string'}
         }
     })
 
