@@ -207,8 +207,7 @@ class CreateShareTask(Task):
         share_type = self.dispatcher.call_sync('share.supported_types').get(share['type'])
         pool_mountpoints = tuple(self.dispatcher.call_sync('volume.query', [], {'select': 'mountpoint'}))
 
-        assert share_type['subtype'] in ('FILE', 'BLOCK'),\
-            "Unsupported Share subtype: {0}".format(share_type['subtype'])
+        assert share_type['subtype'] in ('FILE', 'BLOCK'), "Unsupported share type: {0}".format(share_type['subtype'])
 
         if self.datastore.exists(
             'shares',

@@ -976,7 +976,6 @@ def _init(dispatcher, plugin):
         }
     })
 
-
     plugin.register_provider('network.config', NetworkProvider)
     plugin.register_provider('network.interface', InterfaceProvider)
     plugin.register_provider('network.route', RouteProvider)

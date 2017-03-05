@@ -40,6 +40,7 @@ import ipaddress
 import io
 import dhcp.client
 import socket
+import itertools
 from bsd import setproctitle
 from threading import Condition
 from datastore import get_datastore, DatastoreException
@@ -470,7 +471,12 @@ class ConfigurationService(RpcService):
             yield errno.ENOENT, 'Failed to configure any network interface'
             return
 
-        for i in self.datastore.query('network.interfaces', sort='cloned'):
+        laggs = self.datastore.query_stream('network.interfaces', ('type', '=', 'LAGG'))
+        vlans = self.datastore.query_stream('network.interfaces', ('type', '=', 'VLAN'))
+        bridges = self.datastore.query_stream('network.interfaces', ('type', '=', 'BRIDGE'))
+        physical = self.datastore.query_stream('network.interfaces', ('cloned', '=', False))
+
+        for i in itertools.chain(physical, laggs, vlans, bridges):
             msg = 'Configuring interface {0}...'.format(i['id'])
             self.logger.info(msg)
             push_status(msg)
