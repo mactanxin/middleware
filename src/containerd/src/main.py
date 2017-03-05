@@ -259,6 +259,7 @@ class VirtualMachine(object):
         self.logger = logging.getLogger('VM:{0}'.format(self.name))
         self.run_lock = RLock()
         self.autostart = False
+        self.dropped_devices = []
 
     @property
     def management_lease(self):
@@ -585,6 +586,20 @@ class VirtualMachine(object):
             if i['type'] in ('DISK', 'CDROM', 'VOLUME'):
                 path = self.context.client.call_sync('vm.get_device_path', self.id, i['name'])
                 if not path or not os.path.exists(path):
+                    self.dropped_devices.append(i['name'])
+                    self.devices.remove(i)
+                    yield i
+            if i['type'] == 'NIC' and q.get(i, 'properties.mode') == 'BRIDGED':
+                iface_name = q.get(i, 'properties.bridge')
+                iface_id = self.context.default_if if iface_name == 'default' else iface_name
+                mtu = self.context.client.call_sync(
+                    'network.interface.query',
+                    [('id', '=', iface_id)],
+                    {'select': 'mtu', 'single': True}
+                )
+                # bhyve limitation
+                if mtu > 1500:
+                    self.dropped_devices.append(i['name'])
                     self.devices.remove(i)
                     yield i
 
@@ -1275,6 +1290,19 @@ class ManagementService(RpcService):
             'management_lease': mgmt_lease.lease if mgmt_lease else None,
             'nat_lease': nat_lease.lease if nat_lease else None
         }
+
+    @private
+    def get_devices_status(self, id):
+        res = {}
+        vm = self.context.vms.get(id)
+        if not vm:
+            return res
+
+        if vm.devices:
+            res.update({d['name']: 'CONNECTED' for d in vm.devices})
+        if vm.dropped_devices:
+            res.update({d: 'ERROR' for d in vm.dropped_devices})
+        return res
 
     @private
     def start_vm(self, id, strict=False):
