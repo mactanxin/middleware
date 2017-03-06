@@ -233,12 +233,14 @@ class RoutingSocketEventSource(threading.Thread):
                 if self.link_state_cache[ifname] != message.link_state:
                     if message.link_state == netif.InterfaceLinkState.LINK_STATE_DOWN:
                         self.context.logger.warn('Link down on interface {0}'.format(ifname))
+                        self.context.link_down(ifname)
                         self.client.emit_event('network.interface.link_down', {
                             'interface': ifname,
                         })
 
                     if message.link_state == netif.InterfaceLinkState.LINK_STATE_UP:
                         self.context.logger.warn('Link up on interface {0}'.format(ifname))
+                        self.context.link_up(ifname)
                         self.client.emit_event('network.interface.link_up', {
                             'interface': ifname,
                         })
@@ -991,6 +993,18 @@ class Main(object):
             raise RpcException(errno.ENOENT, 'Cannot renew without a lease')
 
         self.dhcp_clients[interface].request(renew=True, timeout=30)
+
+    def link_down(self, name):
+        if name in self.dhcp_clients:
+            self.deconfigure_dhcp(name)
+
+    def link_up(self, name):
+        iface = self.datastore.get_by_id(name)
+        if not iface:
+            return
+
+        if iface.get('dhcp'):
+            self.configure_dhcp(name)
 
     def interface_detached(self, name):
         self.logger.warn('Interface {0} detached from the system'.format(name))
