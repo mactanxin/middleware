@@ -598,8 +598,9 @@ class Balancer(object):
         if 'RUN_AS_USER' in task.environment:
             task.user = task.environment['RUN_AS_USER']
 
-        task.environment['SENDER_ADDRESS'] = sender.client_address
         task.id = self.dispatcher.datastore_log.insert("tasks", task)
+        task.environment['SENDER_ADDRESS'] = sender.client_address
+        task.environment['ID'] = task.id
         task.set_state(TaskState.CREATED)
         self.task_queue.put(task)
         self.logger.info("Task %d submitted (type: %s, class: %s)", task.id, name, task.clazz)
@@ -673,7 +674,7 @@ class Balancer(object):
         task.description = task.instance.describe(*task.args)
         task.id = self.dispatcher.datastore_log.insert("tasks", task)
         task.parent = parent
-        task.environment = {}
+        task.environment = {'ID': task.id}
 
         if parent:
             task.environment = copy.deepcopy(parent.environment)
