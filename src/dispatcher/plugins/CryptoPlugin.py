@@ -450,39 +450,70 @@ class CertificateImportTask(Task):
 
 
 @accepts(str, FileDescriptor)
-@description("Exports certificate and private key")
+@description("Exports certificate")
 class CertificateExportTask(Task):
     @classmethod
     def early_describe(cls):
-        return "Exporting certificate and private key pair bundled as a tar file"
+        return "Exporting certificate as a tar file"
 
-    def describe(self, id, cert_pair_fd):
+    def describe(self, id, cert_fd):
         cert = self.datastore.get_by_id('crypto.certificates', id)
         return TaskDescription(
-            "Exporting certificate {name} and private key pair bundled as a tar file",
+            "Exporting certificate {name} as a tar file",
             name=cert.get('name', '') if cert else ''
         )
 
-    def verify(self, id, cert_pair_fd):
+    def verify(self, id, cert_fd):
         return ['system']
 
-    def run(self, id, cert_pair_fd):
+    def run(self, id, cert_fd):
         if not self.datastore.exists('crypto.certificates', ('id', '=', id)):
             raise TaskException(errno.ENOENT, 'Certificate ID {0} does not exist'.format(id))
 
-        name, cert, key = self.dispatcher.call_sync(
+        name, cert = self.dispatcher.call_sync(
             'crypto.certificate.query',
             [('id', '=', id)],
-            {'select': ['name', 'certificate', 'privatekey'], 'single': True}
+            {'select': ['name', 'certificate'], 'single': True}
         )
 
-        with os.fdopen(cert_pair_fd.fd, mode='wb') as f:
+        with os.fdopen(cert_fd.fd, mode='wb') as f:
             with tarfile.open(fileobj=f, mode='w|gz') as tf:
                 cert_info = tarfile.TarInfo(name='{0}.crt'.format(name))
                 cert_info.size = len(cert)
+                tf.addfile(cert_info, io.BytesIO(cert.encode('utf-8')))
+
+
+@accepts(str, FileDescriptor)
+@description("Exports private key of a certificate")
+class CertificatePrivatekeyExportTask(Task):
+    @classmethod
+    def early_describe(cls):
+        return "Exporting private key of a certificate as a tar file"
+
+    def describe(self, id, key_fd):
+        cert = self.datastore.get_by_id('crypto.certificates', id)
+        return TaskDescription(
+            "Exporting private key of a certificate {name} as a tar file",
+            name=cert.get('name', '') if cert else ''
+        )
+
+    def verify(self, id, key_fd):
+        return ['system']
+
+    def run(self, id, key_fd):
+        if not self.datastore.exists('crypto.certificates', ('id', '=', id)):
+            raise TaskException(errno.ENOENT, 'Certificate ID {0} does not exist'.format(id))
+
+        name, key = self.dispatcher.call_sync(
+            'crypto.certificate.query',
+            [('id', '=', id)],
+            {'select': ['name', 'privatekey'], 'single': True}
+        )
+
+        with os.fdopen(key_fd.fd, mode='wb') as f:
+            with tarfile.open(fileobj=f, mode='w|gz') as tf:
                 key_info = tarfile.TarInfo(name='{0}.key'.format(name))
                 key_info.size = len(key)
-                tf.addfile(cert_info, io.BytesIO(cert.encode('utf-8')))
                 tf.addfile(key_info, io.BytesIO(key.encode('utf-8')))
 
 
@@ -669,6 +700,7 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('crypto.certificate.update', CertificateUpdateTask)
     plugin.register_task_handler('crypto.certificate.import', CertificateImportTask)
     plugin.register_task_handler('crypto.certificate.export', CertificateExportTask)
+    plugin.register_task_handler('crypto.certificate.export_key', CertificatePrivatekeyExportTask)
     plugin.register_task_handler('crypto.certificate.delete', CertificateDeleteTask)
 
     plugin.register_hook('crypto.pre_delete')
