@@ -388,6 +388,7 @@ class SystemAdvancedConfigureTask(Task):
 
             if 'home_directory_root' in props:
                 self.configstore.set('system.home_directory_root', props['home_directory_root'])
+                self.dispatcher.call_sync('dscached.management.reload_config')
 
             if 'motd' in props:
                 cs.set('system.motd', props['motd'])

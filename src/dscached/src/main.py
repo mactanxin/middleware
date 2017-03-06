@@ -837,6 +837,7 @@ class Main(object):
         self.search_order = []
         self.cache_enumerations = True
         self.cache_lookups = True
+        self.home_directory_root = None
         self.account_service = AccountService(self)
         self.group_service = GroupService(self)
         self.rpc.register_service_instance('dscached.account', self.account_service)
@@ -886,6 +887,12 @@ class Main(object):
                 lambda d: d.max_gid and d.max_gid >= gid >= d.min_gid,
                 self.directories
             )
+
+    def get_home_directory(self, directory, username):
+        if not self.home_directory_root:
+            return '/nonexistent'
+
+        return os.path.join(self.home_directory_root, f'{username}@{directory.domain_name}')
 
     def wait_for_etcd(self):
         self.client.test_or_wait_for_event(
@@ -990,6 +997,7 @@ class Main(object):
         self.cache_ttl = self.configstore.get('directory.cache_ttl')
         self.cache_enumerations = self.configstore.get('directory.cache_enumerations')
         self.cache_lookups = self.configstore.get('directory.cache_lookups')
+        self.home_directory_root = self.configstore.get('system.home_directory_root')
 
     def checkin(self):
         checkin()

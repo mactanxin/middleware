@@ -401,7 +401,7 @@ class WinbindPlugin(DirectoryServicePlugin):
             'group': str(self.domain_users_guid),
             'groups': groups,
             'shell': wbu.passwd.pw_shell,
-            'home': wbu.passwd.pw_dir
+            'home': self.context.get_home_directory(self.directory, username)
         }
 
     def convert_group(self, entry):
