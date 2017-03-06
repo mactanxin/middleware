@@ -605,7 +605,7 @@ class VirtualMachine(object):
                     {'select': 'mtu', 'single': True}
                 )
                 # bhyve limitation
-                if mtu > 1500:
+                if mtu and mtu > 1500:
                     self.dropped_devices.append(i['name'])
                     self.devices.remove(i)
                     yield i
