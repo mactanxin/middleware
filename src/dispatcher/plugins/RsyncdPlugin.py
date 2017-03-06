@@ -81,9 +81,17 @@ class RsyncdConfigureTask(Task):
         return ['system']
 
     def run(self, rsyncd):
+        config = ConfigNode('service.rsyncd', self.configstore).__getstate__()
 
         if rsyncd.get('port') and is_port_open(rsyncd['port']):
-            raise TaskException(errno.EINVAL, 'Provided port is already in use')
+            service_state = self.dispatcher.call_sync(
+                'service.query',
+                [('name', '=', 'rsyncd')],
+                {'single': True, 'select': 'state'}
+            )
+
+            if not (service_state == "RUNNING" and rsyncd['port'] == config['port']):
+                raise TaskException(errno.EINVAL, 'Provided port is already in use')
 
         try:
             node = ConfigNode('service.rsyncd', self.configstore)
