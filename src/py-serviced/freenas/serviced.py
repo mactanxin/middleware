@@ -50,11 +50,11 @@ def checkin():
             _client.disconnect()
 
 
-def push_status(status):
+def push_status(status, extra=None):
     with _lock:
         try:
             _client.connect(SERVICED_SOCKET)
-            return _client.call_sync('serviced.job.push_status', status)
+            return _client.call_sync('serviced.job.push_status', status, extra)
         except RpcException as err:
             raise ServicedException(err.code, err.message, err.extra)
         finally:

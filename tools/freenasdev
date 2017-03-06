@@ -124,12 +124,24 @@ freenasrsync_datastore() {
 }
 
 freenasrsync_migrate93() {
-	myrsync ${REPO_PARENT_PATH}/middleware/freenas-v1.db "root@${1}":/data/
 	myrsyncnodel ${REPO_PARENT_PATH}/freenas-migrate93/ "root@${1}":/usr/local/lib/migrate93/ --exclude sbin
 	myrsyncnodel ${REPO_PARENT_PATH}/freenas-migrate93/sbin/ "root@${1}":/usr/local/sbin/
 
 	# rsync the MigrationPlugin
 	myrsyncnodel ${REPO_PARENT_PATH}/middleware/src/dispatcher/plugins/MigrationPlugin.py "root@${1}":/usr/local/lib/dispatcher/plugins/
+}
+
+freenasrsync_splash() {
+	myrsyncnodel ${REPO_PARENT_PATH}/middleware/src/splash/sbin/ "root@${1}":/usr/local/sbin/
+	myrsync ${REPO_PARENT_PATH}/middleware/src/splash/src/ "root@${1}":/usr/local/lib/splash/src/
+}
+
+freenasrsync_serviced() {
+	myrsyncnodel ${REPO_PARENT_PATH}/middleware/src/py-serviced/freenas/ "root@${1}":/usr/local/lib/python3.6/site-packages/freenas/
+	myrsync ${REPO_PARENT_PATH}/middleware/src/serviced/src/ "root@${1}":/usr/local/lib/serviced/src/
+	myrsync ${REPO_PARENT_PATH}/middleware/src/serviced/etc/serviced "root@${1}":/usr/local/etc/rc.d/serviced
+	myrsyncnodel ${REPO_PARENT_PATH}/middleware/src/serviced/etc/serviced.d/ "root@${1}":/usr/local/etc/serviced.d/
+	myrsyncnodel ${REPO_PARENT_PATH}/middleware/src/serviced/sbin/ "root@${1}":/usr/local/sbin/
 }
 
 freenasrsync() {

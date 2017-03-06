@@ -262,7 +262,7 @@ def populate_user_obj(user, fn10_groups, fn9_user, fn9_groups, fn9_grpmem):
         'shell': fn9_user['bsdusr_shell'],
         'home': fn9_user['bsdusr_home'],
         'sudo': bool(fn9_user['bsdusr_sudo']),
-        'email': fn9_user['bsdusr_email'],
+        'email': fn9_user['bsdusr_email'] or None,
         'lmhash': lmhash,
         'nthash': nthash,
         'password_changed_at': password_changed_at
@@ -888,12 +888,18 @@ class ShareMigrateTask(Task):
         # getting all the information from the fn9 database
         fn9_iscsitargets = get_table('select * from services_iscsitarget')
         fn9_iscsitargetauthcreds = get_table('select * from services_iscsitargetauthcredential')
-        fn9_iscsitargetauthinitiators = get_table('select * from services_iscsitargetauthorizedinitiator')
         fn9_iscsitargetextents = get_table('select * from services_iscsitargetextent')
         fn9_iscsitargetgroups = get_table('select * from services_iscsitargetgroups')
         fn9_iscsitargetportals = get_table('select * from services_iscsitargetportal')
         fn9_iscsitargetportalips = get_table('select * from services_iscsitargetportalip')
         fn9_iscsitargettoextent_maps = get_table('select * from services_iscsitargettoextent')
+
+        # Get non 'ALL' initiators
+        fn9_initiators = {
+            k: v
+            for k, v in get_table('select * from services_iscsitargetauthorizedinitiator').items()
+            if not v['iscsi_target_initiator_initiators'] == v['iscsi_target_initiator_auth_network'] == 'ALL'
+        }
 
         # Here we go...
         for fn9_iscsitargetextent in fn9_iscsitargetextents.values():
@@ -961,11 +967,15 @@ class ShareMigrateTask(Task):
         target_to_portal_map = {}
 
         for auth in fn9_iscsitargetauthcreds.values():
-            auth['auth_methods'] = {
-                'None': {'portal_ids': [], 'target_ids': []},
-                'CHAP': {'portal_ids': [], 'target_ids': []},
-                'CHAP Mutual': {'portal_ids': [], 'target_ids': []},
-            }
+            auth.update({
+                'auth_methods': {
+                    'None': {'portal_ids': [], 'target_ids': []},
+                    'CHAP': {'portal_ids': [], 'target_ids': []},
+                    'CHAP Mutual': {'portal_ids': [], 'target_ids': []},
+                },
+                'initiators': [],
+                'networks': []
+            })
             for x in fn9_iscsitargetportals.values():
                 if x['iscsi_target_portal_discoveryauthgroup'] == auth['iscsi_target_auth_tag']:
                     auth['auth_methods'][x['iscsi_target_portal_discoveryauthmethod']]['portal_ids'].append(x['id'])
@@ -973,6 +983,18 @@ class ShareMigrateTask(Task):
             for x in fn9_iscsitargetgroups.values():
                 if x['iscsi_target_authgroup'] == auth['iscsi_target_auth_tag']:
                     auth['auth_methods'][x['iscsi_target_authtype']]['target_ids'].append(x['id'])
+                    auth_initiator9 = fn9_initiators.get(x['iscsi_target_initiatorgroup_id'])
+                    if auth_initiator9:
+                        for initiator in filter(
+                            lambda val: val and val != 'ALL',
+                            auth_initiator9['iscsi_target_initiator_initiators'].replace('\n', ',').replace(' ', ',').split(',')
+                        ):
+                            auth['initiators'].append(initiator)
+                        for network in filter(
+                            lambda val: val and val != 'ALL',
+                            auth_initiator9['iscsi_target_initiator_auth_network'].replace('\n', ',').replace(' ', ',').split(',')
+                        ):
+                            auth['networs'].append(network)
 
         # Now lets make them auth groups, portals, and targets
         for fn9_targetauthcred in fn9_iscsitargetauthcreds.values():
@@ -982,14 +1004,6 @@ class ShareMigrateTask(Task):
             # i.e. in fn9 that same auth credential entry with 'group id'=1 can be used
             # 'CHAP', 'CHAP_MUTUAL', and 'NONE' in fn9's iscsi portals, BUT, in fn10
             # we need to create a different auth group entry per auth type in it
-            # auth_map = [
-            #     (
-            #         x['iscsi_target_portal_discoveryauthmethod'].upper().replace(' ', '_'),
-            #         x['iscsi_target_portal_tag']
-            #     )
-            #     for x in fn9_iscsitargetportals.values()
-            #     if x['iscsi_target_portal_discoveryauthgroup'] == fn9_iscsitargetauthcred['iscsi_target_auth_tag']
-            # ] or [('NONE', None)]
             def create_auth_group(auth_type='NONE', fn9_targetauthcred=fn9_targetauthcred):
                 try:
                     return self.run_subtask_sync(
@@ -1009,7 +1023,9 @@ class ShareMigrateTask(Task):
                                 'peer_secret': self._notifier.pwenc_decrypt(
                                     fn9_targetauthcred['iscsi_target_auth_peersecret']
                                 ) if fn9_targetauthcred['iscsi_target_auth_peersecret'] else None
-                            }]
+                            }],
+                            'initiators': fn9_targetauthcred['initiators'] or None,
+                            'networks': fn9_targetauthcred['networks'] or None
                         }
                     )
                 except RpcException as err:
@@ -1067,14 +1083,51 @@ class ShareMigrateTask(Task):
 
         for fn9_iscsitarget in fn9_iscsitargets.values():
             try:
+                auth_group = authgroup_to_target_map.get(fn9_iscsitarget['id'])
+                if auth_group is None:
+                    # If this is none that means that we still need to map the initiators
+                    # by creating an auth group just for the 'initiators' and 'networks' fields
+                    for x in fn9_iscsitargetgroups.values():
+                        if x['iscsi_target_id'] == fn9_iscsitarget['id']:
+                            initiator_obj = fn9_initiators.get(x['iscsi_target_initiatorgroup_id'])
+                            if initiator_obj:
+                                target_initiators = []
+                                target_networks = []
+                                for initiator in filter(
+                                    lambda val: val and val != 'ALL',
+                                    initiator_obj['iscsi_target_initiator_initiators'].replace('\n', ',').replace(' ', ',').split(',')
+                                ):
+                                    target_initiators.append(initiator)
+                                for network in filter(
+                                    lambda val: val and val != 'ALL',
+                                    initiator_obj['iscsi_target_initiator_auth_network'].replace('\n', ',').replace(' ', ',').split(',')
+                                ):
+                                    target_networks.append(network)
+                                try:
+                                    auth_group = self.run_subtask_sync(
+                                        'share.iscsi.auth.create',
+                                        {
+                                            'description': '{0} auth group for initiators and networks only'.format(fn9_iscsitarget['iscsi_target_alias']),
+                                            'type': 'NONE',
+                                            'initiators': target_initiators or None,
+                                            'networks': target_networks or None,
+                                        }
+                                    )
+                                except RpcException as err:
+                                    self.add_warning(TaskWarning(
+                                        errno.EINVAL,
+                                        "Cannot create iSCSI auth group for {0} target's initiators and networks, error: {2}".format(
+                                            fn9_iscsitarget['iscsi_target_name'], err
+                                        )
+                                    ))
+                            break
+
                 self.run_subtask_sync(
                     'share.iscsi.target.create',
                     {
                         'id': fn9_iscsitarget['iscsi_target_name'],
                         'description': fn9_iscsitarget['iscsi_target_alias'],
-                        'auth_group': authgroup_to_target_map.get(
-                            fn9_iscsitarget['id'], 'no-authentication'
-                        ),
+                        'auth_group': auth_group or 'no-authentication',
                         'portal_group': target_to_portal_map.get(fn9_iscsitarget['id'], 'default'),
                         'extents': [
                             {
@@ -1692,6 +1745,7 @@ class SystemMigrateTask(Task):
 
         # Migrating email settings
         fn9_email = get_table('select * from system_email', dictionary=False)[0]
+        fn9_root_user = get_table('select * from account_bsdusers').pop(1)
         try:
             self.run_subtask_sync(
                 'alert.emitter.update',
@@ -1701,6 +1755,7 @@ class SystemMigrateTask(Task):
                 {
                     'config': {
                         'from_address': fn9_email['em_fromemail'],
+                        'to': [fn9_root_user['bsdusr_email']] if fn9_root_user['bsdusr_email'] else [],
                         'server': fn9_email['em_outgoingserver'],
                         'port': fn9_email['em_port'],
                         'auth': bool(fn9_email['em_smtp']),
@@ -1815,7 +1870,7 @@ class CalendarMigrateTask(Task):
         #             'calendar_task.create',
         #             {
         #                 'name': ,
-        #                 'task': 
+        #                 'task':
         #             }
         #         )
         #     except RpcException as err:
@@ -1841,18 +1896,17 @@ class MasterMigrateTask(ProgressTask):
 
     def migration_progess(self, progress, message):
         self.set_progress(progress, message)
-        self.dispatcher.dispatch_event(
-            'migration.status',
-            {
-                'apps_migrated': self.apps_migrated,
-                'status': self.status
-            }
-        )
-        push_status(
-            'MigrationPlugin: status: {0}, apps migrated: {1}'.format(
-                self.status, ', '.join(self.apps_migrated)
-            )
-        )
+        migration_status = {
+            'plugin': 'MigrationPlugin',
+            'apps_migrated': self.apps_migrated,
+            'status': self.status
+        }
+        self.dispatcher.dispatch_event('migration.status', migration_status)
+        try:
+            push_status('MigrationPlugin: {0}'.format(message), extra=migration_status)
+        except:
+            # don't fail if you cannot set status d'oh
+            pass
 
     def verify(self):
         return ['root']
@@ -1927,6 +1981,7 @@ def _init(dispatcher, plugin):
     plugin.register_schema_definition('migration-status', {
         'type': 'object',
         'properties': {
+            'plugin': {'type': 'string', 'enum': ['MigrationPlugin']},
             'apps_migrated': {
                 'type': 'array',
                 'items': {'type': 'string'},
@@ -1951,11 +2006,10 @@ def _init(dispatcher, plugin):
     if os.path.exists(FREENAS93_DATABASE_PATH):
         plugin.register_event_handler('service.ready', start_migration)
     else:
-        dispatcher.dispatch_event(
-            'migration.status',
-            {
-                'apps_migrated': [],
-                'status': 'NOT_NEEDED'
-            }
-        )
-        push_status('MigrationPlugin: Migration not needed')
+        migration_status = {
+            'plugin': 'MigrationPlugin',
+            'apps_migrated': [],
+            'status': 'NOT_NEEDED'
+        }
+        dispatcher.dispatch_event('migration.status', migration_status)
+        push_status('MigrationPlugin: Migration not needed', extra=migration_status)

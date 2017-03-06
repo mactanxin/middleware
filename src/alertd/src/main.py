@@ -186,7 +186,7 @@ class Main(object):
                 self.logger.error('Cannot initialize plugin {0}'.format(f), exc_info=True)
 
     def emit_alert(self, alert):
-        if 'clazz' not in alert or 'id' not in alert or 'emitter' not in alert:
+        if 'clazz' not in alert or 'id' not in alert:
             self.logger.warning('Ignoring invalid alert <id:{0}>'.format(alert.get('id')))
             return
 

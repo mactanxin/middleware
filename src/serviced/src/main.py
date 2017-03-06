@@ -138,6 +138,7 @@ class Job(object):
         self.last_exit_code = None
         self.failure_reason = None
         self.status_message = None
+        self.status_extra = None
         self.environment = {}
         self.respawns = 0
         self.cv = Condition()
@@ -295,9 +296,10 @@ class Job(object):
                 self.set_state(JobState.RUNNING)
                 self.context.provide(self.provides)
 
-    def push_status(self, status):
+    def push_status(self, status, extra=None):
         with self.cv:
             self.status_message = status
+            self.status_extra = extra
             self.cv.notify_all()
 
         if self.label == 'org.freenas.dispatcher':
@@ -308,7 +310,8 @@ class Job(object):
             'Label': self.label,
             'Reason': self.failure_reason,
             'Anonymous': self.anonymous,
-            'Message': self.status_message
+            'Message': self.status_message,
+            'Extra': self.status_extra
         })
 
     def pid_event(self, ev):
@@ -551,13 +554,13 @@ class JobService(RpcService):
 
         job.checkin()
 
-    def push_status(self, status):
+    def push_status(self, status, extra=None):
         sender = get_sender()
         job = self.context.job_by_pid(sender.credentials['pid'])
         if not job:
             raise RpcException(errno.EINVAL, 'Unknown job')
 
-        job.push_status(status)
+        job.push_status(status, extra)
 
 
 class Context(object):

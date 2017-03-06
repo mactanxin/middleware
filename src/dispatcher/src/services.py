@@ -261,7 +261,7 @@ class PluginService(RpcService):
                 return self.connection.call_sync(
                     '.'.join([self.service_name, name]),
                     *args,
-                    timeout=60
+                    timeout=None
                 )
 
             return call_wrapped

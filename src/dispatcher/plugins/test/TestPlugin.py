@@ -33,10 +33,10 @@ import time
 import logging
 from task import Task, Provider, TaskDescription, TaskWarning, ProgressTask
 from freenas.dispatcher.fd import FileDescriptor
-from freenas.dispatcher.rpc import RpcException, description, generator, accepts
+from freenas.dispatcher.rpc import RpcException, description, generator, accepts, SchemaHelper as h
 from freenas.utils import query as q
 from freenas.utils.lazy import lazy
-
+from freenas.serviced import push_status
 
 logger = logging.getLogger('TestPlugin')
 
@@ -107,6 +107,15 @@ class TestProvider(Provider):
                 return bool(q.query(l, ('f2.nested', '=', True), count=True))
 
         return False
+
+    @accepts(str, h.one_of(h.object(), None))
+    def serviced_message(self, msg, extra=None):
+        if extra is None:
+            extra = {}
+        try:
+            push_status('TestPlugin: messgae: {0}, extra: {1}'.format(msg, extra))
+        except:
+            pass
 
 
 @description('Downloads tests')
