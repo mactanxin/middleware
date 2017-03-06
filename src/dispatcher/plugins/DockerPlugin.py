@@ -33,6 +33,7 @@ import dockerfile_parse
 import dockerhub
 import logging
 import requests
+from pathlib import PurePath
 from gevent.lock import RLock
 from gevent.queue import Queue
 from resources import Resource
@@ -549,6 +550,13 @@ class DockerContainerCreateTask(DockerBaseTask):
                         v['host_path'], v['source'].lower()
                     )
                 )
+            cont_path = v.get('container_path')
+            if cont_path and not PurePath(cont_path).is_absolute():
+                raise VerifyException(
+                    errno.EINVAL,
+                    'Path: "{0}" is not an absolute path'.format(cont_path)
+                )
+
 
         bridge = container.get('bridge')
         network_mode = container.get('primary_network_mode')
@@ -698,6 +706,12 @@ class DockerContainerUpdateTask(DockerBaseTask):
                     '{0} is living inside /mnt, but its source is a {1} path'.format(
                         v['host_path'], v['source'].lower()
                     )
+                )
+            cont_path = v.get('container_path')
+            if cont_path and not PurePath(cont_path).is_absolute():
+                raise VerifyException(
+                    errno.EINVAL,
+                    'Path: "{0}" is not an absolute path'.format(cont_path)
                 )
 
         bridge = updated_fields.get('bridge', {})
