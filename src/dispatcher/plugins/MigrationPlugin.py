@@ -583,7 +583,6 @@ class StorageMigrateTask(Task):
     def run(self):
 
         # Migrate disk settings
-        disk_subtasks = []
         fn9_disks = get_table('select * from storage_disk', dictionary=False)
         self.fn10_disks = list(self.dispatcher.call_sync('disk.query'))
 
@@ -621,11 +620,11 @@ class StorageMigrateTask(Task):
                 ))
                 continue
 
-            del fn10_disk['name']
             del fn10_disk['serial']
             del fn10_disk['path']
             del fn10_disk['mediasize']
             del fn10_disk['status']
+            fn10_disk_name = fn10_disk.pop('name')
             fn10_disk.update({
                 'smart': fn9_disk['disk_togglesmart'],
                 'smart_options': fn9_disk['disk_smartoptions'],
@@ -633,10 +632,13 @@ class StorageMigrateTask(Task):
                 'acoustic_level': fn9_disk['disk_acousticlevel'].upper(),
                 'apm_mode': None if fn9_disk['disk_advpowermgmt'] == 'Disabled' else int(fn9_disk['disk_advpowermgmt'])
             })
-            disk_subtasks.append(self.run_subtask('disk.update', fn10_disk.pop('id'), fn10_disk))
-
-        if disk_subtasks:
-            self.join_subtasks(*disk_subtasks)
+            try:
+                self.run_subtask_sync('disk.update', fn10_disk.pop('id'), fn10_disk)
+            except RpcException as err:
+                self.add_warning(TaskWarning(
+                    errno.EINVAL,
+                    'Could not update disk config for: {0} due to err: {1}'.format(fn10_disk_name, err)
+                ))
 
         # Importing fn9 volumes
         fn9_volumes = get_table('select * from storage_volume')
