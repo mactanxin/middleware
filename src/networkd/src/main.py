@@ -786,6 +786,7 @@ class ConfigurationService(RpcService):
     @generator
     def up_interface(self, name):
         yield from self.configure_interface(name)
+        yield from self.configure_routes()
 
     def down_interface(self, name):
         try:
