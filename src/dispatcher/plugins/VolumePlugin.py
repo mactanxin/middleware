@@ -2263,7 +2263,7 @@ class VolumeScrubTask(ProgressTask):
         return TaskDescription("Performing a scrub of the volume {name}", name=id)
 
     def verify(self, id):
-        return [f'volume:{id}']
+        return []
 
     def abort(self):
         self.abort_subtasks()

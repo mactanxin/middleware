@@ -363,8 +363,7 @@ class BootPoolScrubTask(ProgressTask):
         return TaskDescription("Performing a scrub of the boot pool")
 
     def verify(self):
-        boot_pool_id = self.configstore.get('system.boot_pool_name')
-        return ['zpool:{}'.format(boot_pool_id)]
+        return []
 
     def abort(self):
         self.abort_subtasks()
