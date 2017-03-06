@@ -170,7 +170,7 @@ class ResourceGraph(object):
                     raise ResourceError('Resource {0} not found'.format(name))
     
                 for i in nx.descendants(self.resources, res):
-                    if i.busy:
+                    if i.name not in names and i.busy:
                         raise ResourceError('Cannot acquire, some of dependent resources are busy')
     
                 res.busy = True
