@@ -72,7 +72,7 @@ class SMBProvider(Provider):
 
     @returns(bool)
     def ad_enabled(self):
-        return self.datastore.exists('directories', ('plugin', '=', 'winbind'), ('enabled', '=', True))
+        return self.datastore.exists('directories', ('type', '=', 'winbind'), ('enabled', '=', True))
 
 @private
 @description('Configure SMB service')
