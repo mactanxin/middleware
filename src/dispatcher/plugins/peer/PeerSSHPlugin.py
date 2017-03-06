@@ -117,7 +117,7 @@ class SSHPeerCreateTask(Task):
 
         password = q.get(peer, 'credentials.password')
         if password:
-            q.get(peer, 'credentials.password', unpassword(password))
+            q.set(peer, 'credentials.password', unpassword(password))
 
         if self.datastore.exists('peers', ('name', '=', peer['name'])):
             raise TaskException(errno.EINVAL, 'Peer entry {0} already exists'.format(peer['name']))
