@@ -399,23 +399,14 @@ class VolumeProvider(Provider):
         )
 
         for disk in disks:
-            label = None
             try:
                 label = self.get_disk_label(disk['path'])
-            except OSError:
-                pass
-
-            if not label:
-                try:
-                    label = self.get_disk_label(q.get(disk, 'status.data_partition_path'))
-                except OSError:
-                    pass
-
-            if label:
-                ret[disk] = {
+                ret[disk['id']] = {
                     'type': 'EXPORTED_VOLUME',
                     'name': label['volume_id']
                 }
+            except RpcException:
+                continue
 
         return ret
 
@@ -434,11 +425,24 @@ class VolumeProvider(Provider):
     @accepts(str)
     @returns(h.ref('VolumeDiskLabel'))
     def get_disk_label(self, disk):
-        dev = get_disk_gptid(self.dispatcher, disk)
-        if not dev:
-            raise RpcException(errno.ENOENT, 'Disk {0} not found'.format(disk))
+        label = None
 
-        label = self.dispatcher.call_sync('zfs.pool.get_disk_label', dev)
+        try:
+            dev = get_disk_gptid(self.dispatcher, disk)
+            if dev:
+                label = self.dispatcher.call_sync('zfs.pool.get_disk_label', dev)
+        except:
+            pass
+
+        if not label:
+            try:
+                label = self.dispatcher.call_sync('zfs.pool.get_disk_label', disk)
+            except:
+                pass
+
+        if not label:
+            raise RpcException(errno.ENOENT, 'Label not found')
+
         return {
             'volume_id': label['name'],
             'volume_guid': str(label['pool_guid']),
