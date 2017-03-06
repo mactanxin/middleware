@@ -675,7 +675,7 @@ class DockerContainerCreateTask(DockerBaseTask):
         if container.get('networks'):
             self.set_progress(90, 'Connecting to networks')
             contid = self.dispatcher.call_sync(
-                'docker.container.query',
+                'containerd.docker.query_containers',
                 [('name', '=', container.get('name'))],
                 {'select': 'id', 'single': True}
             )
