@@ -653,7 +653,7 @@ class DockerContainerCreateTask(DockerBaseTask):
 
         container['name'] = container['names'][0]
 
-        self.set_progress(90, 'Creating container {0}'.format(container['name']))
+        self.set_progress(80, 'Creating container {0}'.format(container['name']))
 
         def match_fn(args):
             if args['operation'] == 'create':
@@ -673,7 +673,7 @@ class DockerContainerCreateTask(DockerBaseTask):
         )
 
         if container.get('networks'):
-            self.set_progress(95, 'Connecting to networks')
+            self.set_progress(90, 'Connecting to networks')
             contid = self.dispatcher.call_sync(
                 'docker.container.query',
                 [('name', '=', container.get('name'))],
@@ -681,6 +681,21 @@ class DockerContainerCreateTask(DockerBaseTask):
             )
             for netid in container.get('networks'):
                 self.run_subtask_sync('docker.network.connect', [contid], netid)
+
+
+        if container.get('autostart'):
+            contid = self.dispatcher.call_sync(
+                'containerd.docker.query_containers',
+                [('name', '=', container.get('name'))],
+                {'select': 'id', 'single': True}
+            )
+            self.set_progress(95, 'Starting the container')
+            self.dispatcher.exec_and_wait_for_event(
+                'docker.container.changed',
+                lambda args: args['operation'] == 'update' and contid in args['ids'],
+                lambda: self.dispatcher.call_sync('containerd.docker.start', contid),
+                600
+            )
 
         self.set_progress(100, 'Finished')
 
