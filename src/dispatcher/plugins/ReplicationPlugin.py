@@ -916,6 +916,7 @@ class ReplicationSyncTask(ReplicationBaseTask):
                             def update_status(p):
                                 speed = int(done / (time.time() - start_time))
                                 state = {
+                                    'task_id': self.environment['ID'],
                                     'created_at': datetime.now(),
                                     'status': 'RUNNING',
                                     'progress': p,
@@ -1865,7 +1866,8 @@ def _init(dispatcher, plugin):
             'status': {'type': 'string'},
             'message': {'type': 'string'},
             'size': {'type': 'number'},
-            'speed': {'type': 'number'}
+            'speed': {'type': 'number'},
+            'task_id': {'type': 'integer'}
         },
         'additionalProperties': False,
     })
