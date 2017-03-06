@@ -215,6 +215,13 @@ def get_dhcp_lease(context, container_name, dockerhost_id, macaddr=None):
         raise RpcException(errno.EACCES, 'Failed to obtain DHCP lease: {0}'.format(c.error))
 
 
+def unpack_docker_error(err):
+    try:
+        return json.loads(err.explanation).get('message', '')
+    except:
+        return str(err)
+
+
 class BinaryRingBuffer(object):
     def __init__(self, size):
         self.data = bytearray(size)
@@ -1756,15 +1763,18 @@ class DockerService(RpcService):
         if not host:
             raise RpcException(errno.ENOENT, 'Docker host {0} not found'.format(host))
 
-        for line in host.connection.pull(name, stream=True):
-            yield json.loads(line.decode('utf-8'))
+        try:
+            for line in host.connection.pull(name, stream=True):
+                yield json.loads(line.decode('utf-8'))
+        except BaseException as err:
+            raise RpcException(errno.EFAULT, 'Failed to pull image: {0}'.format(unpack_docker_error(err)))
 
     def delete_image(self, id, host):
         host = self.context.get_docker_host(host)
         try:
             host.connection.remove_image(image=id, force=True)
         except BaseException as err:
-            raise RpcException(errno.EFAULT, 'Failed to remove image: {0}'.format(str(err)))
+            raise RpcException(errno.EFAULT, 'Failed to remove image: {0}'.format(unpack_docker_error(err)))
 
     def start(self, id):
         host = self.context.docker_host_by_container_id(id)
@@ -1787,14 +1797,14 @@ class DockerService(RpcService):
         try:
             host.connection.start(container=id)
         except BaseException as err:
-            raise RpcException(errno.EFAULT, 'Failed to start container: {0}'.format(str(err)))
+            raise RpcException(errno.EFAULT, 'Failed to start container: {0}'.format(unpack_docker_error(err)))
 
     def stop(self, id):
         host = self.context.docker_host_by_container_id(id)
         try:
             host.connection.stop(container=id)
         except BaseException as err:
-            raise RpcException(errno.EFAULT, 'Failed to stop container: {0}'.format(str(err)))
+            raise RpcException(errno.EFAULT, 'Failed to stop container: {0}'.format(unpack_docker_error(err)))
 
     def restart(self, id):
         host = self.context.docker_host_by_container_id(id)
@@ -1817,11 +1827,12 @@ class DockerService(RpcService):
         try:
             host.connection.restart(container=id)
         except BaseException as err:
-            raise RpcException(errno.EFAULT, 'Failed to restart container: {0}'.format(str(err)))
+            raise RpcException(errno.EFAULT, 'Failed to restart container: {0}'.format(unpack_docker_error(err)))
 
     def create_container(self, container):
         host = self.context.get_docker_host(container['host'])
         networking_config = None
+        macaddr = None
         if not host:
             raise RpcException(errno.ENOENT, 'Docker host {0} not found'.format(container['host']))
 
@@ -1860,11 +1871,14 @@ class DockerService(RpcService):
                     'Either dhcp or static address must be selected for bridged container'
                 )
 
-            networking_config = host.connection.create_networking_config({
-                'external': host.connection.create_endpoint_config(
-                    ipv4_address=ipv4
-                )
-            })
+            try:
+                networking_config = host.connection.create_networking_config({
+                    'external': host.connection.create_endpoint_config(
+                        ipv4_address=ipv4
+                    )
+                })
+            except BaseException as err:
+                raise RpcException(errno.EFAULT, unpack_docker_error(err))
 
         caps_add = container.get('capabilities_add', [])
         caps_add.append('NET_ADMIN') if 'NET_ADMIN' not in caps_add else None
@@ -1877,19 +1891,23 @@ class DockerService(RpcService):
             network_mode = 'host'
         if primary_network_mode == 'NONE':
             network_mode = 'none'
-        host_config = host.connection.create_host_config(
-            port_bindings=port_bindings,
-            binds={
-                i['host_path'].replace('/mnt', '/host'): {
-                    'bind': i['container_path'],
-                    'mode': 'ro' if i['readonly'] else 'rw'
-                } for i in container['volumes']
-                },
-            privileged=container['privileged'],
-            cap_add=caps_add,
-            cap_drop=caps_drop,
-            network_mode=network_mode
-        )
+
+        try:
+            host_config = host.connection.create_host_config(
+                port_bindings=port_bindings,
+                binds={
+                    i['host_path'].replace('/mnt', '/host'): {
+                        'bind': i['container_path'],
+                        'mode': 'ro' if i['readonly'] else 'rw'
+                    } for i in container['volumes']
+                    },
+                privileged=container['privileged'],
+                cap_add=caps_add,
+                cap_drop=caps_drop,
+                network_mode=network_mode
+            )
+        except BaseException as err:
+            raise RpcException(errno.EFAULT, unpack_docker_error(err))
 
         create_args = {
             'name': container['name'],
@@ -1920,7 +1938,7 @@ class DockerService(RpcService):
         try:
             host.connection.create_container(**create_args)
         except BaseException as err:
-            raise RpcException(errno.EFAULT, str(err))
+            raise RpcException(errno.EFAULT, unpack_docker_error(err))
 
     def create_network(self, network):
         host = self.context.get_docker_host(network.get('host'))
@@ -1945,14 +1963,17 @@ class DockerService(RpcService):
         try:
             host.connection.create_network(**create_args)
         except BaseException as err:
-            raise RpcException(errno.EFAULT, 'Cannot create docker network {0}: {1}'.format(network.get('name'), err))
+            raise RpcException(
+                errno.EFAULT,
+                'Cannot create docker network {0}: {1}'.format(network.get('name'), unpack_docker_error(err))
+            )
 
     def create_exec(self, id, command):
         host = self.context.docker_host_by_container_id(id)
         try:
             host.connection.start(container=id)
         except BaseException as err:
-            raise RpcException(errno.EFAULT, 'Failed to start container: {0}'.format(str(err)))
+            raise RpcException(errno.EFAULT, 'Failed to start container: {0}'.format(unpack_docker_error(err)))
         try:
             exec = host.connection.exec_create(
                 container=id,
@@ -1977,7 +1998,7 @@ class DockerService(RpcService):
         try:
             host.connection.remove_container(container=id, force=True)
         except BaseException as err:
-            raise RpcException(errno.EFAULT, 'Failed to remove container: {0}'.format(str(err)))
+            raise RpcException(errno.EFAULT, 'Failed to remove container: {0}'.format(unpack_docker_error(err)))
 
     def delete_network(self, id):
         try:
@@ -1992,7 +2013,7 @@ class DockerService(RpcService):
         try:
             host.connection.remove_network(id)
         except BaseException as err:
-            raise RpcException(errno.EFAULT, 'Failed to remove network: {0}'.format(str(err)))
+            raise RpcException(errno.EFAULT, 'Failed to remove network: {0}'.format(unpack_docker_error(err)))
 
     def set_api_forwarding(self, hostid):
         if hostid in self.context.docker_hosts:
@@ -2009,7 +2030,10 @@ class DockerService(RpcService):
         try:
             host.connection.connect_container_to_network(container_id, network_id)
         except BaseException as err:
-            raise RpcException(errno.EFAULT, 'Failed to connect container to network: {0}'.format(str(err)))
+            raise RpcException(
+                errno.EFAULT,
+                'Failed to connect container to network: {0}'.format(unpack_docker_error(err))
+            )
 
         if not self.query_containers([('id', '=', container_id)], {'select': 'running', 'single': True}):
             # Docker does not transmit any event when stopped container is connected to network
@@ -2028,7 +2052,10 @@ class DockerService(RpcService):
         try:
             host.connection.disconnect_container_from_network(container_id, network_id)
         except BaseException as err:
-            raise RpcException(errno.EFAULT, 'Failed to disconnect container from network: {0}'.format(str(err)))
+            raise RpcException(
+                errno.EFAULT,
+                'Failed to disconnect container from network: {0}'.format(unpack_docker_error(err))
+            )
 
     def commit_image(self, container_id, new_name):
         host = self.context.docker_host_by_container_id(container_id)
@@ -2048,14 +2075,17 @@ class DockerService(RpcService):
                 tag=tag
             )
         except BaseException as err:
-            raise RpcException(errno.EFAULT, str(err))
+            raise RpcException(errno.EFAULT, unpack_docker_error(err))
 
         image_details = first_or_default(lambda i: i['Id'] == image['Id'], host.connection.images(), {})
         return image_details['RepoTags'][0] or image['Id']
 
     def diff_container(self, container_id):
         host = self.context.docker_host_by_container_id(container_id)
-        return host.connection.diff(container_id)
+        try:
+            return host.connection.diff(container_id)
+        except BaseException as err:
+            raise RpcException(errno.EFAULT, unpack_docker_error(err))
 
 
 class ServerResource(Resource):
