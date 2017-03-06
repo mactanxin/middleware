@@ -200,6 +200,12 @@ class FreeNASPeerCreateTask(Task):
     def verify(self, peer, initial_credentials):
         credentials = peer['credentials']
         remote = credentials.get('address')
+        if not initial_credentials:
+            raise VerifyException(
+                errno.EINVAL,
+                'No credentials provided. Provide either username and password or token'
+            )
+
         username = initial_credentials.get('username')
         password = initial_credentials.get('password')
 
