@@ -1894,19 +1894,14 @@ class MasterMigrateTask(ProgressTask):
 
     def migration_progess(self, progress, message):
         self.set_progress(progress, message)
-        self.dispatcher.dispatch_event(
-            'migration.status',
-            {
-                'apps_migrated': self.apps_migrated,
-                'status': self.status
-            }
-        )
+        migration_status = {
+            'plugin': 'MigrationPlugin',
+            'apps_migrated': self.apps_migrated,
+            'status': self.status
+        }
+        self.dispatcher.dispatch_event('migration.status', migration_status)
         try:
-            push_status(
-                'MigrationPlugin: status: {0}, apps migrated: {1}'.format(
-                    self.status, ', '.join(self.apps_migrated)
-                )
-            )
+            push_status('MigrationPlugin: {0}'.format(message), extra=migration_status)
         except:
             # don't fail if you cannot set status d'oh
             pass
@@ -1984,6 +1979,7 @@ def _init(dispatcher, plugin):
     plugin.register_schema_definition('migration-status', {
         'type': 'object',
         'properties': {
+            'plugin': {'type': 'string', 'enum': ['MigrationPlugin']},
             'apps_migrated': {
                 'type': 'array',
                 'items': {'type': 'string'},
@@ -2008,11 +2004,10 @@ def _init(dispatcher, plugin):
     if os.path.exists(FREENAS93_DATABASE_PATH):
         plugin.register_event_handler('service.ready', start_migration)
     else:
-        dispatcher.dispatch_event(
-            'migration.status',
-            {
-                'apps_migrated': [],
-                'status': 'NOT_NEEDED'
-            }
-        )
-        push_status('MigrationPlugin: Migration not needed')
+        migration_status = {
+            'plugin': 'MigrationPlugin',
+            'apps_migrated': [],
+            'status': 'NOT_NEEDED'
+        }
+        dispatcher.dispatch_event('migration.status', migration_status)
+        push_status('MigrationPlugin: Migration not needed', extra=migration_status)
