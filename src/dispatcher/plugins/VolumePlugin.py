@@ -377,40 +377,45 @@ class VolumeProvider(Provider):
     @returns(h.ref('DisksAllocation'))
     def get_disks_allocation(self, disks):
         ret = {}
-        boot_pool_name = self.configstore.get('system.boot_pool_name')
-        boot_devs = self.dispatcher.call_sync('zfs.pool.get_disks', boot_pool_name)
+        boot_pool = self.dispatcher.call_sync('boot.pool.get_config')
 
-        for dev in boot_devs:
-            boot_disk = self.dispatcher.call_sync('disk.partition_to_disk', dev)
-            if boot_disk in disks:
-                ret[boot_disk] = {'type': 'BOOT'}
+        for dev in boot_pool['disks']:
+            ret[dev['disk_id']] = {'type': 'BOOT'}
 
         for vol in self.dispatcher.call_sync('volume.query'):
             if vol['status'] in ('UNAVAIL', 'UNKNOWN', 'LOCKED'):
                 continue
 
-            for dev in self.dispatcher.call_sync('volume.get_volume_disks', vol['id']):
+            for dev in vol['disks']:
                 if dev in disks:
                     ret[dev] = {
                         'type': 'VOLUME',
                         'name': vol['id']
                     }
 
-        for disk in set(disks) - set(ret.keys()):
-            try:
-                disk = self.dispatcher.call_sync(
-                    'disk.query',
-                    [('id', '=', disk), ('online', '=', True)],
-                    {'single': True}
-                )
+        disks = self.dispatcher.call_sync(
+            'disk.query',
+            [('id', 'in', list(set(disks) - set(ret.keys()))), ('online', '=', True)]
+        )
 
+        for disk in disks:
+            label = None
+            try:
                 label = self.get_disk_label(disk['path'])
+            except OSError:
+                pass
+
+            if not label:
+                try:
+                    label = self.get_disk_label(q.get(disk, 'status.data_partition_path'))
+                except OSError:
+                    pass
+
+            if label:
                 ret[disk] = {
                     'type': 'EXPORTED_VOLUME',
                     'name': label['volume_id']
                 }
-            except:
-                continue
 
         return ret
 
