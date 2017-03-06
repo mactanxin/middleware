@@ -1064,6 +1064,10 @@ class VMCreateTask(VMBaseTask):
             'vm-{0}'.format(vm['name']),
             vm
         )
+
+        if q.get(vm, 'config.autostart'):
+            self.run_subtask_sync('vm.start', self.id)
+
         self.set_progress(100, 'Finished')
 
         return self.id
