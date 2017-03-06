@@ -451,7 +451,7 @@ class VMTemplateProvider(Provider):
                     except ValueError:
                         pass
 
-            removed = templates.query(['id', 'nin', ids], {'select': 'id'})
+            removed = templates.query(('id', 'nin', ids), {'select': 'id'})
             templates.update(**result)
             if removed:
                 templates.remove_many(removed)
