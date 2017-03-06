@@ -44,6 +44,7 @@ from freenasOS.Update import ListClones, FindClone, RenameClone, ActivateClone, 
 from freenas.dispatcher.rpc import RpcException
 from freenas.utils import include, query as q
 from freenas.utils.lazy import lazy
+from task import VerifyException
 from lib.zfs import iterate_vdevs
 
 
@@ -238,7 +239,11 @@ class BootAttachDisk(ProgressTask):
 
     def verify(self, disk):
         boot_pool_name = self.configstore.get('system.boot_pool_name')
-        return ['zpool:{0}'.format(boot_pool_name), 'disk:{0}'.format(disk)]
+        disk_id = self.dispatcher.call_sync('disk.path_to_id', disk)
+        if not disk_id:
+            raise VerifyException(f'Disk {disk} not found')
+
+        return [f'zpool:{boot_pool_name}', f'disk:{disk_id}']
 
     def run(self, disk):
         pool = self.dispatcher.call_sync('zfs.pool.get_boot_pool')
