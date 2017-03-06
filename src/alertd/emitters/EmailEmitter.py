@@ -37,7 +37,7 @@ TEMPLATES_ROOT = '/usr/local/lib/alertd/templates'
 class EmailEmitter(AlertEmitter):
     def emit_first(self, alert, options):
         tmpl = Template(filename=os.path.join(TEMPLATES_ROOT, 'email_first.mako'))
-        to = options.get('addresses')
+        to = options.get('to')
 
         if to:
             self.context.client.call_sync('alert.emitter.email.send', {
@@ -48,7 +48,7 @@ class EmailEmitter(AlertEmitter):
 
     def emit_again(self, alert, options):
         tmpl = Template(filename=os.path.join(TEMPLATES_ROOT, 'email_again.mako'))
-        to = options.get('addresses')
+        to = options.get('to')
 
         if to:
             self.context.client.call_sync('alert.emitter.email.send', {
@@ -59,7 +59,7 @@ class EmailEmitter(AlertEmitter):
 
     def cancel(self, alert, options):
         tmpl = Template(filename=os.path.join(TEMPLATES_ROOT, 'email_cancel.mako'))
-        to = options.get('addresses')
+        to = options.get('to')
 
         if to:
             self.context.client.call_sync('alert.emitter.email.send', {
