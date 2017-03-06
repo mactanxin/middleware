@@ -74,6 +74,7 @@ class SMBProvider(Provider):
     def ad_enabled(self):
         return self.datastore.exists('directories', ('type', '=', 'winbind'), ('enabled', '=', True))
 
+
 @private
 @description('Configure SMB service')
 @accepts(h.ref('ServiceSmb'))
