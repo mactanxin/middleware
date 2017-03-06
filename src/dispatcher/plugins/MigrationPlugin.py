@@ -262,7 +262,7 @@ def populate_user_obj(user, fn10_groups, fn9_user, fn9_groups, fn9_grpmem):
         'shell': fn9_user['bsdusr_shell'],
         'home': fn9_user['bsdusr_home'],
         'sudo': bool(fn9_user['bsdusr_sudo']),
-        'email': fn9_user['bsdusr_email'],
+        'email': fn9_user['bsdusr_email'] or None,
         'lmhash': lmhash,
         'nthash': nthash,
         'password_changed_at': password_changed_at
@@ -1745,6 +1745,7 @@ class SystemMigrateTask(Task):
 
         # Migrating email settings
         fn9_email = get_table('select * from system_email', dictionary=False)[0]
+        fn9_root_user = get_table('select * from account_bsdusers').pop(1)
         try:
             self.run_subtask_sync(
                 'alert.emitter.update',
@@ -1754,6 +1755,7 @@ class SystemMigrateTask(Task):
                 {
                     'config': {
                         'from_address': fn9_email['em_fromemail'],
+                        'to': [fn9_root_user['bsdusr_email']] if fn9_root_user['bsdusr_email'] else [],
                         'server': fn9_email['em_outgoingserver'],
                         'port': fn9_email['em_port'],
                         'auth': bool(fn9_email['em_smtp']),
