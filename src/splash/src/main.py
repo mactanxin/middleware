@@ -78,6 +78,9 @@ class CursesFrontend(object):
         curses.endwin()
 
     def draw(self, msg):
+        # Seatbelt to prevent ncurses error when message is longer than 80 chars
+        if len(msg) > 80:
+            msg = msg[:77] + '...'
         self.stdscr.clear()
         self.stdscr.redrawwin()
         self.mainwin.addstr(0, 0, 'Booting {0}...'.format(self.context.version), curses.A_BOLD)
