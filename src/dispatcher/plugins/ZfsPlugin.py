@@ -1620,24 +1620,17 @@ def _init(dispatcher, plugin):
                     })
 
     @sync
-    def on_device_attached(args):
-        for p in pools.validvalues():
-            if p['status'] not in ('DEGRADED', 'UNAVAIL'):
+    def on_disk_attached(args):
+        for volume in dispatcher.call_sync('volume.query', [('status', 'in', ('DEGRADED', 'UNAVAIL'))]):
+            if volume.get('key_encrypted') or volume.get('password_encrypted'):
                 continue
 
-            volume = dispatcher.datastore.get_by_id('volumes', p['id'])
-            if volume and (volume.get('key_encrypted') or volume.get('password_encrypted')):
-                continue
-
-            for vd, _ in iterate_vdevs(p['groups']):
+            for vd, _ in iterate_vdevs(volume['topology']):
                 if args['path'] == vd['path']:
-                    logger.info('Device {0} that was part of the pool {1} got reconnected'.format(
-                        args['path'],
-                        p['name'])
-                    )
+                    logger.info(f'Device {args["path"]} that was part of the pool {volume["id"]} got reconnected')
 
                     # Try to clear errors
-                    zpool_try_clear(dispatcher, p['name'], vd)
+                    zpool_try_clear(dispatcher, volume['id'], vd)
 
     def sync_sizes():
         zfs = get_zfs()
@@ -2015,7 +2008,7 @@ def _init(dispatcher, plugin):
     plugin.register_event_handler('fs.zfs.dataset.renamed', on_dataset_rename)
     plugin.register_event_handler('fs.zfs.dataset.setprop', on_dataset_setprop)
     plugin.register_event_handler('fs.zfs.snapshot.cloned', on_dataset_create)
-    plugin.register_event_handler('system.device.attached', on_device_attached)
+    plugin.register_event_handler('disk.attached', on_disk_attached)
     plugin.register_event_handler('system.fs.mounted', lambda a: on_vfs_mount_or_unmount('mount', a))
     plugin.register_event_handler('system.fs.unmounted', lambda a: on_vfs_mount_or_unmount('unmount', a))
 

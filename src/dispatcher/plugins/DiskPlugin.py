@@ -1677,7 +1677,7 @@ def _init(dispatcher, plugin):
 
             disk = get_disk_by_path(path)
             dispatcher.emit_event('disk.attached', {
-                'path': path,
+                'path': disk['path'],
                 'id': disk['id']
             })
 
