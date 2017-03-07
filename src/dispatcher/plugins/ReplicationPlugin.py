@@ -1787,12 +1787,9 @@ def get_services(dispatcher, service, relation, link_name):
 
 def get_replication_resources(dispatcher, link):
     resources = ['replication']
-    try:
-        datasets = q.query(dispatcher.call_sync('replication.local_datasets_from_link', link), select='name')
-        for dataset in datasets:
-            resources.append('zfs:{0}'.format(dataset))
-    except RpcException:
-        pass
+    datasets = q.query(dispatcher.call_sync('replication.local_datasets_from_link', link), select='name')
+    for dataset in datasets:
+        resources.append('zfs:{0}'.format(dataset))
     return resources
 
 
