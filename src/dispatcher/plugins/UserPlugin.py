@@ -227,7 +227,7 @@ class UserCreateTask(Task):
         if user.get('full_name') and ':' in user['full_name']:
             errors.add((0, 'full_name'), 'The character ":" is not allowed')
 
-        if 'email' in user:
+        if user.get('email'):
             if not EMAIL_REGEX.match(user['email']):
                 errors.add(
                     (0, 'email'),
