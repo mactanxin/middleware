@@ -819,6 +819,7 @@ def _init(dispatcher, plugin):
             'name': {'type': ['string', 'null']},
             'created_at': {'type': 'datetime'},
             'updated_at': {'type': 'datetime'},
+            'cloned': {'type': 'boolean'},
             'enabled': {'type': 'boolean'},
             'dhcp': {'type': 'boolean'},
             'rtadv': {'type': 'boolean'},
