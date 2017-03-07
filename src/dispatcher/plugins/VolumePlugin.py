@@ -272,21 +272,23 @@ class VolumeProvider(Provider):
     @accepts(str, str)
     @returns(str)
     def resolve_path(self, volname, path):
-        volume = self.dispatcher.call_sync('volume.query', [('id', '=', volname)], {'single': True})
-        if not volume:
-            raise RpcException(errno.ENOENT, 'Volume {0} not found'.format(volname))
+        mountpoint = self.dispatcher.call_sync(
+            'volume.query',
+            [('id', '=', volname)],
+            {'single': True, 'select': 'mountpoint'}
+        )
 
-        if not volume['mountpoint']:
-            raise RpcException(errno.EINVAL, 'Volume {0} not mounted'.format(volname))
+        if not mountpoint:
+            raise RpcException(errno.ENOENT, f'Volume {volname} not found or not mounted')
 
         if self.dispatcher.call_sync(
             'volume.dataset.query',
             [('id', '=', os.path.join(volname, path)), ('type', '=', 'VOLUME')],
-            {'single': True}
+            {'single': True, 'select': 'id'}
         ):
             return os.path.join('/dev/zvol', volname, path)
 
-        return os.path.join(volume['mountpoint'], path)
+        return os.path.join(mountpoint, path)
 
     @accepts(str)
     @returns(str)
