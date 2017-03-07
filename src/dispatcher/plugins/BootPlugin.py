@@ -62,6 +62,9 @@ class BootPoolProvider(Provider):
         def collect_disks():
             disks = []
             for vdev, _ in iterate_vdevs(pool['groups']):
+                disk_id = None
+                disk = None
+
                 try:
                     disk_id = self.dispatcher.call_sync('disk.partition_to_disk', vdev['path'])
                     disk = self.dispatcher.call_sync(
@@ -69,15 +72,15 @@ class BootPoolProvider(Provider):
                         [('id', '=', disk_id), ('online', '=', True)],
                         {'single': True}
                     )
-
-                    disks.append({
-                        'disk_id': disk_id,
-                        'path': q.get(disk, 'path'),
-                        'guid': vdev['guid'],
-                        'status': vdev['status']
-                    })
                 except RpcException:
-                    continue
+                    pass
+
+                disks.append({
+                    'disk_id': disk_id,
+                    'path': q.get(disk, 'path', vdev['path']),
+                    'guid': vdev['guid'],
+                    'status': vdev['status']
+                })
 
             return disks
 
