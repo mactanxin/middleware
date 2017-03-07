@@ -213,6 +213,15 @@ def wait_server(server=DEFAULT_SERVER, timeout=DEFAULT_TIMEOUT):
 
 @argh.arg('--server')
 @argh.arg('--timeout')
+def restart(server=DEFAULT_SERVER, timeout=600):
+    c = create_client('unix:///var/run/serviced.sock')
+    c.call_sync('serviced.job.stop', 'org.freenas.dispatcher', True, timeout=timeout)
+    c.call_sync('serviced.job.start', 'org.freenas.dispatcher')
+    wait_server(server, timeout)
+
+
+@argh.arg('--server')
+@argh.arg('--timeout')
 @argh.arg('level', nargs='?', default=None)
 def loglevel(level, server=DEFAULT_SERVER, timeout=DEFAULT_TIMEOUT):
     c = create_client(server)
@@ -260,7 +269,7 @@ def strtoint(v):
 
 def main():
     parser = argh.ArghParser()
-    parser.add_commands([enum, call, emit, wait_server, listen, submit, poll, tasks, loglevel, dump_stacks])
+    parser.add_commands([enum, call, emit, restart, wait_server, listen, submit, poll, tasks, loglevel, dump_stacks])
     parser.dispatch()
 
 
