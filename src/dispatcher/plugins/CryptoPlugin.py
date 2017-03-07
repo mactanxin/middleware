@@ -386,7 +386,7 @@ class CertificateImportTask(Task):
         new_cert_db_entry['name'] = certificate['name']
         new_cert_db_entry['type'] = certificate['type']
 
-        if certificate.get(certificate['signing_ca_name']):
+        if certificate.get('signing_ca_name'):
             signing_cert_db_entry = self.datastore.get_one(
                 'crypto.certificates', ('name', '=', certificate['signing_ca_name'])
             )
