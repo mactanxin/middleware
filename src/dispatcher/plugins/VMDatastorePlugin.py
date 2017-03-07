@@ -104,11 +104,11 @@ class DatastoreProvider(Provider):
     @returns(str)
     @description('Returns type of a datastore driver')
     def get_driver(self, id):
-        ds = self.query([('id', '=', id)], {'single': True})
-        if not ds:
+        type = self.query([('id', '=', id)], {'single': True, 'select': 'type'})
+        if not type:
             raise RpcException(errno.ENOENT, 'Datastore {0} not found'.format(id))
 
-        return ds['type']
+        return type
 
     @private
     @accepts(str, str)
