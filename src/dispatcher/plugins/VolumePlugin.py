@@ -122,6 +122,7 @@ class VolumeProvider(Provider):
 
             if not config:
                 vol['status'] = 'LOCKED' if encrypted else 'UNKNOWN'
+                vol['disks'] = list(get_disk_ids(vol['topology']))
             else:
                 @lazy
                 def collect_topology():
@@ -383,7 +384,7 @@ class VolumeProvider(Provider):
             ret[dev['disk_id']] = {'type': 'BOOT'}
 
         for vol in self.dispatcher.call_sync('volume.query'):
-            if vol['status'] in ('UNAVAIL', 'UNKNOWN', 'LOCKED'):
+            if vol['status'] in ('UNAVAIL', 'UNKNOWN'):
                 continue
 
             for dev in vol['disks']:

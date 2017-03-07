@@ -535,7 +535,6 @@ class DiskConfigureTask(Task):
 
     def verify(self, id, updated_fields):
         disk = disk_by_id(self.dispatcher, id)
-
         if not disk:
             raise VerifyException(errno.ENOENT, 'Disk {0} not found'.format(id))
 
