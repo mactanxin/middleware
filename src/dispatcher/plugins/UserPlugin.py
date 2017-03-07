@@ -334,18 +334,10 @@ class UserCreateTask(Task):
             id = self.datastore.insert('users', user)
             self.id = id
             self.dispatcher.call_sync('etcd.generation.generate_group', 'accounts')
-        except SubprocessException as e:
-            raise TaskException(
-                errno.ENXIO,
-                'Could not generate samba password. stdout: {0}\nstderr: {1}'.format(e.out, e.err)
-            )
         except DuplicateKeyException as e:
             raise TaskException(errno.EBADMSG, 'Cannot add user: {0}'.format(str(e)))
         except RpcException as e:
-            raise TaskException(
-                errno.ENXIO,
-                'Cannot regenerate users file: {0}'.format(e)
-            )
+            raise TaskException(errno.ENXIO, 'Cannot regenerate users file: {0}'.format(e))
 
         if user['home'] != '/nonexistent':
             group = self.dispatcher.call_sync('group.query', [('id', '=', user['group'])], {'single': True})
@@ -385,6 +377,8 @@ class UserCreateTask(Task):
                         os.chown(dest_file, uid, user_gid)
 
             os.chown(user['home'], uid, user_gid)
+            if not self.configstore.get('system.home_directory_root'):
+                self.configstore.set('system.home_directory_root', os.path.dirname(user['home']))
 
         self.dispatcher.dispatch_event('user.changed', {
             'operation': 'create',
