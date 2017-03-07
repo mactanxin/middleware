@@ -117,7 +117,7 @@ SIZE_LOOKUP = {
 
 LAGG_PROTOCOL_MAP = {
     'failover': 'FAILOVER',
-    'fec': 'ETHERCHANNEL',
+    # 'fec': 'ETHERCHANNEL',
     'lacp': 'LACP',
     'loadbalance': 'LOADBALANCE',
     'roundrobin': 'ROUNDROBIN',
@@ -342,29 +342,25 @@ class NetworkMigrateTask(Task):
         # Lets first get all the fn9 network config data we need
         fn9_globalconf = get_table('select * from network_globalconfiguration', dictionary=False)[0]
         fn9_interfaces = get_table('select * from network_interfaces')
-        fn9_lagg_membership = get_table('select * from network_lagginterfacemembers')
         fn9_static_routes = get_table('select * from network_staticroute')
-        fn9_vlan = get_table('select * from network_vlan')
+        fn9_vlaninfo = {
+            v['vlan_vint']: v
+            for v in get_table('select * from network_vlan').values()
+        }
 
-        # get all aliases for all interfaces (nics and laggs)
+        fn9_lagg_membership = get_table('select * from network_lagginterfacemembers')
+        fn9_lagginfo = {
+            laggy['lagg_interface_id']: {
+                'lagg_protocol': LAGG_PROTOCOL_MAP.get(laggy['lagg_protocol'], 'FAILOVER'),
+                'lagg_members': [v for v in fn9_lagg_membership.values() if v['lagg_interfacegroup_id'] == laggy['id']]
+            }
+            for laggy in get_table('select * from network_lagginterface').values()
+        }
+
+        # get all aliases for all interfaces (nics, vlans, and laggs)
         fn9_aliases = {k: [] for k in fn9_interfaces.keys()}
         for v in get_table('select * from network_alias').values():
             fn9_aliases[v['alias_interface_id']].append(v)
-
-        # generate seperate fn9 lagg interfaces dict
-        fn9_laggs = {
-            laggy['lagg_interface_id']: extend(
-                fn9_interfaces.pop(laggy['lagg_interface_id']),
-                {
-                    'lagg_protocol': laggy['lagg_protocol'],
-                    'lagg_members': [
-                        v for v in fn9_lagg_membership.values()
-                        if v['lagg_interfacegroup_id'] == laggy['id']
-                    ]
-                }
-            )
-            for laggy in get_table('select * from network_lagginterface').values()
-        }
 
         # Now get the fn10 data on netowrk config and interfaces (needed to update interfaces, etc)
         fn10_interfaces = list(self.dispatcher.call_sync('network.interface.query'))
@@ -373,12 +369,30 @@ class NetworkMigrateTask(Task):
 
         # Migrating regular network interfaces
         for fn9_iface in fn9_interfaces.values():
+            create_interface = True
             fn10_iface = q.query(
                 fn10_interfaces, ('id', '=', fn9_iface['int_interface']), single=True
             )
             if fn10_iface:
+                create_interface = False
                 del fn10_iface['status']
                 del fn10_iface['type']
+            elif fn9_iface['int_interface'].lower().startswith('vlan'):
+                fn10_iface = {
+                    'type': 'VLAN',
+                    'vlan': {
+                        'parent': fn9_vlaninfo[fn9_iface['int_interface']]['vlan_pint'] or None,
+                        'tag': fn9_vlaninfo[fn9_iface['int_interface']]['vlan_tag'] or None
+                    }
+                }
+            elif fn9_iface['int_interface'].lower().startswith('lagg'):
+                fn10_iface = {
+                    'type': 'LAGG',
+                    'lagg': {
+                        'protocol': fn9_lagginfo[fn9_iface['int_interface']]['lagg_protocol'],
+                        'ports': [lg['lagg_physnic'] for lg in fn9_lagginfo[fn9_iface['int_interface']]['lagg_members']]
+                    }
+                }
             else:
                 self.add_warning(TaskWarning(
                     errno.EINVAL,
@@ -447,20 +461,25 @@ class NetworkMigrateTask(Task):
                 elif k in fn9_iface['int_options']:
                     l = fn10_iface.setdefault('capabilities', {}).setdefault('add', [])
                     l += v
-            network_id = fn10_iface.pop('id')
-            try:
-                self.run_subtask_sync('network.interface.update', network_id, fn10_iface)
-            except RpcException as err:
-                self.add_warning(TaskWarning(
-                    errno.EINVAL,
-                    'Could not configure network interface: {0} due to error: {1}'.format(
-                        network_id, err
-                    )
-                ))
-
-        # TODO: Migrate VLANs
-        # for key, value in fn9_vlan:
-        #     pass
+            if create_interface:
+                try:
+                    self.run_subtask_sync('network.interface.create', fn10_iface)
+                except RpcException as err:
+                    self.add_warning(TaskWarning(
+                        errno.EINVAL,
+                        'Could not create interface: {0} due to err: {1}'.format(fn9_iface['int_interface'], err)
+                    ))
+            else:
+                network_id = fn10_iface.pop('id')
+                try:
+                    self.run_subtask_sync('network.interface.update', network_id, fn10_iface)
+                except RpcException as err:
+                    self.add_warning(TaskWarning(
+                        errno.EINVAL,
+                        'Could not configure network interface: {0} due to error: {1}'.format(
+                            network_id, err
+                        )
+                    ))
 
         # Migrating hosts database
         for line in fn9_globalconf['gc_hosts'].split('\n'):
