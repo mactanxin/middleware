@@ -485,11 +485,15 @@ class VirtualMachine(object):
                     self.logger.debug('Creating a bridged interface for {0}'.format(name))
                     bridge_if = nic['bridge']
                     if bridge_if == 'default':
-                        bridge_if = self.context.client.call_sync(
-                            'networkd.configuration.wait_for_default_interface',
-                            600,
-                            timeout=600
-                        )
+                        try:
+                            bridge_if = self.context.client.call_sync(
+                                'networkd.configuration.wait_for_default_interface',
+                                600,
+                                timeout=600
+                            )
+                        except RpcException:
+                            self.logger.warning(f'Cannot initialize NIC {name}: Cannot resolve default interface')
+                            return
 
                         if not bridge_if:
                             self.logger.error('Error creating {0}. Default interface does not exist'.format(name))
