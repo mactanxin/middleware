@@ -344,8 +344,7 @@ class NetworkMigrateTask(Task):
         fn9_interfaces = get_table('select * from network_interfaces')
         fn9_static_routes = get_table('select * from network_staticroute')
         fn9_vlaninfo = {
-            v['vlan_vint']: v
-            for v in get_table('select * from network_vlan').values()
+            v['vlan_vint']: v for v in get_table('select * from network_vlan').values()
         }
 
         fn9_lagg_membership = get_table('select * from network_lagginterfacemembers')
@@ -381,16 +380,16 @@ class NetworkMigrateTask(Task):
                 fn10_iface = {
                     'type': 'VLAN',
                     'vlan': {
-                        'parent': fn9_vlaninfo[fn9_iface['int_interface']]['vlan_pint'] or None,
-                        'tag': fn9_vlaninfo[fn9_iface['int_interface']]['vlan_tag'] or None
+                        'parent': q.get(fn9_vlaninfo, f"{fn9_iface['int_interface']}.vlan_pint"),
+                        'tag': q.get(fn9_vlaninfo, f"{fn9_iface['int_interface']}.vlan_tag")
                     }
                 }
             elif fn9_iface['int_interface'].lower().startswith('lagg'):
                 fn10_iface = {
                     'type': 'LAGG',
                     'lagg': {
-                        'protocol': fn9_lagginfo[fn9_iface['int_interface']]['lagg_protocol'],
-                        'ports': [lg['lagg_physnic'] for lg in fn9_lagginfo[fn9_iface['int_interface']]['lagg_members']]
+                        'protocol': q.get(fn9_lagginfo, f"{fn9_iface['int_interface']}.lagg_protocol"),
+                        'ports': [lg['lagg_physnic'] for lg in q.get(fn9_lagginfo, f"{fn9_iface['int_interface']}.lagg_members", [])]
                     }
                 }
             else:
