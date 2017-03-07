@@ -455,10 +455,10 @@ class DiskEraseTask(Task):
 
     def verify(self, id, erase_method=None):
         disk = disk_by_id(self.dispatcher, id)
-        if not get_disk_by_path(disk['path']):
-            raise VerifyException(errno.ENOENT, "Disk {0} not found".format(id))
+        if not disk:
+            raise VerifyException(errno.ENOENT, f"Disk {id} not found")
 
-        return ['disk:{0}'.format(disk['path'])]
+        return [f'disk:{id}']
 
     def run(self, id, erase_method=None):
         disk = disk_by_id(self.dispatcher, id)
