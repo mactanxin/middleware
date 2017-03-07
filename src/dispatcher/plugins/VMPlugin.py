@@ -505,7 +505,7 @@ class VMConfigUpdateTask(Task):
                     if t not in valid_sources:
                         shutil.rmtree(os.path.join(templates_dir, t))
 
-                self.dispatcher.call_sync('vm.template.update', True)
+                self.dispatcher.call_async('vm.template.update', None, True)
 
 
 class VMBaseTask(ProgressTask):
