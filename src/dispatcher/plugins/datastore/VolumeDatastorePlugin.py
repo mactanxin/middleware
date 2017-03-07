@@ -28,9 +28,13 @@
 import os
 import uuid
 import errno
+from cache import CacheStore
 from task import ProgressTask, Provider, TaskDescription, TaskException
 from freenas.dispatcher.rpc import SchemaHelper as h, RpcException
 from freenas.dispatcher.rpc import private, accepts, returns, generator, description
+
+
+volume_status = None
 
 
 @description('Provides information about ZFS VM datastores')
@@ -49,12 +53,7 @@ class VolumeDatastoreProvider(Provider):
     @accepts(str)
     @returns(str)
     def get_state(self, datastore_id):
-        status = self.dispatcher.call_sync(
-            'volume.query',
-            [('id', '=', datastore_id)],
-            {'single': True, 'select': 'status'}
-        )
-        return 'ONLINE' if status == 'ONLINE' else 'OFFLINE'
+        return 'ONLINE' if volume_status.get(datastore_id) == 'ONLINE' else 'OFFLINE'
 
     @private
     @description('Lists files or ZVOLs')
@@ -536,14 +535,32 @@ def _metadata():
     }
 
 
+def _depends():
+    return ['VolumePlugin']
+
+
 def _init(dispatcher, plugin):
+    global volume_status
+    volume_status = CacheStore()
+
     def on_snapshot_change(args):
         pass
 
     def on_volume_change(args):
+        ids = args['ids']
+        if args['operation'] in ('create', 'update'):
+            new = dispatcher.call_sync('volume.query', [('id', 'in', ids)], {'select': ('id', 'status')})
+            ids = []
+            for id, status in new:
+                if volume_status.get(id) != status:
+                    volume_status.put(id, status)
+                    ids.append(id)
+        else:
+            volume_status.remove_many(ids)
+
         dispatcher.dispatch_event('vm.datastore.changed', {
             'operation': args['operation'],
-            'ids': args['ids']
+            'ids': ids
         })
 
     plugin.register_schema_definition('VmDatastorePropertiesVolume', {
@@ -573,3 +590,5 @@ def _init(dispatcher, plugin):
 
     plugin.register_event_handler('volume.changed', on_volume_change)
     plugin.register_event_handler('volume.snapshot.changed', on_snapshot_change)
+
+    volume_status.update(**{k: v for k, v in dispatcher.call_sync('volume.query', [], {'select': ('id', 'status')})})
