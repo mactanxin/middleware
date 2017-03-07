@@ -999,7 +999,7 @@ class Main(object):
             self.deconfigure_dhcp(name)
 
     def link_up(self, name):
-        iface = self.datastore.get_by_id(name)
+        iface = self.datastore.get_by_id('network.interfaces', name)
         if not iface:
             return
 

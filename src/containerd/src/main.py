@@ -483,8 +483,10 @@ class VirtualMachine(object):
                     if bridge_if == 'default':
                         bridge_if = self.context.client.call_sync(
                             'networkd.configuration.wait_for_default_interface',
-                            600
+                            600,
+                            timeout=600
                         )
+
                         if not bridge_if:
                             self.logger.error('Error creating {0}. Default interface does not exist'.format(name))
 
