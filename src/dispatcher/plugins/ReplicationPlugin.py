@@ -180,24 +180,18 @@ class ReplicationLinkProvider(Provider):
         datasets = []
         for dataset in iterate_datasets(link['datasets'], is_master, local=True):
             if link['recursive']:
-                try:
-                    dependencies = self.dispatcher.call_sync(
-                        'zfs.dataset.query',
-                        [('name', '~', '^{0}(/|$)'.format(dataset))],
-                    )
-                except RpcException:
-                    raise RpcException(errno.ENOENT, 'Dataset {0} not found'.format(dataset))
+                dependencies = self.dispatcher.call_sync(
+                    'zfs.dataset.query',
+                    [('name', '~', '^{0}(/|$)'.format(dataset))],
+                )
 
                 for dependency in dependencies:
                     if dependency not in datasets:
                         datasets.append(dependency)
             else:
                 dependency = self.dispatcher.call_sync('zfs.dataset.query', [('name', '=', dataset)], {'single': True})
-                if dependency:
-                    if dependency not in datasets:
-                        datasets.append(dependency)
-                else:
-                    raise RpcException(errno.ENOENT, 'Dataset {0} not found'.format(dataset))
+                if dependency and dependency not in datasets:
+                    datasets.append(dependency)
 
         return datasets
 
