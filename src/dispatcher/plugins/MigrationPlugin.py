@@ -38,7 +38,7 @@ from Crypto.Util import Counter
 from Crypto.Cipher import AES
 from lib.system import system, SubprocessException
 from freenas.serviced import push_status
-from freenas.utils import query as q
+from freenas.utils import query as q, extend
 from lxml import etree
 from bsd import sysctl
 from freenas.dispatcher.rpc import RpcException, description
@@ -342,11 +342,29 @@ class NetworkMigrateTask(Task):
         # Lets first get all the fn9 network config data we need
         fn9_globalconf = get_table('select * from network_globalconfiguration', dictionary=False)[0]
         fn9_interfaces = get_table('select * from network_interfaces')
-        fn9_aliases = get_table('select * from network_alias')
-        fn9_lagg_interfaces = get_table('select * from network_lagginterface')
         fn9_lagg_membership = get_table('select * from network_lagginterfacemembers')
         fn9_static_routes = get_table('select * from network_staticroute')
         fn9_vlan = get_table('select * from network_vlan')
+
+        # get all aliases for all interfaces (nics and laggs)
+        fn9_aliases = {k: [] for k in fn9_interfaces.keys()}
+        for v in get_table('select * from network_alias').values():
+            fn9_aliases[v['alias_interface_id']].append(v)
+
+        # generate seperate fn9 lagg interfaces dict
+        fn9_laggs = {
+            laggy['lagg_interface_id']: extend(
+                fn9_interfaces.pop(laggy['lagg_interface_id']),
+                {
+                    'lagg_protocol': laggy['lagg_protocol'],
+                    'lagg_members': [
+                        v for v in fn9_lagg_membership.values()
+                        if v['lagg_interfacegroup_id'] == laggy['id']
+                    ]
+                }
+            )
+            for laggy in get_table('select * from network_lagginterface').values()
+        }
 
         # Now get the fn10 data on netowrk config and interfaces (needed to update interfaces, etc)
         fn10_interfaces = list(self.dispatcher.call_sync('network.interface.query'))
@@ -382,24 +400,28 @@ class NetworkMigrateTask(Task):
                     'address': fn9_iface['int_ipv6address'],
                     'netmask': int(fn9_iface['int_v6netmaskbit'])
                 })
-            # # TODO: Fix below code to work
-            # for alias in fn9_aliases.values():
-            #     if alias['alias_v4address']:
-            #         aliases.append({
-            #             'type': 'INET',
-            #             'address': alias['alias_v4address'],
-            #             'netmask': int(alias['alias_v4netmaskbit'])
-            #         })
+            # Note: Currently not migrating fn9aliases 'alias_vip' field which
+            # is the virtual ipv4 field and is only used by TrueNAS HA, please
+            # do the same when we start doing TrueNAS 9.x-->10 migrations
+            # this logic also applies to the 'alias_v4address_b' and 'alias_v6address_b'
+            for alias in fn9_aliases.get(fn9_iface['id'], []):
+                if alias['alias_v4address']:
+                    aliases.append({
+                        'type': 'INET',
+                        'address': alias['alias_v4address'],
+                        'netmask': int(alias['alias_v4netmaskbit'])
+                    })
 
-            #     if alias.alias_v6address:
-            #         aliases.append({
-            #             'type': 'INET6',
-            #             'address': alias['alias_v6address'],
-            #             'netmask': int(alias['alias_v6netmaskbit'])
-            #         })
+                if alias['alias_v6address']:
+                    aliases.append({
+                        'type': 'INET6',
+                        'address': alias['alias_v6address'],
+                        'netmask': int(alias['alias_v6netmaskbit'])
+                    })
 
             fn10_iface.update({
                 'name': fn9_iface['int_name'],
+                'enabled': True,
                 'dhcp': fn9_iface['int_dhcp'],
                 'aliases': aliases
             })
@@ -435,9 +457,6 @@ class NetworkMigrateTask(Task):
                         network_id, err
                     )
                 ))
-
-        # TODO: Migrate LAGG interfaces
-        # for key, value in fn9_lagg_interfaces
 
         # TODO: Migrate VLANs
         # for key, value in fn9_vlan:
