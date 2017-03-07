@@ -2528,10 +2528,10 @@ class Main(object):
         self.die()
 
     def init_autostart(self):
-        for vm in self.client.call_sync('vm.query'):
-            if vm['config'].get('autostart'):
-                if self.client.call_sync('containerd.management.start_vm', vm['id'], True):
-                    self.failed_autostart_vms.append(vm['id'])
+        for id, autostart in self.client.call_sync('vm.query', [], {'select': ('id', 'config.autostart')}):
+            if autostart:
+                if self.client.call_sync('containerd.management.start_vm', id, True):
+                    self.failed_autostart_vms.append(id)
 
     def main(self):
         parser = argparse.ArgumentParser()
