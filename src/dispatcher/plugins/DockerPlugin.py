@@ -557,7 +557,6 @@ class DockerContainerCreateTask(DockerBaseTask):
                     'Path: "{0}" is not an absolute path'.format(cont_path)
                 )
 
-
         bridge = container.get('bridge')
         network_mode = container.get('primary_network_mode')
         bridge_enabled = network_mode == 'BRIDGED'
