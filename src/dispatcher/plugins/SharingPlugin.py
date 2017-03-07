@@ -219,6 +219,13 @@ class CreateShareTask(Task):
                 share['type']
             ))
 
+        if self.datastore.exists(
+            'shares',
+            ('target_type', '=', share['target_type']),
+            ('target_path', '=', share['target_path'])
+        ):
+            self.add_warning(TaskWarning(errno.EEXIST, f'There are other shares set on {share["target_path"]}'))
+
         normalize(share, {
             'enabled': True,
             'immutable': False,
@@ -343,6 +350,15 @@ class UpdateShareTask(Task):
                     share['name'],
                     share['type']
                 ))
+
+        if 'target_type' in updated_fields or 'target_path' in updated_fields:
+            if self.datastore.exists(
+                'shares',
+                ('target_type', '=', share['target_type']),
+                ('target_path', '=', share['target_path']),
+                ('id', '!=', id)
+            ):
+                self.add_warning(TaskWarning(errno.EEXIST, f'There are other shares set on {share["target_path"]}'))
 
         path_after_update = updated_fields.get('target_path', share['target_path'])
         type_after_update = updated_fields.get('target_type', share['target_type'])
