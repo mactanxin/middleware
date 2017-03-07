@@ -70,7 +70,7 @@ class NISPlugin(DirectoryServicePlugin):
             'username': entry.pw_name,
             'full_name': entry.pw_gecos,
             'shell': entry.pw_shell,
-            'home': entry.pw_dir,
+            'home': self.context.get_home_directory(self.directory, entry.pw_name),
             'sshpubkey': None,
             'group': str(uuid2(crc32(tmp), entry.pw_gid)),
             'groups': None,

@@ -114,6 +114,7 @@ class FreeIPAPlugin(DirectoryServicePlugin):
         groups = []
         group = None
         nthash = None
+        username = get(entry, 'uid.0')
 
         if contains(entry, 'gidNumber'):
             ret = self.search_one(
@@ -145,12 +146,12 @@ class FreeIPAPlugin(DirectoryServicePlugin):
             'gid': int(get(entry, 'gidNumber')),
             'sid': get(entry, 'ipaNTSecurityIdentifier'),
             'builtin': False,
-            'username': get(entry, 'uid.0'),
+            'username': username,
             'full_name': get(entry, 'gecos', get(entry, 'displayName', '<unknown>')),
             'nthash': nthash,
             'password_changed_at': get(entry, 'krbLastPwdChange'),
             'shell': get(entry, 'loginShell', '/bin/sh'),
-            'home': get(entry, 'homeDirectory', '/nonexistent'),
+            'home': self.context.get_home_directory(self.directory, username),
             'sshpubkey': get(entry, 'ipaSshPubKey.0', b'').decode('ascii') or None,
             'group': get(group, 'ipaUniqueID.0') if group else None,
             'groups': groups,

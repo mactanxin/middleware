@@ -108,6 +108,7 @@ class LDAPPlugin(DirectoryServicePlugin):
         pwd_change_time = get(entry, 'sambaPwdLastSet')
         groups = []
         group = None
+        username = get(entry, 'uid.0')
 
         if contains(entry, 'gidNumber'):
             ret = self.search_one(
@@ -128,10 +129,10 @@ class LDAPPlugin(DirectoryServicePlugin):
             'sid': get(entry, 'sambaSID'),
             'uid': int(get(entry, 'uidNumber')),
             'builtin': False,
-            'username': get(entry, 'uid.0'),
+            'username': username,
             'full_name': get(entry, 'gecos', get(entry, 'displayName', '<unknown>')),
             'shell': get(entry, 'loginShell', '/bin/sh'),
-            'home': get(entry, 'homeDirectory', '/nonexistent'),
+            'home': self.context.get_home_directory(self.directory, username),
             'nthash': get(entry, 'sambaNTPassword'),
             'lmhash': get(entry, 'sambaLMPassword'),
             'password_changed_at': datetime.utcfromtimestamp(int(pwd_change_time)) if pwd_change_time else None,
