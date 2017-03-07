@@ -1840,7 +1840,7 @@ class SystemMigrateTask(Task):
                         'enabled': bool(fn9_tunable['tun_enabled']),
                     }
                 )
-            except RpcException as err:
+            except (RpcException, ValueError) as err:
                 self.add_warning(TaskWarning(
                     errno.EINVAL,
                     'Could not migrate {0} tunable: {1} due to error: {2}'.format(
