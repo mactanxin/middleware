@@ -422,9 +422,13 @@ class VirtualMachine(object):
         def vmtools_state_changed():
             self.context.client.emit_event('vmtools.state.changed', {'state': self.health, 'id': self.id})
 
-        self.vmtools_client = Client()
-        self.vmtools_client.connect('unix://{0}'.format(self.vmtools_socket))
-        self.vmtools_client.register_event_handler('vmtools.ready', vmtools_ready)
+        try:
+            self.vmtools_client = Client()
+            self.vmtools_client.connect('unix://{0}'.format(self.vmtools_socket))
+            self.vmtools_client.register_event_handler('vmtools.ready', vmtools_ready)
+        except Exception as err:
+            self.logger.warning(f'Failed to initialize vm-tools connection for VM {self.name} <{self.id}>: {err}')
+            return
 
         while True:
             time.sleep(60)
