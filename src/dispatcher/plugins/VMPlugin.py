@@ -116,7 +116,10 @@ class VMProvider(Provider):
 
             def get_devices_status():
                 vm_id = obj['id']
-                return self.dispatcher.call_sync('containerd.management.get_devices_status', vm_id)
+                try:
+                    return self.dispatcher.call_sync('containerd.management.get_devices_status', vm_id)
+                except RpcException:
+                    return {}
 
             obj['status'] = lazy(get_status)
             obj['config']['readme'] = lazy(read_readme)
