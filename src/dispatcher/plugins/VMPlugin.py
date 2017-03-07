@@ -2174,7 +2174,8 @@ class DeleteFilesTask(Task):
                     if clones:
                         break
 
-            self.run_subtask_sync('vm.datastore.directory.delete', datastore, template_dir)
+                if not clones:
+                    self.run_subtask_sync('vm.datastore.directory.delete', datastore, template_dir)
 
 
 @description('Deletes all of cached VM files')
