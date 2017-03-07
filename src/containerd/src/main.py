@@ -1308,13 +1308,13 @@ class ManagementService(RpcService):
     def get_devices_status(self, id):
         res = {}
         vm = self.context.vms.get(id)
-        if not vm:
-            return res
+        if vm:
+            if vm.devices:
+                res.update({d['name']: 'CONNECTED' for d in vm.devices})
 
-        if vm.devices:
-            res.update({d['name']: 'CONNECTED' for d in vm.devices})
-        if vm.dropped_devices:
-            res.update({d: 'ERROR' for d in vm.dropped_devices})
+            if vm.dropped_devices:
+                res.update({d: 'ERROR' for d in vm.dropped_devices})
+
         return res
 
     @private
