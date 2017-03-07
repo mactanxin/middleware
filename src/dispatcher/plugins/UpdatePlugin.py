@@ -604,8 +604,8 @@ class UpdateConfigureTask(Task):
         if block is not None and block.busy:
             raise VerifyException(
                 errno.EBUSY,
-                'An Update Operation (Configuration/ Download/ Applying ' +
-                'the Updates) is already in the queue, please retry later')
+                'An update operation (Configuration/Downloading/Applying ' +
+                'the updates) is already in the queue; please retry later')
 
         return [update_resource_string]
 
@@ -660,8 +660,8 @@ class CheckUpdateTask(Task):
         block = self.dispatcher.resource_graph.get_resource(update_resource_string)
         if block is not None and block.busy:
             raise VerifyException(errno.EBUSY, (
-                'An Update Operation (Configuration/ Download/ Applying'
-                'the Updates) is already in the queue, please retry later'
+                'An update operation (Configuration/Downloading/Applying '
+                'the updates) is already in the queue; please retry later'
             ))
 
         return [update_resource_string]
@@ -701,8 +701,8 @@ class DownloadUpdateTask(ProgressTask):
         block = self.dispatcher.resource_graph.get_resource(update_resource_string)
         if block is not None and block.busy:
             raise VerifyException(errno.EBUSY, (
-                'An Update Operation (Configuration/ Download/ Applying'
-                'the Updates) is already in the queue, please retry later'
+                'An update operation (Configuration/Downloading/Applying '
+                'the updates) is already in the queue; please retry later'
             ))
 
         return [update_resource_string]
@@ -967,8 +967,8 @@ class CheckFetchUpdateTask(ProgressTask):
         block = self.dispatcher.resource_graph.get_resource(update_resource_string)
         if block is not None and block.busy:
             raise VerifyException(errno.EBUSY, (
-                'An Update Operation (Configuration/ Download/ Applying'
-                'the Updates) is already in the queue, please retry later'
+                'An update operation (Configuration/Downloading/Applying '
+                'the updates) is already in the queue; please retry later'
             ))
 
         return []
