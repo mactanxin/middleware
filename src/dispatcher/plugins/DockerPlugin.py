@@ -712,7 +712,6 @@ class DockerContainerCreateTask(DockerBaseTask):
             for netid in container.get('networks'):
                 self.run_subtask_sync('docker.network.connect', [contid], netid)
 
-
         if container.get('autostart'):
             contid = self.dispatcher.call_sync(
                 'containerd.docker.query_containers',
