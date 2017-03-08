@@ -207,12 +207,16 @@ def get_dhcp_lease(context, container_name, dockerhost_id, macaddr=None):
     c = dhcp.Client(interface[0], dockerhost_name+'.'+container_name)
     c.hwaddr = macaddr if macaddr else context.client.call_sync('vm.generate_mac')
     c.start()
-    lease = c.wait_for_bind(timeout=30).__getstate__()
-    if c.state == dhcp.State.BOUND:
-        return lease
-    else:
+
+    lease = c.wait_for_bind(timeout=30)
+    if not lease or c.state != dhcp.State.BOUND:
         c.stop()
-        raise RpcException(errno.EACCES, 'Failed to obtain DHCP lease: {0}'.format(c.error))
+        raise RpcException(
+            errno.EACCES,
+            'Failed to obtain DHCP lease' + (' : {0}'.format(c.error) if c.error else '')
+        )
+    else:
+        return lease.__getstate__()
 
 
 def unpack_docker_error(err):
