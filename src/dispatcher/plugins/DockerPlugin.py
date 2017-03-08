@@ -62,7 +62,7 @@ dockerfile_parser_logger.setLevel(logging.ERROR)
 logging.getLogger('requests').setLevel(logging.WARNING)
 logging.getLogger('urllib').setLevel(logging.WARNING)
 
-docker_names_pattern = '^[a-zA-Z0-9]+[a-zA-Z0-9._-]*'
+docker_names_pattern = '^[a-zA-Z0-9]+[a-zA-Z0-9._-]*$'
 
 
 @description('Provides information about Docker configuration')
