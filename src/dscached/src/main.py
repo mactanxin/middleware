@@ -527,9 +527,11 @@ class AccountService(RpcService):
 
         if '@' in user_name:
             # Fully qualified user name
+            fqdn = True
             user_name, domain_name = user_name.split('@', 1)
             dirs = [self.context.get_directory_by_domain(domain_name)]
         else:
+            fqdn = False
             dirs = self.context.get_searched_directories()
 
         for d in dirs:
@@ -544,6 +546,9 @@ class AccountService(RpcService):
             if user:
                 resolve_primary_group(self.context, user)
                 aliases = alias(d, user, 'username')
+                if fqdn:
+                    aliases.remove(user_name)
+
                 item = CacheItem(user['uid'], user['id'], aliases, copy.copy(user), d, self.context.cache_ttl)
                 self.context.users_cache.set(item)
                 return fix_passwords(item.annotated)
@@ -684,9 +689,11 @@ class GroupService(RpcService):
 
         if '@' in name:
             # Fully qualified group name
+            fqdn = True
             name, domain_name = name.split('@', 1)
             dirs = [self.context.get_directory_by_domain(domain_name)]
         else:
+            fqdn = False
             dirs = self.context.get_searched_directories()
 
         for d in dirs:
@@ -700,6 +707,9 @@ class GroupService(RpcService):
 
             if group:
                 aliases = alias(d, group, 'name')
+                if fqdn:
+                    aliases.remove(name)
+
                 item = CacheItem(group['gid'], group['id'], aliases, copy.copy(group), d, self.context.cache_ttl)
                 self.context.groups_cache.set(item)
                 return item.annotated
