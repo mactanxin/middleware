@@ -1131,6 +1131,9 @@ class VMImportTask(VMBaseTask):
                 'Cannot read configuration file. File is not a valid JSON file'
             )
 
+        vm['target'] = datastore
+        vm.pop('id', None)
+
         id = self.datastore.insert('vms', vm)
         self.dispatcher.dispatch_event('vm.changed', {
             'operation': 'create',
