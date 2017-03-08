@@ -56,8 +56,12 @@ def split_dataset(dataset_path):
     return pool, dataset_path
 
 
-def save_config(conf_path, name_mod, entry, file_perms=None):
-    file_name = os.path.join(conf_path, '.config-{0}.json'.format(name_mod))
+def save_config(conf_path, name_mod, entry, file_perms=None, version=None):
+    file_name = os.path.join(conf_path, f'.config-{name_mod}.json')
+
+    if version:
+        entry['%version'] = version
+
     with open(file_name, 'w', encoding='utf-8') as conf_file:
         conf_file.write(dumps(entry))
 
@@ -66,13 +70,17 @@ def save_config(conf_path, name_mod, entry, file_perms=None):
             os.chmod(file_name, file_perms)
 
 
-def load_config(conf_path, name_mod):
-    with open(os.path.join(conf_path, '.config-{0}.json'.format(name_mod)), 'r', encoding='utf-8') as conf_file:
-        return loads(conf_file.read())
+def load_config(conf_path, name_mod, version=None):
+    with open(os.path.join(conf_path, f'.config-{name_mod}.json'), 'r', encoding='utf-8') as conf_file:
+        entry = loads(conf_file.read())
+        if version and entry.get('%version') != version:
+            raise ValueError(f'Unsupported version: got {entry.get("version", "<none>")} instead of {version}')
+
+        return entry
 
 
 def delete_config(conf_path, name_mod):
-    os.remove(os.path.join(conf_path, '.config-{0}.json'.format(name_mod)))
+    os.remove(os.path.join(conf_path, f'.config-{name_mod}.json'))
 
 
 def get_freenas_peer_client(parent, remote):
