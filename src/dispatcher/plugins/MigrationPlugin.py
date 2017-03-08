@@ -187,6 +187,19 @@ RSYNCD_MODULE_MODE_MAP = {
     'rw': 'READWRITE'
 }
 
+# Only listing the valid directory service types for freenas10
+DS_TYPE_LOOKUP = {
+    1: 'winbind',  # 'ACTIVEDIRECTORY'
+    2: 'ldap',  # 'LDAP'
+    3: 'nis'  # 'NIS'
+}
+
+# Only listing the valid IDMAP types for freenas10
+IDMAP_LOOKUP = {
+    1: 'UNIX',  # 'idmap_ad'
+    7: 'RID'
+}
+
 
 def get_table(query_string, dictionary=True):
     with sqlite3.connect(FREENAS93_DATABASE_PATH) as conn:
@@ -1919,6 +1932,28 @@ class CalendarMigrateTask(Task):
         #         ))
 
 
+@description("Directory services migration task")
+class DirectoryServicesMigrateTask(Task):
+    def __init__(self, dispatcher):
+        super(DirectoryServicesMigrateTask, self).__init__(dispatcher)
+        self._notifier = notifier()
+
+    @classmethod
+    def early_describe(cls):
+        return "Migration of FreeNAS 9.x Directory Services settings (AD, LDAP, NIS)"
+
+    def describe(self):
+        return TaskDescription(
+            "Migration of FreeNAS 9.x Directory Services settings (AD, LDAP, NIS)"
+        )
+
+    def run(self):
+        # get all directory services settings from fn9 database
+        fn9_ad = get_table('select * from directoryservice_activedirectory', dictionary=False)[0]
+        fn9_ad_idmap = get_table('select * from directoryservice_idmap_ad', dictionary=False)[0]
+        fn9_rid_idmap = get_table('select * from directoryservice_idmap_rid')
+
+
 @description("Master top level migration task for 9.x to 10.x")
 class MasterMigrateTask(ProgressTask):
     def __init__(self, dispatcher):
@@ -2039,6 +2074,7 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('migration.servicemigrate', ServiceMigrateTask)
     plugin.register_task_handler('migration.systemmigrate', SystemMigrateTask)
     plugin.register_task_handler('migration.calendarmigrate', CalendarMigrateTask)
+    plugin.register_task_handler('migration.directoryservicesmigrate', DirectoryServicesMigrateTask)
 
     plugin.register_event_type('migration.status')
 
