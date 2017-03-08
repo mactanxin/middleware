@@ -887,7 +887,7 @@ class ZfsDatasetMountTask(ZfsBaseTask):
 
             def doit():
                 if recursive:
-                    dataset.mount_recursive()
+                    dataset.mount_recursive(True)
                 else:
                     dataset.mount()
 
