@@ -83,7 +83,9 @@ class WinbindPlugin(DirectoryServicePlugin):
         self.ldap_servers = None
         self.ldap = None
         self.domain_sid = None
+        self.domain_admins_sid = None
         self.domain_users_guid = None
+        self.wheel_group = None
         self.cv = Condition()
         self.bind_thread = Thread(target=self.bind, daemon=True)
         self.bind_thread.start()
@@ -259,6 +261,7 @@ class WinbindPlugin(DirectoryServicePlugin):
                                 raise RuntimeError('Failed to fetch domain LDAP object, incorrect realm?')
 
                             self.domain_sid = domain['attributes']['objectSid']
+                            self.domain_admins_sid = f'{self.domain_sid}-512'
                             logger.info('Domain SID: {0}'.format(self.domain_sid))
 
                             # Figure out group DN and prefetch "Domain Users" GUID
@@ -381,10 +384,14 @@ class WinbindPlugin(DirectoryServicePlugin):
                 ('objectClass', '=', 'group')
             ])
 
-            for r in self.search(self.base_dn, qstr, attributes=['objectGUID']):
+            for r in self.search(self.base_dn, qstr, attributes=['objectGUID', 'objectSid']):
                 r = dict(r['attributes'])
                 guid = uuid.UUID(get(r, 'objectGUID'))
                 groups.append(str(guid))
+
+                # Append wheel group to users being in Domain Admins group
+                if r['objectSid'] == self.domain_admins_sid and self.wheel_group:
+                    groups.append(self.wheel_group['id'])
 
         return {
             'id': str(uuid.UUID(get(entry, 'objectGUID'))),
@@ -554,6 +561,7 @@ class WinbindPlugin(DirectoryServicePlugin):
 
     def configure(self, enable, directory):
         with self.cv:
+            self.wheel_group = self.context.group_service.getgrnam('wheel')
             self.enabled = enable
             self.directory = directory
             self.parameters = directory.parameters
