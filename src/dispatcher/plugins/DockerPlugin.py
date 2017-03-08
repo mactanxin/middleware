@@ -364,7 +364,17 @@ class DockerCollectionProvider(Provider):
     @query('DockerCollection')
     @generator
     def query(self, filter=None, params=None):
-        return self.datastore.query_stream('docker.collections', *(filter or []), **(params or {}))
+        def extend(obj):
+            collection = collections.get(obj['collection'], {})
+            if not collection:
+                obj['status'] = 'UNKNOWN'
+            elif collection.get('connection_error'):
+                obj['status'] = 'ERROR'
+            else:
+                obj['status'] = 'OK'
+            return obj
+
+        return self.datastore.query_stream('docker.collections', *(filter or []), **(params or {}), callback=extend)
 
     @description('Returns a list of Docker images related to a saved collection')
     @returns(h.array(h.ref('DockerHubImage')))
@@ -2358,11 +2368,18 @@ def _init(dispatcher, plugin):
         'additionalProperties': False,
         'properties': {
             'id': {'type': 'string'},
+            'status': {'$ref': 'DockerCollectionStatus'},
             'name': {'type': 'string'},
             'collection': {'type': 'string'},
             'match_expr': {'type': ['string', 'null']},
             'images': {'$ref': 'DockerHubImage'}
         }
+    })
+
+    plugin.register_schema_definition('DockerCollectionStatus', {
+        'type': 'string',
+        'enum': ['OK', 'ERROR', 'UNKNOWN'],
+        'readOnly': True
     })
 
     plugin.register_schema_definition('DockerHost', {
