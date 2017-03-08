@@ -60,7 +60,7 @@ class LdapQueryBuilder(object):
         if op == '=*':
             return '({0}=*{1})'.format(name, escape_filter_chars(str(value)))
 
-        if op == '~':
+        if op in ('~', 'match'):
             return '({0}={1})'.format(name, str(value))
 
         if op == '!=':
