@@ -1132,7 +1132,6 @@ class VMImportTask(VMBaseTask):
             )
 
         vm['target'] = datastore
-        vm.pop('id', None)
 
         id = self.datastore.insert('vms', vm)
         self.dispatcher.dispatch_event('vm.changed', {
