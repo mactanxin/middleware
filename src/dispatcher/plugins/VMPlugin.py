@@ -2190,7 +2190,7 @@ class DeleteFilesTask(Task):
 
 
 @description('Deletes all of cached VM files')
-class FlushFilesTask(Task):
+class FlushFilesTask(ProgressTask):
     @classmethod
     def early_describe(cls):
         return 'Deleting VM files cache'
@@ -2202,9 +2202,18 @@ class FlushFilesTask(Task):
         return ['system']
 
     def run(self):
-        for template in self.dispatcher.call_sync('vm.template.query'):
-            if template['template']['cached_on']:
-                self.run_subtask_sync('vm.cache.delete', template['template']['name'])
+        length = self.dispatcher.call_sync('vm.template.query', [], {'count': True})
+        cnt = 0
+        templates = self.dispatcher.call_sync(
+            'vm.template.query',
+            [],
+            {'select': ('template.name', 'template.cached_on')}
+        )
+        for name, cached in templates:
+            self.set_progress((cnt / length) * 100, 'Removing unused VM template images')
+            if cached:
+                self.run_subtask_sync('vm.cache.delete', name)
+            cnt += 1
 
 
 @private
