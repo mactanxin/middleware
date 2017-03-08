@@ -281,10 +281,13 @@ class DockerImagesProvider(Provider):
 
         with dockerhub.DockerHub() as hub:
             with self.update_collection_lock:
+                connection_error = False
                 now = datetime.now()
                 collection_data = collections.get(collection, {})
+                conn_error = collection_data.get('connection_error')
+                coll_valid = collections.is_valid(collection)
                 time_since_last_update = now - collection_data.get('update_time', now)
-                if not force and collections.is_valid(collection) and time_since_last_update < self.throttle_period:
+                if not force and coll_valid and not conn_error and time_since_last_update < self.throttle_period:
                     return
 
                 try:
@@ -316,18 +319,23 @@ class DockerImagesProvider(Provider):
                         items.append(item)
                         if queue:
                             queue.put(item)
-                except TimeoutError as e:
-                    raise RpcException(errno.ETIMEDOUT, e)
-                except ConnectionError as e:
-                    raise RpcException(errno.ECONNABORTED, e)
+                except (TimeoutError, ConnectionError):
+                    connection_error = True
                 finally:
                     if queue:
                         queue.put(StopIteration)
 
                 collections.put(collection, {
                     'update_time': datetime.now(),
+                    'connection_error': connection_error,
                     'items': items
                 })
+                ids = self.datastore.query('docker.collections', ('collection', '=', collection), select='id')
+                if ids:
+                    self.dispatcher.dispatch_event('docker.collection.changed', {
+                        'operation': 'update',
+                        'ids': ids
+                    })
 
 
 @description('Provides information about cached Docker container collections')
