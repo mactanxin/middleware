@@ -668,6 +668,7 @@ class VirtualMachine(object):
 
             with self.run_lock:
                 self.set_state(VirtualMachineState.BOOTLOADER)
+                subprocess.call(['/usr/sbin/bhyvectl', '--destroy', '--vm={0}'.format(self.name)])
                 self.context.vm_started.set()
                 self.logger.debug('Starting bootloader...')
 
