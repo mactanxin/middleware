@@ -171,6 +171,7 @@ class BootEnvironmentUpdate(Task):
         return ['system']
 
     def run(self, id, updated_params):
+        boot_pool_name = self.configstore.get('system.boot_pool_name')
         new_id = updated_params.get('id', id)
         be = FindClone(id)
         if not be:
@@ -185,8 +186,9 @@ class BootEnvironmentUpdate(Task):
                     raise TaskException(errno.EIO, 'Cannot rename the {0} boot evironment'.format(id))
 
             if 'keep' in updated_params:
-                if not CloneSetAttr(be, keep=updated_params['keep']):
-                    raise TaskException(errno.EIO, 'Cannot set keep flag on boot environment {0}'.format(id))
+                self.run_subtask_sync('zfs.update', f'{boot_pool_name}/ROOT/{be["realname"]}', {
+                    'value': str(updated_params['keep'])
+                })
 
             if updated_params.get('active'):
                 if not ActivateClone(id):
