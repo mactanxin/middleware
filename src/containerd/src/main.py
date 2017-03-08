@@ -981,8 +981,12 @@ class DockerHost(object):
         }
 
         while True:
+            events = self.connection.events(decode=True)
+            self.logger.debug(f'Docker host VM {self.vm.name} starting to listen on events')
+            self.context.client.call_sync('docker.host.refresh_cache', self.vm.id, timeout=600)
+            self.logger.debug(f'Docker host VM {self.vm.name} local cache synced')
             try:
-                for ev in self.connection.events(decode=True):
+                for ev in events:
                     self.logger.debug('Received docker event: {0}'.format(ev))
                     if ev['Type'] == 'container':
                         self.context.client.emit_event('containerd.docker.container.changed', {
@@ -1134,9 +1138,6 @@ class DockerHost(object):
             except BaseException as err:
                 self.logger.error('Docker connection closed: {0}, retrying in 1 second'.format(str(err)), exc_info=True)
                 time.sleep(1)
-                self.context.client.emit_event('containerd.docker.client.disconnected', {
-                    'id': self.vm.id
-                })
 
     def get_container_console(self, id):
         if id not in self.active_consoles:
