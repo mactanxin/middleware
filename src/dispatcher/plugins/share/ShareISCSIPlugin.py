@@ -38,6 +38,9 @@ from freenas.dispatcher.rpc import SchemaHelper as h
 from freenas.utils import normalize, query as q
 
 
+IQN_NAME_REGEX = '^[a-zA-Z0-9-:\.]+$'
+
+
 def validate_portal_port(listen):
     if listen:
         for host in listen:
@@ -607,7 +610,10 @@ def _init(dispatcher, plugin):
         'type': 'object',
         'additionalProperties': False,
         'properties': {
-            'id': {'type': 'string'},
+            'id': {
+                'type': 'string',
+                'pattern': IQN_NAME_REGEX
+            },
             'description': {'type': 'string'},
             'auth_group': {'type': 'string'},
             'portal_group': {'type': 'string'},
