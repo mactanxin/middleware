@@ -1131,7 +1131,7 @@ class DockerHost(object):
                 self.logger.warning('Disconnected from Docker API endpoint on {0}'.format(self.vm.name))
 
             except BaseException as err:
-                self.logger.info('Docker connection closed: {0}, retrying in 1 second'.format(str(err)))
+                self.logger.error('Docker connection closed: {0}, retrying in 1 second'.format(str(err)), exc_info=True)
                 time.sleep(1)
                 self.context.client.emit_event('containerd.docker.client.disconnected', {
                     'id': self.vm.id
