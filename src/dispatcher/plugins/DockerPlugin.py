@@ -436,18 +436,25 @@ class DockerBaseTask(ProgressTask):
                 {'single': True, 'select': 'id'}
             )
 
-            def match_fn(args):
-                if args['operation'] == 'update':
-                    if hostid in args['ids']:
-                        state = self.dispatcher.call_sync(
-                            'docker.host.query',
-                            [('id', '=', hostid)],
-                            {'single': True, 'select': 'state'}
-                        )
-                        return state == 'UP'
-                else:
-                    return False
+        def match_fn(args):
+            if args['operation'] == 'update':
+                if hostid in args['ids']:
+                    state = self.dispatcher.call_sync(
+                        'docker.host.query',
+                        [('id', '=', hostid)],
+                        {'single': True, 'select': 'state'}
+                    )
+                    return state == 'UP'
+            else:
+                return False
 
+        state = self.dispatcher.call_sync(
+            'vm.query',
+            [('id', '=', hostid)],
+            {'single': True, 'select': 'status.state'}
+        )
+
+        if state and state == 'STOPPED':
             self.dispatcher.exec_and_wait_for_event(
                 'docker.host.changed',
                 match_fn,
