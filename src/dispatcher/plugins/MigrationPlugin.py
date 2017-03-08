@@ -448,7 +448,7 @@ class NetworkMigrateTask(Task):
             fn10_iface.update({
                 'name': fn9_iface['int_name'],
                 'enabled': True,
-                'dhcp': fn9_iface['int_dhcp'],
+                'dhcp': False if aliases else bool(fn9_iface['int_dhcp']),
                 'aliases': aliases
             })
             m = re.search(r'mtu (\d+)', fn9_iface['int_options'])
