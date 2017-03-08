@@ -463,45 +463,36 @@ class ImportShareTask(Task):
         return TaskDescription("Importing share {name} from {config_path}", name=name, config_path=config_path)
 
     def verify(self, config_path, name, type):
+        return ['system']
+
+    def run(self, config_path, name, type):
         try:
-            share = load_config(config_path, '{0}-{1}'.format(type, name))
+            share = load_config(config_path, f'{type}-{name}', version=CONFIG_VERSION)
         except FileNotFoundError:
             raise VerifyException(
                 errno.ENOENT,
-                'There is no share {0} of type {1} at {2} to be imported.'.format(name, type, config_path)
+                f'There is no share {name} of type {type} at {config_path} to be imported.'
             )
-        except ValueError:
-            raise VerifyException(
-                errno.EINVAL,
-                'Cannot read configuration file. File is not a valid JSON file'
-            )
+        except ValueError as err:
+            raise VerifyException(errno.EINVAL, f'Cannot read configuration file: {err}')
 
         if share['type'] != type:
             raise VerifyException(
                 errno.EINVAL,
-                'Share type {0} does not match configuration file entry type {1}'.format(type, share['type'])
+                f'Share type {type} does not match configuration file entry type {share["type"]}'
             )
 
         if not self.dispatcher.call_sync('share.supported_types').get(share['type']):
-            raise VerifyException(errno.ENXIO, 'Unknown sharing type {0}'.format(share['type']))
+            raise TaskException(errno.ENXIO, f'Unknown sharing type {share["type"]}')
 
-        return ['system']
-
-    def run(self, config_path, name, type):
-
-        share = load_config(config_path, '{0}-{1}'.format(type, name))
         if self.datastore.exists(
             'shares',
             ('type', '=', share['type']),
             ('name', '=', share['name'])
         ):
-            raise TaskException(errno.EEXIST, 'Share {0} of type {1} already exists'.format(
-                share['name'],
-                share['type']
-            ))
+            raise TaskException(errno.EEXIST, 'Share {share["name"]} of type {share["type"]} already exists')
 
-        id = self.run_subtask_sync('share.{0}.import'.format(share['type']), share)
-
+        id = self.run_subtask_sync(f'share.{share["type"]}.import', share)
         self.dispatcher.dispatch_event('share.changed', {
             'operation': 'create',
             'ids': [id]

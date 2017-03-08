@@ -1120,7 +1120,8 @@ class VMImportTask(VMBaseTask):
                     datastore,
                     get_vm_path(name)
                 ),
-                'vm-{0}'.format(name)
+                f'vm-{name}',
+                version=CONFIG_VERSION
             )
         except FileNotFoundError:
             raise TaskException(
