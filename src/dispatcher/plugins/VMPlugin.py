@@ -28,6 +28,7 @@
 import ipaddress
 import errno
 import os
+import copy
 import random
 import gzip
 import hashlib
@@ -2016,22 +2017,29 @@ class VMSnapshotCloneTask(VMSnapshotBaseTask):
             extra=lambda p: (p.replace(vm_name, new_name, 1),)
         )
 
-        new_vm = snapshot['parent']
-        new_vm['id'] = str(uuid.uuid4())
+        new_vm = copy.deepcopy(snapshot['parent'])
+        new_vm.pop('id', None)
         new_vm['name'] = new_name
         new_vm['parent'] = vm['id']
 
+        parent_root = get_vm_path(q.get(snapshot, 'parent.name'))
+        clone_root = get_vm_path(new_name)
         for d in new_vm['devices']:
             if d['type'] == 'NIC':
                 q.set(d, 'properties.link_address', self.dispatcher.call_sync('vm.generate_mac'))
+            elif d['type'] == 'DISK':
+                path = q.get(d, 'properties.target_path')
+                if path.startswith(parent_root):
+                    path = path.replace(parent_root, clone_root)
+                    q.set(d, 'properties.target_path', path)
 
-        self.datastore.insert('vms', new_vm)
+        id = self.datastore.insert('vms', new_vm)
         self.dispatcher.dispatch_event('vm.changed', {
             'operation': 'create',
-            'ids': [new_vm['id']]
+            'ids': [id]
         })
 
-        return new_vm['id']
+        return id
 
 
 @accepts(str, str)
