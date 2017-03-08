@@ -1063,7 +1063,8 @@ class VMCreateTask(VMBaseTask):
                 get_vm_path(vm['name'])
             ),
             'vm-{0}'.format(vm['name']),
-            vm
+            vm,
+            version=CONFIG_VERSION
         )
 
         if q.get(vm, 'config.autostart'):
@@ -1311,7 +1312,8 @@ class VMUpdateTask(VMBaseTask):
                     get_vm_path(vm['name'])
                 ),
                 'vm-{0}'.format(vm['name']),
-                vm
+                vm,
+                version=CONFIG_VERSION
             )
         except OSError:
             pass

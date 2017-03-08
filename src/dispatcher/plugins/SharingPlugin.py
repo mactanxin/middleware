@@ -84,7 +84,8 @@ class SharesProvider(Provider):
             if p.metadata and p.metadata.get('type') == 'sharing':
                 result[p.metadata['method']] = {
                     'subtype': p.metadata['subtype'],
-                    'perm_type': p.metadata.get('perm_type')
+                    'perm_type': p.metadata.get('perm_type'),
+                    'version': p.metadata.get('version')
                 }
 
         return result
@@ -299,7 +300,8 @@ class CreateShareTask(Task):
                 path,
                 '{0}-{1}'.format(new_share['type'], new_share['name']),
                 new_share,
-                file_perms=0o600
+                file_perms=0o600,
+                version=f'{CONFIG_VERSION}-{share_type["version"]}'
             )
         except OSError as err:
             self.add_warning(TaskWarning(errno.ENXIO, 'Cannot save backup config file: {0}'.format(str(err))))
@@ -425,12 +427,14 @@ class UpdateShareTask(Task):
 
         updated_share = self.datastore.get_by_id('shares', id)
         path = self.dispatcher.call_sync('share.get_directory_path', updated_share['id'])
+        share_type = self.dispatcher.call_sync('share.supported_types').get(updated_fields['type'])
         try:
             save_config(
                 path,
                 '{0}-{1}'.format(updated_share['type'], updated_share['name']),
                 updated_share,
-                file_perms=0o600
+                file_perms=0o600,
+                version=f'{CONFIG_VERSION}-{share_type["version"]}'
             )
         except OSError as err:
             self.add_warning(TaskWarning(errno.ENXIO, 'Cannot save backup config file: {0}'.format(str(err))))
