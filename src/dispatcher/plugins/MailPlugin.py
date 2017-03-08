@@ -92,6 +92,8 @@ class MailProvider(Provider):
     def send(self, mailmessage, mail=None):
         if mail is None:
             mail = ConfigNode('mail', self.configstore).__getstate__()
+        elif mail.get('password'):
+            mail['password'] = unpassword(mail['password'])
 
         if not mail.get('server') or not mail.get('port'):
             raise RpcException(
@@ -191,7 +193,7 @@ class MailConfigureTask(Task):
 
     def run(self, mail):
         node = ConfigNode('mail', self.configstore)
-        if 'password' in mail:
+        if mail.get('password'):
             mail['password'] = unpassword(mail['password'])
 
         node.update(mail)
