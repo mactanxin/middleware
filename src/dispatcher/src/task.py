@@ -133,6 +133,10 @@ class Task(object):
                     self.progress_callbacks.pop(t, None)
 
     def run_subtask_sync(self, classname, *args, **kwargs):
+        validate = kwargs.pop('validate', False)
+        if validate:
+            self.verify_subtask(classname, *args)
+
         ret, = self.join_subtasks(self.run_subtask(classname, *args, **kwargs))
         return ret
 
