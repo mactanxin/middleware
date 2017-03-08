@@ -31,6 +31,8 @@ from freenas.dispatcher.rpc import SchemaHelper as h, description, accepts, priv
 from freenas.utils import normalize
 from lxml import etree
 
+
+CONFIG_VERSION = 100000
 logger = logging.getLogger(__name__)
 
 
@@ -181,7 +183,8 @@ def _metadata():
         'type': 'sharing',
         'subtype': 'FILE',
         'perm_type': 'PERM',
-        'method': 'webdav'
+        'method': 'webdav',
+        'version': CONFIG_VERSION
     }
 
 

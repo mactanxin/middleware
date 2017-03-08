@@ -35,6 +35,9 @@ from freenas.dispatcher.rpc import SchemaHelper as h
 from freenas.utils import first_or_default, normalize
 
 
+CONFIG_VERSION = 100000
+
+
 @description("Provides info about configured AFP shares")
 class AFPSharesProvider(Provider):
     @private
@@ -248,7 +251,8 @@ def _metadata():
         'type': 'sharing',
         'subtype': 'FILE',
         'perm_type': 'PERM',
-        'method': 'afp'
+        'method': 'afp',
+        'version': CONFIG_VERSION
     }
 
 

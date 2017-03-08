@@ -35,6 +35,9 @@ from freenas.utils.lazy import lazy
 from utils import split_dataset, save_config, load_config, delete_config
 
 
+CONFIG_VERSION = 100000
+
+
 @description("Provides information on shares")
 class SharesProvider(Provider):
     @query('Share')

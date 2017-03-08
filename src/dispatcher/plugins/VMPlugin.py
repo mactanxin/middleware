@@ -65,11 +65,8 @@ VM_ROOT = '/vm'
 CACHE_ROOT = '/.vm_cache'
 BLOCKSIZE = 65536
 MAX_VM_TOOLS_FILE_SIZE = 102400
-
-
+CONFIG_VERSION = 100000
 logger = logging.getLogger(__name__)
-
-
 templates = None
 
 

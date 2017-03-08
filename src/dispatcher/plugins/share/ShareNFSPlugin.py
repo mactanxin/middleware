@@ -33,6 +33,7 @@ from freenas.dispatcher.rpc import SchemaHelper as h
 from freenas.utils import normalize, query as q
 
 
+CONFIG_VERSION = 100000
 logger = logging.getLogger(__name__)
 
 
@@ -217,7 +218,8 @@ def _metadata():
         'type': 'sharing',
         'subtype': 'FILE',
         'perm_type': 'PERM',
-        'method': 'nfs'
+        'method': 'nfs',
+        'version': CONFIG_VERSION
     }
 
 
