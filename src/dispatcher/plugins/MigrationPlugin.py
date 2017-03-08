@@ -306,7 +306,8 @@ class AccountsMigrateTask(Task):
                         'name': g['bsdgrp_group'],
                         'gid': g['bsdgrp_gid'],
                         'sudo': g['bsdgrp_sudo']
-                    }
+                    },
+                    validate=True
                 )
             except RpcException as err:
                 self.add_warning(TaskWarning(
@@ -326,14 +327,15 @@ class AccountsMigrateTask(Task):
         del fn10_root_user['uid']
         del fn10_root_user['username']
         del fn10_root_user['locked']
-        self.run_subtask_sync('user.update', fn10_root_user['id'], fn10_root_user)
+        self.run_subtask_sync('user.update', fn10_root_user['id'], fn10_root_user, validate=True)
 
         # Now rest of the users can be looped upon
         for u in filter(lambda x: x['bsdusr_builtin'] == 0, users.values()):
             try:
                 self.run_subtask_sync(
                     'user.create',
-                    populate_user_obj(None, fn10_groups, u, groups, grp_membership)
+                    populate_user_obj(None, fn10_groups, u, groups, grp_membership),
+                    validate=True
                 )
             except RpcException as err:
                 self.add_warning(TaskWarning(
@@ -448,7 +450,7 @@ class NetworkMigrateTask(Task):
             fn10_iface.update({
                 'name': fn9_iface['int_name'],
                 'enabled': True,
-                'dhcp': fn9_iface['int_dhcp'],
+                'dhcp': False if aliases else bool(fn9_iface['int_dhcp']),
                 'aliases': aliases
             })
             m = re.search(r'mtu (\d+)', fn9_iface['int_options'])
@@ -475,7 +477,7 @@ class NetworkMigrateTask(Task):
                     l += v
             if create_interface:
                 try:
-                    self.run_subtask_sync('network.interface.create', fn10_iface)
+                    self.run_subtask_sync('network.interface.create', fn10_iface, validate=True)
                 except RpcException as err:
                     self.add_warning(TaskWarning(
                         errno.EINVAL,
@@ -484,7 +486,9 @@ class NetworkMigrateTask(Task):
             else:
                 network_id = fn10_iface.pop('id')
                 try:
-                    self.run_subtask_sync('network.interface.update', network_id, fn10_iface)
+                    self.run_subtask_sync(
+                        'network.interface.update', network_id, fn10_iface, validate=True
+                    )
                 except RpcException as err:
                     self.add_warning(TaskWarning(
                         errno.EINVAL,
@@ -501,7 +505,7 @@ class NetworkMigrateTask(Task):
                 for name in names:
                     try:
                         self.run_subtask_sync(
-                            'network.host.create', {'id': name, 'addresses': [ip]}
+                            'network.host.create', {'id': name, 'addresses': [ip]}, validate=True
                         )
                     except RpcException as err:
                         self.add_warning(TaskWarning(
@@ -520,13 +524,17 @@ class NetworkMigrateTask(Task):
                 continue
 
             try:
-                self.run_subtask_sync('network.route.create', {
-                    'id': route['sr_description'],
-                    'type': 'INET',
-                    'network': str(net.network_address),
-                    'netmask': net.prefixlen,
-                    'gateway': route['sr_gateway'],
-                })
+                self.run_subtask_sync(
+                    'network.route.create',
+                    {
+                        'id': route['sr_description'],
+                        'type': 'INET',
+                        'network': str(net.network_address),
+                        'netmask': net.prefixlen,
+                        'gateway': route['sr_gateway'],
+                    },
+                    validate=True
+                )
             except RpcException as err:
                 self.add_warning(TaskWarning(
                     errno.EINVAL,
@@ -538,7 +546,8 @@ class NetworkMigrateTask(Task):
         # Set the system hostname
         self.run_subtask_sync(
             'system.general.update',
-            {'hostname': fn9_globalconf['gc_hostname'] + '.' + fn9_globalconf['gc_domain']}
+            {'hostname': fn9_globalconf['gc_hostname'] + '.' + fn9_globalconf['gc_domain']},
+            validate=True
         )
 
         # Finally migrate the global network config
@@ -683,7 +692,7 @@ class StorageMigrateTask(Task):
                 'apm_mode': None if fn9_disk['disk_advpowermgmt'] == 'Disabled' else int(fn9_disk['disk_advpowermgmt'])
             })
             try:
-                self.run_subtask_sync('disk.update', fn10_disk.pop('id'), fn10_disk)
+                self.run_subtask_sync('disk.update', fn10_disk.pop('id'), fn10_disk, validate=True)
             except RpcException as err:
                 self.add_warning(TaskWarning(
                     errno.EINVAL,
@@ -695,7 +704,7 @@ class StorageMigrateTask(Task):
         for fn9_volume in fn9_volumes.values():
             try:
                 self.run_subtask_sync(
-                    'volume.import', fn9_volume['vol_guid'], fn9_volume['vol_name']
+                    'volume.import', fn9_volume['vol_guid'], fn9_volume['vol_name'], validate=True
                 )
             except RpcException as err:
                 self.add_warning(TaskWarning(
@@ -790,7 +799,8 @@ class ShareMigrateTask(Task):
                             'hosts_allow': hosts_allow or None,
                             'hosts_deny': hosts_deny or None
                         }
-                    }
+                    },
+                    validate=True
                 )
             except RpcException as err:
                 self.add_warning(TaskWarning(
@@ -850,7 +860,8 @@ class ShareMigrateTask(Task):
                             'hosts_allow': hosts_allow,
                             'hosts_deny': hosts_deny
                         }
-                    }
+                    },
+                    validate=True
                 )
             except RpcException as err:
                 self.add_warning(TaskWarning(
@@ -892,7 +903,8 @@ class ShareMigrateTask(Task):
                             'hosts': fn9_nfs_share['nfs_hosts'].replace('\t', ',').replace(' ', ',').split(','),
                             'security': [fn9_nfs_share['nfs_security']] if fn9_nfs_share['nfs_security'] else []
                         }
-                    }
+                    },
+                    validate=True
                 )
             except RpcException as err:
                 self.add_warning(TaskWarning(
@@ -925,7 +937,8 @@ class ShareMigrateTask(Task):
                             'read_only': bool(fn9_dav_share['webdav_ro']),
                             'permission': bool(fn9_dav_share['webdav_perm'])
                         }
-                    }
+                    },
+                    validate=True
                 )
             except RpcException as err:
                 self.add_warning(TaskWarning(
@@ -1003,7 +1016,8 @@ class ShareMigrateTask(Task):
                             'device_id': device_id,
                             'rpm': fn9_iscsitargetextent['iscsi_target_extent_rpm']
                         }
-                    }
+                    },
+                    validate=True
                 )
             except RpcException as err:
                 self.add_warning(TaskWarning(
@@ -1078,7 +1092,8 @@ class ShareMigrateTask(Task):
                             }],
                             'initiators': fn9_targetauthcred['initiators'] or None,
                             'networks': fn9_targetauthcred['networks'] or None
-                        }
+                        },
+                        validate=True
                     )
                 except RpcException as err:
                     self.add_warning(TaskWarning(
@@ -1119,7 +1134,8 @@ class ShareMigrateTask(Task):
                             for p in fn9_iscsitargetportalips.values()
                             if p['iscsi_target_portalip_portal_id'] == fn9_iscsitargetportal['id']
                         ]
-                    }
+                    },
+                    validate=True
                 )
                 for x in fn9_iscsitargetgroups.values():
                     if x['iscsi_target_portalgroup_id'] == fn9_iscsitargetportal['id']:
@@ -1163,7 +1179,8 @@ class ShareMigrateTask(Task):
                                             'type': 'NONE',
                                             'initiators': target_initiators or None,
                                             'networks': target_networks or None,
-                                        }
+                                        },
+                                        validate=True
                                     )
                                 except RpcException as err:
                                     self.add_warning(TaskWarning(
@@ -1189,7 +1206,8 @@ class ShareMigrateTask(Task):
                             for x in fn9_iscsitargettoextent_maps.values()
                             if x['iscsi_target_id'] == fn9_iscsitarget['id']
                         ]
-                    }
+                    },
+                    validate=True
                 )
             except RpcException as err:
                 self.add_warning(TaskWarning(
@@ -1240,7 +1258,8 @@ class ServiceMigrateTask(Task):
                     'base_name': fn9_iscsi['iscsi_basename'],
                     'pool_space_threshold': fn9_iscsi['iscsi_pool_avail_threshold'],
                     'isns_servers': list(filter(None, fn9_iscsi['iscsi_isns_servers'].split(' ')))
-                }}
+                }},
+                validate=True
             )
         except RpcException as err:
             self.add_warning(TaskWarning(
@@ -1269,7 +1288,8 @@ class ServiceMigrateTask(Task):
                     'homedir_name': fn9_afp['afp_srv_homename'] or None,
                     'dbpath': fn9_afp['afp_srv_dbpath'] or None,
                     'auxiliary': fn9_afp['afp_srv_global_aux'] or None
-                }}
+                }},
+                validate=True
             )
         except RpcException as err:
             self.add_warning(TaskWarning(
@@ -1310,7 +1330,8 @@ class ServiceMigrateTask(Task):
             self.run_subtask_sync(
                 'service.update',
                 q.query(fn10_services, ("name", "=", "smb"), single=True)['id'],
-                {'config': smbconfig}
+                {'config': smbconfig},
+                validate=True
             )
         except RpcException as err:
             self.add_warning(TaskWarning(
@@ -1335,7 +1356,8 @@ class ServiceMigrateTask(Task):
                     'mountd_port': fn9_nfs['nfs_srv_mountd_port'],
                     'rpcstatd_port': fn9_nfs['nfs_srv_rpcstatd_port'],
                     'rpclockd_port': fn9_nfs['nfs_srv_rpclockd_port']
-                }}
+                }},
+                validate=True
             )
         except RpcException as err:
             self.add_warning(TaskWarning(
@@ -1350,7 +1372,7 @@ class ServiceMigrateTask(Task):
                 webdav_cert9 = fn9_certs.get(fn9_dav['webdav_certssl_id'], {})
                 webdav_cert = q.query(
                     fn10_certs_and_cas,
-                    ('name', '=', webdav_cer9t.get('cert_name')),
+                    ('name', '=', webdav_cert9.get('cert_name')),
                     single=True
                 )
                 if webdav_cert is None:
@@ -1372,7 +1394,8 @@ class ServiceMigrateTask(Task):
                     },
                     'authentication': fn9_dav['webdav_htauth'].upper(),
                     'certificate': webdav_cert['id'] if webdav_cert else None
-                }}
+                }},
+                validate=True
             )
         except RpcException as err:
             self.add_warning(TaskWarning(
@@ -1409,7 +1432,8 @@ class ServiceMigrateTask(Task):
                     'sftp_log_level': fn9_sshd['ssh_sftp_log_level'] or 'ERROR',
                     'sftp_log_facility': fn9_sshd['ssh_sftp_log_facility'] or 'AUTH',
                     'auxiliary': fn9_sshd['ssh_options'] or None
-                }}
+                }},
+                validate=True
             )
         except RpcException as err:
             self.add_warning(TaskWarning(
@@ -1435,7 +1459,8 @@ class ServiceMigrateTask(Task):
                     'update_period': int(fn9_dyndns['ddns_updateperiod']) if fn9_dyndns['ddns_updateperiod'] else None,
                     'force_update_period': int(fn9_dyndns['ddns_fupdateperiod']) if fn9_dyndns['ddns_fupdateperiod'] else None,
                     'auxiliary': fn9_dyndns['ddns_options']
-                }}
+                }},
+                validate=True
             )
         except RpcException as err:
             self.add_warning(TaskWarning(
@@ -1495,7 +1520,8 @@ class ServiceMigrateTask(Task):
                     ],
                     'tls_ssl_certificate': ftp_cert['id'] if ftp_cert else None,
                     'auxiliary': fn9_ftp['ftp_options'] or None
-                }}
+                }},
+                validate=True
             )
         except RpcException as err:
             self.add_warning(TaskWarning(
@@ -1513,7 +1539,8 @@ class ServiceMigrateTask(Task):
                     'save_description': bool(fn9_lldp['lldp_intdesc']),
                     'country_code': fn9_lldp['lldp_country'] or None,
                     'location': fn9_lldp['lldp_location'] or None,
-                }}
+                }},
+                validate=True
             )
         except RpcException as err:
             self.add_warning(TaskWarning(
@@ -1531,7 +1558,8 @@ class ServiceMigrateTask(Task):
                     'enable': bool(fn9_services['rsync']['srv_enable']),
                     'port': fn9_rsyncd['rsyncd_port'],
                     'auxiliary': fn9_rsyncd['rsyncd_auxiliary']
-                }}
+                }},
+                validate=True
             )
         except RpcException as err:
             self.add_warning(TaskWarning(
@@ -1558,7 +1586,8 @@ class ServiceMigrateTask(Task):
                             None, rsyncd_mod['rsyncmod_hostsdeny'].replace('\t', ',').replace(' ', ',').split(','))
                         ) or None,
                         'auxiliary': rsyncd_mod['rsyncmod_auxiliary'] or None,
-                    }
+                    },
+                    validate=True
                 )
             except RpcException as err:
                 self.add_warning(TaskWarning(
@@ -1594,7 +1623,8 @@ class ServiceMigrateTask(Task):
             self.run_subtask_sync(
                 'service.update',
                 q.query(fn10_services, ("name", "=", "snmp"), single=True)['id'],
-                {'config': snmp_config}
+                {'config': snmp_config},
+                validate=True
             )
         except RpcException as err:
             self.add_warning(TaskWarning(
@@ -1616,7 +1646,8 @@ class ServiceMigrateTask(Task):
                     'username': fn9_tftp['tftp_username'],
                     'umask': {'value': int(fn9_tftp['tftp_umask'])},
                     'auxiliary': fn9_tftp['tftp_options'] or None
-                }}
+                }},
+                validate=True
             )
         except RpcException as err:
             self.add_warning(TaskWarning(
@@ -1649,7 +1680,8 @@ class ServiceMigrateTask(Task):
                     'auxiliary_users': fn9_ups['ups_extrausers'] or None,
                     'powerdown': True if fn9_ups['ups_powerdown'] in ['True', 1] else False,
                     'auxiliary': fn9_ups['ups_options'] or None
-                }}
+                }},
+                validate=True
             )
         except RpcException as err:
             self.add_warning(TaskWarning(
@@ -1665,7 +1697,8 @@ class ServiceMigrateTask(Task):
         #         q.query(fn10_services, ("name", "=", "foo"), single=True)['id'],
         #         {'config': {
         #             'enable': bool(fn9_services['foo']['srv_enable'])
-        #         }}
+        #         }},
+        #         validate=True
         #     )
         # except RpcException as err:
         #     self.add_warning(TaskWarning(
@@ -1716,7 +1749,8 @@ class SystemMigrateTask(Task):
                         'certificate': crypto_obj['cert_certificate'],
                         'privatekey': crypto_obj['cert_privatekey'],
                         'signing_ca_name': signed_by_ca['cert_name'] if signed_by_ca else None
-                    }
+                    },
+                    validate=True
                 )
             except RpcException as err:
                 self.add_warning(TaskWarning(
@@ -1734,7 +1768,7 @@ class SystemMigrateTask(Task):
             if fn9_sys_settings['stg_kbdmap']:
                 system_general_config.update({'console_keymap': fn9_sys_settings['stg_kbdmap']})
 
-            self.run_subtask_sync('system.general.update', system_general_config)
+            self.run_subtask_sync('system.general.update', system_general_config, validate=True)
         except RpcException as err:
             self.add_warning(TaskWarning(
                 errno.EINVAL,
@@ -1761,7 +1795,8 @@ class SystemMigrateTask(Task):
                     'webui_http_port': fn9_sys_settings['stg_guiport'],
                     'webui_https_certificate': webgui_cert['id'] if webgui_cert else None,
                     'webui_https_port': fn9_sys_settings['stg_guihttpsport']
-                }
+                },
+                validate=True
             )
         except RpcException as err:
             self.add_warning(TaskWarning(
@@ -1787,7 +1822,8 @@ class SystemMigrateTask(Task):
                     'motd': fn9_adv_settings['adv_motd'],
                     'boot_scrub_internal': fn9_adv_settings['adv_boot_scrub'],
                     'graphite_servers': [fn9_adv_settings['adv_graphite']] if fn9_adv_settings['adv_graphite'] else []
-                }
+                },
+                validate=True
             )
         except RpcException as err:
             self.add_warning(TaskWarning(
@@ -1817,7 +1853,8 @@ class SystemMigrateTask(Task):
                             '$password': self._notifier.pwenc_decrypt(fn9_email['em_pass'])
                         } if fn9_email['em_pass'] else None
                     }
-                }
+                },
+                validate=True
             )
         except RpcException as err:
             self.add_warning(TaskWarning(
@@ -1847,7 +1884,7 @@ class SystemMigrateTask(Task):
                     },
                     True
                 ]
-                self.run_subtask_sync(*list(filter(None, ntp_task_args)))
+                self.run_subtask_sync(*list(filter(None, ntp_task_args)), validate=True)
             except RpcException as err:
                 self.add_warning(TaskWarning(
                     errno.EINVAL, 'Could not migrate npt_server: {0} due to error: {1}'.format(
@@ -1869,7 +1906,8 @@ class SystemMigrateTask(Task):
                         'value': fn9_tunable['tun_value'],
                         'comment': fn9_tunable['tun_comment'],
                         'enabled': bool(fn9_tunable['tun_enabled']),
-                    }
+                    },
+                    validate=True
                 )
             except (RpcException, ValueError) as err:
                 self.add_warning(TaskWarning(
@@ -1882,7 +1920,9 @@ class SystemMigrateTask(Task):
         # Migrate system dataset (only pool setting is migrated though)
         fn9_sysdataset = get_table('select * from system_systemdataset', dictionary=False)[0]
         try:
-            self.run_subtask_sync('system_dataset.migrate', fn9_sysdataset['sys_pool'])
+            self.run_subtask_sync(
+                'system_dataset.migrate', fn9_sysdataset['sys_pool'], validate=True
+            )
         except RpcException as err:
             self.add_warning(TaskWarning(
                 errno.EINVAL,
@@ -2005,33 +2045,33 @@ class MasterMigrateTask(ProgressTask):
         self.status = 'RUNNING'
 
         self.migration_progess(0, 'Migrating storage app: disks and volumes')
-        self.run_subtask_sync('migration.storagemigrate')
+        self.run_subtask_sync('migration.storagemigrate', validate=True)
         self.apps_migrated.append('storage')
 
         self.migration_progess(10, 'Migrating account app: users and groups')
-        self.run_subtask_sync('migration.accountsmigrate')
+        self.run_subtask_sync('migration.accountsmigrate', validate=True)
         self.apps_migrated.append('accounts')
 
         self.migration_progess(20, 'Migrating system app')
-        self.run_subtask_sync('migration.systemmigrate')
+        self.run_subtask_sync('migration.systemmigrate', validate=True)
         self.apps_migrated.append('system')
 
         self.migration_progess(
             30, 'Migrating network app: network config, interfaces, vlans, bridges, and laggs'
         )
-        self.run_subtask_sync('migration.networkmigrate')
+        self.run_subtask_sync('migration.networkmigrate', validate=True)
         self.apps_migrated.append('network')
 
         self.migration_progess(40, 'Migrating services app: AFP, SMB, NFS, iSCSI, etc')
-        self.run_subtask_sync('migration.servicemigrate')
+        self.run_subtask_sync('migration.servicemigrate', validate=True)
         self.apps_migrated.append('services')
 
         self.migration_progess(50, 'Migrating shares app: AFP, SMB, NFS, iSCSI, and WebDAV')
-        self.run_subtask_sync('migration.sharemigrate')
+        self.run_subtask_sync('migration.sharemigrate', validate=True)
         self.apps_migrated.append('sharing')
 
         self.migration_progess(60, 'Migrating calendar tasks: cron, rsync, scrub, snapshot, smart')
-        self.run_subtask_sync('migration.calendarmigrate')
+        self.run_subtask_sync('migration.calendarmigrate', validate=True)
         self.apps_migrated.append('calendar')
 
         # If we reached till here migration must have succeeded
