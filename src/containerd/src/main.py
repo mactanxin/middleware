@@ -1633,7 +1633,7 @@ class DockerService(RpcService):
                 if net_mode == 'none':
                     primary_network_mode = 'NONE'
 
-                networks=[]
+                networks = []
                 hidden_builtin_networks = ('bridge', 'external', 'host', 'none')
                 # Docker does not assign the <container>.NetworkSettings.Networks.<network>.NetworkID
                 # untill the container is started, hence the below gymnastics to retrive the network id
