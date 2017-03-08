@@ -446,8 +446,9 @@ class UpdateShareTask(Task):
                 self.run_subtask_sync('service.update', service_state['id'], {'config': config})
             else:
                 self.add_warning(TaskWarning(
-                    errno.ENXIO, "Share has been updated but the service {0} is not currently running "
-                                 "Please enable the {0} service.".format(share['type'])
+                    errno.ENXIO,
+                    "Share has been updated but the service {0} is not currently running "
+                    "Please enable the {0} service.".format(share['type'])
                 ))
 
 
