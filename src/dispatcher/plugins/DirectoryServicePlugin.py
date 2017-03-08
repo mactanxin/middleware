@@ -87,6 +87,7 @@ class DirectoryServicesConfigureTask(Task):
 
         try:
             self.dispatcher.call_sync('dscached.management.reload_config')
+            self.dispatcher.call_sync('dscached.management.flush_cache')
         except RpcException as e:
             raise TaskException(errno.ENXIO, 'Cannot reconfigure directory services: {0}'.format(str(e)))
 

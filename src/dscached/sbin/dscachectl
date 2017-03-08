@@ -95,7 +95,7 @@ def directories():
 def flush():
     """Flush the Directory Services cache."""
     client = create_client()
-    client.call_sync('dscached.management.flush')
+    client.call_sync('dscached.management.flush_cache')
     print("Caches flushed sucessfully")
 
 
