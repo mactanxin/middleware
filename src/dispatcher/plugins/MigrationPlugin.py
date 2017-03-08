@@ -1372,7 +1372,7 @@ class ServiceMigrateTask(Task):
                 webdav_cert9 = fn9_certs.get(fn9_dav['webdav_certssl_id'], {})
                 webdav_cert = q.query(
                     fn10_certs_and_cas,
-                    ('name', '=', webdav_cer9t.get('cert_name')),
+                    ('name', '=', webdav_cert9.get('cert_name')),
                     single=True
                 )
                 if webdav_cert is None:
