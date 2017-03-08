@@ -74,7 +74,7 @@ def load_config(conf_path, name_mod, version=None):
     with open(os.path.join(conf_path, f'.config-{name_mod}.json'), 'r', encoding='utf-8') as conf_file:
         entry = loads(conf_file.read())
         if version and entry.get('%version') != version:
-            raise ValueError(f'Unsupported version: got {entry.get("version", "<none>")} instead of {version}')
+            raise ValueError(f'Unsupported version: got {entry.get("%version", "<none>")} instead of {version}')
 
         return entry
 
