@@ -305,7 +305,7 @@ class AccountsMigrateTask(Task):
                     {
                         'name': g['bsdgrp_group'],
                         'gid': g['bsdgrp_gid'],
-                        'sudo': g['bsdgrp_sudo']
+                        'sudo': bool(g['bsdgrp_sudo'])
                     },
                     validate=True
                 )
@@ -327,6 +327,10 @@ class AccountsMigrateTask(Task):
         del fn10_root_user['uid']
         del fn10_root_user['username']
         del fn10_root_user['locked']
+        del fn10_root_user['gid']
+        fn10_root_user.pop('updated_at', None)
+        fn10_root_user.pop('created_at', None)
+
         self.run_subtask_sync('user.update', fn10_root_user['id'], fn10_root_user, validate=True)
 
         # Now rest of the users can be looped upon
@@ -391,6 +395,9 @@ class NetworkMigrateTask(Task):
                 create_interface = False
                 del fn10_iface['status']
                 del fn10_iface['type']
+                fn10_iface.pop('updated_at', None)
+                fn10_iface.pop('created_at', None)
+
             elif fn9_iface['int_interface'].lower().startswith('vlan'):
                 fn10_iface = {
                     'type': 'VLAN',
@@ -683,9 +690,11 @@ class StorageMigrateTask(Task):
             del fn10_disk['path']
             del fn10_disk['mediasize']
             del fn10_disk['status']
+            fn10_disk.pop('created_at', None)
+            fn10_disk.pop('updated_at', None)
             fn10_disk_name = fn10_disk.pop('name')
             fn10_disk.update({
-                'smart': fn9_disk['disk_togglesmart'],
+                'smart': bool(fn9_disk['disk_togglesmart']),
                 'smart_options': fn9_disk['disk_smartoptions'],
                 'standby_mode': None if fn9_disk['disk_hddstandby'] == 'Always On' else int(fn9_disk['disk_hddstandby']),
                 'acoustic_level': fn9_disk['disk_acousticlevel'].upper(),
@@ -1006,7 +1015,7 @@ class ShareMigrateTask(Task):
                             'naa': fn9_iscsitargetextent['iscsi_target_extent_naa'],
                             'size': size,
                             'block_size': fn9_iscsitargetextent['iscsi_target_extent_blocksize'],
-                            'physizal_block_size': bool(fn9_iscsitargetextent['iscsi_target_extent_pblocksize']),
+                            'physical_block_size': bool(fn9_iscsitargetextent['iscsi_target_extent_pblocksize']),
                             'available_space_threshold': fn9_iscsitargetextent['iscsi_target_extent_avail_threshold'],
                             'read_only': bool(fn9_iscsitargetextent['iscsi_target_extent_ro']),
                             'xen_compat': bool(fn9_iscsitargetextent['iscsi_target_extent_xen']),
@@ -1212,7 +1221,7 @@ class ShareMigrateTask(Task):
             except RpcException as err:
                 self.add_warning(TaskWarning(
                     errno.EINVAL,
-                    'Cannot create iSCSI target: {0} due to error: {2}'.format(
+                    'Cannot create iSCSI target: {0} due to error: {1}'.format(
                         fn9_iscsitarget['iscsi_target_name'], err
                     )
                 ))
@@ -1443,6 +1452,9 @@ class ServiceMigrateTask(Task):
         # Migrating DynDNS service
         fn9_dyndns = get_table('select * from services_dynamicdns', dictionary=False)[0]
         try:
+            # workaround bogus default entry in 9.10 databse
+            if fn9_dyndns['ddns_provider'] == 'dyndns':
+                fn9_dyndns['ddns_provider'] = 'dyndns@dyndns.org'
             self.run_subtask_sync(
                 'service.update',
                 q.query(fn10_services, ("name", "=", "dyndns"), single=True)['id'],
@@ -1670,7 +1682,7 @@ class ServiceMigrateTask(Task):
                     'driver': fn9_ups['ups_driver'] or None,
                     'driver_port': fn9_ups['ups_port'] or None,
                     'description': fn9_ups['ups_description'] or None,
-                    'shutdown_mode': fn9_ups['ups_shutdown'],
+                    'shutdown_mode': fn9_ups['ups_shutdown'].upper(),
                     'shutdown_timer': fn9_ups['ups_shutdowntimer'],
                     'monitor_user': fn9_ups['ups_monuser'],
                     'monitor_password': {
@@ -1815,7 +1827,7 @@ class SystemMigrateTask(Task):
                     'console_screensaver': bool(fn9_adv_settings['adv_consolescreensaver']),
                     'serial_console': bool(fn9_adv_settings['adv_serialconsole']),
                     'serial_port': fn9_adv_settings['adv_serialport'],
-                    'serial_speed': fn9_adv_settings['adv_serialspeed'],
+                    'serial_speed': int(fn9_adv_settings['adv_serialspeed']),
                     'swapondrive': fn9_adv_settings['adv_swapondrive'],
                     'debugkernel': bool(fn9_adv_settings['adv_debugkernel']),
                     'uploadcrash': bool(fn9_adv_settings['adv_uploadcrash']),
