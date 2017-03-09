@@ -1834,12 +1834,11 @@ class VolumeAutoImportTask(Task):
                                 )
 
                                 imported['shares'].append(
-                                    {
-                                        'path': config_path,
-                                        'type': item_type,
-                                        'name': config.get('name', '')
-                                    }
-                                )
+                                {
+                                    'path': config_path,
+                                    'type': item_type,
+                                    'name': config.get('name', '')
+                                })
                             except RpcException as err:
                                 self.add_warning(
                                     TaskWarning(
@@ -2390,7 +2389,7 @@ class DatasetCreateTask(Task):
             props = {
                 'org.freenas:permissions_type': {'value': dataset['permissions_type']},
                 'org.freenas:hidden': {'value': 'yes' if dataset['hidden'] else 'no'},
-                'aclmode': {'value': 'restricted' if dataset['permissions_type'] == 'ACL' else 'passthrough'}
+                'aclmode': {'value': 'discard_chmod' if dataset['permissions_type'] == 'ACL' else 'passthrough'}
             }
 
         if dataset['type'] == 'VOLUME':
@@ -2502,7 +2501,7 @@ class DatasetConfigureTask(Task):
         fs_path = self.dispatcher.call_sync('volume.get_dataset_path', path)
         self.join_subtasks(
             self.run_subtask('zfs.update', path, {
-                'aclmode': {'value': 'restricted'},
+                'aclmode': {'value': 'discard_chmod'},
                 'org.freenas:permissions_type': {'value': 'ACL'}
             }),
             self.run_subtask('file.set_permissions', fs_path, {
@@ -3237,7 +3236,7 @@ def _init(dispatcher, plugin):
                     'zfs.dataset.set_property',
                     ds['name'],
                     'org.freenas:permissions_type',
-                    'ACL' if aclmode == 'restricted' else 'PERM'
+                    'ACL' if aclmode in ('restricted', 'discard_chmod') else 'PERM'
                 )
             except RpcException as err:
                 logger.warning(f'Failed to set permissions type on dataset {ds["name"]}: {err}')
