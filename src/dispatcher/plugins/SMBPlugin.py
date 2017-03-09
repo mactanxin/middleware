@@ -235,7 +235,7 @@ def collect_debug(dispatcher):
 
 
 def _depends():
-    return ['ServiceManagePlugin']
+    return ['ServiceManagePlugin', 'SystemDatasetPlugin']
 
 
 def _init(dispatcher, plugin):
@@ -361,6 +361,9 @@ def _init(dispatcher, plugin):
 
     set_smb_sid()
     os.unlink('/var/db/samba4/registry.tdb')
+    os.chmod('/var/db/samba4/private', 0o700)
+    os.chmod('/var/db/samba4/private/msg.sock', 0o700)
+    os.chmod('/var/db/samba4/winbindd_privileged', 0o750)
 
     node = ConfigNode('service.smb', dispatcher.configstore)
     configure_params(node.__getstate__(), dispatcher.call_sync('service.smb.ad_enabled'))
