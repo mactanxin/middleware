@@ -179,7 +179,7 @@ class UpdateSMBShareTask(Task):
                 smb_share.save()
             except BaseException as err:
                 smb_conf.transaction_cancel()
-                raise TaskException(errno.EBUSY, 'Failed to update samba configuration: {0}', err)
+                raise TaskException(errno.EBUSY, f'Failed to update samba configuration: {err}')
             else:
                 smb_conf.transaction_commit()
 
@@ -359,7 +359,7 @@ def convert_share(dispatcher, ret, path, enabled, share):
 
 
 def _depends():
-    return ['SharingPlugin']
+    return ['SharingPlugin', 'SMBPlugin']
 
 
 def _metadata():
