@@ -187,7 +187,7 @@ class BootEnvironmentUpdate(Task):
 
             if 'keep' in updated_params:
                 self.run_subtask_sync('zfs.update', f'{boot_pool_name}/ROOT/{be["realname"]}', {
-                    'value': str(updated_params['keep'])
+                    'beadm:keep': {'value': str(updated_params['keep'])}
                 })
 
             if updated_params.get('active'):
