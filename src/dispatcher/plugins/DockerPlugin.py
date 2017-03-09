@@ -1684,17 +1684,9 @@ class DockerHostCreateTask(ProgressTask):
         if self.datastore.exists('vms', ('name', '=', host['name'])):
             raise TaskException(errno.EEXIST, 'VM {0} already exists'.format(host['name']))
 
-        vm = self.dispatcher.call_sync(
-            'vm.template.query',
-            [('template.name', '=', 'boot2docker')],
-            {'single': True}
-        )
+        q.set(host, 'template.name', 'boot2docker')
 
-        vm.update(host)
-
-        id = self.run_subtask_sync_with_progress('vm.create', vm)
-
-        self.run_subtask_sync('vm.start', id)
+        id = self.run_subtask_sync_with_progress('vm.create', host)
 
         return id
 
