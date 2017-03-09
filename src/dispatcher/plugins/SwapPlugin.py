@@ -34,6 +34,7 @@ from task import Provider
 from lib.system import system, SubprocessException
 from lib.geom import confxml
 from freenas.dispatcher.rpc import RpcException, accepts, returns, description, SchemaHelper as h
+from freenas.utils import query as q
 from freenas.utils.decorators import delay
 from freenas.utils.trace_logger import TRACE
 
@@ -188,11 +189,18 @@ def init_textdumps():
 
 def find_dumps(dispatcher):
     logger.warning('Finding and saving crash dumps')
-    for disk in get_available_disks(dispatcher):
-        try:
-            system('/sbin/savecore', '/data/crash', disk + 'p1')
-        except SubprocessException:
-            continue
+
+    for disk in dispatcher.call_sync(
+        'disk.query',
+        [('id', 'in', get_available_disks(dispatcher)), ('online', '=', True)],
+        {'single': True}
+    ):
+        swap = q.get(disk, 'status.swap_partition_path')
+        if swap:
+            try:
+                system('/sbin/savecore', '/data/crash', swap)
+            except SubprocessException:
+                continue
 
 
 def _depends():
