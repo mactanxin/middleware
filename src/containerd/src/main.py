@@ -176,7 +176,7 @@ def get_docker_volumes(details):
             'host_path': mnt['Source'],
             'container_path': mnt['Destination'],
             'readonly': not mnt['RW'],
-            'source': 'HOST' if mnt['Source'].startswith('/mnt') else 'VM'
+            'source': 'HOST' if mnt['Source'].startswith('/host') else 'VM'
         }
 
 
