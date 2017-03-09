@@ -1704,7 +1704,6 @@ class ServiceMigrateTask(Task):
                         '$password': self._notifier.pwenc_decrypt(fn9_ups['ups_monpwd'])
                     },
                     'allow_remote_connections': bool(fn9_ups['ups_rmonitor']),
-                    'auxiliary_users': fn9_ups['ups_extrausers'] or None,
                     'powerdown': True if fn9_ups['ups_powerdown'] in ['True', 1] else False,
                     'auxiliary': fn9_ups['ups_options'] or None
                 }},
