@@ -44,7 +44,7 @@ PROVIDERS = {
     '3322.org': 'dyndns@3322.org',
     'sitelutions.com': 'default@sitelutions.com',
     'dnsomatic.com': 'default@dnsomatic.com',
-    'he.net': 'ipv6tb@he.net',
+    'he.net': 'default@he.net',
     'tzo.com': 'default@tzo.com',
     'dynsip.org': 'default@dynsip.org',
     'dhis.org': 'default@dhis.org',
