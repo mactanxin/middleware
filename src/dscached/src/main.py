@@ -358,15 +358,14 @@ class ManagementService(RpcService):
         }
 
     def clean_cache(self):
+        self.context.logger.warning('Cleaning caches')
         for i in self.context.users_cache, self.context.groups_cache, self.context.hosts_cache:
             i.expire()
 
     def flush_cache(self):
+        self.context.logger.warning('Flushing caches')
         for i in self.context.users_cache, self.context.groups_cache, self.context.hosts_cache:
             i.clear()
-
-    def populate_caches(self):
-        self.context.populate_caches()
 
     def normalize_parameters(self, plugin, parameters):
         cls = self.context.plugins.get(plugin)
@@ -509,6 +508,7 @@ class AccountService(RpcService):
             if user:
                 resolve_primary_group(self.context, user)
                 aliases = alias(d, user, 'username')
+                aliases.remove(user['username'])
                 item = CacheItem(user['uid'], user['id'], aliases, copy.copy(user), d, self.context.cache_ttl)
                 self.context.users_cache.set(item)
                 return fix_passwords(item.annotated)
@@ -577,6 +577,7 @@ class AccountService(RpcService):
             if user:
                 resolve_primary_group(self.context, user)
                 aliases = alias(d, user, 'username')
+                aliases.remove(user['username'])
                 item = CacheItem(user['uid'], user['id'], aliases, copy.copy(user), d, self.context.cache_ttl)
                 self.context.users_cache.set(item)
                 return fix_passwords(item.annotated)
