@@ -36,12 +36,13 @@ import base64
 from Crypto.Random import get_random_bytes
 from Crypto.Util import Counter
 from Crypto.Cipher import AES
+from collections import OrderedDict
 from lib.system import system, SubprocessException
 from freenas.serviced import push_status
-from freenas.utils import query as q, extend
+from freenas.utils import query as q
 from lxml import etree
 from bsd import sysctl
-from freenas.dispatcher.rpc import RpcException, description
+from freenas.dispatcher.rpc import RpcException, description, accepts, SchemaHelper as h
 from datastore import get_datastore
 from datastore.config import ConfigStore, ConfigNode
 from task import (
@@ -289,63 +290,77 @@ class AccountsMigrateTask(Task):
     def early_describe(cls):
         return "Migration of FreeNAS 9.x users and grups to 10.x"
 
-    def describe(self):
-        return TaskDescription("Migration of FreeNAS 9.x users and groups to 10.x")
+    def describe(self, accounts='all'):
+        desc = "Migration of all FreeNAS 9.x users and groups to 10.x"
+        if accounts == 'root':
+            desc = "Migration of FreeNAS 9.x root user settings to 10.x"
+        elif accounts == 'non-root':
+            desc = "Migration of all (except root) FreeNAS 9.x users and groups to 10.x"
+        return TaskDescription(desc)
 
-    def run(self):
+    def run(self, accounts='all'):
         users = get_table('select * from account_bsdusers')
+        root_user = users.pop(1)
         groups = get_table('select * from account_bsdgroups')
         grp_membership = get_table('select * from account_bsdgroupmembership')
+        fn10_groups = None
 
-        # First lets create all the non buitlin groups in this system
-        for g in filter(lambda x: x['bsdgrp_builtin'] == 0, groups.values()):
-            try:
-                self.run_subtask_sync(
-                    'group.create',
-                    {
-                        'name': g['bsdgrp_group'],
-                        'gid': g['bsdgrp_gid'],
-                        'sudo': bool(g['bsdgrp_sudo'])
-                    },
-                    validate=True
-                )
-            except RpcException as err:
-                self.add_warning(TaskWarning(
-                    errno.EINVAL,
-                    'Could not create group: {0} due to error: {1}'.format(g['bsdgrp_group'], err)
-                ))
+        if accounts != 'non-root':
+            # First lets create all the non buitlin groups in this system
+            for g in filter(lambda x: x['bsdgrp_builtin'] == 0, groups.values()):
+                try:
+                    self.run_subtask_sync(
+                        'group.create',
+                        {
+                            'name': g['bsdgrp_group'],
+                            'gid': g['bsdgrp_gid'],
+                            'sudo': bool(g['bsdgrp_sudo'])
+                        },
+                        validate=True
+                    )
+                except RpcException as err:
+                    self.add_warning(TaskWarning(
+                        err.code,
+                        'Could not create group: {0} due to error: {1}'.format(g['bsdgrp_group'], err)
+                    ))
 
-        # Now lets first add the root user's properties (password, etc)
-        fn10_groups = list(self.dispatcher.call_sync('group.query'))
-        root_user = users.pop(1)
-        fn10_root_user = self.dispatcher.call_sync(
-            'user.query', [('uid', '=', 0)], {"single": True}
-        )
-        fn10_root_user = populate_user_obj(fn10_root_user, fn10_groups, root_user, groups, grp_membership)
-        del fn10_root_user['builtin']
-        del fn10_root_user['home']
-        del fn10_root_user['uid']
-        del fn10_root_user['username']
-        del fn10_root_user['locked']
-        del fn10_root_user['gid']
-        fn10_root_user.pop('updated_at', None)
-        fn10_root_user.pop('created_at', None)
+            # Now lets add the root user's properties (password, etc)
+            fn10_groups = list(self.dispatcher.call_sync('group.query'))
+            fn10_root_user = self.dispatcher.call_sync(
+                'user.query', [('uid', '=', 0)], {"single": True}
+            )
+            fn10_root_user = populate_user_obj(
+                fn10_root_user, fn10_groups, root_user, groups, grp_membership
+            )
+            del fn10_root_user['builtin']
+            del fn10_root_user['home']
+            del fn10_root_user['uid']
+            del fn10_root_user['username']
+            del fn10_root_user['locked']
+            del fn10_root_user['gid']
+            fn10_root_user.pop('updated_at', None)
+            fn10_root_user.pop('created_at', None)
 
-        self.run_subtask_sync('user.update', fn10_root_user['id'], fn10_root_user, validate=True)
+            self.run_subtask_sync(
+                'user.update', fn10_root_user['id'], fn10_root_user, validate=True
+            )
 
-        # Now rest of the users can be looped upon
-        for u in filter(lambda x: x['bsdusr_builtin'] == 0, users.values()):
-            try:
-                self.run_subtask_sync(
-                    'user.create',
-                    populate_user_obj(None, fn10_groups, u, groups, grp_membership),
-                    validate=True
-                )
-            except RpcException as err:
-                self.add_warning(TaskWarning(
-                    errno.EINVAL,
-                    'Could not create user: {0} due to error: {1}'.format(u['bsdusr_username'], err)
-                ))
+        if accounts != 'root':
+            if fn10_groups is None:
+                fn10_groups = list(self.dispatcher.call_sync('group.query'))
+            # Now rest of the users can be looped upon
+            for u in filter(lambda x: x['bsdusr_builtin'] == 0, users.values()):
+                try:
+                    self.run_subtask_sync(
+                        'user.create',
+                        populate_user_obj(None, fn10_groups, u, groups, grp_membership),
+                        validate=True
+                    )
+                except RpcException as err:
+                    self.add_warning(TaskWarning(
+                        err.code,
+                        'Could not create user: {0} due to error: {1}'.format(u['bsdusr_username'], err)
+                    ))
 
 
 @description("Network migration task")
@@ -416,7 +431,7 @@ class NetworkMigrateTask(Task):
                 }
             else:
                 self.add_warning(TaskWarning(
-                    errno.EINVAL,
+                    err.code,
                     'Skipping FreeNAS 9.x network interface: {0} as it is not found'.format(
                         fn9_iface['int_interface']
                     )
@@ -487,7 +502,7 @@ class NetworkMigrateTask(Task):
                     self.run_subtask_sync('network.interface.create', fn10_iface, validate=True)
                 except RpcException as err:
                     self.add_warning(TaskWarning(
-                        errno.EINVAL,
+                        err.code,
                         'Could not create interface: {0} due to err: {1}'.format(fn9_iface['int_interface'], err)
                     ))
             else:
@@ -498,7 +513,7 @@ class NetworkMigrateTask(Task):
                     )
                 except RpcException as err:
                     self.add_warning(TaskWarning(
-                        errno.EINVAL,
+                        err.code,
                         'Could not configure network interface: {0} due to error: {1}'.format(
                             network_id, err
                         )
@@ -516,7 +531,7 @@ class NetworkMigrateTask(Task):
                         )
                     except RpcException as err:
                         self.add_warning(TaskWarning(
-                            errno.EINVAL,
+                            err.code,
                             'Could not add host: {0}, ip: {1} due to error: {2}'.format(
                                 name, ip, err
                             )
@@ -544,7 +559,7 @@ class NetworkMigrateTask(Task):
                 )
             except RpcException as err:
                 self.add_warning(TaskWarning(
-                    errno.EINVAL,
+                    err.code,
                     'Could not add network route: {0} due to error: {1}'.format(
                         route['sr_description'], err
                     )
@@ -656,7 +671,7 @@ class StorageMigrateTask(Task):
             dev = self.identifier_to_device(fn9_disk['disk_identifier'])
             if not dev:
                 self.add_warning(TaskWarning(
-                    errno.EINVAL,
+                    err.code,
                     'Identifier to device failed for {0}, skipping'.format(
                         fn9_disk['disk_identifier']
                     )
@@ -704,7 +719,7 @@ class StorageMigrateTask(Task):
                 self.run_subtask_sync('disk.update', fn10_disk.pop('id'), fn10_disk, validate=True)
             except RpcException as err:
                 self.add_warning(TaskWarning(
-                    errno.EINVAL,
+                    err.code,
                     'Could not update disk config for: {0} due to err: {1}'.format(fn10_disk_name, err)
                 ))
 
@@ -717,7 +732,7 @@ class StorageMigrateTask(Task):
                 )
             except RpcException as err:
                 self.add_warning(TaskWarning(
-                    errno.EINVAL,
+                    err.code,
                     'Cannot import volume name: {0} GUID: {1} due to error: {2}'.format(
                         fn9_volume['vol_name'], fn9_volume['vol_guid'], err
                     )
@@ -813,7 +828,7 @@ class ShareMigrateTask(Task):
                 )
             except RpcException as err:
                 self.add_warning(TaskWarning(
-                    errno.EINVAL,
+                    err.code,
                     'Cannot create AFP share: {0} due to error: {1}'.format(
                         fn9_afp_share['afp_name'], err
                     )
@@ -874,7 +889,7 @@ class ShareMigrateTask(Task):
                 )
             except RpcException as err:
                 self.add_warning(TaskWarning(
-                    errno.EINVAL,
+                    err.code,
                     'Cannot create SMB share: {0} due to error: {1}'.format(
                         fn9_smb_share['cifs_name'], err
                     )
@@ -917,7 +932,7 @@ class ShareMigrateTask(Task):
                 )
             except RpcException as err:
                 self.add_warning(TaskWarning(
-                    errno.EINVAL,
+                    err.code,
                     'Cannot create NFS share: {0} due to error: {1}'.format(
                         fn9_nfs_share['path'], err
                     )
@@ -951,7 +966,7 @@ class ShareMigrateTask(Task):
                 )
             except RpcException as err:
                 self.add_warning(TaskWarning(
-                    errno.EINVAL,
+                    err.code,
                     'Cannot create SMB share: {0} due to error: {1}'.format(
                         fn9_dav_share['webdav_name'], err
                     )
@@ -1030,7 +1045,7 @@ class ShareMigrateTask(Task):
                 )
             except RpcException as err:
                 self.add_warning(TaskWarning(
-                    errno.EINVAL,
+                    err.code,
                     'Cannot create iSCSI share: {0} due to error: {1}'.format(
                         fn9_iscsitargetextent['iscsi_target_extent_name'], err
                     )
@@ -1106,7 +1121,7 @@ class ShareMigrateTask(Task):
                     )
                 except RpcException as err:
                     self.add_warning(TaskWarning(
-                        errno.EINVAL,
+                        err.code,
                         'Cannot create iSCSI auth group: {0}, auth_type: {1}, error: {2}'.format(
                             fn9_targetauthcred['iscsi_target_auth_tag'], auth_type, err
                         )
@@ -1152,7 +1167,7 @@ class ShareMigrateTask(Task):
 
             except RpcException as err:
                 self.add_warning(TaskWarning(
-                    errno.EINVAL,
+                    err.code,
                     'Cannot create iSCSI portal: {0} due to error: {1}'.format(
                         fn9_iscsitargetportal['iscsi_target_portal_tag'], err
                     )
@@ -1193,7 +1208,7 @@ class ShareMigrateTask(Task):
                                     )
                                 except RpcException as err:
                                     self.add_warning(TaskWarning(
-                                        errno.EINVAL,
+                                        err.code,
                                         "Cannot create iSCSI auth group for {0} target's initiators and networks, error: {2}".format(
                                             fn9_iscsitarget['iscsi_target_name'], err
                                         )
@@ -1220,7 +1235,7 @@ class ShareMigrateTask(Task):
                 )
             except RpcException as err:
                 self.add_warning(TaskWarning(
-                    errno.EINVAL,
+                    err.code,
                     'Cannot create iSCSI target: {0} due to error: {1}'.format(
                         fn9_iscsitarget['iscsi_target_name'], err
                     )
@@ -1272,7 +1287,7 @@ class ServiceMigrateTask(Task):
             )
         except RpcException as err:
             self.add_warning(TaskWarning(
-                errno.EINVAL,
+                err.code,
                 'Could not migrate iSCSI service settings due to err: {0}'.format(err)
             ))
 
@@ -1302,7 +1317,7 @@ class ServiceMigrateTask(Task):
             )
         except RpcException as err:
             self.add_warning(TaskWarning(
-                errno.EINVAL, 'Could not migrate AFP service settings due to err: {0}'.format(err)
+                err.code, 'Could not migrate AFP service settings due to err: {0}'.format(err)
             ))
 
         # Migrating SMB service
@@ -1344,7 +1359,7 @@ class ServiceMigrateTask(Task):
             )
         except RpcException as err:
             self.add_warning(TaskWarning(
-                errno.EINVAL, 'Could not migrate SMB service settings due to err: {0}'.format(err)
+                err.code, 'Could not migrate SMB service settings due to err: {0}'.format(err)
             ))
 
         # Migrating NFS service
@@ -1370,7 +1385,7 @@ class ServiceMigrateTask(Task):
             )
         except RpcException as err:
             self.add_warning(TaskWarning(
-                errno.EINVAL, 'Could not migrate NFS service settings due to err: {0}'.format(err)
+                err.code, 'Could not migrate NFS service settings due to err: {0}'.format(err)
             ))
 
         # Migrating WebDAV service
@@ -1386,7 +1401,7 @@ class ServiceMigrateTask(Task):
                 )
                 if webdav_cert is None:
                     self.add_warning(TaskWarning(
-                        errno.EINVAL,
+                        err.code,
                         'Could not find the certificate for setting up secure WebDAV service'
                     ))
             self.run_subtask_sync(
@@ -1408,7 +1423,7 @@ class ServiceMigrateTask(Task):
             )
         except RpcException as err:
             self.add_warning(TaskWarning(
-                errno.EINVAL, 'Could not migrate WebDAV service settings due to err: {0}'.format(err)
+                err.code, 'Could not migrate WebDAV service settings due to err: {0}'.format(err)
             ))
 
         # Migrating SSHD service
@@ -1446,7 +1461,7 @@ class ServiceMigrateTask(Task):
             )
         except RpcException as err:
             self.add_warning(TaskWarning(
-                errno.EINVAL, 'Could not migrate SSHD service settings due to err: {0}'.format(err)
+                err.code, 'Could not migrate SSHD service settings due to err: {0}'.format(err)
             ))
 
         # Migrating DynDNS service
@@ -1476,7 +1491,7 @@ class ServiceMigrateTask(Task):
             )
         except RpcException as err:
             self.add_warning(TaskWarning(
-                errno.EINVAL,
+                err.code,
                 'Could not migrate Dynamic DNS service settings due to err: {0}'.format(err)
             ))
 
@@ -1492,7 +1507,7 @@ class ServiceMigrateTask(Task):
                 )
                 if ftp_cert is None:
                     self.add_warning(TaskWarning(
-                        errno.EINVAL,
+                        err.code,
                         'Could not find the certificate for setting up secure FTP service'
                     ))
             self.run_subtask_sync(
@@ -1537,7 +1552,7 @@ class ServiceMigrateTask(Task):
             )
         except RpcException as err:
             self.add_warning(TaskWarning(
-                errno.EINVAL, 'Could not migrate FTP service settings due to err: {0}'.format(err)
+                err.code, 'Could not migrate FTP service settings due to err: {0}'.format(err)
             ))
 
         fn9_lldp = get_table('select * from services_lldp', dictionary=False)[0]
@@ -1556,7 +1571,7 @@ class ServiceMigrateTask(Task):
             )
         except RpcException as err:
             self.add_warning(TaskWarning(
-                errno.EINVAL, 'Could not migrate LLDP service settings due to err: {0}'.format(err)
+                err.code, 'Could not migrate LLDP service settings due to err: {0}'.format(err)
             ))
 
         # Migrating RSYNCD service and modules
@@ -1575,7 +1590,7 @@ class ServiceMigrateTask(Task):
             )
         except RpcException as err:
             self.add_warning(TaskWarning(
-                errno.EINVAL, 'Could not migrate RSYNCD service settings due to err: {0}'.format(err)
+                err.code, 'Could not migrate RSYNCD service settings due to err: {0}'.format(err)
             ))
 
         fn9_rsyncd_mods = get_table('select * from services_rsyncmod')
@@ -1603,7 +1618,7 @@ class ServiceMigrateTask(Task):
                 )
             except RpcException as err:
                 self.add_warning(TaskWarning(
-                    errno.EINVAL,
+                    err.code,
                     'Could not migrate rsyncd module: {0} due to err: {1}'.format(
                         rsyncd_mod['rsyncmod_name'], err
                     )
@@ -1640,7 +1655,7 @@ class ServiceMigrateTask(Task):
             )
         except RpcException as err:
             self.add_warning(TaskWarning(
-                errno.EINVAL, 'Could not migrate SNMP service settings due to err: {0}'.format(err)
+                err.code, 'Could not migrate SNMP service settings due to err: {0}'.format(err)
             ))
 
         # Migrating TFTP service
@@ -1663,7 +1678,7 @@ class ServiceMigrateTask(Task):
             )
         except RpcException as err:
             self.add_warning(TaskWarning(
-                errno.EINVAL, 'Could not migrate TFTP service settings due to err: {0}'.format(err)
+                err.code, 'Could not migrate TFTP service settings due to err: {0}'.format(err)
             ))
 
         # Migrating UPS (YAY LAST SERVICE TO MIGRATE!!!)
@@ -1697,7 +1712,7 @@ class ServiceMigrateTask(Task):
             )
         except RpcException as err:
             self.add_warning(TaskWarning(
-                errno.EINVAL, 'Could not migrate UPS service settings due to err: {0}'.format(err)
+                err.code, 'Could not migrate UPS service settings due to err: {0}'.format(err)
             ))
 
         # Template to use for adding future service migrations
@@ -1714,7 +1729,7 @@ class ServiceMigrateTask(Task):
         #     )
         # except RpcException as err:
         #     self.add_warning(TaskWarning(
-        #         errno.EINVAL, 'Could not migrate FOO service settings due to err: {0}'.format(err)
+        #         err.code, 'Could not migrate FOO service settings due to err: {0}'.format(err)
         #     ))
 
 
@@ -1742,7 +1757,7 @@ class SystemMigrateTask(Task):
             cert_type = CRYPTO_TYPE[crypto_obj['cert_type']]
             if cert_type == 'CERT_CSR':
                 self.add_warning(TaskWarning(
-                    errno.EINVAL,
+                    err.code,
                     'Cannot migrate CSR: {0}. Migrating CSRs is not supported'.format(crypto_obj['cert_name'])
                 ))
                 continue
@@ -1766,7 +1781,7 @@ class SystemMigrateTask(Task):
                 )
             except RpcException as err:
                 self.add_warning(TaskWarning(
-                    errno.EINVAL,
+                    err.code,
                     'Could not migrate CA/Cert: {0} due to error: {1}'.format(crypto_obj['cert_name'], err)
                 ))
 
@@ -1783,7 +1798,7 @@ class SystemMigrateTask(Task):
             self.run_subtask_sync('system.general.update', system_general_config, validate=True)
         except RpcException as err:
             self.add_warning(TaskWarning(
-                errno.EINVAL,
+                err.code,
                 'Could not migrate system general settings due to error: {0}'.format(err)
             ))
 
@@ -1812,7 +1827,7 @@ class SystemMigrateTask(Task):
             )
         except RpcException as err:
             self.add_warning(TaskWarning(
-                errno.EINVAL, 'Could not migrate system ui settings due to error: {0}'.format(err)
+                err.code, 'Could not migrate system ui settings due to error: {0}'.format(err)
             ))
 
         # Migrating system advanced settings over to 10
@@ -1839,7 +1854,7 @@ class SystemMigrateTask(Task):
             )
         except RpcException as err:
             self.add_warning(TaskWarning(
-                errno.EINVAL,
+                err.code,
                 'Could not migrate system advanced settings due to error: {0}'.format(err)
             ))
 
@@ -1870,7 +1885,7 @@ class SystemMigrateTask(Task):
             )
         except RpcException as err:
             self.add_warning(TaskWarning(
-                errno.EINVAL, 'Could not migrate email settings due to error: {0}'.format(err)
+                err.code, 'Could not migrate email settings due to error: {0}'.format(err)
             ))
 
         # Migrating ntpservers' settings
@@ -1899,7 +1914,7 @@ class SystemMigrateTask(Task):
                 self.run_subtask_sync(*list(filter(None, ntp_task_args)), validate=True)
             except RpcException as err:
                 self.add_warning(TaskWarning(
-                    errno.EINVAL, 'Could not migrate npt_server: {0} due to error: {1}'.format(
+                    err.code, 'Could not migrate npt_server: {0} due to error: {1}'.format(
                         fn9_ntp['ntp_address'], err
                     )
                 ))
@@ -1923,7 +1938,7 @@ class SystemMigrateTask(Task):
                 )
             except (RpcException, ValueError) as err:
                 self.add_warning(TaskWarning(
-                    errno.EINVAL,
+                    err.code,
                     'Could not migrate {0} tunable: {1} due to error: {2}'.format(
                         fn9_tunable['type'].upper(), fn9_tunable['tun_var'], err
                     )
@@ -1937,7 +1952,7 @@ class SystemMigrateTask(Task):
             )
         except RpcException as err:
             self.add_warning(TaskWarning(
-                errno.EINVAL,
+                err.code,
                 'Failed to migrate system dataset to pool: {0} due to error'.format(
                     fn9_sysdataset['sys_pool'], err
                 )
@@ -1979,7 +1994,7 @@ class CalendarMigrateTask(Task):
         #         )
         #     except RpcException as err:
         #         self.add_warning(TaskWarning(
-        #             errno.EINVAL,
+        #             err.code,
         #             'Failed to migrate calendar task: {0} due to error: {1}'.format(, err)
         #         ))
 
@@ -2007,18 +2022,102 @@ class DirectoryServicesMigrateTask(Task):
 
 
 @description("Master top level migration task for 9.x to 10.x")
+@accepts(h.one_of(bool, None))
 class MasterMigrateTask(ProgressTask):
-    def __init__(self, dispatcher):
+    def __init__(self, dispatcher, second_run=False):
         super(MasterMigrateTask, self).__init__(dispatcher)
         self.status = 'STARTED'
         self.apps_migrated = []
+        self.progress_tracker = 0
+
+        # migration app to (task, args, status message) mappings
+        self.critical_migrations = OrderedDict([
+            (
+                'root user',
+                {
+                    'task_name': 'migration.accountsmigrate',
+                    'args': ['root'],
+                    'msg': 'Migrating root user settings'
+                }
+            ),
+            (
+                'network',
+                {
+                    'task_name': 'migration.networkmigrate',
+                    'args': [],
+                    'msg': 'Migrating network app'
+                }
+            )
+        ])
+
+        self.non_critical_migrations = OrderedDict([
+            (
+                'storage',
+                {
+                    'task_name': 'migration.storagemigrate',
+                    'args': [],
+                    'msg': 'Migrating storage app: disks and volumes'
+                }
+            ),
+            (
+                'accounts',
+                {
+                    'task_name': 'migration.accountsmigrate',
+                    'args': ['non-root'],
+                    'msg': 'Migrating accounts app: users and groups'
+                }
+            ),
+            (
+                'system',
+                {
+                    'task_name': 'migration.systemmigrate',
+                    'args': [],
+                    'msg': 'Migrating system app'
+                }
+            ),
+            (
+                'services',
+                {
+                    'task_name': 'migration.servicemigrate',
+                    'args': [],
+                    'msg': 'Migrating services app'
+                }
+            ),
+            (
+                'shares',
+                {
+                    'task_name': 'migration.sharemigrate',
+                    'args': [],
+                    'msg': 'Migrating shares app'
+                }
+            ),
+            # (
+            #     'calendar',
+            #     {
+            #         'task_name': 'migration.calendarmigrate',
+            #         'args': [],
+            #         'msg': 'Migrating calendar tasks'
+            #     }
+            # ),
+            # (
+            #     'directoryservices',
+            #     {
+            #         'task_name': 'migration.directoryservicesmigrate',
+            #         'args': [],
+            #         'msg': 'Migrating directory services settings'
+            #     }
+            # )
+        ])
 
     @classmethod
     def early_describe(cls):
         return "Migration of FreeNAS 9.x settings to 10"
 
-    def describe(self):
-        return TaskDescription("Migration of FreeNAS 9.x settings to 10")
+    def describe(self, second_run=False):
+        desc = "Migration of FreeNAS 9.x settings to 10"
+        if second_run:
+            desc = "Resuming FreeNAS 9.x to 10 settings migration post unlocking of passphrase encrypted volumes"
+        return TaskDescription(desc)
 
     def migration_progess(self, progress, message):
         self.set_progress(progress, message)
@@ -2034,66 +2133,55 @@ class MasterMigrateTask(ProgressTask):
             # don't fail if you cannot set status d'oh
             pass
 
-    def verify(self):
+    def migration_task_routine(self, app, task_dict):
+        try:
+            self.progress_tracker += 10
+            self.migration_progess(self.progress_tracker, task_dict.get('msg', f'Migrating {app} app'))
+            self.run_subtask_sync(task_dict['task_name'], *task_dict.get('args', []), validate=True)
+            self.apps_migrated.append(app)
+        except RpcException as err:
+            self.add_warning(TaskWarning(
+                err.code, f'Failed to successfully migrate: {app} due to {err}'
+            ))
+
+    def verify(self, second_run=False):
         return ['root']
 
-    def run(self):
+    def run(self, second_run=False):
         self.migration_progess(0, 'Starting migration from 9.x database to 10.x')
 
-        # bring the 9.x database up to date with the latest 9.x version
-        # doing this via a subprocess call since otherwise there are much import
-        # issues which I tried hunting down but could not finally resolve
-        try:
-            out, err = system('/usr/local/sbin/migrate93', '-f', FREENAS93_DATABASE_PATH)
-        except SubprocessException as e:
-            logger.error('Traceback of 9.x database migration', exc_info=True)
-            raise TaskException(
-                'Error whilst trying upgrade 9.x database to latest 9.x schema: {0}'.format(e)
+        if not second_run:
+            # bring the 9.x database up to date with the latest 9.x version
+            # doing this via a subprocess call since otherwise there are much import
+            # issues which I tried hunting down but could not finally resolve
+            try:
+                out, err = system('/usr/local/sbin/migrate93', '-f', FREENAS93_DATABASE_PATH)
+            except SubprocessException as e:
+                logger.error('Traceback of 9.x database migration', exc_info=True)
+                raise TaskException(
+                    'Error whilst trying upgrade 9.x database to latest 9.x schema: {0}'.format(e)
+                )
+            logger.debug(
+                'Result of running 9.x was as follows: stdout: {0}, stderr: {1}'.format(out, err)
             )
-        logger.debug(
-            'Result of running 9.x was as follows: stdout: {0}, stderr: {1}'.format(out, err)
-        )
 
         self.status = 'RUNNING'
 
-        self.migration_progess(0, 'Migrating storage app: disks and volumes')
-        self.run_subtask_sync('migration.storagemigrate', validate=True)
-        self.apps_migrated.append('storage')
+        if not second_run:
+            for app, task_tuple in self.critical_migrations.items():
+                self.migration_task_routine(app, task_tuple)
 
-        self.migration_progess(10, 'Migrating account app: users and groups')
-        self.run_subtask_sync('migration.accountsmigrate', validate=True)
-        self.apps_migrated.append('accounts')
-
-        self.migration_progess(20, 'Migrating system app')
-        self.run_subtask_sync('migration.systemmigrate', validate=True)
-        self.apps_migrated.append('system')
-
-        self.migration_progess(
-            30, 'Migrating network app: network config, interfaces, vlans, bridges, and laggs'
-        )
-        self.run_subtask_sync('migration.networkmigrate', validate=True)
-        self.apps_migrated.append('network')
-
-        self.migration_progess(40, 'Migrating services app: AFP, SMB, NFS, iSCSI, etc')
-        self.run_subtask_sync('migration.servicemigrate', validate=True)
-        self.apps_migrated.append('services')
-
-        self.migration_progess(50, 'Migrating shares app: AFP, SMB, NFS, iSCSI, and WebDAV')
-        self.run_subtask_sync('migration.sharemigrate', validate=True)
-        self.apps_migrated.append('sharing')
-
-        self.migration_progess(60, 'Migrating calendar tasks: cron, rsync, scrub, snapshot, smart')
-        self.run_subtask_sync('migration.calendarmigrate', validate=True)
-        self.apps_migrated.append('calendar')
+        # Putting this here explicity so that when this task is run with second_run = True
+        self.progress_tracker = len(self.critical_migrations) * 10
+        # Here put the check in for passphrase based encrypted volumes and decided whether
+        # we should succeed or not
+        for app, task_tuple in self.non_critical_migrations.items():
+            self.migration_task_routine(app, task_tuple)
 
         # If we reached till here migration must have succeeded
         # so lets rename the databse
         os.rename(FREENAS93_DATABASE_PATH, "{0}.done".format(FREENAS93_DATABASE_PATH))
 
-        self.apps_migrated = [
-            'accounts', 'network', 'directoryservice', 'support', 'services', 'sharing', 'storage',
-            'system', 'calendar'
-        ]
         self.status = 'FINISHED'
         self.migration_progess(100, 'Migration of FreeNAS 9.x database config and settings done')
 
