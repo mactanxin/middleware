@@ -5,4 +5,3 @@
 [${re.sub('([$#=])', r'\\\1', ups['monitor_user'])}]
 	password = ${re.sub('([$#=])', r'\\\1', ups['monitor_password'].secret)}
 	upsmon master
-${ups['auxiliary_users'] or ''}

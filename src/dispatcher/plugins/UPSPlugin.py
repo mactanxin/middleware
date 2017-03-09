@@ -208,7 +208,6 @@ def _init(dispatcher, plugin):
             'monitor_user': {'type': 'string'},
             'monitor_password': {'type': 'password'},
             'allow_remote_connections': {'type': 'boolean'},
-            'auxiliary_users': {'type': ['string', 'null']},
             'propagate_alerts': {'type': 'boolean'},
             'powerdown': {'type': 'boolean'},
             'auxiliary': {'type': ['string', 'null']},

@@ -194,7 +194,6 @@
             "service.ups.monitor_user": "upsmon",
             "service.ups.monitor_password": "fixmepass",
             "service.ups.allow_remote_connections": false,
-            "service.ups.auxiliary_users": "",
             "service.ups.propagate_alerts": false,
             "service.ups.powerdown": true,
             "service.ups.auxiliary": null,
