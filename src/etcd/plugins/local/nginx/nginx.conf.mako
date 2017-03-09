@@ -68,11 +68,13 @@ http {
             add_header Cache-Control "must-revalidate";
             add_header Etag "${dispatcher.call_sync("system.info.version")}";
             gzip on;
+            gzip_types text/plain text/html text/css application/json application/javascript;
         }
 
         location /cli {
             alias /usr/local/www/cli/html;
             gzip on;
+            gzip_types text/plain text/html text/css application/json application/javascript;
         }
 
         % if config.get("service.ipfs.webui"):
