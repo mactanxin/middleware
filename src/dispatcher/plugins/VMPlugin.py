@@ -952,7 +952,6 @@ class VMCreateTask(VMBaseTask):
             vm['template']['name'] = template['template']['name']
             template['template'].pop('readme', None)
             template['config'].pop('minmemsize', None)
-            template.pop('id', None)
 
             result = {}
             for key in vm:
@@ -1048,6 +1047,7 @@ class VMCreateTask(VMBaseTask):
 
         self.init_files(vm, lambda p, m, e=None: self.chunk_progress(80, 90, 'Initializing VM files:', p, m, e))
 
+        vm.pop('id', None)
         self.id = self.datastore.insert('vms', vm)
         self.dispatcher.dispatch_event('vm.changed', {
             'operation': 'create',
