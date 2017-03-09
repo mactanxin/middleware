@@ -43,7 +43,7 @@ LoadPlugin write_graphite
 </Plugin>
 
 <Plugin "geom_stat">
-    Filter "^([a]?da|ciss|md|mfi|md|nvd|xbd|vtbd|multipath/mpath)[0123456789]+(\.eli)?$"
+    Filter "^([a]?da|ciss|md|mfi|mfid|md|nvd|xbd|vtbd|multipath/mpath)[0123456789]+(\.eli)?$"
 </Plugin>
 
 <Plugin "zfs_arc">
