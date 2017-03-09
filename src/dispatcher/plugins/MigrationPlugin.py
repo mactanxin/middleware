@@ -2046,10 +2046,7 @@ class MasterMigrateTask(ProgressTask):
                     'args': [],
                     'msg': 'Migrating network app'
                 }
-            )
-        ])
-
-        self.non_critical_migrations = OrderedDict([
+            ),
             (
                 'storage',
                 {
@@ -2059,19 +2056,22 @@ class MasterMigrateTask(ProgressTask):
                 }
             ),
             (
-                'accounts',
-                {
-                    'task_name': 'migration.accountsmigrate',
-                    'args': ['non-root'],
-                    'msg': 'Migrating accounts app: users and groups'
-                }
-            ),
-            (
                 'system',
                 {
                     'task_name': 'migration.systemmigrate',
                     'args': [],
                     'msg': 'Migrating system app'
+                }
+            )
+        ])
+
+        self.non_critical_migrations = OrderedDict([
+            (
+                'accounts',
+                {
+                    'task_name': 'migration.accountsmigrate',
+                    'args': ['non-root'],
+                    'msg': 'Migrating accounts app: users and groups'
                 }
             ),
             (
