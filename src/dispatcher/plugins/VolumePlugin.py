@@ -446,13 +446,16 @@ class VolumeProvider(Provider):
         if not label:
             raise RpcException(errno.ENOENT, 'Label not found')
 
-        return {
-            'volume_id': label['name'],
-            'volume_guid': str(label['pool_guid']),
-            'vdev_guid': str(label['guid']),
-            'hostname': label['hostname'],
-            'hostid': label.get('hostid')
-        }
+        try:
+            return {
+                'volume_id': label['name'],
+                'volume_guid': str(label['pool_guid']),
+                'vdev_guid': str(label['guid']),
+                'hostname': label['hostname'],
+                'hostid': label.get('hostid')
+            }
+        except KeyError:
+            raise RpcException(errno.EINVAL, 'Invalid label')
 
     @description("Returns volume capabilities")
     @accepts(str)
