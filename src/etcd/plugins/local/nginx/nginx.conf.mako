@@ -67,10 +67,12 @@ http {
             root /usr/local/www/gui;
             add_header Cache-Control "must-revalidate";
             add_header Etag "${dispatcher.call_sync("system.info.version")}";
+            gzip on;
         }
 
         location /cli {
             alias /usr/local/www/cli/html;
+            gzip on;
         }
 
         % if config.get("service.ipfs.webui"):
