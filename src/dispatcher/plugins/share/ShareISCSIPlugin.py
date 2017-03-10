@@ -53,6 +53,8 @@ def validate_portal_port(listen):
 
 def check_auth_group_mode(datastore, discovery_auth_group):
     if discovery_auth_group:
+        if discovery_auth_group == 'no-authentication':
+            return
         if not datastore.exists('iscsi.auth', ('id', '=', discovery_auth_group)):
             raise TaskException(
                 errno.ENOENT,

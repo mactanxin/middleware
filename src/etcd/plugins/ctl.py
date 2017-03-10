@@ -218,6 +218,7 @@ def generate_portal_groups(context):
     for i in context.datastore.query('iscsi.portals'):
         portal = {
             'listen': list(map(lambda l: '{0}:{1}'.format(l['address'], l['port']), i['listen'])),
+            'discovery-auth-group': 'no-authentication'
         }
 
         if i.get('discovery_auth_group'):
