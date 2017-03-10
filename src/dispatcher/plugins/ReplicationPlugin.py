@@ -171,6 +171,10 @@ class ReplicationLinkProvider(Provider):
         })
 
     @private
+    def get_status(self, id):
+        return current_state_cache.get(id)
+
+    @private
     def remove_status(self, id):
         current_state_cache.remove(id)
 
