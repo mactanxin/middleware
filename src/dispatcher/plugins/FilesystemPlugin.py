@@ -317,10 +317,16 @@ class SetPermissionsTask(Task):
 
             for root, dirs, files in os.walk(path):
                 for n in files:
-                    b.apply(file=os.path.join(root, n))
+                    try:
+                        b.apply(file=os.path.join(root, n))
+                    except OSError:
+                        pass
 
                 for n in dirs:
-                    a.apply(file=os.path.join(root, n))
+                    try:
+                        a.apply(file=os.path.join(root, n))
+                    except OSError:
+                        pass
 
         if ds:
             self.dispatcher.dispatch_event('zfs.dataset.changed', {
