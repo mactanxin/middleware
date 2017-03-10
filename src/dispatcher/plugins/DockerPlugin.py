@@ -685,10 +685,16 @@ class DockerContainerCreateTask(DockerBaseTask):
 
         self.set_progress(80, 'Creating container {0}'.format(container['name']))
 
+        event = 'docker.container.changed'
+        query = 'docker.container.query'
+        if update:
+            event = 'containerd.docker.container.changed'
+            query = 'containerd.docker.query_containers'
+
         def match_fn(args):
             if args['operation'] == 'create':
                 return self.dispatcher.call_sync(
-                    'containerd.docker.query_containers',
+                    query,
                     [('id', 'in', args['ids']), ('names.0', '=', container['name'])],
                     {'count': True}
                 )
@@ -696,7 +702,7 @@ class DockerContainerCreateTask(DockerBaseTask):
                 return False
 
         self.dispatcher.exec_and_wait_for_event(
-            'containerd.docker.container.changed',
+            event,
             match_fn,
             lambda: self.dispatcher.call_sync('containerd.docker.create_container', container, timeout=100),
             600
@@ -705,7 +711,7 @@ class DockerContainerCreateTask(DockerBaseTask):
         if container.get('networks'):
             self.set_progress(90, 'Connecting to networks')
             contid = self.dispatcher.call_sync(
-                'containerd.docker.query_containers',
+                query,
                 [('name', '=', container.get('name'))],
                 {'select': 'id', 'single': True}
             )
@@ -714,13 +720,13 @@ class DockerContainerCreateTask(DockerBaseTask):
 
         if container.get('autostart'):
             contid = self.dispatcher.call_sync(
-                'containerd.docker.query_containers',
+                query,
                 [('name', '=', container.get('name'))],
                 {'select': 'id', 'single': True}
             )
             self.set_progress(95, 'Starting the container')
             self.dispatcher.exec_and_wait_for_event(
-                'docker.container.changed',
+                event,
                 lambda args: args['operation'] == 'update' and contid in args['ids'],
                 lambda: self.dispatcher.call_sync('containerd.docker.start', contid),
                 600
