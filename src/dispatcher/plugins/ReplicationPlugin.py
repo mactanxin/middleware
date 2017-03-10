@@ -1989,7 +1989,7 @@ def _init(dispatcher, plugin):
 
                 is_master, _ = dispatcher.call_sync('replication.get_replication_state', link)
                 recover = link['auto_recover'] and link['initial_master'] != link['master'] and not is_master
-                if (last_status and last_status['status'] == 'FAILED') or recover:
+                if (last_status and last_status['status'] == 'FAILED') and recover:
                     dispatcher.call_task_sync(
                         'replication.sync',
                         link['id']
