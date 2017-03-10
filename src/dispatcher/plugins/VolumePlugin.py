@@ -40,7 +40,7 @@ import hashlib
 import time
 import uuid
 import itertools
-from datetime import datetime
+from datetime import datetime, timedelta
 from event import sync
 from cache import EventCacheStore
 from lib.system import SubprocessException
@@ -3166,12 +3166,14 @@ def _init(dispatcher, plugin):
         except (ValueError, TypeError):
             pass
 
+        creation = int(q.get(snapshot, 'properties.creation.rawvalue', 0))
         return {
             'id': snapshot['name'],
             'volume': pool,
             'dataset': dataset,
             'name': name,
             'lifetime': lifetime,
+            'expires_at': datetime.utcfromtimestamp(creation + lifetime) if lifetime else None,
             'replicable': yesno_to_bool(q.get(snapshot, 'properties.org\\.freenas:replicable.value')),
             'hidden': yesno_to_bool(q.get(snapshot, 'properties.org\\.freenas:hidden.value')),
             'properties': include(
@@ -3408,16 +3410,9 @@ def _init(dispatcher, plugin):
         interval = dispatcher.configstore.get('middleware.snapshot_scrub_interval')
         while True:
             gevent.sleep(interval)
-            ts = int(time.time())
-            for snap in dispatcher.call_sync('volume.snapshot.query'):
-                creation = int(q.get(snap, 'properties.creation.rawvalue'))
-                lifetime = snap['lifetime']
-
-                if lifetime is None:
-                    continue
-
-                if creation + lifetime <= ts:
-                    dispatcher.call_task_sync('volume.snapshot.delete', snap['id'])
+            ts = datetime.utcnow()
+            for snap in dispatcher.call_sync('volume.snapshot.query', ('expires_at', '<=', ts)):
+                dispatcher.call_task_sync('volume.snapshot.delete', snap['id'])
 
     plugin.register_schema_definition('Volume', {
         'type': 'object',
@@ -3565,6 +3560,7 @@ def _init(dispatcher, plugin):
             'replicable': {'type': 'boolean'},
             'hidden': {'type': 'boolean'},
             'lifetime': {'type': ['integer', 'null']},
+            'expires_at': {'type': ['datetime', 'null']},
             'properties': {'$ref': 'VolumeSnapshotProperties'},
             'holds': {'type': 'object'},
             'metadata': {
@@ -3748,6 +3744,8 @@ def _init(dispatcher, plugin):
             'auto_unlock': False,
             'attributes': {}
         })
+
+    plugin.push_status('Populating volume cache')
 
     global snapshots
     snapshots = EventCacheStore(dispatcher, 'volume.snapshot')
