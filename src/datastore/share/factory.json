@@ -1527,6 +1527,16 @@
                 "type": "SYSTEM",
                 "subtype": "SYSTEM",
                 "severity": "WARNING"
+            },
+            "MigrationDone": {
+                "type": "SYSTEM",
+                "subtype": "MIGRATION",
+                "severity": "INFO"
+            },
+            "MigrationStalled": {
+                "type": "SYSTEM",
+                "subtype": "MIGRATION",
+                "severity": "CRITICAL"
             }
         }
     },
