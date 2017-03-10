@@ -36,7 +36,7 @@ from freenas.utils import first_or_default, human_readable_bytes
 from freenas.dispatcher.fd import FileDescriptor
 from freenas.dispatcher.rpc import SchemaHelper as h, description, accepts, private
 from utils import get_freenas_peer_client
-from task import Task, ProgressTask, Provider, TaskException, VerifyException, TaskDescription
+from task import Task, ProgressTask, Provider, TaskException, VerifyException, TaskDescription, TaskAbortException
 from libc.stdlib cimport malloc, free
 from posix.unistd cimport read, write
 from libc.stdint cimport *
@@ -272,6 +272,8 @@ class TransportSendTask(TransportBase):
         self.fds = []
         self.sock = None
         self.conn = None
+        self.recv_task_id = None
+        self.remote_client = None
 
     @classmethod
     def early_describe(cls):
@@ -307,6 +309,7 @@ class TransportSendTask(TransportBase):
             buffer_size = transport.get('buffer_size', 1024*1024)
             client_address = transport.get('client_address')
             remote_client = get_freenas_peer_client(self, client_address)
+            self.remote_client = remote_client
             server_address = remote_client.local_address[0]
             server_port = transport.get('server_port', 0)
             self.estimated_size = transport.get('estimated_size', 0)
@@ -360,7 +363,10 @@ class TransportSendTask(TransportBase):
             transport['buffer_size'] = buffer_size
             transport['auth_token_size'] = token_size
 
-            recv_task_id = remote_client.call_task_async(
+            if self.aborted:
+                raise TaskAbortException(EINTR, "User invoked task.abort")
+
+            self.recv_task_id = remote_client.call_task_async(
                 'replication.transport.receive',
                 transport,
                 callback=self.get_recv_status,
@@ -451,11 +457,17 @@ class TransportSendTask(TransportBase):
             progress_t.start()
 
             wr_fd = header_wr
+            if self.aborted:
+                raise TaskAbortException(EINTR, "User invoked task.abort")
+
             with nogil:
                 buffer = <uint32_t *>malloc((buffer_size + header_size) * sizeof(uint8_t))
 
                 buffer[0] = transport_header_magic
             while True:
+                if self.aborted:
+                    raise TaskAbortException(EINTR, "User invoked task.abort")
+
                 with nogil:
                     ret = read_fd(rd_fd, buffer, buffer_size, header_size)
 
@@ -548,6 +560,10 @@ class TransportSendTask(TransportBase):
     def abort(self):
         self.aborted = True
         self.finished.set(True)
+        if self.remote_client and self.recv_task_id:
+            self.remote_client.call_sync('task.abort', self.recv_task_id)
+
+        self.abort_subtasks()
         close_fds(self.fds)
         if self.conn:
             self.conn.shutdown(socket.SHUT_RDWR)
@@ -703,10 +719,15 @@ class TransportReceiveTask(TransportBase):
             header_rd = last_rd_fd
             header_wr = zfs_wr
 
+            if self.aborted:
+                raise TaskAbortException(EINTR, "User invoked task.abort")
             with nogil:
                 buffer = <uint32_t *>malloc(buffer_size * sizeof(uint8_t))
                 header_buffer = <uint32_t *>malloc(header_size * sizeof(uint8_t))
             while True:
+                if self.aborted:
+                    raise TaskAbortException(EINTR, "User invoked task.abort")
+
                 with nogil:
                     ret = read_fd(header_rd, header_buffer, header_size, 0)
                 IF REPLICATION_TRANSPORT_DEBUG:
@@ -781,6 +802,7 @@ class TransportReceiveTask(TransportBase):
 
     def abort(self):
         self.aborted = True
+        self.abort_subtasks()
         close_fds(self.fds)
         if self.sock:
             self.sock.close()
@@ -853,6 +875,9 @@ class TransportCompressTask(Task):
                 logger.debug('Compression context initialization completed')
 
             while True:
+                if self.aborted:
+                    raise TaskAbortException(EINTR, "User invoked task.abort")
+
                 with nogil:
                     ret_rd = read_fd(rd_fd, in_buffer, buffer_size, 0)
                     strm.avail_in = ret_rd
@@ -968,6 +993,9 @@ class TransportDecompressTask(Task):
                 logger.debug('Decompression context initialization completed')
 
             while True:
+                if self.aborted:
+                    raise TaskAbortException(EINTR, "User invoked task.abort")
+
                 with nogil:
                     ret_rd = read_fd(rd_fd, in_buffer, buffer_size, 0)
                     strm.avail_in = ret_rd
@@ -1156,6 +1184,9 @@ class TransportEncryptTask(Task):
             logger.debug('Encryption context initialization completed')
 
             while True:
+                if self.aborted:
+                    raise TaskAbortException(EINTR, "User invoked task.abort")
+
                 with nogil:
                     plain_ret = read_fd(rd_fd, plainbuffer, buffer_size, header_size)
                     if plain_ret < 0:
@@ -1407,6 +1438,9 @@ class TransportDecryptTask(Task):
             logger.debug('Decryption context initialization completed')
 
             while True:
+                if self.aborted:
+                    raise TaskAbortException(EINTR, "User invoked task.abort")
+
                 with nogil:
                     cipher_ret = read_fd(rd_fd, cipherbuffer, header_size, 0)
                     if cipher_ret == -1:
@@ -1593,6 +1627,9 @@ class TransportThrottleTask(Task):
             timer_t.start()
 
             while True:
+                if self.aborted:
+                    raise TaskAbortException(EINTR, "User invoked task.abort")
+
                 with nogil:
                     ret = read(rd_fd, buffer + done, buffer_size - done)
                     if ret == -1:

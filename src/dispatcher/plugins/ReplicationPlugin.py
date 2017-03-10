@@ -38,7 +38,10 @@ from cache import CacheStore
 from resources import Resource
 from datetime import datetime, timedelta
 from dateutil.parser import parse as parse_datetime
-from task import Provider, Task, ProgressTask, VerifyException, TaskException, TaskWarning, query, TaskDescription
+from task import (
+    Provider, Task, ProgressTask, VerifyException, TaskException, TaskWarning, query, TaskDescription,
+    TaskAbortException
+)
 from freenas.dispatcher.rpc import RpcException, SchemaHelper as h, description, accepts, returns, private, generator
 from freenas.dispatcher.fd import FileDescriptor
 from utils import get_freenas_peer_client, call_task_and_check_state
@@ -857,6 +860,12 @@ class ReplicationUpdateTask(ReplicationBaseTask):
 @description("Runs replication process based on saved link")
 @accepts(str)
 class ReplicationSyncTask(ReplicationBaseTask):
+    def __init__(self, dispatcher):
+        super(ProgressTask, self).__init__(dispatcher)
+        self.status = 'FAILED'
+        self.message = ''
+        self.aborted = False
+
     @classmethod
     def early_describe(cls):
         return "Synchronizing replication link"
@@ -877,8 +886,6 @@ class ReplicationSyncTask(ReplicationBaseTask):
         start_time = time.time()
         started_at = datetime.utcnow().isoformat().split('.')[0]
         total_size = 0
-        status = 'SUCCESS'
-        message = ''
         speed = 0
         remote_client = None
         link = self.run_subtask_sync('replication.get_latest_link', name)
@@ -892,6 +899,9 @@ class ReplicationSyncTask(ReplicationBaseTask):
 
                     ds_count = len(parent_datasets)
                     for idx, dataset in enumerate(parent_datasets):
+                        if self.aborted:
+                            raise TaskAbortException(errno.EINTR, "User invoked task.abort")
+
                         done = 0
 
                         def report_progress(prgrs, msg, extra):
@@ -939,15 +949,34 @@ class ReplicationSyncTask(ReplicationBaseTask):
                     if link['replicate_services']:
                         call_task_and_check_state(remote_client, 'replication.reserve_services', name)
             else:
-                call_task_and_check_state(
-                    remote_client,
-                    'replication.sync',
-                    id
-                )
+                tid = remote_client.submit_task('replication.sync', id)
+                while not self.aborted:
+                    time.sleep(10)
+                    if self.aborted:
+                        remote_client.call_sync('task.abort', tid)
 
-        except TaskException as e:
-            status = 'FAILED'
-            message = e.message
+                    task_status = remote_client.call_sync('task.status', tid)
+                    if task_status['state'] in ('FINISHED', 'FAILED', 'ABORTED'):
+                        break
+
+                    status = self.dispatcher.call_sync('replication.get_status', link['id'])
+                    if status:
+                        self.set_progress(status['progress'], 'Receiving replication stream')
+
+            if not self.aborted:
+                self.status = 'SUCCESS'
+                self.message = 'Replication completed successfully'
+
+        except TaskAbortException:
+            self.status = 'ABORTED'
+            self.message = 'Replication aborted by user'
+        except TaskException as err:
+            self.status = 'FAILED'
+            self.message = err.message
+            raise
+        except BaseException as err:
+            self.status = 'FAILED'
+            self.message = f'Replication sync failed: {err}'
             raise
         finally:
             if is_master:
@@ -959,8 +988,8 @@ class ReplicationSyncTask(ReplicationBaseTask):
                 status_dict = {
                     'started_at': {'$date': started_at},
                     'ended_at': {'$date': datetime.utcnow().isoformat().split('.')[0]},
-                    'status': status,
-                    'message': message,
+                    'status': self.status,
+                    'message': self.message,
                     'size': total_size,
                     'speed': speed
                 }
@@ -985,8 +1014,12 @@ class ReplicationSyncTask(ReplicationBaseTask):
                     })
                     remote_client.disconnect()
 
-                if status == 'SUCCESS' and link['one_time']:
+                if self.status == 'SUCCESS' and link['one_time']:
                     self.dispatcher.submit_task('replication.delete', id)
+
+    def abort(self):
+        self.aborted = True
+        self.abort_subtasks()
 
 
 @private
@@ -1333,14 +1366,17 @@ class ReplicateDatasetTask(ProgressTask):
         peer = options.get('peer')
         nomount = options.get('nomount', False)
 
-        self.run_subtask_sync(
-            'volume.snapshot_dataset',
-            localds,
-            True,
-            lifetime,
-            'repl',
-            True
-        )
+        if not self.aborted:
+            self.run_subtask_sync(
+                'volume.snapshot_dataset',
+                localds,
+                True,
+                lifetime,
+                'repl',
+                True
+            )
+        else:
+            raise TaskAbortException(errno.EINTR, "User invoked task.abort")
 
         if peer:
             remote = self.dispatcher.call_sync(
@@ -1406,14 +1442,17 @@ class ReplicateDatasetTask(ProgressTask):
                 'resume_token': None
             })
 
-        actions, send_size = self.run_subtask_sync(
-            'replication.calculate_delta',
-            localds,
-            remoteds,
-            remote_data,
-            recursive,
-            followdelete
-        )
+        if not self.aborted:
+            actions, send_size = self.run_subtask_sync(
+                'replication.calculate_delta',
+                localds,
+                remoteds,
+                remote_data,
+                recursive,
+                followdelete
+            )
+        else:
+            raise TaskAbortException(errno.EINTR, "User invoked task.abort")
 
         if dry_run:
             return actions, send_size
@@ -1436,7 +1475,7 @@ class ReplicateDatasetTask(ProgressTask):
                 return progress
 
             if self.aborted:
-                break
+                raise TaskAbortException(errno.EINTR, "User invoked task.abort")
 
             if action['type'] in (ReplicationActionType.DELETE_SNAPSHOTS.name, ReplicationActionType.CLEAR_SNAPSHOTS.name):
                 self.set_progress(get_progress(), 'Removing snapshots on remote dataset {0}'.format(action['remotefs']))
@@ -1527,8 +1566,7 @@ class ReplicateDatasetTask(ProgressTask):
 
     def abort(self):
         self.aborted = True
-        self.rd_fd.close()
-        self.wr_fd.close()
+        self.abort_subtasks()
 
 
 @private
@@ -1859,7 +1897,7 @@ def _init(dispatcher, plugin):
             'created_at': {'type': 'datetime'},
             'status': {
                 'type': 'string',
-                'enum': ['RUNNING', 'STOPPED', 'FAILED']
+                'enum': ['RUNNING', 'STOPPED', 'FAILED', 'ABORTED']
             },
             'progress': {'type': 'number'},
             'speed': {'type': 'string'}
