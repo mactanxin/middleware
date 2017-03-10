@@ -78,6 +78,8 @@ class EntitySubscriberEventSource(EventSource):
             with contextlib.suppress(BaseException):
                 fn(service, operation, ids)
 
+            gevent.sleep(0)
+
     def event_added(self, args):
         if args['name'].startswith('entity-subscriber'):
             return

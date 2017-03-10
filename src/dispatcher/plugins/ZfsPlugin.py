@@ -1413,6 +1413,8 @@ def sync_dataset_cache(dispatcher, dataset, old_dataset=None, recursive=False):
 
                 logger.warning("Cannot read snapshot status from snapshot {0}".format(name))
 
+            gevent.sleep(0)
+
         snapshots.update(**ds_snapshots)
 
         if recursive:
