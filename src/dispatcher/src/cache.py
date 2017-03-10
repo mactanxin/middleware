@@ -284,7 +284,7 @@ class EventCacheStore(CacheStore):
         if self.ready:
             self.dispatcher.emit_event('{0}.changed'.format(self.name), {
                 'operation': 'rename',
-                'ids': [pairs]
+                'ids': pairs
             })
 
     def propagate(self, event, callback=None):
