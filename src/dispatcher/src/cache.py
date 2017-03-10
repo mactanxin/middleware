@@ -70,11 +70,10 @@ class CacheStore(object):
 
                 try:
                     item = self.store[k]
-                    created.append(k)
-                except KeyError:
-                    item = self.CacheItem()
-                    self.store[k] = item
                     updated.append(k)
+                except KeyError:
+                    self.store[k] = item = self.CacheItem()
+                    created.append(k)
 
                 item.data = v
                 item.valid.set()
