@@ -2543,6 +2543,19 @@ class Main(object):
                 if self.client.call_sync('containerd.management.start_vm', id, True):
                     self.failed_autostart_vms.append(id)
 
+    def init_docker_collections(self):
+        self.client.call_sync(
+            'networkd.configuration.wait_for_default_interface',
+            600,
+            timeout=600
+        )
+        collections = set(self.client.call_sync('docker.collection.query', [], {'select': 'collection'}))
+        for c in collections:
+            try:
+                self.client.call_sync('docker.image.update_collection', c, True, timeout=600)
+            except RpcException as err:
+                self.logger.error(f'Couldn\'t init {c} collection. Error: {err}', exc_info=True)
+
     def main(self):
         parser = argparse.ArgumentParser()
         parser.add_argument('-c', metavar='CONFIG', default=DEFAULT_CONFIGFILE, help='Middleware config file')
@@ -2568,6 +2581,7 @@ class Main(object):
         self.init_datastore()
         self.init_dispatcher()
         gevent.spawn(self.init_autostart)
+        gevent.spawn(self.init_docker_collections)
         self.logger.info('Started')
 
         global vtx_enabled, unrestricted_guest, svm_features

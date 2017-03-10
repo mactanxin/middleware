@@ -2299,13 +2299,6 @@ def _init(dispatcher, plugin):
                             'ids': args['ids']
                         })
 
-    def init_collections(args):
-        for c in dispatcher.datastore.query_stream('docker.collections', select='collection'):
-            try:
-                dispatcher.call_sync('docker.image.update_collection', c, True)
-            except RpcException as err:
-                logger.error(f'Couldn\'t init {c} collection. Error: {err}', exc_info=True)
-
     plugin.register_provider('docker.config', DockerConfigProvider)
     plugin.register_provider('docker.host', DockerHostProvider)
     plugin.register_provider('docker.container', DockerContainerProvider)
@@ -2359,7 +2352,6 @@ def _init(dispatcher, plugin):
         'plugin.service_registered',
         lambda a: refresh_cache(dispatcher) if a['service-name'] == 'containerd.docker' else None
     )
-    dispatcher.register_event_handler_once('network.changed', init_collections)
 
     plugin.attach_hook('vm.pre_destroy', vm_pre_destroy)
 
