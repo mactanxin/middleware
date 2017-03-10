@@ -44,20 +44,6 @@ from freenas.dispatcher.fd import FileDescriptor
 from OpenSSL import crypto
 
 
-def export_privatekey(buf, passphrase=None):
-    key = crypto.load_privatekey(
-        crypto.FILETYPE_PEM,
-        buf,
-        passphrase=str(passphrase) if passphrase else None
-    )
-
-    return crypto.dump_privatekey(
-        crypto.FILETYPE_PEM,
-        key,
-        passphrase=str(passphrase) if passphrase else None
-    ).decode('utf-8')
-
-
 def get_cert_info(buf):
     if isinstance(buf, str):
         cert = crypto.load_certificate(crypto.FILETYPE_PEM, buf.encode('utf-8'))
