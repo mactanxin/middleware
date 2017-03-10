@@ -1923,7 +1923,7 @@ class SystemMigrateTask(Task):
         for fn9_tunable in fn9_tunables.values():
             try:
                 if fn9_tunable['tun_type'].upper() == 'RC':
-                    raise ValueError('RC tunables are no longer supported')
+                    raise RpcException(errno.EINVAL, 'RC tunables are no longer supported')
                 self.run_subtask_sync(
                     'tunable.create',
                     {
@@ -1935,11 +1935,11 @@ class SystemMigrateTask(Task):
                     },
                     validate=True
                 )
-            except (RpcException, ValueError) as err:
+            except RpcException as err:
                 self.add_warning(TaskWarning(
                     err.code,
                     'Could not migrate {0} tunable: {1} due to error: {2}'.format(
-                        fn9_tunable['type'].upper(), fn9_tunable['tun_var'], err
+                        fn9_tunable['tun_type'].upper(), fn9_tunable['tun_var'], err
                     )
                 ))
 
