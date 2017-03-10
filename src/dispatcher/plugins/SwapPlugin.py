@@ -192,8 +192,7 @@ def find_dumps(dispatcher):
 
     for disk in dispatcher.call_sync(
         'disk.query',
-        [('id', 'in', get_available_disks(dispatcher)), ('online', '=', True)],
-        {'single': True}
+        [('id', 'in', get_available_disks(dispatcher)), ('online', '=', True)]
     ):
         swap = q.get(disk, 'status.swap_partition_path')
         if swap:
