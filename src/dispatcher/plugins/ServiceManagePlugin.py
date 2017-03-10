@@ -263,7 +263,7 @@ class ServiceManageTask(Task):
 
         if hook_rpc:
             try:
-                self.dispatcher.call_sync(hook_rpc, timeout=90)
+                self.dispatcher.call_sync(hook_rpc, timeout=300)
             except RpcException as e:
                 raise TaskException(errno.EBUSY, 'Hook {0} for {1} failed: {2}'.format(
                     action, name, e

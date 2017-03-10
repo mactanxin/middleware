@@ -50,7 +50,7 @@ class DCProvider(Provider):
         self.dispatcher.exec_and_wait_for_event(
             'vmtools.state.changed',lambda args: args['state'] == 'HEALTHY' and  args['id'] == dc_vm['vm_id'],
             lambda: logger.info("Starting DC VM: waiting for the vm-tools to initialize"),
-            90
+            160
         )
 
 
