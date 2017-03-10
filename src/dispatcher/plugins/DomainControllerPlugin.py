@@ -47,6 +47,12 @@ class DCProvider(Provider):
         dc_vm = self.get_config()
         self.check_dc_vm_availability()
         self.dispatcher.call_task_sync('vm.start', dc_vm['vm_id'])
+        self.dispatcher.exec_and_wait_for_event(
+            'vmtools.state.changed',lambda args: args['state'] == 'HEALTHY' and  args['id'] == dc_vm['vm_id'],
+            lambda: logger.info("Starting DC VM: waiting for the vm-tools to initialize"),
+            90
+        )
+
 
     def service_status(self):
         dc_vm = self.get_config()
@@ -54,9 +60,9 @@ class DCProvider(Provider):
         state = self.dispatcher.call_sync(
             'vm.query',
             [('id', '=', dc_vm['vm_id'])],
-            {'select': 'status.state', 'single': True}
+            {'select': 'status', 'single': True}
         )
-        if state not in ('RUNNING', 'BOOTLOADER'):
+        if state.get('state') != 'RUNNING' or not state.get('vm_tools_available', False):
             raise RpcException(errno.ENOENT, "Domain Controller service is not running")
         else:
             return 'RUNNING'
@@ -73,7 +79,12 @@ class DCProvider(Provider):
 
     def provide_dc_url(self):
         dc_vm = self.get_config()
-        if dc_vm['vm_id'] and dc_vm['enable']:
+        state = self.dispatcher.call_sync(
+            'vm.query',
+            [('id', '=', dc_vm['vm_id'])],
+            {'select': 'status', 'single': True}
+        )
+        if dc_vm['vm_id'] and state.get('state') == 'RUNNING':
             try:
                 guest_info = self.dispatcher.call_sync('vm.get_guest_info', dc_vm['vm_id'])
                 addresses = []
@@ -91,7 +102,7 @@ class DCProvider(Provider):
                     "virtual machine state was altered manually."
                 )
         else:
-            raise RpcException(errno.ENOENT, 'Please configure and enable the Domain Controller vm service.')
+            raise RpcException(errno.ENOENT, 'Please configure and start the Domain Controller vm service.')
 
     def provide_dc_ip(self):
         dc_vm = self.get_config()
