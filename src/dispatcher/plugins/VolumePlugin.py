@@ -3745,11 +3745,11 @@ def _init(dispatcher, plugin):
             'attributes': {}
         })
 
-    plugin.push_status('Populating volume cache')
+    plugin.push_status('Populating volume cache...')
 
     global snapshots
     snapshots = EventCacheStore(dispatcher, 'volume.snapshot')
-    snapshots.populate(dispatcher.call_sync('zfs.snapshot.query'), callback=convert_snapshot)
+    snapshots.populate(dispatcher.call_sync('zfs.snapshot.query', no_copy=True), callback=convert_snapshot)
     snapshots.ready = True
     plugin.register_event_handler(
         'entity-subscriber.zfs.snapshot.changed',
@@ -3758,7 +3758,7 @@ def _init(dispatcher, plugin):
 
     global datasets
     datasets = EventCacheStore(dispatcher, 'volume.dataset')
-    datasets.populate(dispatcher.call_sync('zfs.dataset.query'), callback=convert_dataset)
+    datasets.populate(dispatcher.call_sync('zfs.dataset.query', no_copy=True), callback=convert_dataset)
     datasets.ready = True
     plugin.register_event_handler(
         'entity-subscriber.zfs.dataset.changed',
