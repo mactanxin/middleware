@@ -3393,8 +3393,10 @@ def _init(dispatcher, plugin):
                     continue
 
                 if vdev['type'] == 'disk' and vdev['disk_id'] == args['id']:
-                    dispatcher.call_task_sync('zfs.pool.import', vol['guid'])
-                    dispatcher.call_task_sync('zfs.mount', vol['id'], True)
+                    pool = first_or_default(None, dispatcher.call_sync('zfs.pool.find', vol['id']))
+                    if pool and pool['status'] != 'UNAVAIL':
+                        dispatcher.call_task_sync('zfs.pool.import', vol['guid'])
+                        dispatcher.call_task_sync('zfs.mount', vol['id'], True)
 
     def on_server_ready(args):
         for vol in dispatcher.call_sync('volume.query'):
