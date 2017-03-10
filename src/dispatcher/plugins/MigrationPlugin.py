@@ -580,7 +580,7 @@ class NetworkMigrateTask(Task):
         self.run_subtask_sync(
             'network.config.update',
             {
-                'autoconfigure': bool(fn9_interfaces),
+                'autoconfigure': not bool(fn9_interfaces),
                 'http_proxy': fn9_globalconf['gc_httpproxy'] or None,
                 'gateway': {
                     'ipv4': fn9_globalconf['gc_ipv4gateway'] or None,
@@ -599,6 +599,15 @@ class NetworkMigrateTask(Task):
                 }
             }
         )
+        # In case we have no interfaces manually configured in fn9 we need to retrigger the
+        # networkd autoconfiguration stuff so do that below
+        if not fn9_interfaces:
+            try:
+                for code, message in self.dispatcher.call_sync('networkd.configuration.configure_network', timeout=60):
+                    self.add_warning(TaskWarning(code, message))
+                self.dispatcher.call_sync('etcd.generation.generate_group', 'network')
+            except RpcException as e:
+                raise TaskException(errno.ENXIO, 'Cannot reconfigure interface: {0}'.format(str(e)))
 
 
 @description("Storage volume migration task")
@@ -2218,6 +2227,9 @@ def _init(dispatcher, plugin):
     plugin.register_event_type('migration.status')
 
     if os.path.exists(FREENAS93_DATABASE_PATH):
+        # Ensure that networkd and Migration plugin do not both try to race to configure
+        # network interfaces by setting `autoconfigure` flag to False
+        dispatcher.configstore.set('network.autoconfigure', False)
         plugin.register_event_handler('service.ready', start_migration)
     else:
         migration_status = {
