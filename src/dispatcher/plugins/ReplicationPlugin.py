@@ -467,10 +467,6 @@ class ReplicationCreateTask(ReplicationBaseTask):
             'ids': [id]
         })
 
-        self.dispatcher.register_resource(
-            Resource('replication:{0}'.format(link['name'])),
-            parents=get_replication_resources(self.dispatcher, link)
-        )
         remote_client.disconnect()
 
         if is_master and link['one_time']:
@@ -655,7 +651,6 @@ class ReplicationDeleteTask(ReplicationBaseTask):
 
         self.datastore.delete('replication.links', link['id'])
         self.dispatcher.call_sync('replication.link_cache_remove', link['name'])
-        self.dispatcher.unregister_resource('replication:{0}'.format(link['name']))
 
         self.dispatcher.dispatch_event('replication.changed', {
             'operation': 'delete',
@@ -680,16 +675,11 @@ class ReplicationUpdateTask(ReplicationBaseTask):
         return TaskDescription("Updating the replication link {name}", name=name or '')
 
     def verify(self, id, updated_fields):
-        name = self.datastore.query('replication.links', ('id', '=', id), select='name', single=True)
-
         if 'datasets' in updated_fields:
             if not len(updated_fields['datasets']):
                 raise VerifyException(errno.ENOENT, 'At least one dataset have to be specified')
 
-        if name:
-            return ['replication:{0}'.format(name)]
-        else:
-            return ['replication']
+        return [f'replication:{id}']
 
     def run(self, id, updated_fields):
         if not self.datastore.exists('replication.links', ('id', '=', id)):
@@ -876,12 +866,7 @@ class ReplicationSyncTask(ReplicationBaseTask):
         return TaskDescription("Synchronizing replication link {name}", name=name or '')
 
     def verify(self, id):
-        name = self.datastore.query('replication.links', ('id', '=', id), select='name', single=True)
-
-        if name:
-            return ['replication:{0}'.format(name)]
-        else:
-            return ['replication']
+        return [f'replication:{id}']
 
     def run(self, id):
         if not self.datastore.exists('replication.links', ('id', '=', id)):
@@ -1650,18 +1635,18 @@ class ReplicationRoleUpdateTask(ReplicationBaseTask):
     def early_describe(cls):
         return "Synchronizing replication link role with it's desired state"
 
-    def describe(self, name):
-        return TaskDescription("Synchronizing replication link {name} role with it's desired state", name=name)
+    def describe(self, id):
+        name = self.datastore.query('replication.links', ('id', '=', id), select='name', single=True)
+        return TaskDescription("Synchronizing replication link {name} role with it's desired state", name=name or '')
 
-    def verify(self, name):
-        if not self.datastore.exists('replication.links', ('name', '=', name)):
-            raise VerifyException(errno.ENOENT, 'Replication link {0} do not exist.'.format(name))
+    def verify(self, id):
+        return [f'replication:{id}']
 
-        return ['replication:{0}'.format(name)]
+    def run(self, id):
+        if not self.datastore.exists('replication.links', ('id', '=', id)):
+            raise TaskException(errno.ENOENT, f'Replication link {id} do not exist.')
 
-    def run(self, name):
-        if not self.datastore.exists('replication.links', ('name', '=', name)):
-            raise TaskException(errno.ENOENT, 'Replication link {0} do not exist.'.format(name))
+        name = self.datastore.query('replication.links', ('id', '=', id), select='name', single=True)
 
         link = self.run_subtask_sync('replication.get_latest_link', name)
         if not link['bidirectional']:
@@ -1714,7 +1699,7 @@ class ReplicationCheckDatasetsTask(ReplicationBaseTask):
         if not self.datastore.exists('replication.links', ('name', '=', link['name'])):
             raise VerifyException(errno.ENOENT, 'Replication link {0} do not exist.'.format(link['name']))
 
-        return ['replication:{0}'.format(link['name'])]
+        return [f'replication:{link["id"]}']
 
     def run(self, link):
         if not self.datastore.exists('replication.links', ('name', '=', link['name'])):
@@ -1735,9 +1720,7 @@ class ReplicationCleanHistoryTask(ReplicationBaseTask):
         return TaskDescription("Deleting replication {name} status history", name=link['name'] if link else id)
 
     def verify(self, id):
-        link = self.datastore.get_by_id('replication.links', id)
-
-        return ['replication{0}'.format(':' + link['name'] if link else '')]
+        return [f'replication:{id}']
 
     def run(self, id):
         if not self.datastore.exists('replication.links', ('id', '=', id)):
@@ -1787,7 +1770,7 @@ def get_replication_resources(dispatcher, link):
     resources = ['replication']
     datasets = q.query(dispatcher.call_sync('replication.local_datasets_from_link', link), select='name')
     for dataset in datasets:
-        resources.append('zfs:{0}'.format(dataset))
+        resources.append(f'zfs:{dataset}')
     return resources
 
 
@@ -1972,10 +1955,6 @@ def _init(dispatcher, plugin):
         for i in args['ids']:
             link = dispatcher.call_sync('replication.local_query', [('id', '=', i)], {'single': True})
             if link:
-                dispatcher.update_resource(
-                    'replication:{0}'.format(link['name']),
-                    new_parents=get_replication_resources(dispatcher, link)
-                )
                 if link['bidirectional']:
                     dispatcher.call_task_sync('replication.role_update', i)
 
@@ -2030,23 +2009,6 @@ def _init(dispatcher, plugin):
             if resync:
                 dispatcher.call_sync('replication.sync_query')
 
-    def update_resources(args):
-        links = dispatcher.call_sync('replication.local_query')
-        if args.get('operation') == 'rename':
-            # In this case 'id' is list [oldname, newname]
-            updated_pools = list(set([d[1].split('/', 1)[0] for d in args['ids']]))
-        else:
-            updated_pools = list(set([d.split('/', 1)[0] for d in args['ids']]))
-
-        for link in links:
-            is_master, _ = dispatcher.call_sync('replication.get_replication_state', link)
-            related_pools = list(set([d.split('/', 1)[0] for d in iterate_datasets(link['datasets'], is_master)]))
-            if any(p in related_pools for p in updated_pools):
-                dispatcher.update_resource(
-                    'replication:{0}'.format(link['name']),
-                    new_parents=get_replication_resources(dispatcher, link)
-                )
-
     def recover_replications():
         interval = dispatcher.configstore.get('replication.auto_recovery_ping_interval')
         while True:
@@ -2081,12 +2043,14 @@ def _init(dispatcher, plugin):
 
     plugin.register_event_handler('replication.changed', on_replication_change)
     plugin.register_event_handler('network.changed', update_link_cache)
-    plugin.register_event_handler('zfs.dataset.changed', update_resources)
     for link in dispatcher.datastore.query_stream('replication.links'):
-        dispatcher.register_resource(
-            Resource('replication:{0}'.format(link['name'])),
-            parents=get_replication_resources(dispatcher, link)
-        )
         dispatcher.call_sync('replication.link_cache_put', link)
 
     gevent.spawn(recover_replications)
+
+    dispatcher.track_resources(
+        'replication.query',
+        'entity-subscriber.replication.changed',
+        lambda id: f'replication:{id}',
+        lambda link: get_replication_resources(dispatcher, link)
+    )
