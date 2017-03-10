@@ -543,6 +543,9 @@ class NetworkMigrateTask(Task):
                 net = ipaddress.ip_network(route['sr_destination'])
             except ValueError as e:
                 logger.debug("Invalid network {0}: {1}".format(route['sr_destination'], e))
+                self.add_warning(TaskWarning(
+                    errno.EINVAL, "Invalid network {0}: {1}".format(route['sr_destination'], e)
+                ))
                 continue
 
             try:
@@ -734,10 +737,27 @@ class StorageMigrateTask(Task):
 
         # Importing fn9 volumes
         fn9_volumes = get_table('select * from storage_volume')
+        # Just keeping this here for reference for `vol_encrypt` field in fn9_volumes database
+        # entry which states if the volume is encrypted or not and if it is encrypted then is it
+        # passphrased or not
+        # volencrypt_lookup = {
+        #     0: 'Unencrypted',
+        #     1: 'Encrypted, no passphrase',
+        #     2: 'Encrypted, with passphrase'
+        # }
         for fn9_volume in fn9_volumes.values():
             try:
+                if fn9_volume['vol_encrypt'] > 1:
+                    raise RpcException(
+                        errno.EINVAL,
+                        f"Cannot import passphrase encrypted volume: {fn9_volume['vol_name']}, please do so manually"
+                    )
                 self.run_subtask_sync(
-                    'volume.import', fn9_volume['vol_guid'], fn9_volume['vol_name'], validate=True
+                    'volume.import',
+                    fn9_volume['vol_guid'],
+                    fn9_volume['vol_name'],
+                    {'key': f"/data/geli/{fn9_volume['vol_encryptkey']}.key"} if fn9_volume['vol_encrypt'] else {},
+                    validate=True
                 )
             except RpcException as err:
                 self.add_warning(TaskWarning(
@@ -1993,7 +2013,7 @@ class CalendarMigrateTask(Task):
         # # migrating SMART TEST tasks
         # for fn9_smart_task in fn9_smart_tasks.values():
         #     try:
-        #         self.call_subtask_sync(
+        #         self.dispatcher.run_subtask_sync(
         #             'calendar_task.create',
         #             {
         #                 'name': ,
@@ -2179,6 +2199,34 @@ class MasterMigrateTask(ProgressTask):
             for app, task_tuple in self.critical_migrations.items():
                 self.migration_task_routine(app, task_tuple)
 
+        # check if the passphrase encrypted volumes are imported into the system
+        fn10_vols = list(self.dispatcher.call_sync('volume.query'))
+        vols_left_to_import = []
+
+        for fn9_volume in get_table('select * from storage_volume').values():
+            if (
+                fn9_volume['vol_encrypt'] > 1 and
+                q.query(fn10_vols, ('guid', '=', fn9_volume['vol_guid']), single=True) is None
+            ):
+                vols_left_to_import.append(fn9_volume['vol_name'])
+
+        if vols_left_to_import:
+            self.status = 'FINISHED'
+            self.migration_progess(
+                100,
+                'Migration of FreeNAS 9.x database deferred pending manual import of passphrase encrypted volumes'
+            )
+            self.dispatcher.call_sync(
+                'alert.emit',
+                {
+                    'clazz': 'MigrationStalled',
+                    'title': 'FreeNAS 9.x to 10 migration stopped',
+                    'description': f"Please import passphrase encrypted volumes: {', '.join(vols_left_to_import)} and resume migrations from GUI",
+                    'target': ', '.join(vols_left_to_import)
+                }
+            )
+            return
+
         # Putting this here explicity so that when this task is run with second_run = True
         self.progress_tracker = len(self.critical_migrations) * 10
         # Here put the check in for passphrase based encrypted volumes and decided whether
@@ -2192,6 +2240,15 @@ class MasterMigrateTask(ProgressTask):
 
         self.status = 'FINISHED'
         self.migration_progess(100, 'Migration of FreeNAS 9.x database config and settings done')
+
+        self.dispatcher.call_sync(
+            'alert.emit',
+            {
+                'clazz': 'MigrationDone',
+                'title': 'FreeNAS 9.x to 10 migration completed',
+                'description': 'Successfully migrated FreeNAS 9.x settings and configurations'
+            }
+        )
 
 
 def _init(dispatcher, plugin):
