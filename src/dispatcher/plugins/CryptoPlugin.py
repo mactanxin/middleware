@@ -152,7 +152,7 @@ class CertificateCreateTask(Task):
 
     def verify(self, certificate):
         certificate['selfsigned'] = certificate.get('selfsigned', False)
-        certificate['signing_ca_name'] = certificate.get('signing_ca_name', False)
+        certificate['signing_ca_name'] = certificate.get('signing_ca_name', None)
 
         if '"' in certificate['name']:
             raise VerifyException(errno.EINVAL, 'Provide certificate name without : `"`')
@@ -226,7 +226,7 @@ class CertificateCreateTask(Task):
         if self.datastore.exists('crypto.certificates', ('name', '=', certificate['name'])):
             raise TaskException(errno.EEXIST, 'Certificate named "{0}" already exists'.format(certificate['name']))
 
-        if certificate['signing_ca_name']:
+        if certificate.get('signing_ca_name'):
             if not self.datastore.exists('crypto.certificates', ('name', '=', certificate['signing_ca_name'])):
                 raise TaskException(errno.ENOENT,
                                     'Signing certificate "{0}" not found'.format(certificate['signing_ca_name']))
@@ -669,7 +669,7 @@ def _init(dispatcher, plugin):
             'common': {'type': 'string'},
             'serial': {'type': ['string', 'null']},
             'selfsigned': {'type': 'boolean'},
-            'signing_ca_name': {'type': 'string'},
+            'signing_ca_name': {'type': ['string', 'null']},
             'signing_ca_id': {'type': 'string'},
             'dn': {'type': 'string', 'readOnly': True},
             'valid_from': {'type': ['string', 'null'], 'readOnly': True},
