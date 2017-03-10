@@ -62,19 +62,23 @@ class CacheStore(object):
 
     def update(self, **kwargs):
         with self.lock:
-            items = {}
             created = []
             updated = []
             for k, v in kwargs.items():
-                items[k] = self.CacheItem()
-                items[k].data = v
-                items[k].valid.set()
-                if k in self.store:
-                    updated.append(k)
-                else:
-                    created.append(k)
+                if not v:
+                    continue
 
-            self.store.update(**items)
+                try:
+                    item = self.store[k]
+                    created.append(k)
+                except KeyError:
+                    item = self.CacheItem()
+                    self.store[k] = item
+                    updated.append(k)
+
+                item.data = v
+                item.valid.set()
+
             return created, updated
 
     def update_one(self, key, **kwargs):
@@ -139,9 +143,15 @@ class CacheStore(object):
     def rename(self, oldkey, newkey):
         with self.lock:
             obj = self.get(oldkey)
+            if not obj:
+                return
             obj['id'] = newkey
             self.put(newkey, obj)
             self.remove(oldkey)
+
+    def rename_many(self, pairs):
+        for o, n in pairs:
+            self.rename(o, n)
 
     def is_valid(self, key):
         item = self.store.get(key)
@@ -258,13 +268,7 @@ class EventCacheStore(CacheStore):
 
     def rename(self, oldkey, newkey):
         with self.lock:
-            obj = super(EventCacheStore, self).get(oldkey)
-            if not obj:
-                return False
-
-            obj['id'] = newkey
-            super(EventCacheStore, self).put(newkey, obj)
-            super(EventCacheStore, self).remove(oldkey)
+            super(EventCacheStore, self).rename(oldkey, newkey)
 
         if self.ready:
             self.dispatcher.emit_event('{0}.changed'.format(self.name), {
@@ -274,27 +278,28 @@ class EventCacheStore(CacheStore):
 
         return True
 
+    def rename_many(self, pairs):
+        with self.lock:
+            super(EventCacheStore, self).rename_many(pairs)
+
+        if self.ready:
+            self.dispatcher.emit_event('{0}.changed'.format(self.name), {
+                'operation': 'rename',
+                'ids': [pairs]
+            })
+
     def propagate(self, event, callback=None):
         with self.lock:
             if event['operation'] == 'delete':
-                for i in event['ids']:
-                    self.remove(i)
-
+                self.remove_many(event['ids'])
                 return
 
             if event['operation'] == 'rename':
-                for o, i in event['ids']:
-                    self.rename(o, i)
-
+                self.rename_many(event['ids'])
                 return
 
             if event['operation'] in ('create', 'update'):
-                for i in event['entities']:
-                    obj = callback(i) if callback else i
-                    if not obj:
-                        continue
-
-                    self.put(obj['id'], obj)
+                self.update(**{i['id']: (callback(i) if callback else i) for i in event['entities']})
 
     def populate(self, collection, callback=None):
         with self.lock:
