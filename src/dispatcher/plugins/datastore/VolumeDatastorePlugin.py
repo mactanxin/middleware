@@ -558,10 +558,11 @@ def _init(dispatcher, plugin):
         else:
             volume_status.remove_many(ids)
 
-        dispatcher.dispatch_event('vm.datastore.changed', {
-            'operation': args['operation'],
-            'ids': ids
-        })
+        if ids:
+            dispatcher.dispatch_event('vm.datastore.changed', {
+                'operation': args['operation'],
+                'ids': ids
+            })
 
     plugin.register_schema_definition('VmDatastorePropertiesVolume', {
         'type': 'object',
