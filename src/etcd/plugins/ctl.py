@@ -69,13 +69,13 @@ def generate_luns(context):
 
     for share in context.client.call_sync('share.query', [('type', '=', 'iscsi')]):
         props = share['properties']
-        serial = '{:<31}'.format(props['serial']) if not props['xen_compat'] else props['serial']
+        padded_serial = '{:<31}'.format(props['serial']) if not props['xen_compat'] else props['serial']
         extent = {
             'path': share['filesystem_path'],
             'blocksize': props['block_size'],
-            'serial': serial,
+            'serial': props['serial'],
             'options': {
-                'device-id': 'SCSI Disk {0}'.format(props['serial']),
+                'device-id': 'SCSI Disk {0}'.format(padded_serial),
                 'vendor': 'FreeNAS',
                 'product': 'SCSI Disk',
                 'revision': '0123',
