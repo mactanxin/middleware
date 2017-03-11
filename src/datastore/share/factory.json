@@ -1536,6 +1536,11 @@
                 "type": "SYSTEM",
                 "subtype": "MIGRATION",
                 "severity": "CRITICAL"
+            },
+            "MigrationFailed": {
+                "type": "SYSTEM",
+                "subtype": "MIGRATION",
+                "severity": "CRITICAL"
             }
         }
     },

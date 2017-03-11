@@ -30,6 +30,7 @@ import curses
 from bsd import sysctl
 from threading import Condition
 from freenas.serviced import subscribe
+from freenas.utils import query as q
 
 
 CRITICAL_JOBS = [
@@ -49,7 +50,9 @@ class VerboseFrontend(object):
     def init(self):
         print('Booting {0}...'.format(self.context.version))
 
-    def draw(self, msg):
+    def draw(self, msg, extra=None):
+        if extra is None:
+            extra = {}
         if msg != self.last_msg:
             print(msg)
             self.last_msg = msg
@@ -72,15 +75,18 @@ class CursesFrontend(object):
         self.maxy, self.maxx = self.stdscr.getmaxyx()
         self.mainwin = curses.newwin(1, self.maxx, 1, 2)
         self.statuswin = curses.newwin(1, self.maxx, self.maxy - 1, 0)
+        self.migrationwin = curses.newwin(3, self.maxx, self.maxy - 5, 0)
+        # self.migrationwin.bkgd(ord(' '), curses.A_STANDOUT)
         self.statuswin.bkgd(ord(' '), curses.A_REVERSE)
 
     def cleanup(self):
         curses.endwin()
 
-    def draw(self, msg):
+    def draw(self, msg, extra=None):
+        if extra is None:
+            extra = {}
         # Seatbelt to prevent ncurses error when message is longer than 80 chars
-        if len(msg) > 79:
-            msg = msg[:75] + '...'
+        msg = msg[:75] + '...' if len(msg) > 79 else msg
         self.stdscr.clear()
         self.stdscr.redrawwin()
         self.mainwin.addstr(0, 0, 'Booting {0}...'.format(self.context.version), curses.A_BOLD)
@@ -91,6 +97,24 @@ class CursesFrontend(object):
             pass
         else:
             self.statuswin.refresh()
+        if extra.get('plugin') == 'MigrationPlugin' and extra.get('status') != 'NOT_NEEDED':
+            apps_migrated = 'Apps done: ' + ', '.join(extra.get('apps_migrated', []))
+            self.migrationwin.clear()
+            try:
+                migration_prog = extra.get('migration_progress', 0)
+                done_perct = '#' * int(migration_prog / 10)
+                left_perct = (10 - len(done_perct)) * '_'
+                self.migrationwin.addstr(0, 2, msg)
+                self.migrationwin.addstr(
+                    1, 2, f"Migration progress: [{done_perct}{left_perct}] {migration_prog}%"
+                )
+                self.migrationwin.addstr(
+                    2, 2, apps_migrated[:75] + '...' if len(apps_migrated) > 79 else apps_migrated
+                )
+            except (ValueError, curses.error):
+                pass
+            else:
+                self.migrationwin.refresh()
         self.mainwin.refresh()
 
 
@@ -104,6 +128,8 @@ class Main(object):
         self.cv = Condition()
         self.etc = False
         self.network = False
+        self.migration_done = False
+        self.migration_status = {}
         self.failed_job = None
         self.msg = 'Loading...'
         with open('/etc/version', 'r') as f:
@@ -125,7 +151,11 @@ class Main(object):
                 self.cv.notify_all()
 
             if name == 'serviced.job.status':
-                self.msg = '{0}: {1}'.format(args['Label'], args['Message'])
+                if q.get(args, 'Extra.plugin') == 'MigrationPlugin':
+                    self.migration_status = q.get(args, 'Extra', {})
+                    self.msg = args.get('Message', 'Migrating FreeNAS 9.x settings...')
+                else:
+                    self.msg = '{0}: {1}'.format(args['Label'], args['Message'])
                 self.cv.notify_all()
 
             if name == 'serviced.job.error' and args['Label'] in CRITICAL_JOBS:
@@ -142,16 +172,21 @@ class Main(object):
     def main(self):
         subscribe(self.event)
         frontend = self.select_frontend()
+        migration_states = ['NOT_NEEDED', 'FINISHED', 'FAILED', 'STOPPED']
         try:
             frontend.init()
-            frontend.draw(self.msg)
+            frontend.draw(self.msg, self.migration_status)
             with self.cv:
                 while True:
                     self.cv.wait(0.5)
-                    if self.etc and self.network:
+                    if (
+                        self.etc and
+                        self.network and
+                        self.migration_status.get('status') in migration_states
+                    ):
                         break
 
-                    frontend.draw(self.msg)
+                    frontend.draw(self.msg, self.migration_status)
         finally:
             frontend.cleanup()
 
@@ -159,6 +194,7 @@ class Main(object):
             print('Critical system job {0} failed to start.'.format(self.failed_job))
             print('Dropping into single user mode')
             sys.exit(1)
+
 
 if __name__ == '__main__':
     m = Main()

@@ -2152,6 +2152,7 @@ class MasterMigrateTask(ProgressTask):
         migration_status = {
             'plugin': 'MigrationPlugin',
             'apps_migrated': self.apps_migrated,
+            'migration_progress': progress,
             'status': self.status
         }
         self.dispatcher.dispatch_event('migration.status', migration_status)
@@ -2176,79 +2177,96 @@ class MasterMigrateTask(ProgressTask):
         return ['root']
 
     def run(self, second_run=False):
-        self.migration_progess(0, 'Starting migration from 9.x database to 10.x')
+        try:
+            self.migration_progess(0, 'Starting migration from 9.x database to 10.x')
 
-        if not second_run:
-            # bring the 9.x database up to date with the latest 9.x version
-            # doing this via a subprocess call since otherwise there are much import
-            # issues which I tried hunting down but could not finally resolve
-            try:
-                out, err = system('/usr/local/sbin/migrate93', '-f', FREENAS93_DATABASE_PATH)
-            except SubprocessException as e:
-                logger.error('Traceback of 9.x database migration', exc_info=True)
-                raise TaskException(
-                    'Error whilst trying upgrade 9.x database to latest 9.x schema: {0}'.format(e)
+            if not second_run:
+                # bring the 9.x database up to date with the latest 9.x version
+                # doing this via a subprocess call since otherwise there are much import
+                # issues which I tried hunting down but could not finally resolve
+                try:
+                    out, err = system('/usr/local/sbin/migrate93', '-f', FREENAS93_DATABASE_PATH)
+                except SubprocessException as e:
+                    logger.error('Traceback of 9.x database migration', exc_info=True)
+                    raise TaskException(
+                        'Error whilst trying upgrade 9.x database to latest 9.x schema: {0}'.format(e)
+                    )
+                logger.debug(
+                    'Result of running 9.x was as follows: stdout: {0}, stderr: {1}'.format(out, err)
                 )
-            logger.debug(
-                'Result of running 9.x was as follows: stdout: {0}, stderr: {1}'.format(out, err)
-            )
 
-        self.status = 'RUNNING'
+            self.status = 'RUNNING'
 
-        if not second_run:
-            for app, task_tuple in self.critical_migrations.items():
+            if not second_run:
+                for app, task_tuple in self.critical_migrations.items():
+                    self.migration_task_routine(app, task_tuple)
+
+            # check if the passphrase encrypted volumes are imported into the system
+            fn10_vols = list(self.dispatcher.call_sync('volume.query'))
+            vols_left_to_import = []
+
+            for fn9_volume in get_table('select * from storage_volume').values():
+                if (
+                    fn9_volume['vol_encrypt'] > 1 and
+                    q.query(fn10_vols, ('guid', '=', fn9_volume['vol_guid']), single=True) is None
+                ):
+                    vols_left_to_import.append(fn9_volume['vol_name'])
+
+            if vols_left_to_import:
+                self.status = 'STOPPED'
+                self.migration_progess(
+                    self.progress_tracker,
+                    'Migration of FreeNAS 9.x database deferred pending manual import of passphrase encrypted volumes'
+                )
+                self.dispatcher.call_sync(
+                    'alert.emit',
+                    {
+                        'clazz': 'MigrationStalled',
+                        'title': 'FreeNAS 9.x to 10 migration stopped',
+                        'description': f"Please import passphrase encrypted volumes: {', '.join(vols_left_to_import)} and resume migrations from GUI",
+                        'target': ', '.join(vols_left_to_import)
+                    }
+                )
+                return
+
+            # Putting this here explicity so that when this task is run with second_run = True
+            self.progress_tracker = len(self.critical_migrations) * 10
+            # Here put the check in for passphrase based encrypted volumes and decided whether
+            # we should succeed or not
+            for app, task_tuple in self.non_critical_migrations.items():
                 self.migration_task_routine(app, task_tuple)
 
-        # check if the passphrase encrypted volumes are imported into the system
-        fn10_vols = list(self.dispatcher.call_sync('volume.query'))
-        vols_left_to_import = []
+            # If we reached till here migration must have succeeded
+            # so lets rename the databse
+            os.rename(FREENAS93_DATABASE_PATH, "{0}.done".format(FREENAS93_DATABASE_PATH))
 
-        for fn9_volume in get_table('select * from storage_volume').values():
-            if (
-                fn9_volume['vol_encrypt'] > 1 and
-                q.query(fn10_vols, ('guid', '=', fn9_volume['vol_guid']), single=True) is None
-            ):
-                vols_left_to_import.append(fn9_volume['vol_name'])
-
-        if vols_left_to_import:
             self.status = 'FINISHED'
+            self.migration_progess(100, 'Migration of FreeNAS 9.x database config and settings done')
+
+            self.dispatcher.call_sync(
+                'alert.emit',
+                {
+                    'clazz': 'MigrationDone',
+                    'title': 'FreeNAS 9.x to 10 migration completed',
+                    'description': 'Successfully migrated FreeNAS 9.x settings and configurations'
+                }
+            )
+        except Exception as err:
+            # I know a broad catch-all is hacky but I need this for sending the serviced event
+            # which will release the splash screen
+            self.status = 'FAILED'
             self.migration_progess(
-                100,
-                'Migration of FreeNAS 9.x database deferred pending manual import of passphrase encrypted volumes'
+                self.progress_tracker, f'Master migration task failed due to {err}'
             )
             self.dispatcher.call_sync(
                 'alert.emit',
                 {
-                    'clazz': 'MigrationStalled',
-                    'title': 'FreeNAS 9.x to 10 migration stopped',
-                    'description': f"Please import passphrase encrypted volumes: {', '.join(vols_left_to_import)} and resume migrations from GUI",
-                    'target': ', '.join(vols_left_to_import)
+                    'clazz': 'MigrationFailed',
+                    'title': 'FreeNAS 9.x to 10 migration failed!',
+                    'description': f'Master migration task failed due to {err}'
                 }
             )
-            return
-
-        # Putting this here explicity so that when this task is run with second_run = True
-        self.progress_tracker = len(self.critical_migrations) * 10
-        # Here put the check in for passphrase based encrypted volumes and decided whether
-        # we should succeed or not
-        for app, task_tuple in self.non_critical_migrations.items():
-            self.migration_task_routine(app, task_tuple)
-
-        # If we reached till here migration must have succeeded
-        # so lets rename the databse
-        os.rename(FREENAS93_DATABASE_PATH, "{0}.done".format(FREENAS93_DATABASE_PATH))
-
-        self.status = 'FINISHED'
-        self.migration_progess(100, 'Migration of FreeNAS 9.x database config and settings done')
-
-        self.dispatcher.call_sync(
-            'alert.emit',
-            {
-                'clazz': 'MigrationDone',
-                'title': 'FreeNAS 9.x to 10 migration completed',
-                'description': 'Successfully migrated FreeNAS 9.x settings and configurations'
-            }
-        )
+            raise TaskException(errno.EINVAL, f'Master migration task failed due to {err}')
 
 
 def _init(dispatcher, plugin):
@@ -2265,9 +2283,10 @@ def _init(dispatcher, plugin):
                 'type': 'array',
                 'items': {'type': 'string'},
             },
+            'migration_progress': {'type': 'integer'},
             'status': {
                 'type': 'string',
-                'enum': ['NOT_NEEDED', 'STARTED', 'RUNNING', 'FINISHED']}
+                'enum': ['NOT_NEEDED', 'STARTED', 'RUNNING', 'FINISHED', 'STOPPED', 'FAILED']}
         }
     })
 
