@@ -822,7 +822,7 @@ class DockerContainerUpdateTask(DockerBaseTask):
                 )
             )
 
-            image_name = self.run_subtask_sync('docker.container.commit', id, image, tag)
+            image_name = self.run_subtask_sync('docker.container.commit', id, image, tag, timeout=240)
             container['image'] = image_name
 
         name = q.get(container, 'names.0')
@@ -1946,14 +1946,13 @@ def refresh_database_cache(dispatcher, collection, event, query, lock, host_id=N
         deleted = []
         for obj in map(lambda o: exclude(o, 'running', 'health'), current):
             old_obj = first_or_default(lambda o: o['id'] == obj['id'], old)
-            if old_obj:
+            if not dispatcher.datastore_log.exists(collection, ('id', '=', obj['id'])):
+                dispatcher.datastore_log.insert(collection, obj)
+                created.append(obj['id'])
+            else:
                 if obj != old_obj:
                     dispatcher.datastore_log.update(collection, obj['id'], obj)
                     updated.append(obj['id'])
-
-            else:
-                dispatcher.datastore_log.insert(collection, obj)
-                created.append(obj['id'])
 
         for obj in old:
             if not first_or_default(lambda o: o['id'] == obj['id'], current):
