@@ -1400,36 +1400,28 @@ def sync_zpool_cache(dispatcher, pool, guid=None):
         logger.warning("Cannot read pool status from pool {0}".format(pool))
 
 
-def sync_dataset_cache(dispatcher, dataset, old_dataset=None, recursive=False):
+def sync_dataset_cache(dispatcher, dataset, old_dataset=None, recursive=False, snapshots=False):
     zfs = get_zfs()
     pool = dataset.split('/')[0]
     sync_zpool_cache(dispatcher, pool)
     try:
         ds = dispatcher.threaded(lambda: zfs.get_dataset(dataset))
-
         if old_dataset:
             datasets.rename(old_dataset, dataset)
 
         datasets.put(dataset, dispatcher.threaded(lambda: ds.__getstate__(False)))
-        ds_snapshots = {}
-        for i in dispatcher.threaded(lambda: [d.__getstate__() for d in ds.snapshots]):
-            name = i['name']
-            try:
-                ds_snapshots[name] = i
-            except libzfs.ZFSException as e:
-                if e.code == libzfs.Error.NOENT:
-                    snapshots.remove(name)
 
-                logger.warning("Cannot read snapshot status from snapshot {0}".format(name))
+        if snapshots:
+            ds_snapshots = {}
+            for i in dispatcher.threaded(lambda: [d.__getstate__() for d in ds.snapshots]):
+                ds_snapshots[i['name']] = i
 
-            gevent.sleep(0)
-
-        snapshots.update(**ds_snapshots)
+            snapshots.update(**ds_snapshots)
 
         if recursive:
             for i in dispatcher.threaded(lambda: list(ds.children)):
                 oldpath = os.path.join(old_dataset, os.path.relpath(i.name, dataset)) if old_dataset else None
-                sync_dataset_cache(dispatcher, i.name, old_dataset=oldpath, recursive=True)
+                sync_dataset_cache(dispatcher, i.name, old_dataset=oldpath, recursive=True, snapshots=snapshots)
 
     except libzfs.ZFSException as e:
         if e.code == libzfs.Error.NOENT:
@@ -1521,7 +1513,7 @@ def _init(dispatcher, plugin):
         logger.info('New pool imported: {0} <{1}>'.format(args['pool'], args['guid']))
         with dispatcher.get_lock('zfs-cache'):
             sync_zpool_cache(dispatcher, args['pool'], args['guid'])
-            sync_dataset_cache(dispatcher, args['pool'], recursive=True)
+            sync_dataset_cache(dispatcher, args['pool'], recursive=True, snapshots=True)
 
     @sync
     def on_pool_destroy(args):
@@ -1549,7 +1541,7 @@ def _init(dispatcher, plugin):
                 sync_snapshot_cache(dispatcher, args['ds'])
             else:
                 logger.info('New dataset created: {0}'.format(args['ds']))
-                sync_dataset_cache(dispatcher, args['ds'])
+                sync_dataset_cache(dispatcher, args['ds'], snapshots=True)
 
     @sync
     def on_dataset_delete(args):
@@ -1559,7 +1551,7 @@ def _init(dispatcher, plugin):
                 sync_snapshot_cache(dispatcher, args['ds'])
             else:
                 logger.info('Dataset removed: {0}'.format(args['ds']))
-                sync_dataset_cache(dispatcher, args['ds'])
+                sync_dataset_cache(dispatcher, args['ds'], snapshots=True)
 
     @sync
     def on_dataset_rename(args):
