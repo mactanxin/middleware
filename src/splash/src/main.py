@@ -98,14 +98,15 @@ class CursesFrontend(object):
         else:
             self.statuswin.refresh()
         if extra.get('plugin') == 'MigrationPlugin' and extra.get('status') != 'NOT_NEEDED':
-            apps_migrated = 'Apps done: ' + ', '.join(extra.get('apps_migrated', []))
+            apps_migrated = ', '.join(extra.get('apps_migrated', []))
+            apps_migrated = 'Apps done: ' + apps_migrated if apps_migrated else 'Initializing...'
             self.migrationwin.clear()
             try:
                 migration_prog = extra.get('migration_progress', 0)
-                done_perct = '#' * int(migration_prog / 10)
-                left_perct = (10 - len(done_perct)) * '_'
+                done_perct = '#' * int(migration_prog / 5)
+                left_perct = (20 - len(done_perct)) * '_'
                 self.migrationwin.addstr(
-                    0, 2, f"Migration progress: [{done_perct}{left_perct}] {migration_prog}%"
+                    0, 2, f"FreeNAS 9 migration progress: [{done_perct}{left_perct}] {migration_prog}%"
                 )
                 self.migrationwin.addstr(
                     1, 2, apps_migrated[:75] + '...' if len(apps_migrated) > 79 else apps_migrated
