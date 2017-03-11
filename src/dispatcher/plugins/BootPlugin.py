@@ -124,8 +124,11 @@ class BootEnvironmentCreate(Task):
 
     def run(self, newname, source=None):
         def doit():
-            if not CreateClone(newname, bename=source):
-                raise TaskException(errno.EIO, 'Cannot create the {0} boot environment'.format(newname))
+            try:
+                if not CreateClone(newname, bename=source):
+                    raise TaskException(errno.EIO, f'Cannot create the {newname} boot environment')
+            except KeyError:
+                raise TaskException(errno.EEXIST, f'Boot environment {newname} already exists')
 
         self.dispatcher.exec_and_wait_for_event(
             'boot.environment.changed',
