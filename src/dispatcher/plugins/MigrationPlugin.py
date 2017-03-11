@@ -688,7 +688,7 @@ class StorageMigrateTask(Task):
             dev = self.identifier_to_device(fn9_disk['disk_identifier'])
             if not dev:
                 self.add_warning(TaskWarning(
-                    err.code,
+                    errno.ENOENT,
                     'Identifier to device failed for {0}, skipping'.format(
                         fn9_disk['disk_identifier']
                     )
