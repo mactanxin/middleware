@@ -267,7 +267,13 @@ class EventCacheStore(CacheStore):
 
     def rename(self, oldkey, newkey):
         with self.lock:
-            super(EventCacheStore, self).rename(oldkey, newkey)
+            obj = super(EventCacheStore, self).get(oldkey)
+            if not obj:
+                return False
+
+            obj['id'] = newkey
+            super(EventCacheStore, self).put(newkey, obj)
+            super(EventCacheStore, self).remove(oldkey)
 
         if self.ready:
             self.dispatcher.emit_event('{0}.changed'.format(self.name), {
@@ -278,14 +284,10 @@ class EventCacheStore(CacheStore):
         return True
 
     def rename_many(self, pairs):
+        # XXX: not sending bulk rename event because GUI doesn't support them yet
         with self.lock:
-            super(EventCacheStore, self).rename_many(pairs)
-
-        if self.ready:
-            self.dispatcher.emit_event('{0}.changed'.format(self.name), {
-                'operation': 'rename',
-                'ids': pairs
-            })
+            for o, n in pairs:
+                self.rename(o, n)
 
     def propagate(self, event, callback=None):
         with self.lock:

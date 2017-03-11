@@ -1561,7 +1561,7 @@ def _init(dispatcher, plugin):
                 sync_snapshot_cache(dispatcher, args['new_ds'], args['ds'])
             else:
                 logger.info('Dataset {0} renamed to: {1}'.format(args['ds'], args['new_ds']))
-                sync_dataset_cache(dispatcher, args['new_ds'], args['ds'], True)
+                sync_dataset_cache(dispatcher, args['new_ds'], args['ds'], True, snapshots=True)
 
     @sync
     def on_dataset_setprop(args):

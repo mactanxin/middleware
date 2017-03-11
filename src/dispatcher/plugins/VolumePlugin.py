@@ -37,10 +37,9 @@ import copy
 import bsd
 import bsd.kld
 import hashlib
-import time
 import uuid
 import itertools
-from datetime import datetime, timedelta
+from datetime import datetime
 from event import sync
 from cache import EventCacheStore
 from lib.system import SubprocessException
@@ -123,6 +122,8 @@ class VolumeProvider(Provider):
             if not config:
                 vol['status'] = 'LOCKED' if encrypted else 'UNKNOWN'
                 vol['disks'] = list(get_disk_ids(vol['topology']))
+                for vdev, _ in iterate_vdevs(vol['topology']):
+                    vdev['status'] = 'UNAVAIL'
             else:
                 @lazy
                 def collect_topology():
