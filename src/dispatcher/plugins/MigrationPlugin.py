@@ -432,7 +432,7 @@ class NetworkMigrateTask(Task):
                 }
             else:
                 self.add_warning(TaskWarning(
-                    err.code,
+                    errno.ENXIO,
                     'Skipping FreeNAS 9.x network interface: {0} as it is not found'.format(
                         fn9_iface['int_interface']
                     )
