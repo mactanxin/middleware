@@ -384,7 +384,7 @@ class NetworkMigrateTask(Task):
 
         fn9_lagg_membership = get_table('select * from network_lagginterfacemembers')
         fn9_lagginfo = {
-            laggy['lagg_interface_id']: {
+            fn9_interfaces[laggy['lagg_interface_id']]['int_interface']: {
                 'lagg_protocol': LAGG_PROTOCOL_MAP.get(laggy['lagg_protocol'], 'FAILOVER'),
                 'lagg_members': [v for v in fn9_lagg_membership.values() if v['lagg_interfacegroup_id'] == laggy['id']]
             }
@@ -423,11 +423,15 @@ class NetworkMigrateTask(Task):
                     }
                 }
             elif fn9_iface['int_interface'].lower().startswith('lagg'):
+                lagg_members = sorted(
+                    q.get(fn9_lagginfo, f"{fn9_iface['int_interface']}.lagg_members", []),
+                    key=lambda lg: lg['lagg_ordernum']
+                )
                 fn10_iface = {
                     'type': 'LAGG',
                     'lagg': {
                         'protocol': q.get(fn9_lagginfo, f"{fn9_iface['int_interface']}.lagg_protocol"),
-                        'ports': [lg['lagg_physnic'] for lg in q.get(fn9_lagginfo, f"{fn9_iface['int_interface']}.lagg_members", [])]
+                        'ports': [lg['lagg_physnic'] for lg in lagg_members]
                     }
                 }
             else:
