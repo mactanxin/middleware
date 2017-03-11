@@ -170,10 +170,10 @@ class CreateISCSIShareTask(Task):
             'device_id': None,
             'rpm': 'SSD',
             'read_only': False,
-            'xen_compat': False
+            'xen_compat': False,
+            'naa': self.dispatcher.call_sync('share.iscsi.generate_naa')
         })
 
-        props['naa'] = self.dispatcher.call_sync('share.iscsi.generate_naa')
         id = self.datastore.insert('shares', share)
         self.dispatcher.call_sync('etcd.generation.generate_group', 'ctl')
         self.dispatcher.call_sync('service.reload', 'ctl')
