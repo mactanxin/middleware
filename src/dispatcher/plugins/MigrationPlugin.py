@@ -265,6 +265,7 @@ def populate_user_obj(user, fn10_groups, fn9_user, fn9_groups, fn9_grpmem):
         aux_groups = []
 
     user.update({
+        'uid': fn9_user['bsdusr_uid'],
         'sshpubkey': pubkeys,
         'username': fn9_user['bsdusr_username'],
         'group': grp,
