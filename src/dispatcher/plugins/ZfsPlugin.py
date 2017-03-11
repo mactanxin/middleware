@@ -1246,7 +1246,10 @@ class ZfsSendTask(ZfsBaseTask):
         except libzfs.ZFSException as err:
             raise TaskException(zfs_error_to_errno(err.code), str(err))
         finally:
-            os.close(fd.fd)
+            try:
+                os.close(fd.fd)
+            except OSError:
+                pass
 
 
 @private
@@ -1278,7 +1281,10 @@ class ZfsResumeSendTask(Task):
         except libzfs.ZFSException as err:
             raise TaskException(zfs_error_to_errno(err.code), str(err))
         finally:
-            os.close(fd.fd)
+            try:
+                os.close(fd.fd)
+            except OSError:
+                pass
 
 
 @private
@@ -1310,7 +1316,10 @@ class ZfsReceiveTask(Task):
         except libzfs.ZFSException as err:
             raise TaskException(zfs_error_to_errno(err.code), str(err))
         finally:
-            os.close(fd.fd)
+            try:
+                os.close(fd.fd)
+            except OSError:
+                pass
 
 
 def convert_topology(zfs, topology):
