@@ -31,6 +31,7 @@ import logging
 import re
 import smbconf
 import enum
+import contextlib
 from datastore.config import ConfigNode
 from freenas.dispatcher.rpc import RpcException, SchemaHelper as h, description, accepts, returns, private
 from lib.system import system, SubprocessException
@@ -361,9 +362,15 @@ def _init(dispatcher, plugin):
 
     set_smb_sid()
     os.unlink('/var/db/samba4/registry.tdb')
-    os.chmod('/var/db/samba4/private', 0o700)
-    os.chmod('/var/db/samba4/private/msg.sock', 0o700)
-    os.chmod('/var/db/samba4/winbindd_privileged', 0o750)
+
+    with contextlib.suppress(OSError):
+        os.chmod('/var/db/samba4/private', 0o700)
+
+    with contextlib.suppress(OSError):
+        os.chmod('/var/db/samba4/private/msg.sock', 0o700)
+
+    with contextlib.suppress(OSError):
+        os.chmod('/var/db/samba4/winbindd_privileged', 0o750)
 
     node = ConfigNode('service.smb', dispatcher.configstore)
     configure_params(node.__getstate__(), dispatcher.call_sync('service.smb.ad_enabled'))
