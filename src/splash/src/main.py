@@ -75,7 +75,7 @@ class CursesFrontend(object):
         self.maxy, self.maxx = self.stdscr.getmaxyx()
         self.mainwin = curses.newwin(1, self.maxx, 1, 2)
         self.statuswin = curses.newwin(1, self.maxx, self.maxy - 1, 0)
-        self.migrationwin = curses.newwin(3, self.maxx, self.maxy - 5, 0)
+        self.migrationwin = curses.newwin(2, self.maxx, self.maxy - 5, 0)
         # self.migrationwin.bkgd(ord(' '), curses.A_STANDOUT)
         self.statuswin.bkgd(ord(' '), curses.A_REVERSE)
 
@@ -104,12 +104,11 @@ class CursesFrontend(object):
                 migration_prog = extra.get('migration_progress', 0)
                 done_perct = '#' * int(migration_prog / 10)
                 left_perct = (10 - len(done_perct)) * '_'
-                self.migrationwin.addstr(0, 2, msg)
                 self.migrationwin.addstr(
-                    1, 2, f"Migration progress: [{done_perct}{left_perct}] {migration_prog}%"
+                    0, 2, f"Migration progress: [{done_perct}{left_perct}] {migration_prog}%"
                 )
                 self.migrationwin.addstr(
-                    2, 2, apps_migrated[:75] + '...' if len(apps_migrated) > 79 else apps_migrated
+                    1, 2, apps_migrated[:75] + '...' if len(apps_migrated) > 79 else apps_migrated
                 )
             except (ValueError, curses.error):
                 pass
