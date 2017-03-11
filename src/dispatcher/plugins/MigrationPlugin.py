@@ -704,6 +704,7 @@ class StorageMigrateTask(Task):
                 newident_err = err
             if newident is None:
                 self.add_warning(TaskWarning(
+                    errno.ENOENT,
                     'Skipping {0} since failed to convert it to id{1}'.format(
                         dev, ' due to error: {0}'.format(newident_err) if newident_err else ''
                     )
@@ -714,6 +715,7 @@ class StorageMigrateTask(Task):
 
             if fn10_disk is None:
                 self.add_warning(TaskWarning(
+                    errno.ENOENT,
                     'Failed to lookup id: {0} for fn9 disk id: {1}, skipping'.format(newident, dev)
                 ))
                 continue
