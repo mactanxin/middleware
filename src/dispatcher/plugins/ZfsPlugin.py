@@ -1413,7 +1413,7 @@ def sync_dataset_cache(dispatcher, dataset, old_dataset=None, recursive=False, s
 
         if snaps:
             for i in dispatcher.threaded(lambda: list(ds.snapshots)):
-                oldpath = f'{old_dataset}@{i.snapshot_name}'
+                oldpath = f'{old_dataset}@{i.snapshot_name}' if old_dataset else None
                 sync_snapshot_cache(dispatcher, i.name, old_snapshot=oldpath)
 
         if recursive:
