@@ -685,10 +685,16 @@ class DockerContainerCreateTask(DockerBaseTask):
 
         self.set_progress(80, 'Creating container {0}'.format(container['name']))
 
+        event = 'docker.container.changed'
+        query = 'docker.container.query'
+        if update:
+            event = 'containerd.docker.container.changed'
+            query = 'containerd.docker.query_containers'
+
         def match_fn(args):
             if args['operation'] == 'create':
                 return self.dispatcher.call_sync(
-                    'containerd.docker.query_containers',
+                    query,
                     [('id', 'in', args['ids']), ('names.0', '=', container['name'])],
                     {'count': True}
                 )
@@ -696,7 +702,7 @@ class DockerContainerCreateTask(DockerBaseTask):
                 return False
 
         self.dispatcher.exec_and_wait_for_event(
-            'containerd.docker.container.changed',
+            event,
             match_fn,
             lambda: self.dispatcher.call_sync('containerd.docker.create_container', container, timeout=100),
             600
@@ -705,7 +711,7 @@ class DockerContainerCreateTask(DockerBaseTask):
         if container.get('networks'):
             self.set_progress(90, 'Connecting to networks')
             contid = self.dispatcher.call_sync(
-                'containerd.docker.query_containers',
+                query,
                 [('name', '=', container.get('name'))],
                 {'select': 'id', 'single': True}
             )
@@ -714,13 +720,13 @@ class DockerContainerCreateTask(DockerBaseTask):
 
         if container.get('autostart'):
             contid = self.dispatcher.call_sync(
-                'containerd.docker.query_containers',
+                query,
                 [('name', '=', container.get('name'))],
                 {'select': 'id', 'single': True}
             )
             self.set_progress(95, 'Starting the container')
             self.dispatcher.exec_and_wait_for_event(
-                'docker.container.changed',
+                event,
                 lambda args: args['operation'] == 'update' and contid in args['ids'],
                 lambda: self.dispatcher.call_sync('containerd.docker.start', contid),
                 600
@@ -816,7 +822,7 @@ class DockerContainerUpdateTask(DockerBaseTask):
                 )
             )
 
-            image_name = self.run_subtask_sync('docker.container.commit', id, image, tag)
+            image_name = self.run_subtask_sync('docker.container.commit', id, image, tag, timeout=240)
             container['image'] = image_name
 
         name = q.get(container, 'names.0')
@@ -1940,14 +1946,13 @@ def refresh_database_cache(dispatcher, collection, event, query, lock, host_id=N
         deleted = []
         for obj in map(lambda o: exclude(o, 'running', 'health'), current):
             old_obj = first_or_default(lambda o: o['id'] == obj['id'], old)
-            if old_obj:
+            if not dispatcher.datastore_log.exists(collection, ('id', '=', obj['id'])):
+                dispatcher.datastore_log.insert(collection, obj)
+                created.append(obj['id'])
+            else:
                 if obj != old_obj:
                     dispatcher.datastore_log.update(collection, obj['id'], obj)
                     updated.append(obj['id'])
-
-            else:
-                dispatcher.datastore_log.insert(collection, obj)
-                created.append(obj['id'])
 
         for obj in old:
             if not first_or_default(lambda o: o['id'] == obj['id'], current):

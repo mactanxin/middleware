@@ -265,6 +265,7 @@ def populate_user_obj(user, fn10_groups, fn9_user, fn9_groups, fn9_grpmem):
         aux_groups = []
 
     user.update({
+        'uid': fn9_user['bsdusr_uid'],
         'sshpubkey': pubkeys,
         'username': fn9_user['bsdusr_username'],
         'group': grp,
@@ -383,7 +384,7 @@ class NetworkMigrateTask(Task):
 
         fn9_lagg_membership = get_table('select * from network_lagginterfacemembers')
         fn9_lagginfo = {
-            laggy['lagg_interface_id']: {
+            fn9_interfaces[laggy['lagg_interface_id']]['int_interface']: {
                 'lagg_protocol': LAGG_PROTOCOL_MAP.get(laggy['lagg_protocol'], 'FAILOVER'),
                 'lagg_members': [v for v in fn9_lagg_membership.values() if v['lagg_interfacegroup_id'] == laggy['id']]
             }
@@ -422,16 +423,20 @@ class NetworkMigrateTask(Task):
                     }
                 }
             elif fn9_iface['int_interface'].lower().startswith('lagg'):
+                lagg_members = sorted(
+                    q.get(fn9_lagginfo, f"{fn9_iface['int_interface']}.lagg_members", []),
+                    key=lambda lg: lg['lagg_ordernum']
+                )
                 fn10_iface = {
                     'type': 'LAGG',
                     'lagg': {
                         'protocol': q.get(fn9_lagginfo, f"{fn9_iface['int_interface']}.lagg_protocol"),
-                        'ports': [lg['lagg_physnic'] for lg in q.get(fn9_lagginfo, f"{fn9_iface['int_interface']}.lagg_members", [])]
+                        'ports': [lg['lagg_physnic'] for lg in lagg_members]
                     }
                 }
             else:
                 self.add_warning(TaskWarning(
-                    err.code,
+                    errno.ENXIO,
                     'Skipping FreeNAS 9.x network interface: {0} as it is not found'.format(
                         fn9_iface['int_interface']
                     )
@@ -543,6 +548,9 @@ class NetworkMigrateTask(Task):
                 net = ipaddress.ip_network(route['sr_destination'])
             except ValueError as e:
                 logger.debug("Invalid network {0}: {1}".format(route['sr_destination'], e))
+                self.add_warning(TaskWarning(
+                    errno.EINVAL, "Invalid network {0}: {1}".format(route['sr_destination'], e)
+                ))
                 continue
 
             try:
@@ -580,7 +588,7 @@ class NetworkMigrateTask(Task):
         self.run_subtask_sync(
             'network.config.update',
             {
-                'autoconfigure': bool(fn9_interfaces),
+                'autoconfigure': not bool(fn9_interfaces),
                 'http_proxy': fn9_globalconf['gc_httpproxy'] or None,
                 'gateway': {
                     'ipv4': fn9_globalconf['gc_ipv4gateway'] or None,
@@ -599,6 +607,15 @@ class NetworkMigrateTask(Task):
                 }
             }
         )
+        # In case we have no interfaces manually configured in fn9 we need to retrigger the
+        # networkd autoconfiguration stuff so do that below
+        if not fn9_interfaces:
+            try:
+                for code, message in self.dispatcher.call_sync('networkd.configuration.configure_network', timeout=60):
+                    self.add_warning(TaskWarning(code, message))
+                self.dispatcher.call_sync('etcd.generation.generate_group', 'network')
+            except RpcException as e:
+                raise TaskException(errno.ENXIO, 'Cannot reconfigure interface: {0}'.format(str(e)))
 
 
 @description("Storage volume migration task")
@@ -671,7 +688,7 @@ class StorageMigrateTask(Task):
             dev = self.identifier_to_device(fn9_disk['disk_identifier'])
             if not dev:
                 self.add_warning(TaskWarning(
-                    err.code,
+                    errno.ENOENT,
                     'Identifier to device failed for {0}, skipping'.format(
                         fn9_disk['disk_identifier']
                     )
@@ -687,6 +704,7 @@ class StorageMigrateTask(Task):
                 newident_err = err
             if newident is None:
                 self.add_warning(TaskWarning(
+                    errno.ENOENT,
                     'Skipping {0} since failed to convert it to id{1}'.format(
                         dev, ' due to error: {0}'.format(newident_err) if newident_err else ''
                     )
@@ -697,6 +715,7 @@ class StorageMigrateTask(Task):
 
             if fn10_disk is None:
                 self.add_warning(TaskWarning(
+                    errno.ENOENT,
                     'Failed to lookup id: {0} for fn9 disk id: {1}, skipping'.format(newident, dev)
                 ))
                 continue
@@ -725,10 +744,27 @@ class StorageMigrateTask(Task):
 
         # Importing fn9 volumes
         fn9_volumes = get_table('select * from storage_volume')
+        # Just keeping this here for reference for `vol_encrypt` field in fn9_volumes database
+        # entry which states if the volume is encrypted or not and if it is encrypted then is it
+        # passphrased or not
+        # volencrypt_lookup = {
+        #     0: 'Unencrypted',
+        #     1: 'Encrypted, no passphrase',
+        #     2: 'Encrypted, with passphrase'
+        # }
         for fn9_volume in fn9_volumes.values():
             try:
+                if fn9_volume['vol_encrypt'] > 1:
+                    raise RpcException(
+                        errno.EINVAL,
+                        f"Cannot import passphrase encrypted volume: {fn9_volume['vol_name']}, please do so manually"
+                    )
                 self.run_subtask_sync(
-                    'volume.import', fn9_volume['vol_guid'], fn9_volume['vol_name'], validate=True
+                    'volume.import',
+                    fn9_volume['vol_guid'],
+                    fn9_volume['vol_name'],
+                    {'key': f"/data/geli/{fn9_volume['vol_encryptkey']}.key"} if fn9_volume['vol_encrypt'] else {},
+                    validate=True
                 )
             except RpcException as err:
                 self.add_warning(TaskWarning(
@@ -905,7 +941,7 @@ class ShareMigrateTask(Task):
                 self.run_subtask_sync(
                     'share.create',
                     {
-                        'name': os.path.basename(fn9_nfs_shares[1]['path']),  # Had to use something
+                        'name': os.path.basename(fn9_nfs_share['path']),  # Had to use something
                         'description': fn9_nfs_share['nfs_comment'],
                         'enabled': True,
                         'immutable': False,
@@ -1984,7 +2020,7 @@ class CalendarMigrateTask(Task):
         # # migrating SMART TEST tasks
         # for fn9_smart_task in fn9_smart_tasks.values():
         #     try:
-        #         self.call_subtask_sync(
+        #         self.dispatcher.run_subtask_sync(
         #             'calendar_task.create',
         #             {
         #                 'name': ,
@@ -2123,6 +2159,7 @@ class MasterMigrateTask(ProgressTask):
         migration_status = {
             'plugin': 'MigrationPlugin',
             'apps_migrated': self.apps_migrated,
+            'migration_progress': progress,
             'status': self.status
         }
         self.dispatcher.dispatch_event('migration.status', migration_status)
@@ -2147,42 +2184,96 @@ class MasterMigrateTask(ProgressTask):
         return ['root']
 
     def run(self, second_run=False):
-        self.migration_progess(0, 'Starting migration from 9.x database to 10.x')
+        try:
+            self.migration_progess(0, 'Starting migration from 9.x database to 10.x')
 
-        if not second_run:
-            # bring the 9.x database up to date with the latest 9.x version
-            # doing this via a subprocess call since otherwise there are much import
-            # issues which I tried hunting down but could not finally resolve
-            try:
-                out, err = system('/usr/local/sbin/migrate93', '-f', FREENAS93_DATABASE_PATH)
-            except SubprocessException as e:
-                logger.error('Traceback of 9.x database migration', exc_info=True)
-                raise TaskException(
-                    'Error whilst trying upgrade 9.x database to latest 9.x schema: {0}'.format(e)
+            if not second_run:
+                # bring the 9.x database up to date with the latest 9.x version
+                # doing this via a subprocess call since otherwise there are much import
+                # issues which I tried hunting down but could not finally resolve
+                try:
+                    out, err = system('/usr/local/sbin/migrate93', '-f', FREENAS93_DATABASE_PATH)
+                except SubprocessException as e:
+                    logger.error('Traceback of 9.x database migration', exc_info=True)
+                    raise TaskException(
+                        'Error whilst trying upgrade 9.x database to latest 9.x schema: {0}'.format(e)
+                    )
+                logger.debug(
+                    'Result of running 9.x was as follows: stdout: {0}, stderr: {1}'.format(out, err)
                 )
-            logger.debug(
-                'Result of running 9.x was as follows: stdout: {0}, stderr: {1}'.format(out, err)
-            )
 
-        self.status = 'RUNNING'
+            self.status = 'RUNNING'
 
-        if not second_run:
-            for app, task_tuple in self.critical_migrations.items():
+            if not second_run:
+                for app, task_tuple in self.critical_migrations.items():
+                    self.migration_task_routine(app, task_tuple)
+
+            # check if the passphrase encrypted volumes are imported into the system
+            fn10_vols = list(self.dispatcher.call_sync('volume.query'))
+            vols_left_to_import = []
+
+            for fn9_volume in get_table('select * from storage_volume').values():
+                if (
+                    fn9_volume['vol_encrypt'] > 1 and
+                    q.query(fn10_vols, ('guid', '=', fn9_volume['vol_guid']), single=True) is None
+                ):
+                    vols_left_to_import.append(fn9_volume['vol_name'])
+
+            if vols_left_to_import:
+                self.status = 'STOPPED'
+                self.migration_progess(
+                    self.progress_tracker,
+                    'Migration of FreeNAS 9.x database deferred pending manual import of passphrase encrypted volumes'
+                )
+                self.dispatcher.call_sync(
+                    'alert.emit',
+                    {
+                        'clazz': 'MigrationStalled',
+                        'title': 'FreeNAS 9.x to 10 migration stopped',
+                        'description': f"Please import passphrase encrypted volumes: {', '.join(vols_left_to_import)} and resume migrations from GUI",
+                        'target': ', '.join(vols_left_to_import)
+                    }
+                )
+                return
+
+            # Putting this here explicity so that when this task is run with second_run = True
+            self.progress_tracker = len(self.critical_migrations) * 10
+            # Here put the check in for passphrase based encrypted volumes and decided whether
+            # we should succeed or not
+            for app, task_tuple in self.non_critical_migrations.items():
                 self.migration_task_routine(app, task_tuple)
 
-        # Putting this here explicity so that when this task is run with second_run = True
-        self.progress_tracker = len(self.critical_migrations) * 10
-        # Here put the check in for passphrase based encrypted volumes and decided whether
-        # we should succeed or not
-        for app, task_tuple in self.non_critical_migrations.items():
-            self.migration_task_routine(app, task_tuple)
+            # If we reached till here migration must have succeeded
+            # so lets rename the databse
+            os.rename(FREENAS93_DATABASE_PATH, "{0}.done".format(FREENAS93_DATABASE_PATH))
 
-        # If we reached till here migration must have succeeded
-        # so lets rename the databse
-        os.rename(FREENAS93_DATABASE_PATH, "{0}.done".format(FREENAS93_DATABASE_PATH))
+            self.status = 'FINISHED'
+            self.migration_progess(100, 'Migration of FreeNAS 9.x database config and settings done')
 
-        self.status = 'FINISHED'
-        self.migration_progess(100, 'Migration of FreeNAS 9.x database config and settings done')
+            self.dispatcher.call_sync(
+                'alert.emit',
+                {
+                    'clazz': 'MigrationDone',
+                    'title': 'FreeNAS 9.x to 10 migration completed',
+                    'description': 'Successfully migrated FreeNAS 9.x settings and configurations'
+                }
+            )
+        except Exception as err:
+            # I know a broad catch-all is hacky but I need this for sending the serviced event
+            # which will release the splash screen
+            self.status = 'FAILED'
+            self.migration_progess(
+                self.progress_tracker, f'Master migration task failed due to {err}'
+            )
+            self.dispatcher.call_sync(
+                'alert.emit',
+                {
+                    'clazz': 'MigrationFailed',
+                    'title': 'FreeNAS 9.x to 10 migration failed!',
+                    'description': f'Master migration task failed due to {err}'
+                }
+            )
+            raise TaskException(errno.EINVAL, f'Master migration task failed due to {err}')
 
 
 def _init(dispatcher, plugin):
@@ -2199,9 +2290,10 @@ def _init(dispatcher, plugin):
                 'type': 'array',
                 'items': {'type': 'string'},
             },
+            'migration_progress': {'type': 'integer'},
             'status': {
                 'type': 'string',
-                'enum': ['NOT_NEEDED', 'STARTED', 'RUNNING', 'FINISHED']}
+                'enum': ['NOT_NEEDED', 'STARTED', 'RUNNING', 'FINISHED', 'STOPPED', 'FAILED']}
         }
     })
 
@@ -2218,6 +2310,9 @@ def _init(dispatcher, plugin):
     plugin.register_event_type('migration.status')
 
     if os.path.exists(FREENAS93_DATABASE_PATH):
+        # Ensure that networkd and Migration plugin do not both try to race to configure
+        # network interfaces by setting `autoconfigure` flag to False
+        dispatcher.configstore.set('network.autoconfigure', False)
         plugin.register_event_handler('service.ready', start_migration)
     else:
         migration_status = {

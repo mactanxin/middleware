@@ -40,22 +40,10 @@ from freenas.dispatcher.rpc import SchemaHelper as h
 from task import Provider, Task, TaskException, VerifyException, query, TaskDescription
 from freenas.utils import query as q, COUNTRY_CODES
 from freenas.dispatcher.fd import FileDescriptor
+from freenas.dispatcher import Password
+from freenas.utils.password import unpassword
 
 from OpenSSL import crypto
-
-
-def export_privatekey(buf, passphrase=None):
-    key = crypto.load_privatekey(
-        crypto.FILETYPE_PEM,
-        buf,
-        passphrase=str(passphrase) if passphrase else None
-    )
-
-    return crypto.dump_privatekey(
-        crypto.FILETYPE_PEM,
-        key,
-        passphrase=str(passphrase) if passphrase else None
-    ).decode('utf-8')
 
 
 def get_cert_info(buf):
@@ -114,6 +102,7 @@ class CertificateProvider(Provider):
                     cert_path, '{0}.crt'.format(certificate['name']))
 
             if certificate.get('privatekey'):
+                certificate['privatekey'] = Password(certificate['privatekey'])
                 certificate['privatekey_path'] = os.path.join(
                     cert_path, '{0}.key'.format(certificate['name']))
 
@@ -371,6 +360,7 @@ class CertificateImportTask(Task):
                 )
 
         if certificate.get('privatekey'):
+            certificate['privatekey'] = unpassword(certificate['privatekey'])
             try:
                 crypto.load_privatekey(crypto.FILETYPE_PEM, certificate['privatekey'])
             except Exception:
@@ -423,6 +413,7 @@ class CertificateImportTask(Task):
             imported_privkey = crypto.load_privatekey(
                 crypto.FILETYPE_PEM, get_file_contents(certificate['privatekey_path']))
         elif certificate.get('privatekey'):
+            certificate['privatekey'] = unpassword(certificate['privatekey'])
             imported_privkey = crypto.load_privatekey(crypto.FILETYPE_PEM, certificate['privatekey'])
         else:
             imported_privkey = False
@@ -554,6 +545,7 @@ class CertificateUpdateTask(Task):
                 except Exception:
                     raise TaskException(errno.EINVAL, 'Invalid certificate')
             if 'privatekey' in updated_fields:
+                updated_fields['privatekey'] = unpassword(updated_fields['privatekey'])
                 try:
                     crypto.load_privatekey(crypto.FILETYPE_PEM, updated_fields['privatekey'])
                 except Exception:
@@ -653,7 +645,7 @@ def _init(dispatcher, plugin):
             'type': {'$ref': 'CryptoCertificateType'},
             'name': {'type': 'string'},
             'certificate': {'type': ['string', 'null']},
-            'privatekey': {'type': ['string', 'null']},
+            'privatekey': {'type': ['password', 'null']},
             'csr': {'type': 'string'},
             'key_length': {'type': 'integer'},
             'digest_algorithm': {'$ref': 'CryptoCertificateDigestalgorithm'},

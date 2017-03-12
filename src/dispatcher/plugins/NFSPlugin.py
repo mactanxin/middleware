@@ -99,7 +99,7 @@ class NFSConfigureTask(Task):
         config = self.dispatcher.call_sync('service.query', [('name', '=', 'nfs')], {'single': True})['config']
         for n in ('mountd_port', 'rpcstatd_port', 'rpclockd_port'):
             port = nfs.get(n)
-            if port and port != config[n] and is_port_open(port):
+            if port and port != config[n] and is_port_open(port, 'inet'):
                 raise TaskException(errno.EBUSY, 'Port number : {0} is already in use'.format(port))
 
         try:

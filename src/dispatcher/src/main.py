@@ -579,7 +579,7 @@ class Dispatcher(object):
         return self.dispatch_event(name, args)
 
     def call_sync(self, name, *args, **kwargs):
-        return self.rpc.call_sync(name, *args)
+        return self.rpc.call_sync(name, *args, **kwargs)
 
     def call_async(self, name, callback, *args, **kwargs):
         def call(n, c, *a):
@@ -872,17 +872,19 @@ class DispatcherRpcContext(RpcContext):
         super(DispatcherRpcContext, self).__init__()
         self.dispatcher = dispatcher
 
-    def call_sync(self, name, *args):
+    def call_sync(self, name, *args, **kwargs):
+        no_copy = kwargs.pop('no_copy', False)
+
         def unpack_chunk(it):
             for chunk in it:
                 for item in chunk:
-                    yield copy.deepcopy(item)
+                    yield item if no_copy else copy.deepcopy(item)
 
         result = self.dispatch_call(name, list(args), streaming=True, validation=False)
         if hasattr(result, '__next__'):
             return unpack_chunk(result)
 
-        return copy.deepcopy(result)
+        return result if no_copy else copy.deepcopy(result)
 
 
 class DispatcherConnection(ServerConnection):

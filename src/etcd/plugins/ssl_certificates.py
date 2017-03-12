@@ -86,7 +86,7 @@ def generate_cert_files(context, certs_to_create):
 
         privatekey = cert.get('privatekey')
         if privatekey:
-            generate_file(context, cert['privatekey_path'], privatekey)
+            generate_file(context, cert['privatekey_path'], privatekey.secret)
 
         csr = cert.get('csr')
         if csr and csr['type'] == 'CERT_CSR':

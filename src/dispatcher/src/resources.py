@@ -224,7 +224,7 @@ class ResourceTracker(object):
             self.dispatcher.register_event_handler(changed_event, self.on_changed)
             self.on_changed({
                 'operation': 'create',
-                'entities': self.dispatcher.call_sync(query_call)
+                'entities': self.dispatcher.call_sync(query_call, no_copy=True)
             })
 
     def on_changed(self, args):

@@ -69,13 +69,13 @@ def generate_luns(context):
 
     for share in context.client.call_sync('share.query', [('type', '=', 'iscsi')]):
         props = share['properties']
-        serial = '{:<31}'.format(props['serial']) if not props['xen_compat'] else props['serial']
+        padded_serial = '{:<31}'.format(props['serial']) if not props['xen_compat'] else props['serial']
         extent = {
             'path': share['filesystem_path'],
             'blocksize': props['block_size'],
-            'serial': serial,
+            'serial': props['serial'],
             'options': {
-                'device-id': 'SCSI Disk {0}'.format(props['serial']),
+                'device-id': 'SCSI Disk {0}'.format(padded_serial),
                 'vendor': 'FreeNAS',
                 'product': 'SCSI Disk',
                 'revision': '0123',
@@ -156,7 +156,7 @@ def generate_targets(context):
 
         name = i['id']
         if not name.startswith(('iqn.', 'naa.', 'eui.')):
-            name = '.'.join([context.configstore.get('service.iscsi.base_name'), name])
+            name = ':'.join([context.configstore.get('service.iscsi.base_name'), name])
 
         result[name] = target
 
@@ -218,6 +218,7 @@ def generate_portal_groups(context):
     for i in context.datastore.query('iscsi.portals'):
         portal = {
             'listen': list(map(lambda l: '{0}:{1}'.format(l['address'], l['port']), i['listen'])),
+            'discovery-auth-group': 'no-authentication'
         }
 
         if i.get('discovery_auth_group'):

@@ -45,7 +45,7 @@ class ScheduledQueryUpdate(object):
     def run(self):
         logging.log(TRACE, 'Running update for {0}'.format(self.service))
         try:
-            entities = list(self.dispatcher.call_sync('{0}.query'.format(self.service), [('id', 'in', list(self.keys))]))
+            entities = list(self.dispatcher.call_sync(f'{self.service}.query', [('id', 'in', list(self.keys))]))
         except BaseException as e:
             logging.warning('Cannot fetch changed entities from service {0}: {1}'.format(self.service, str(e)))
             return
@@ -77,6 +77,8 @@ class EntitySubscriberEventSource(EventSource):
             fn, operation, ids = self.queues[service].get()
             with contextlib.suppress(BaseException):
                 fn(service, operation, ids)
+
+            gevent.sleep(0)
 
     def event_added(self, args):
         if args['name'].startswith('entity-subscriber'):
@@ -110,7 +112,7 @@ class EntitySubscriberEventSource(EventSource):
         if operation in ('create', 'update'):
             try:
                 keys = set(ids.keys() if isinstance(ids, dict) else ids)
-                entities = list(self.dispatcher.call_sync('{0}.query'.format(service), [('id', 'in', list(keys))]))
+                entities = list(self.dispatcher.call_sync(f'{service}.query', [('id', 'in', list(keys))], no_copy=True))
             except BaseException as e:
                 self.logger.warning('Cannot fetch changed entities from service {0}: {1}'.format(service, str(e)))
                 return
@@ -127,7 +129,7 @@ class EntitySubscriberEventSource(EventSource):
         assert operation == 'update'
         assert ids is None
 
-        entity = self.dispatcher.call_sync('{0}.get_config'.format(service))
+        entity = self.dispatcher.call_sync(f'{service}.get_config', no_copy=True)
         self.dispatcher.dispatch_event('entity-subscriber.{0}.changed'.format(service), {
             'service': service,
             'operation': operation,

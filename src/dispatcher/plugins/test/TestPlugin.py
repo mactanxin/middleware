@@ -113,7 +113,7 @@ class TestProvider(Provider):
         if extra is None:
             extra = {}
         try:
-            push_status('TestPlugin: messgae: {0}, extra: {1}'.format(msg, extra))
+            push_status(msg, extra=extra)
         except:
             pass
 

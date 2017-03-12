@@ -902,7 +902,7 @@ class DockerHost(object):
 
         while ready != 'OK':
             try:
-                connection = docker.Client(base_url='http://{0}:2375'.format(ip), version='auto')
+                connection = docker.Client(base_url='http://{0}:2375'.format(ip), version='auto', timeout=240)
                 ready = connection.ping()
             except (requests.exceptions.RequestException, docker.errors.DockerException):
                 gevent.sleep(1)
