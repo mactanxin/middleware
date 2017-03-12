@@ -2090,8 +2090,6 @@ def _init(dispatcher, plugin):
             single=True
         )
         if host:
-            refresh_containers(dispatcher, args['name'])
-            refresh_networks(dispatcher, args['name'])
             logger.debug('Docker host {0} deleted'.format(host['name']))
             dispatcher.dispatch_event('docker.host.changed', {
                 'operation': 'delete',
@@ -2121,6 +2119,9 @@ def _init(dispatcher, plugin):
                     })
 
         elif args['operation'] == 'delete':
+            for id in args['ids']:
+                refresh_cache(dispatcher, host_id=id)
+
             if dispatcher.call_sync('docker.config.get_config').get('default_host') in args['ids']:
                 host = dispatcher.datastore.query(
                     'vms',
