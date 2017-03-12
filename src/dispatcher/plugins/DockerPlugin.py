@@ -54,6 +54,7 @@ containers_rename_cache = None
 hosts_status_cache = None
 containers_lock = None
 networks_lock = None
+images_lock = None
 
 CONTAINERS_QUERY = 'containerd.docker.query_containers'
 NETWORKS_QUERY = 'containerd.docker.query_networks'
@@ -1998,15 +1999,16 @@ def sync_images(dispatcher, ids=None, host_id=None):
     if host_id:
         filter.append(('hosts', 'contains', host_id))
 
-    objects = list(dispatcher.call_sync(IMAGES_QUERY, filter))
-    images.update(**{i['id']: i for i in objects})
-    if not ids:
-        nonexistent_ids = []
-        for k, v in images.itervalid():
-            if not first_or_default(lambda o: o['id'] == k, objects):
-                nonexistent_ids.append(k)
+    with images_lock:
+        objects = list(dispatcher.call_sync(IMAGES_QUERY, filter))
+        images.update(**{i['id']: i for i in objects})
+        if not ids:
+            nonexistent_ids = []
+            for k, v in images.itervalid():
+                if not first_or_default(lambda o: o['id'] == k, objects):
+                    nonexistent_ids.append(k)
 
-        images.remove_many(nonexistent_ids)
+            images.remove_many(nonexistent_ids)
 
 
 def refresh_cache(dispatcher, host_id=None):
@@ -2044,9 +2046,11 @@ def _init(dispatcher, plugin):
     global hosts_status_cache
     global containers_lock
     global networks_lock
+    global images_lock
 
     containers_lock = RLock()
     networks_lock = RLock()
+    images_lock = RLock()
 
     images = EventCacheStore(dispatcher, 'docker.image')
     collections = CacheStore()
@@ -2193,12 +2197,13 @@ def _init(dispatcher, plugin):
                             })
 
     def on_image_event(args):
-        logger.trace('Received Docker image event: {0}'.format(args))
-        if args['ids']:
-            if args['operation'] == 'delete':
-                images.remove_many(args['ids'])
-            else:
-                sync_images(dispatcher, args['ids'])
+        with images_lock:
+            logger.trace('Received Docker image event: {0}'.format(args))
+            if args['ids']:
+                if args['operation'] == 'delete':
+                    images.remove_many(args['ids'])
+                else:
+                    sync_images(dispatcher, args['ids'])
 
     def on_container_event(args):
         logger.trace('Received Docker container event: {}'.format(args))
