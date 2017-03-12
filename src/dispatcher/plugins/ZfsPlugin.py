@@ -1412,10 +1412,9 @@ def sync_dataset_cache(dispatcher, dataset, old_dataset=None, recursive=False, s
         datasets.put(dataset, dispatcher.threaded(lambda: ds.__getstate__(False)))
 
         if snaps:
-            snapshots.update(**{
-                i['name']: i
-                for i in dispatcher.threaded(lambda: [d.__getstate__() for d in ds.snapshots])
-            })
+            for i in dispatcher.threaded(lambda: list(ds.snapshots)):
+                oldpath = f'{old_dataset}@{i.snapshot_name}'
+                sync_snapshot_cache(dispatcher, i.name, old_snapshot=oldpath)
 
         if recursive:
             for i in dispatcher.threaded(lambda: list(ds.children)):
@@ -1560,7 +1559,7 @@ def _init(dispatcher, plugin):
                 sync_snapshot_cache(dispatcher, args['new_ds'], args['ds'])
             else:
                 logger.info('Dataset {0} renamed to: {1}'.format(args['ds'], args['new_ds']))
-                sync_dataset_cache(dispatcher, args['new_ds'], args['ds'], True, snaps=True)
+                sync_dataset_cache(dispatcher, args['new_ds'], args['ds'], recursive=True, snaps=True)
 
     @sync
     def on_dataset_setprop(args):
