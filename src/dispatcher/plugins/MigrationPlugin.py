@@ -39,9 +39,10 @@ from Crypto.Cipher import AES
 from collections import OrderedDict
 from lib.system import system, SubprocessException
 from freenas.serviced import push_status
-from freenas.utils import query as q
+from freenas.utils import query as q, extend
 from lxml import etree
 from bsd import sysctl
+from freenas.dispatcher import Password
 from freenas.dispatcher.rpc import RpcException, description, accepts, SchemaHelper as h
 from datastore import get_datastore
 from datastore.config import ConfigStore, ConfigNode
@@ -743,7 +744,14 @@ class StorageMigrateTask(Task):
                 ))
 
         # Importing fn9 volumes
-        fn9_volumes = get_table('select * from storage_volume')
+        fn9_enc_disks = get_table('select * from storage_encrypteddisk')
+        fn9_volumes = {
+            k: extend(
+                v,
+                {'enc_disks': [enc for enc in fn9_enc_disks.values() if enc['encrypted_volume_id'] == v['id']]}
+            ) for k, v in get_table('select * from storage_volume').items()
+        }
+
         # Just keeping this here for reference for `vol_encrypt` field in fn9_volumes database
         # entry which states if the volume is encrypted or not and if it is encrypted then is it
         # passphrased or not
@@ -759,16 +767,35 @@ class StorageMigrateTask(Task):
                         errno.EINVAL,
                         f"Cannot import passphrase encrypted volume: {fn9_volume['vol_name']}, please do so manually"
                     )
+
+                key_contents = None
+                if fn9_volume['vol_encrypt']:
+                    with open(f"/data/geli/{fn9_volume['vol_encryptkey']}.key", "rb") as key_file:
+                        key_contents = base64.b64encode(key_file.read()).decode('utf-8')
+
                 self.run_subtask_sync(
                     'volume.import',
                     fn9_volume['vol_guid'],
                     fn9_volume['vol_name'],
-                    {'key': f"/data/geli/{fn9_volume['vol_encryptkey']}.key"} if fn9_volume['vol_encrypt'] else {},
+                    {},
+                    {
+                        'key': key_contents,
+                        'disks': list(filter(
+                            None,
+                            [
+                                os.path.join(
+                                    '/dev',
+                                    self.identifier_to_device(enc_disk['encrypted_disk_id'])
+                                )
+                                for enc_disk in fn9_volume['enc_disks']
+                            ]
+                        ))
+                    } if fn9_volume['vol_encrypt'] else {},
                     validate=True
                 )
-            except RpcException as err:
+            except (OSError, RpcException) as err:
                 self.add_warning(TaskWarning(
-                    err.code,
+                    getattr(err, 'code', errno.EINVAL),
                     'Cannot import volume name: {0} GUID: {1} due to error: {2}'.format(
                         fn9_volume['vol_name'], fn9_volume['vol_guid'], err
                     )
@@ -2056,6 +2083,70 @@ class DirectoryServicesMigrateTask(Task):
         fn9_rid_idmap = get_table('select * from directoryservice_idmap_rid')
 
 
+@description("FreeNAS 9 passphrased volumes unlock and import task")
+@accepts(h.array(h.object(properties={'name': str, 'passphrase': Password}, additionalProperties=False)))
+class PassEncVolumeImportTask(StorageMigrateTask):
+    @classmethod
+    def early_describe(cls):
+        return "Unlock and import of FreeNAS 9.x passphrase encrypted volumes"
+
+    def describe(self, volimport):
+        return TaskDescription(
+            "Unlocking and importing volumes: {vols}",
+            vols=', '.join(filter(None, (v.get('name') for v in volimport)))
+        )
+
+    def verify(self, volimport):
+        return ['system']
+
+    def run(self, volimport):
+        self.fn10_disks = list(self.dispatcher.call_sync('disk.query'))
+        fn9_enc_disks = get_table('select * from storage_encrypteddisk')
+        fn9_passenc_vols = {
+            v['vol_name']: extend(
+                v,
+                {'enc_disks': [enc for enc in fn9_enc_disks.values() if enc['encrypted_volume_id'] == v['id']]}
+            ) for v in get_table('select * from storage_volume').values() if v['vol_encrypt'] > 1
+        }
+        for vol in volimport:
+            fn9_volume = fn9_passenc_vols.get(vol['name'])
+            if fn9_volume:
+                try:
+                    with open(f"/data/geli/{fn9_volume['vol_encryptkey']}.key", "rb") as key_file:
+                        key_contents = base64.b64encode(key_file.read()).decode('utf-8')
+                    self.run_subtask_sync(
+                        'volume.import',
+                        fn9_volume['vol_guid'],
+                        fn9_volume['vol_name'],
+                        {},
+                        {
+                            'key': key_contents,
+                            'disks': list(filter(
+                                None,
+                                [
+                                    os.path.join(
+                                        '/dev',
+                                        self.identifier_to_device(enc_disk['encrypted_disk_id'])
+                                    )
+                                    for enc_disk in fn9_volume['enc_disks']
+                                ]
+                            ))
+                        },
+                        vol['passphrase'],
+                        validate=True
+                    )
+                except (OSError, RpcException) as err:
+                    raise TaskException(
+                        getattr(err, 'code', errno.EINVAL),
+                        f"Import of volume named: {fn9_volume['vol_name']} guid: {fn9_volume['vol_guid']} failed due to err: {err}"
+                    )
+            else:
+                raise TaskException(
+                    errno.ENXIO,
+                    f"Volume: {vol['name']} not in FreeNAS 9.x passphrase encrypted volumes list"
+                )
+
+
 @description("Master top level migration task for 9.x to 10.x")
 @accepts(h.one_of(bool, None))
 class MasterMigrateTask(ProgressTask):
@@ -2230,7 +2321,7 @@ class MasterMigrateTask(ProgressTask):
                     {
                         'clazz': 'MigrationStalled',
                         'title': 'FreeNAS 9.x to 10 migration stopped',
-                        'description': f"Please import passphrase encrypted volumes: {', '.join(vols_left_to_import)} and resume migrations from GUI",
+                        'description': f"Please import passphrase encrypted volumes: {', '.join(vols_left_to_import)} and resume migrations from CLI",
                         'target': ', '.join(vols_left_to_import)
                     }
                 )
@@ -2306,6 +2397,7 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('migration.systemmigrate', SystemMigrateTask)
     plugin.register_task_handler('migration.calendarmigrate', CalendarMigrateTask)
     plugin.register_task_handler('migration.directoryservicesmigrate', DirectoryServicesMigrateTask)
+    plugin.register_task_handler('migration.import_encvolume', PassEncVolumeImportTask)
 
     plugin.register_event_type('migration.status')
 
