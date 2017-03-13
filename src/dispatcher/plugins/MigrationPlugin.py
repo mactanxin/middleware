@@ -769,9 +769,15 @@ class StorageMigrateTask(Task):
                     )
 
                 key_contents = None
+                encrypted_disks = []
                 if fn9_volume['vol_encrypt']:
                     with open(f"/data/geli/{fn9_volume['vol_encryptkey']}.key", "rb") as key_file:
                         key_contents = base64.b64encode(key_file.read()).decode('utf-8')
+                    for ed in fn9_volume['enc_disks']:
+                        logger.debug(f"suraj enc disk is: {ed['encrypted_disk_id']}")
+                        enc_disk = self.identifier_to_device(ed['encrypted_disk_id'])
+                        if enc_disk:
+                            encrypted_disks.append(os.path.join('/dev', enc_disk))
 
                 self.run_subtask_sync(
                     'volume.import',
@@ -780,16 +786,7 @@ class StorageMigrateTask(Task):
                     {},
                     {
                         'key': key_contents,
-                        'disks': list(filter(
-                            None,
-                            [
-                                os.path.join(
-                                    '/dev',
-                                    self.identifier_to_device(enc_disk['encrypted_disk_id'])
-                                )
-                                for enc_disk in fn9_volume['enc_disks']
-                            ]
-                        ))
+                        'disks': encrypted_disks
                     } if fn9_volume['vol_encrypt'] else {},
                     validate=True
                 )
@@ -2114,6 +2111,14 @@ class PassEncVolumeImportTask(StorageMigrateTask):
                 try:
                     with open(f"/data/geli/{fn9_volume['vol_encryptkey']}.key", "rb") as key_file:
                         key_contents = base64.b64encode(key_file.read()).decode('utf-8')
+
+                    encrypted_disks = []
+                    for ed in fn9_volume['enc_disks']:
+                        logger.debug(f"suraj enc disk is: {ed['encrypted_disk_id']}")
+                        enc_disk = self.identifier_to_device(ed['encrypted_disk_id'])
+                        if enc_disk:
+                            encrypted_disks.append(os.path.join('/dev', enc_disk))
+
                     self.run_subtask_sync(
                         'volume.import',
                         fn9_volume['vol_guid'],
@@ -2121,16 +2126,7 @@ class PassEncVolumeImportTask(StorageMigrateTask):
                         {},
                         {
                             'key': key_contents,
-                            'disks': list(filter(
-                                None,
-                                [
-                                    os.path.join(
-                                        '/dev',
-                                        self.identifier_to_device(enc_disk['encrypted_disk_id'])
-                                    )
-                                    for enc_disk in fn9_volume['enc_disks']
-                                ]
-                            ))
+                            'disks': encrypted_disks
                         },
                         vol['passphrase'],
                         validate=True
