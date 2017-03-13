@@ -743,6 +743,11 @@ class StorageMigrateTask(Task):
                     'Could not update disk config for: {0} due to err: {1}'.format(fn10_disk_name, err)
                 ))
 
+        # Repopulate this list before we begin volume import
+        # this is needed since I have a bunch of `del ` statements on
+        # disks in here above, hence repopulating to ensure that `identifier_to_device`
+        # returns proper values
+        self.fn10_disks = list(self.dispatcher.call_sync('disk.query'))
         # Importing fn9 volumes
         fn9_enc_disks = get_table('select * from storage_encrypteddisk')
         fn9_volumes = {
@@ -774,7 +779,6 @@ class StorageMigrateTask(Task):
                     with open(f"/data/geli/{fn9_volume['vol_encryptkey']}.key", "rb") as key_file:
                         key_contents = base64.b64encode(key_file.read()).decode('utf-8')
                     for ed in fn9_volume['enc_disks']:
-                        logger.debug(f"suraj enc disk is: {ed['encrypted_disk_id']}")
                         enc_disk = self.identifier_to_device(ed['encrypted_disk_id'])
                         if enc_disk:
                             encrypted_disks.append(os.path.join('/dev', enc_disk))
@@ -2114,7 +2118,6 @@ class PassEncVolumeImportTask(StorageMigrateTask):
 
                     encrypted_disks = []
                     for ed in fn9_volume['enc_disks']:
-                        logger.debug(f"suraj enc disk is: {ed['encrypted_disk_id']}")
                         enc_disk = self.identifier_to_device(ed['encrypted_disk_id'])
                         if enc_disk:
                             encrypted_disks.append(os.path.join('/dev', enc_disk))
