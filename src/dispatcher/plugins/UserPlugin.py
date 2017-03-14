@@ -280,8 +280,8 @@ class UserCreateTask(Task):
 
         if user['home'] != '/nonexistent':
             user['home'] = os.path.normpath(user['home'])
-            zfs_dataset_mountpoints = list(self.dispatcher.call_sync('volume.dataset.query', [], {'select': 'mountpoint'}))
-            zfs_pool_mountpoints = list(self.dispatcher.call_sync('volume.query', [], {'select': 'mountpoint'}))
+            zfs_pool_mountpoints = tuple(self.dispatcher.call_sync('volume.query', [], {'select': 'mountpoint'}))
+            homedir_mount_path = os.path.join('/', *(user['home'].split(os.path.sep)[:-1]))
             homedir_occurrence = self.dispatcher.call_sync(
                 'user.query',
                 [('home', '=', user['home'])],
@@ -294,9 +294,7 @@ class UserCreateTask(Task):
                     'ZFS pool mountpoint cannot be set as the home directory.'
                 )
 
-            homedir_mount_path = os.path.join('/', *(user['home'].split(os.path.sep)[:-1]))
-            if not any(homedir_mount_path == dataset_mountpoint
-                       and os.path.ismount(dataset_mountpoint) for dataset_mountpoint in zfs_dataset_mountpoints):
+            if not user['home'].startswith(zfs_pool_mountpoints):
                 raise TaskException(
                     errno.ENXIO,
                     'Home directory has to reside in zfs pool or dataset.' +
@@ -353,12 +351,16 @@ class UserCreateTask(Task):
                     {'single': True}
                 )
 
-                homedir_dataset_id = os.path.join(parent_dataset['id'], user['home'].split(os.path.sep)[-1])
-                self.run_subtask_sync(
-                    'volume.dataset.create',
-                    {'id': homedir_dataset_id, 'type': 'FILESYSTEM', 'volume': parent_dataset['volume']}
-                )
-                os.chmod(user['home'], 0o755)
+                if not parent_dataset:
+                    os.makedirs(user['home'], mode=0o755)
+
+                else:
+                    homedir_dataset_id = os.path.join(parent_dataset['id'], user['home'].split(os.path.sep)[-1])
+                    self.run_subtask_sync(
+                        'volume.dataset.create',
+                        {'id': homedir_dataset_id, 'type': 'FILESYSTEM', 'volume': parent_dataset['volume']}
+                    )
+                    os.chmod(user['home'], 0o755)
 
             else:
                 os.chmod(user['home'], 0o755)
@@ -430,6 +432,8 @@ class UserDeleteTask(Task):
                 )
                 if homedir_dataset:
                     subtasks.append(self.run_subtask('volume.dataset.delete', homedir_dataset['id']))
+                else:
+                    shutil.rmtree(user['home'])
             elif user['home'] not in (None, '/nonexistent') and os.path.exists(user['home']):
                 self.add_warning(TaskWarning(
                     errno.EBUSY,
@@ -561,8 +565,7 @@ class UserUpdateTask(Task):
 
         if 'home' in updated_fields and updated_fields['home'] != '/nonexistent':
             updated_fields['home'] = os.path.normpath(updated_fields['home'])
-            zfs_dataset_mountpoints = list(self.dispatcher.call_sync('volume.dataset.query', [], {'select': 'mountpoint'}))
-            zfs_pool_mountpoints = list(self.dispatcher.call_sync('volume.query', [], {'select': 'mountpoint'}))
+            zfs_pool_mountpoints = tuple(self.dispatcher.call_sync('volume.query', [], {'select': 'mountpoint'}))
             homedir_occurrence = self.dispatcher.call_sync(
                 'user.query',
                 [('home', '=', updated_fields['home'])],
@@ -581,8 +584,7 @@ class UserUpdateTask(Task):
                         'Volume mountpoint cannot be set as the home directory.'
                     )
 
-                if not any(homedir_mount_path == dataset_mountpoint
-                           and os.path.ismount(dataset_mountpoint) for dataset_mountpoint in zfs_dataset_mountpoints):
+                if not updated_fields['home'].startswith(zfs_pool_mountpoints):
                     raise TaskException(
                         errno.ENXIO,
                         'Home directory has to reside in zfs pool or dataset.' +
@@ -602,17 +604,20 @@ class UserUpdateTask(Task):
                         [('mountpoint', '=', homedir_mount_path)],
                         {'single': True}
                     )
+                    if not parent_dataset:
+                        os.makedirs(updated_fields['home'], mode=0o755)
 
-                    homedir_dataset_id = os.path.join(
-                        parent_dataset['id'],
-                        updated_fields['home'].split(os.path.sep)[-1]
-                    )
+                    else:
+                        homedir_dataset_id = os.path.join(
+                            parent_dataset['id'],
+                            updated_fields['home'].split(os.path.sep)[-1]
+                        )
 
-                    self.run_subtask_sync(
-                        'volume.dataset.create',
-                        {'id': homedir_dataset_id, 'type': 'FILESYSTEM', 'volume': parent_dataset['volume']}
-                    )
-                    os.chmod(updated_fields['home'], 0o755)
+                        self.run_subtask_sync(
+                            'volume.dataset.create',
+                            {'id': homedir_dataset_id, 'type': 'FILESYSTEM', 'volume': parent_dataset['volume']}
+                        )
+                        os.chmod(updated_fields['home'], 0o755)
 
                 else:
                     os.chmod(updated_fields['home'], 0o755)
