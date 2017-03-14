@@ -600,6 +600,38 @@ class VMBaseTask(ProgressTask):
         if progress_cb:
             progress_cb(100, 'Initializing VM files')
 
+    def regenerate_template_files(self, vm):
+        template = vm.get('template')
+        if not template:
+            return
+
+        vm_root = self.dispatcher.call_sync('vm.get_vm_root', vm['id'], False)
+
+        dest_root = self.dispatcher.call_sync('vm.datastore.get_filesystem_path', vm['target'], vm_root)
+
+        if template.get('files'):
+            source_root = os.path.join(template['path'], 'files')
+            files_root = self.dispatcher.call_sync(
+                'vm.datastore.get_filesystem_path',
+                vm['target'],
+                os.path.join(vm_root, 'files')
+            )
+
+            for root, dirs, files in os.walk(source_root):
+                r = os.path.relpath(root, source_root)
+
+                for f in files:
+                    name, ext = os.path.splitext(f)
+                    if ext == '.in':
+                        process_template(os.path.join(root, f), os.path.join(files_root, r, name), **{
+                            'VM_ROOT': dest_root
+                        })
+                    else:
+                        shutil.copyfile(os.path.join(root, f), os.path.join(files_root, r, f))
+
+                for d in dirs:
+                    os.makedirs(os.path.join(files_root, r, d), exist_ok=True)
+
     def create_device(self, vm, res, progress_cb=None):
         if progress_cb:
             progress_cb(0, 'Creating {0}'.format(res['type'].lower()))
@@ -1299,6 +1331,9 @@ class VMUpdateTask(VMBaseTask):
             self.run_subtask_sync('vm.stop', id)
 
         self.datastore.update('vms', id, vm)
+        if q.get(vm, 'config.bootloader') == 'GRUB':
+            self.regenerate_template_files(vm)
+
         self.dispatcher.dispatch_event('vm.changed', {
             'operation': 'update',
             'ids': [id]
