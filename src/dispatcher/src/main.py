@@ -1557,7 +1557,7 @@ def run(d, args):
     d.port = args.p
     d.init()
 
-    if args.s:
+    if args.s and d.configstore.get('system.debug.ui'):
         # Debugging frontend server
         from frontend import frontend
 
