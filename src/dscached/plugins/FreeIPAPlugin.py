@@ -32,6 +32,7 @@ import ldap3.utils.dn
 import logging
 import errno
 import krb5
+import ssl
 from threading import Thread, Condition
 from datetime import datetime
 from plugin import DirectoryServicePlugin, DirectoryState
@@ -68,6 +69,7 @@ class FreeIPAPlugin(DirectoryServicePlugin):
         self.directory = None
         self.bind_thread = Thread(target=self.bind, daemon=True)
         self.enabled = False
+        self.start_tls = False
         self.cv = Condition()
         self.bind_thread.start()
 
@@ -105,7 +107,9 @@ class FreeIPAPlugin(DirectoryServicePlugin):
             'username': '',
             'password': '',
             'user_suffix': 'cn=users,cn=accounts',
-            'group_suffix': 'cn=groups,cn=accounts'
+            'group_suffix': 'cn=groups,cn=accounts',
+            'encryption': 'NONE',
+            'verify_certificate': True
         })
 
     def convert_user(self, entry):
@@ -191,17 +195,14 @@ class FreeIPAPlugin(DirectoryServicePlugin):
         return (self.convert_user(i) for i in result)
 
     def getpwnam(self, name):
-        logger.debug('getpwnam(name={0})'.format(name))
         user = self.search_one(join_dn('uid={0}'.format(name), self.user_dn), '(objectclass=posixAccount)')
         return self.convert_user(user)
 
     def getpwuuid(self, id):
-        logger.debug('getpwuuid(uuid={0})'.format(id))
         user = self.search_one(self.user_dn, '(ipaUniqueID={0})'.format(id))
         return self.convert_user(user)
 
     def getpwuid(self, uid):
-        logger.debug('getpwuid(uid={0})'.format(uid))
         user = self.search_one(self.user_dn, '(uidNumber={0})'.format(uid))
         return self.convert_user(user)
 
@@ -211,17 +212,14 @@ class FreeIPAPlugin(DirectoryServicePlugin):
         return (self.convert_group(i) for i in result)
 
     def getgrnam(self, name):
-        logger.debug('getgrnam(name={0})'.format(name))
         group = self.search_one(join_dn('cn={0}'.format(name), self.group_dn), '(objectclass=posixGroup)')
         return self.convert_group(group)
 
     def getgruuid(self, id):
-        logger.debug('getgruuid(uuid={0})'.format(id))
         group = self.search_one(self.group_dn, '(ipaUniqueID={0})'.format(id))
         return self.convert_group(group)
 
     def getgrgid(self, gid):
-        logger.debug('getgrgid(gid={0})'.format(gid))
         group = self.search_one(self.group_dn, '(gidNumber={0})'.format(gid))
         return self.convert_group(group)
 
@@ -239,6 +237,26 @@ class FreeIPAPlugin(DirectoryServicePlugin):
         return self.parameters['realm']
 
     def bind(self):
+        def create_args(params):
+            validate = ssl.CERT_REQUIRED if params.get('verify_certificate', False) else ssl.CERT_NONE
+
+            if params['encryption'] == 'OFF':
+                return {}
+
+            if params['encryption'] == 'SSL':
+                tls = ldap3.Tls(validate=validate)
+                return {
+                    'port': 636,
+                    'use_ssl': True,
+                    'tls': tls
+                }
+
+            if params['encryption'] == 'TLS':
+                tls = ldap3.Tls(validate=validate)
+                return {
+                    'tls': tls
+                }
+
         while True:
             with self.cv:
                 notify = self.cv.wait(60)
@@ -260,13 +278,18 @@ class FreeIPAPlugin(DirectoryServicePlugin):
 
                     try:
                         self.directory.put_state(DirectoryState.JOINING)
-                        self.servers = [ldap3.Server(i) for i in self.ldap_addresses]
+                        self.servers = [ldap3.Server(i, **create_args(self.parameters)) for i in self.ldap_addresses]
                         self.conn = ldap3.Connection(
                             self.servers,
                             client_strategy='ASYNC',
                             authentication=ldap3.SASL,
                             sasl_mechanism='GSSAPI'
                         )
+
+                        if self.parameters['encryption'] == 'TLS':
+                            logger.debug('Performing STARTTLS...')
+                            self.conn.open()
+                            self.conn.start_tls()
 
                         self.conn.bind()
                         self.directory.put_state(DirectoryState.BOUND)
@@ -321,9 +344,10 @@ def _init(context):
             'group_suffix': {'type': ['string', 'null']},
             'encryption': {
                 'type': 'string',
-                'enum': ['NONE', 'SSL', 'TLS']
+                'enum': ['OFF', 'SSL', 'TLS']
             },
-            'certificate': {'type': ['string', 'null']}
+            'certificate': {'type': ['string', 'null']},
+            'verify_certificate': {'type': 'boolean'}
         }
     })
 
