@@ -211,6 +211,9 @@ class BackupQueryTask(ProgressTask):
         except ValueError:
             raise TaskException(errno.EINVAL, 'Invalid backup manifest')
 
+        for snap in manifest.get('snapshots', []):
+            snap['created_at'] = datetime.utcfromtimestamp(snap.get('created_at', 0))
+
         return manifest
 
 
