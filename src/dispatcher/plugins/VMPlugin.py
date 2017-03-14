@@ -1836,6 +1836,9 @@ class VMSnapshotDeleteTask(VMSnapshotBaseTask):
             'ids': [id]
         })
 
+        if not self.dispatcher.call_sync('vm.datastore.query', [('id', '=', datastore)], {'count': True}):
+            return
+
         devices = snapshot['parent']['devices']
 
         for d in list(devices):
