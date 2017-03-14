@@ -1596,7 +1596,10 @@ class ReplicationGetLatestLinkTask(ReplicationBaseTask):
         remote_link = None
         latest_link = local_link
 
-        is_master, remote = self.get_replication_state(local_link)
+        try:
+            is_master, remote = self.get_replication_state(local_link)
+        except RpcException:
+            return local_link
 
         try:
             client = get_freenas_peer_client(self, remote)
