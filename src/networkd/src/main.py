@@ -215,6 +215,9 @@ class RoutingSocketEventSource(threading.Thread):
                     self.context.interface_detached(message.interface)
                     self.client.emit_event('network.interface.detached', args)
 
+                # Interface arrival event might come before interface is fully instantiated.
+                time.sleep(0.1)
+
                 self.build_cache()
 
             if type(message) is netif.InterfaceInfoMessage:
