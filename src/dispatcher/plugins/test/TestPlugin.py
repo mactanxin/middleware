@@ -38,6 +38,7 @@ from freenas.utils import query as q
 from freenas.utils.lazy import lazy
 from freenas.serviced import push_status
 
+
 logger = logging.getLogger('TestPlugin')
 
 
@@ -116,6 +117,12 @@ class TestProvider(Provider):
             push_status(msg, extra=extra)
         except:
             pass
+
+    def nested_fd(self, data):
+        fd = data['file_descriptor']
+        assert isinstance(fd, FileDescriptor)
+        with os.fdopen(fd.fd, 'wb') as f:
+            f.write(b'hello\n')
 
 
 @description('Downloads tests')
@@ -265,6 +272,44 @@ class TestAbortSubtask(Task):
         time.sleep(20)
 
 
+class TestNestedFdTask(Task):
+    @classmethod
+    def early_describe(cls):
+        return 'Nested fd passing test'
+
+    def describe(self, data):
+        return TaskDescription('Nested fd passing test')
+
+    def verify(self, data):
+        return []
+
+    def run(self, data):
+        fd = data['file_descriptor']
+        assert isinstance(fd, FileDescriptor)
+        with os.fdopen(fd.fd, 'wb') as f:
+            f.write(b'hello\n')
+
+
+class TestNestedFdSubTask(Task):
+    @classmethod
+    def early_describe(cls):
+        return 'Nested fd passing subtask test'
+
+    def describe(self):
+        return TaskDescription('Nested fd passing subtask test')
+
+    def verify(self):
+        return []
+
+    def run(self):
+        r, w = os.pipe()
+        self.run_subtask_sync('test.nested_fd', {
+            'file_descriptor': FileDescriptor(w)
+        })
+
+        return os.read(r, 1024).decode('utf-8')
+
+
 def _init(dispatcher, plugin):
     plugin.register_provider("test", TestProvider)
     plugin.register_task_handler('test.test_download', TestDownloadTask)
@@ -275,3 +320,5 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('test.unreasonable_error', UnreasonableErrorTask)
     plugin.register_task_handler('test.abort', TestAbortTask)
     plugin.register_task_handler('test.abort.subtask', TestAbortSubtask)
+    plugin.register_task_handler('test.nested_fd', TestNestedFdTask)
+    plugin.register_task_handler('test.nested_fd_subtask', TestNestedFdSubTask)

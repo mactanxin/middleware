@@ -190,6 +190,7 @@ class SystemAdvancedProvider(Provider):
             'powerd': cs.get('service.powerd.enable'),
             'swapondrive': cs.get('system.swapondrive'),
             'debugkernel': cs.get('system.debug.kernel'),
+            'debugui': cs.get('system.debug.ui'),
             'uploadcrash': cs.get('system.upload_crash'),
             'home_directory_root': cs.get('system.home_directory_root'),
             'motd': cs.get('system.motd'),
@@ -381,6 +382,9 @@ class SystemAdvancedConfigureTask(Task):
             if 'debugkernel' in props:
                 cs.set('system.debug.kernel', props['debugkernel'])
                 loader = True
+
+            if 'debugui' in props:
+                cs.set('system.debug.ui', props['debugui'])
 
             if 'uploadcrash' in props:
                 cs.set('system.upload_crash', props['uploadcrash'])
@@ -683,6 +687,7 @@ def _init(dispatcher, plugin):
             'powerd': {'type': 'boolean'},
             'swapondrive': {'type': 'integer'},
             'debugkernel': {'type': 'boolean'},
+            'debugui': {'type': 'boolean'},
             'uploadcrash': {'type': 'boolean'},
             'home_directory_root': {'type': ['string', 'null']},
             'motd': {'type': 'string'},

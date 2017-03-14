@@ -729,7 +729,7 @@ class VirtualMachine(object):
                         close_fds=True
                     )
 
-            if self.config['bootloader'] not in ['UEFI', 'UEFI_CSM']:
+            if self.config['bootloader'] not in ('UEFI', 'UEFI_CSM'):
                 out, err = self.bhyve_process.communicate()
                 self.bhyve_process.wait()
                 self.logger.debug('bhyveload: {0}'.format(out))

@@ -3492,7 +3492,7 @@ def _init(dispatcher, plugin):
 
     plugin.register_schema_definition('VolumePropertySource', {
         'type': 'string',
-        'enum': ['NONE', 'DEFAULT', 'LOCAL', 'INHERITED']
+        'enum': ['NONE', 'DEFAULT', 'LOCAL', 'INHERITED', 'RECEIVED']
     })
 
     plugin.register_schema_definition('VolumeEncryption', {

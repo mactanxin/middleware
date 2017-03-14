@@ -314,6 +314,7 @@
                 }
             },
             "system.debug.kernel": false,
+            "system.debug.ui": false,
             "system.language": "en",
             "system.serial.console": false,
             "system.serial.port": null,

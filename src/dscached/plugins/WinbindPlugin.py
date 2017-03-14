@@ -467,8 +467,6 @@ class WinbindPlugin(DirectoryServicePlugin):
         return (self.convert_user(i) for i in results)
 
     def getpwuid(self, uid):
-        logger.debug('getpwuid(uid={0})'.format(uid))
-
         if not self.is_joined():
             logger.debug('getpwuid: not joined')
             return
@@ -481,7 +479,6 @@ class WinbindPlugin(DirectoryServicePlugin):
         return self.convert_user(self.search_one(self.base_dn, '(objectSid={0})'.format(usid)))
 
     def getpwuuid(self, id):
-        logger.debug('getpwuuid(uuid={0})'.format(id))
         if not self.is_joined():
             logger.debug('getpwuuid: not joined')
             return
@@ -490,8 +487,6 @@ class WinbindPlugin(DirectoryServicePlugin):
         return self.convert_user(self.search_one(self.base_dn, '(objectGUID={0})'.format(guid)))
 
     def getpwnam(self, name):
-        logger.debug('getpwnam(name={0})'.format(name))
-
         if '\\' in name:
             domain, name = name.split('\\', 1)
             if domain != self.domain_name:
@@ -516,8 +511,6 @@ class WinbindPlugin(DirectoryServicePlugin):
         return (self.convert_group(i) for i in results)
 
     def getgrnam(self, name):
-        logger.debug('getgrnam(name={0})'.format(name))
-
         if '\\' in name:
             domain, name = name.split('\\', 1)
             if domain != self.domain_name:
@@ -530,7 +523,6 @@ class WinbindPlugin(DirectoryServicePlugin):
         return self.convert_group(self.search_one(self.base_dn, '(sAMAccountName={0})'.format(name)))
 
     def getgruuid(self, id):
-        logger.debug('getgruuid(uuid={0})'.format(id))
         if not self.is_joined():
             logger.debug('getgruuid: not joined')
             return
@@ -539,7 +531,6 @@ class WinbindPlugin(DirectoryServicePlugin):
         return self.convert_group(self.search_one(self.base_dn, '(objectGUID={0})'.format(guid)))
 
     def getgrgid(self, gid):
-        logger.debug('getgrgid(gid={0})'.format(gid))
         if not self.is_joined():
             logger.debug('getgrgid: not joined')
             return

@@ -26,6 +26,8 @@
 #####################################################################
 import os
 import glob
+import shutil
+from pathlib import Path
 
 
 def run(context):
@@ -46,6 +48,45 @@ def run(context):
 
     if datastore_certs_to_create:
         generate_cert_files(context, datastore_certs_to_create)
+
+    update_installed_certs(datastore_certs)
+
+
+def update_installed_certs(certs):
+    """Installs/Removes system-wide OpenSSL certificates by modyfing the /usr/local/share/certs/ca-root-nss.crt file"""
+    certs_filepath = '/usr/local/share/certs/ca-root-nss.crt'
+    backup_filepath = certs_filepath + '.bak'
+    certs_file = Path(certs_filepath)
+    backup_file = Path(backup_filepath)
+    def _update_certs():
+        cert_begin_line = 'BEGIN CERTIFICATE'
+        summary_line = '##  Number of certificates: '
+        eof_line = '##  End of file.\n'
+        separator = '\n\n\n'
+        count = 0
+        with certs_file.open('w', encoding='iso-8859-1') as o, backup_file.open('r', encoding='iso-8859-1') as i:
+            for line in i:
+                if summary_line in line:
+                    for c in certs:
+                        if c.get('certificate'):
+                            o.write(c['certificate'])
+                            o.write(separator)
+                            count += 1
+                    o.write(summary_line + '{0}\n'.format(count))
+                    o.write(eof_line)
+                    return
+                else:
+                    count += 1 if cert_begin_line in line else 0
+                    o.write(line)
+
+    if not backup_file.exists():
+        shutil.copy2(certs_file, backup_file)
+
+    if not certs:
+        shutil.copy2(backup_file, certs_file)
+        return
+
+    _update_certs()
 
 
 def get_cert_files_short_names_and_abs_paths():

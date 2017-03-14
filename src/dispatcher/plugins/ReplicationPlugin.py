@@ -183,7 +183,8 @@ class ReplicationLinkProvider(Provider):
 
     @private
     def local_datasets_from_link(self, link):
-        is_master, _ = self.get_replication_state(link)
+        hostid = self.dispatcher.call_sync('system.info.host_uuid')
+        is_master = link['master'] == hostid
         datasets = []
         for dataset in iterate_datasets(link['datasets'], is_master, local=True):
             if link['recursive']:
@@ -304,7 +305,8 @@ class ReplicationBaseTask(ProgressTask):
             self.dispatcher.call_sync('replication.local_datasets_from_link', link),
             select='name'
         )
-        is_master, remote = self.get_replication_state(link)
+        hostid = self.dispatcher.call_sync('system.info.host_uuid')
+        is_master = link['master'] == hostid
 
         links = self.dispatcher.call_sync('replication.sync_query', [('name', '!=', link['name'])])
         for dataset in datasets:
@@ -313,7 +315,7 @@ class ReplicationBaseTask(ProgressTask):
                     self.dispatcher.call_sync('replication.local_datasets_from_link', l),
                     select='name'
                 )
-                l_is_master, remote = self.get_replication_state(l)
+                l_is_master = l['master'] == hostid
 
                 if dataset in l_datasets:
                     if l['bidirectional'] or link['bidirectional']:
@@ -615,7 +617,7 @@ class ReplicationDeleteTask(ReplicationBaseTask):
         return TaskDescription("Deleting the replication link {name}", name=name or '')
 
     def verify(self, id, scrub=False):
-        return ['replication']
+        return [f'replication:{id}']
 
     def run(self, id, scrub=False):
         if not self.datastore.exists('replication.links', ('id', '=', id)):
@@ -1596,7 +1598,10 @@ class ReplicationGetLatestLinkTask(ReplicationBaseTask):
         remote_link = None
         latest_link = local_link
 
-        is_master, remote = self.get_replication_state(local_link)
+        try:
+            is_master, remote = self.get_replication_state(local_link)
+        except RpcException:
+            return local_link
 
         try:
             client = get_freenas_peer_client(self, remote)
@@ -2025,7 +2030,8 @@ def _init(dispatcher, plugin):
                 else:
                     continue
 
-                is_master, _ = dispatcher.call_sync('replication.get_replication_state', link)
+                hostid = dispatcher.call_sync('system.info.host_uuid')
+                is_master = link['master'] == hostid
                 recover = link['auto_recover'] and link['initial_master'] != link['master'] and not is_master
                 if (last_status and last_status['status'] == 'FAILED') and recover:
                     dispatcher.call_task_sync(
