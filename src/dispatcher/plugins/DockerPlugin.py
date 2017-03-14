@@ -1931,8 +1931,11 @@ def normalize_image_name(name):
     return name
 
 
-def refresh_database_cache(dispatcher, collection, event, query, lock, host_id=None):
+def refresh_database_cache(dispatcher, collection, event, query, lock, ids=None, host_id=None, rename_cache=None):
     filter = []
+    if ids:
+        filter.append(('id', 'in', ids))
+
     if host_id:
         filter.append(('host', '=', host_id))
     else:
@@ -1944,50 +1947,98 @@ def refresh_database_cache(dispatcher, collection, event, query, lock, host_id=N
         old = dispatcher.datastore_log.query(collection, *filter)
         created = []
         updated = []
+        renamed = []
         deleted = []
         for obj in map(lambda o: exclude(o, 'running', 'health'), current):
             old_obj = first_or_default(lambda o: o['id'] == obj['id'], old)
-            if not dispatcher.datastore_log.exists(collection, ('id', '=', obj['id'])):
-                dispatcher.datastore_log.insert(collection, obj)
-                created.append(obj['id'])
-            else:
+            new_id = obj['id']
+            changed = True
+
+            if dispatcher.datastore_log.exists(collection, ('id', '=', new_id)):
                 if obj != old_obj:
-                    dispatcher.datastore_log.update(collection, obj['id'], obj)
-                    updated.append(obj['id'])
+                    updated.append(new_id)
+                else:
+                    changed = False
+            else:
+                if rename_cache:
+                    name = q.get(obj, 'names.0')
+                    old_id = rename_cache.get(name)
+
+                    if old_id:
+                        renamed.append([old_id, new_id])
+                        rename_cache.remove(name)
+                        updated.append(new_id)
+                        continue
+
+                created.append(new_id)
+
+            if changed:
+                dispatcher.datastore_log.update(collection, new_id, obj, upsert=True)
 
         for obj in old:
-            if not first_or_default(lambda o: o['id'] == obj['id'], current):
-                dispatcher.datastore_log.delete(collection, obj['id'])
-                deleted.append(obj['id'])
+            old_id = obj['id']
+            if not first_or_default(lambda o: o['id'] == old_id, current):
+                if dispatcher.datastore_log.exists(collection, ('id', '=', old_id)):
+                    dispatcher.datastore_log.delete(collection, obj['id'])
+                    if not rename_cache or not rename_cache.get(old_id):
+                        deleted.append(obj['id'])
 
-        if created:
+        if rename_cache:
+            for old_id, new_id in renamed:
+                rename_cache.remove(old_id)
+
+        if renamed:
+            logger.trace(f'Renamed in {collection}: {renamed}')
             dispatcher.dispatch_event(event, {
-                'operation': 'create',
-                'ids': created
+                'operation': 'rename',
+                'ids': renamed
             })
 
         if updated:
+            logger.trace(f'Updated in {collection}: {updated}')
             dispatcher.dispatch_event(event, {
                 'operation': 'update',
                 'ids': updated
             })
 
+        if created:
+            logger.trace(f'Created in {collection}: {created}')
+            dispatcher.dispatch_event(event, {
+                'operation': 'create',
+                'ids': created
+            })
+
         if deleted:
+            logger.trace(f'Deleted in {collection}: {deleted}')
             dispatcher.dispatch_event(event, {
                 'operation': 'delete',
                 'ids': deleted
             })
 
 
-def refresh_networks(dispatcher, host_id=None):
+def refresh_networks(dispatcher, ids=None, host_id=None):
     refresh_database_cache(
-        dispatcher, 'docker.networks', 'docker.network.changed', NETWORKS_QUERY, networks_lock, host_id
+        dispatcher=dispatcher,
+        collection='docker.networks',
+        event='docker.network.changed',
+        query=NETWORKS_QUERY,
+        lock=networks_lock,
+        ids=ids,
+        host_id=host_id,
+        rename_cache=None
     )
 
 
-def refresh_containers(dispatcher, host_id=None):
+def refresh_containers(dispatcher, ids=None, host_id=None):
     refresh_database_cache(
-        dispatcher, 'docker.containers', 'docker.container.changed', CONTAINERS_QUERY, containers_lock, host_id
+        dispatcher=dispatcher,
+        collection='docker.containers',
+        event='docker.container.changed',
+        query=CONTAINERS_QUERY,
+        lock=containers_lock,
+        ids=ids,
+        host_id=host_id,
+        rename_cache=containers_rename_cache
     )
 
 
@@ -2011,12 +2062,12 @@ def sync_images(dispatcher, ids=None, host_id=None):
             images.remove_many(nonexistent_ids)
 
 
-def refresh_cache(dispatcher, host_id=None):
+def refresh_cache(dispatcher, ids=None, host_id=None):
     logger.trace('Syncing Docker containers, networks, image cache')
 
-    sync_images(dispatcher, host_id=host_id)
-    refresh_containers(dispatcher, host_id=host_id)
-    refresh_networks(dispatcher, host_id=host_id)
+    sync_images(dispatcher, ids=ids, host_id=host_id)
+    refresh_containers(dispatcher, ids=ids, host_id=host_id)
+    refresh_networks(dispatcher, ids=ids, host_id=host_id)
 
     if not images.ready:
         logger.trace('Docker images cache initialized')
@@ -2061,16 +2112,7 @@ def _init(dispatcher, plugin):
     def on_host_event(args):
         if args['operation'] == 'create':
             for host_id in args['ids']:
-                refresh_containers(dispatcher, host_id)
-                refresh_networks(dispatcher, host_id)
-
-                new_images = list(dispatcher.call_sync(
-                    IMAGES_QUERY,
-                    [('hosts', 'contains', host_id)], {'select': 'id'}
-                ))
-                if new_images:
-                    sync_images(dispatcher, new_images)
-
+                refresh_cache(dispatcher, host_id=host_id)
                 logger.debug('Docker host {0} started'.format(host_id))
 
         elif args['operation'] == 'delete':
@@ -2208,12 +2250,8 @@ def _init(dispatcher, plugin):
 
     def on_container_event(args):
         logger.trace('Received Docker container event: {}'.format(args))
-
-        collection = 'docker.containers'
-        event = 'docker.container.changed'
-
-        with containers_lock:
-            if args['ids']:
+        if args['ids']:
+            with containers_lock:
                 for id in args['ids']:
                     if args['operation'] in ('create', 'update'):
                         state = list(dispatcher.call_sync(
@@ -2230,85 +2268,13 @@ def _init(dispatcher, plugin):
                     else:
                         containers_state.remove(id)
 
-                if args['operation'] == 'delete':
-                    ids = []
-                    for i in args['ids']:
-                        dispatcher.datastore_log.delete(collection, i)
-
-                        if not containers_rename_cache.get(i):
-                            ids.append(i)
-                            containers_rename_cache.remove(i)
-
-                    if ids:
-                        dispatcher.dispatch_event(event, {
-                            'operation': 'delete',
-                            'ids': ids
-                        })
-                else:
-                    objs = dispatcher.call_sync(CONTAINERS_QUERY, [('id', 'in', args['ids'])])
-                    ids = []
-                    ids_rename = []
-                    for obj in map(lambda o: exclude(o, 'running', 'health'), objs):
-                        id = q.get(obj, 'id')
-                        if args['operation'] == 'create':
-                            dispatcher.datastore_log.insert(collection, obj)
-
-                            name = q.get(obj, 'names.0')
-                            old_id = containers_rename_cache.get(name)
-                            if old_id:
-                                ids_rename.append([old_id, id])
-                                containers_rename_cache.remove(name)
-                            else:
-                                ids.append(id)
-
-                        else:
-                            dispatcher.datastore_log.update(collection, obj['id'], obj)
-                            ids.append(id)
-
-                    if ids:
-                        dispatcher.dispatch_event(event, {
-                            'operation': args['operation'],
-                            'ids': ids
-                        })
-
-                    if ids_rename:
-                        dispatcher.dispatch_event(event, {
-                            'operation': 'rename',
-                            'ids': ids_rename
-                        })
-                        dispatcher.dispatch_event(event, {
-                            'operation': 'update',
-                            'ids': [i[1] for i in ids_rename]
-                        })
+                refresh_containers(dispatcher, ids=args['ids'])
 
     def on_network_event(args):
         logger.trace('Received Docker network event: {}'.format(args))
-
-        collection = 'docker.networks'
-        event = 'docker.network.changed'
-
-        with networks_lock:
-            if args['ids']:
-                if args['operation'] == 'delete':
-                    for i in args['ids']:
-                        dispatcher.datastore_log.delete(collection, i)
-
-                    dispatcher.dispatch_event(event, {
-                        'operation': 'delete',
-                        'ids': args['ids']
-                    })
-                else:
-                    objs = dispatcher.call_sync(NETWORKS_QUERY, [('id', 'in', args['ids'])])
-                    for obj in objs:
-                        if args['operation'] == 'create':
-                            dispatcher.datastore_log.insert(collection, obj)
-                        else:
-                            dispatcher.datastore_log.update(collection, obj['id'], obj)
-
-                        dispatcher.dispatch_event(event, {
-                            'operation': args['operation'],
-                            'ids': args['ids']
-                        })
+        if args['ids']:
+            with networks_lock:
+                refresh_networks(dispatcher, ids=args['ids'])
 
     plugin.register_provider('docker.config', DockerConfigProvider)
     plugin.register_provider('docker.host', DockerHostProvider)
