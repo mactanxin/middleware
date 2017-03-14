@@ -915,7 +915,7 @@ class ExportedVolumeDestroyTask(Task):
         return TaskDescription("Destroying an exported volume {name}", name=id)
 
     def verify(self, id):
-        disks = self.dispatcher.call_sync('disk.query', {'select': 'path'})
+        disks = self.dispatcher.call_sync('disk.query', {'select': 'id'})
         return ['disk:{0}'.format(d) for d in disks]
 
     def run(self, id):
@@ -1259,7 +1259,14 @@ class VolumeImportTask(Task):
             else:
                 if isinstance(disks, str):
                     disks = [disks]
-                return ['disk:{0}'.format(i) for i in disks]
+
+                result = []
+                for d in disks:
+                    try:
+                        result.append('disk:{}'.format(self.dispatcher.call_sync('disk.path_to_id', d)))
+                    except RpcException:
+                        pass
+                return result
         else:
             return self.verify_subtask('zfs.pool.import', id, new_name)
 
