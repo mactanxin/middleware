@@ -617,7 +617,7 @@ class ReplicationDeleteTask(ReplicationBaseTask):
         return TaskDescription("Deleting the replication link {name}", name=name or '')
 
     def verify(self, id, scrub=False):
-        return ['replication']
+        return [f'replication:{id}']
 
     def run(self, id, scrub=False):
         if not self.datastore.exists('replication.links', ('id', '=', id)):
