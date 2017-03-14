@@ -626,33 +626,39 @@ class ReplicationDeleteTask(ReplicationBaseTask):
         name = self.datastore.query('replication.links', ('id', '=', id), select='name', single=True)
 
         link = self.run_subtask_sync('replication.get_latest_link', name)
-        is_master, remote = self.get_replication_state(link)
+        remote = None
+        is_master = False
+        try:
+            is_master, remote = self.get_replication_state(link)
+        except RpcException:
+            pass
         remote_client = None
 
-        try:
-            remote_client = get_freenas_peer_client(self, remote)
-        except TaskException as e:
-            self.add_warning(TaskWarning(
-                e.code,
-                'Remote is unreachable. Delete operation is being performed only locally.'
-            ))
+        if remote:
+            try:
+                remote_client = get_freenas_peer_client(self, remote)
+            except TaskException as e:
+                self.add_warning(TaskWarning(
+                    e.code,
+                    'Remote is unreachable. Delete operation is being performed only locally.'
+                ))
 
-        if not is_master:
-            for service in ['shares', 'vms']:
-                for reserved_item in self.dispatcher.call_sync('replication.get_reserved_{0}'.format(service), name):
-                    self.run_subtask_sync(
-                        '{0}.export'.format(service),
-                        reserved_item['id']
-                    )
+            if not is_master:
+                for service in ['shares', 'vms']:
+                    for reserved_item in self.dispatcher.call_sync('replication.get_reserved_{0}'.format(service), name):
+                        self.run_subtask_sync(
+                            '{0}.export'.format(service),
+                            reserved_item['id']
+                        )
 
-            if scrub:
-                with self.dispatcher.get_lock('volumes'):
-                    datasets = reversed(self.dispatcher.call_sync('replication.local_datasets_from_link', link))
-                    for dataset in datasets:
-                        if len(dataset['name'].split('/')) == 1:
-                            self.run_subtask_sync('volume.delete', dataset['name'])
-                        else:
-                            self.run_subtask_sync('volume.dataset.delete', dataset['name'])
+                if scrub:
+                    with self.dispatcher.get_lock('volumes'):
+                        datasets = reversed(self.dispatcher.call_sync('replication.local_datasets_from_link', link))
+                        for dataset in datasets:
+                            if len(dataset['name'].split('/')) == 1:
+                                self.run_subtask_sync('volume.delete', dataset['name'])
+                            else:
+                                self.run_subtask_sync('volume.dataset.delete', dataset['name'])
 
         self.datastore.delete('replication.links', link['id'])
         self.dispatcher.call_sync('replication.link_cache_remove', link['name'])
