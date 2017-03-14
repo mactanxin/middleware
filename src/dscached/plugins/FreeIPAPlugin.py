@@ -272,6 +272,7 @@ class FreeIPAPlugin(DirectoryServicePlugin):
                         self.directory.put_state(DirectoryState.BOUND)
                         continue
                     except BaseException as err:
+                        logger.debug('Failure details', exc_info=True)
                         self.directory.put_status(errno.ENXIO, '{0} <{1}>'.format(str(err), type(err).__name__))
                         self.directory.put_state(DirectoryState.FAILURE)
                         continue
