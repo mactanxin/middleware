@@ -73,9 +73,14 @@ class ISCSISharesProvider(Provider):
     def get_connected_clients(self, share_name=None):
         handle = ctl.CTL()
         result = []
+        base_name = self.configstore.get('service.iscsi.base_name')
+
         for conn in handle.iscsi_connections:
             # Add entry for every lun mapped in this target
             target = self.datastore.get_by_id('iscsi.targets', conn.target)
+            if not target:
+                target = self.datastore.get_by_id('iscsi.targets', f'{base_name}:{conn.target}')
+
             if not target:
                 continue
 
