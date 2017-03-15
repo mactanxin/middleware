@@ -76,6 +76,9 @@ class ISCSISharesProvider(Provider):
         for conn in handle.iscsi_connections:
             # Add entry for every lun mapped in this target
             target = self.datastore.get_by_id('iscsi.targets', conn.target)
+            if not target:
+                continue
+
             for lun in target['extents']:
                 result.append({
                     'host': conn.initiator_address,
