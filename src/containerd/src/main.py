@@ -638,7 +638,12 @@ class VirtualMachine(object):
                 except ProcessLookupError:
                     self.logger.warning('bhyve process is already dead')
 
-        self.thread.join(timeout=60)
+        try:
+            self.thread.get(timeout=60)
+        except gevent.Timeout:
+            raise RpcException(errno.ETIMEDOUT, f'Timeout while waiting for VM to stop')
+        except BaseException as err:
+            raise RpcException(errno.EFAULT, f'Cannot stop VM: {err}')
 
         # Clear console
         gevent.kill(self.console_thread)
