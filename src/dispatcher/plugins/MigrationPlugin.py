@@ -2147,9 +2147,9 @@ class PassEncVolumeImportTask(StorageMigrateTask):
 
 
 @description("Master top level migration task for 9.x to 10.x")
-@accepts(h.one_of(bool, None))
+@accepts(h.one_of(bool, None), h.one_of(bool, None))
 class MasterMigrateTask(ProgressTask):
-    def __init__(self, dispatcher, second_run=False):
+    def __init__(self, dispatcher, second_run=False, ignore_encrypted_volumes=False):
         super(MasterMigrateTask, self).__init__(dispatcher)
         self.status = 'STARTED'
         self.apps_migrated = []
@@ -2238,10 +2238,13 @@ class MasterMigrateTask(ProgressTask):
     def early_describe(cls):
         return "Migration of FreeNAS 9.x settings to 10"
 
-    def describe(self, second_run=False):
+    def describe(self, second_run=False, ignore_encrypted_volumes=False):
         desc = "Migration of FreeNAS 9.x settings to 10"
         if second_run:
-            desc = "Resuming FreeNAS 9.x to 10 settings migration post unlocking of passphrase encrypted volumes"
+            if ignore_encrypted_volumes:
+                desc = "Resuming FreeNAS 9.x to 10 settings migration (ignoring passphrase encrypted volumes)"
+            else:
+                desc = "Resuming FreeNAS 9.x to 10 settings migration post unlocking of passphrase encrypted volumes"
         return TaskDescription(desc)
 
     def migration_progess(self, progress, message):
@@ -2270,10 +2273,10 @@ class MasterMigrateTask(ProgressTask):
                 err.code, f'Failed to successfully migrate: {app} due to {err}'
             ))
 
-    def verify(self, second_run=False):
+    def verify(self, second_run=False, ignore_encrypted_volumes=False):
         return ['root']
 
-    def run(self, second_run=False):
+    def run(self, second_run=False, ignore_encrypted_volumes=False):
         try:
             self.migration_progess(0, 'Starting migration from 9.x database to 10.x')
 
@@ -2298,33 +2301,40 @@ class MasterMigrateTask(ProgressTask):
                 for app, task_tuple in self.critical_migrations.items():
                     self.migration_task_routine(app, task_tuple)
 
-            # check if the passphrase encrypted volumes are imported into the system
-            fn10_vols = list(self.dispatcher.call_sync('volume.query'))
-            vols_left_to_import = []
+            if not ignore_encrypted_volumes:
+                # check if the passphrase encrypted volumes are imported into the system
+                fn10_vols = list(self.dispatcher.call_sync('volume.query'))
+                vols_left_to_import = []
 
-            for fn9_volume in get_table('select * from storage_volume').values():
-                if (
-                    fn9_volume['vol_encrypt'] > 1 and
-                    q.query(fn10_vols, ('guid', '=', fn9_volume['vol_guid']), single=True) is None
-                ):
-                    vols_left_to_import.append(fn9_volume['vol_name'])
+                for fn9_volume in get_table('select * from storage_volume').values():
+                    if (
+                        fn9_volume['vol_encrypt'] > 1 and
+                        q.query(fn10_vols, ('guid', '=', fn9_volume['vol_guid']), single=True) is None
+                    ):
+                        vols_left_to_import.append(fn9_volume['vol_name'])
 
-            if vols_left_to_import:
-                self.status = 'STOPPED'
-                self.migration_progess(
-                    self.progress_tracker,
-                    'Migration of FreeNAS 9.x database deferred pending manual import of passphrase encrypted volumes'
-                )
-                self.dispatcher.call_sync(
-                    'alert.emit',
-                    {
-                        'clazz': 'MigrationStalled',
-                        'title': 'FreeNAS 9.x to 10 migration stopped',
-                        'description': f"Please import passphrase encrypted volumes: {', '.join(vols_left_to_import)} and resume migrations from CLI",
-                        'target': ', '.join(vols_left_to_import)
-                    }
-                )
-                return
+                if vols_left_to_import:
+                    self.status = 'STOPPED'
+                    self.migration_progess(
+                        self.progress_tracker,
+                        'Migration of FreeNAS 9.x database deferred pending manual import of passphrase encrypted volumes'
+                    )
+                    self.dispatcher.call_sync(
+                        'alert.emit',
+                        {
+                            'clazz': 'MigrationStalled',
+                            'title': 'FreeNAS 9.x to 10 migration stopped',
+                            'description': f"Please import passphrase encrypted volumes: {', '.join(vols_left_to_import)} and resume migrations from CLI",
+                            'target': ', '.join(vols_left_to_import)
+                        }
+                    )
+                    self.add_warning(TaskWarning(
+                        errno.ENXIO,
+                        "Migration stopped: pending import of passphrase encrypted volumes: {0}.".format(
+                            ', '.join(vols_left_to_import)
+                        )
+                    ))
+                    return
 
             # Putting this here explicity so that when this task is run with second_run = True
             self.progress_tracker = len(self.critical_migrations) * 10
