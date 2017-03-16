@@ -685,7 +685,7 @@ class StorageMigrateTask(Task):
             return None
 
         tp = search.group("type")
-        value = search.group("value")
+        value = search.group("value").strip()
 
         if tp == 'uuid':
             search = doc.xpath("//class[name = 'PART']/geom//config[rawuuid = '%s']/../../name" % value)
