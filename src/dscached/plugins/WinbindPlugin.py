@@ -573,12 +573,12 @@ class WinbindPlugin(DirectoryServicePlugin):
     def join(self):
         logger.info(f'Trying to join to {self.realm}...')
 
-        # First try to reach LDAP and grab the NetBIOS domain name
-        self.connect()
-        self.workgroup = self.get_netbios_domain_name()
-        logger.debug(f'NetBIOS domain name is {self.workgroup}')
-
         try:
+            # First try to reach LDAP and grab the NetBIOS domain name
+            self.connect()
+            self.workgroup = self.get_netbios_domain_name()
+            logger.debug(f'NetBIOS domain name is {self.workgroup}')
+
             self.configure_smb(True)
 
             try:
