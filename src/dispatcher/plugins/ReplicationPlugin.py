@@ -2109,3 +2109,5 @@ def _init(dispatcher, plugin):
         lambda id: f'replication:{id}',
         lambda link: get_replication_resources(dispatcher, link)
     )
+
+    plugin.register_debug_hook(collect_debug)
