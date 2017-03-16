@@ -86,6 +86,7 @@ class WinbindPlugin(DirectoryServicePlugin):
         self.domain_admins_sid = None
         self.domain_users_guid = None
         self.wheel_group = None
+        self.workgroup = ''
         self.cv = Condition()
         self.bind_thread = Thread(target=self.bind, daemon=True)
         self.bind_thread.start()
@@ -198,6 +199,37 @@ class WinbindPlugin(DirectoryServicePlugin):
     def search_one(self, *args, **kwargs):
         return first_or_default(None, self.search(*args, **kwargs))
 
+    def get_netbios_domain_name(self):
+        partition = self.search_one(f'cn=Partitions,cn=Configuration,{self.base_dn}', '(nETBIOSName=*)')
+        return partition['attributes']['nETBIOSName']
+
+    def connect(self):
+        logger.debug('Initializing LDAP connection')
+        logger.debug('LDAP server addresses: {0}'.format(', '.join(self.ldap_addresses)))
+        ldap_addresses = self.ldap_addresses
+
+        if self.parameters.get('dc_address'):
+            logger.debug('Using manually configured DC address')
+            ldap_addresses = [self.parameters.get('dc_address')]
+
+        self.ldap_servers = [ldap3.Server(i) for i in ldap_addresses]
+        self.ldap = ldap3.Connection(
+            self.ldap_servers,
+            client_strategy='ASYNC',
+            authentication=ldap3.SASL,
+            sasl_mechanism='GSSAPI',
+            sasl_credentials=None
+        )
+
+        if not self.ldap.bind():
+            # try TLS now
+            logger.warning('Regular bind failed, trying STARTTLS...')
+            self.ldap.start_tls()
+            if not self.ldap.bind():
+                raise RuntimeError("Failed to bind")
+
+        logger.debug('LDAP bound')
+
     def bind(self):
         logger.debug('Bind thread: starting')
         while True:
@@ -229,32 +261,6 @@ class WinbindPlugin(DirectoryServicePlugin):
 
                     if self.directory.state != DirectoryState.BOUND:
                         try:
-                            logger.debug('Initializing LDAP connection')
-                            logger.debug('LDAP server addresses: {0}'.format(', '.join(self.ldap_addresses)))
-                            ldap_addresses = self.ldap_addresses
-
-                            if self.parameters.get('dc_address'):
-                                logger.debug('Using manually configured DC address')
-                                ldap_addresses = [self.parameters.get('dc_address')]
-
-                            self.ldap_servers = [ldap3.Server(i) for i in ldap_addresses]
-                            self.ldap = ldap3.Connection(
-                                self.ldap_servers,
-                                client_strategy='ASYNC',
-                                authentication=ldap3.SASL,
-                                sasl_mechanism='GSSAPI',
-                                sasl_credentials=None
-                            )
-
-                            if not self.ldap.bind():
-                                # try TLS now
-                                logger.warning('Regular bind failed, trying STARTTLS...')
-                                self.ldap.start_tls()
-                                if not self.ldap.bind():
-                                    raise RuntimeError("Failed to bind")
-
-                            logger.debug('LDAP bound')
-
                             # Get the domain object
                             domain = self.search_dn(self.base_dn)
                             if not domain:
@@ -284,7 +290,7 @@ class WinbindPlugin(DirectoryServicePlugin):
                         self.directory.put_state(DirectoryState.DISABLED)
 
     def configure_smb(self, enable):
-        workgroup = self.parameters['realm'].split('.')[0].upper()
+        workgroup = self.workgroup
         cfg = smbconf.SambaConfig('registry')
         params = {
             'server role': 'member server',
@@ -565,7 +571,12 @@ class WinbindPlugin(DirectoryServicePlugin):
         return self.realm.lower()
 
     def join(self):
-        logger.info('Trying to join to {0}...'.format(self.realm))
+        logger.info(f'Trying to join to {self.realm}...')
+
+        # First try to reach LDAP and grab the NetBIOS domain name
+        self.connect()
+        self.workgroup = self.get_netbios_domain_name()
+        logger.debug(f'NetBIOS domain name is {self.workgroup}')
 
         try:
             self.configure_smb(True)
@@ -574,7 +585,7 @@ class WinbindPlugin(DirectoryServicePlugin):
                 subprocess.check_output(['/usr/local/bin/net', 'ads', 'join', self.realm, '-k'])
             except subprocess.CalledProcessError as err:
                 # Undo possibly partially successful join
-                subprocess.call(['/usr/local/bin/net', 'ads', 'leave'])
+                subprocess.call(['/usr/local/bin/net', 'ads', 'leave', '-k'])
                 raise RuntimeError(err.output.decode('utf-8'))
 
             self.context.client.call_sync('serviced.job.restart', 'org.samba.winbindd')
@@ -609,7 +620,7 @@ class WinbindPlugin(DirectoryServicePlugin):
     def leave(self):
         logger.info('Leaving domain')
         subprocess.call(['/usr/local/bin/net', 'cache', 'flush'])
-        subprocess.call(['/usr/local/bin/net', 'ads', 'leave'])
+        subprocess.call(['/usr/local/bin/net', 'ads', 'leave', '-k'])
         self.configure_smb(False)
         self.dc = None
         self.domain_name = None
