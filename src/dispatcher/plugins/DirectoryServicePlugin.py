@@ -187,8 +187,8 @@ class DirectoryServiceUpdateTask(Task):
 
         if 'name' in updated_params:
             old_name = directory['name']
-            if self.datastore.exists('directories', ('name', '=', updated_params['name'])):
-                raise TaskException(errno.EEXIST, 'Directory {0} already exists'.format(directory['name']))
+            if self.datastore.exists('directories', ('name', '=', updated_params['name']), ('id', '!=', id)):
+                raise TaskException(errno.EEXIST, 'Directory {0} already exists'.format(updated_params['name']))
 
         if 'parameters' in updated_params:
             for k, v in updated_params['parameters'].items():
