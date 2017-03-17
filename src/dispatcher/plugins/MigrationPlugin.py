@@ -44,8 +44,6 @@ from lxml import etree
 from bsd import sysctl
 from freenas.dispatcher import Password
 from freenas.dispatcher.rpc import RpcException, description, accepts, SchemaHelper as h
-from datastore import get_datastore
-from datastore.config import ConfigStore, ConfigNode
 from task import (
     Task,
     ProgressTask,
@@ -1345,8 +1343,6 @@ class ServiceMigrateTask(Task):
     def __init__(self, dispatcher):
         super(ServiceMigrateTask, self).__init__(dispatcher)
         self._notifier = notifier()
-        self.ds = get_datastore()
-        self.cs = ConfigStore(self.ds)
 
     @classmethod
     def early_describe(cls):
@@ -1527,17 +1523,17 @@ class ServiceMigrateTask(Task):
         # Migrating SSHD service
         fn9_sshd = get_table('select * from services_ssh', dictionary=False)[0]
         try:
-            sshd_node = ConfigNode('service.sshd', self.cs)
             for keytype in ('rsa', 'dsa', 'ecdsa', 'ed25519'):
-                pubkey = fn9_sshd['ssh_host_{0}_key'.format(keytype)]
-                privkey = fn9_sshd['ssh_host_{0}_key_pub'.format(keytype)]
+                privkey = fn9_sshd['ssh_host_{0}_key'.format(keytype)]
+                pubkey = fn9_sshd['ssh_host_{0}_key_pub'.format(keytype)]
                 certfile = fn9_sshd['ssh_host_{0}_key_cert_pub'.format(keytype)]
                 if pubkey and privkey:
-                    sshd_node.update({
-                        'service.sshd.keys.{0}.private'.format(keytype): pubkey,
-                        'service.sshd.keys.{0}.public'.format(keytype): privkey,
-                        'service.sshd.keys.{0}.certificate'.format(keytype): certfile or None,
-                    })
+                    self.dispatcher.configstore.set(f'service.sshd.keys.{keytype}.private', privkey)
+                    self.dispatcher.configstore.set(f'service.sshd.keys.{keytype}.public', pubkey)
+                    self.dispatcher.configstore.set(
+                        f'serivce.sshd.keys.{keytype}.certificate',
+                        certfile or None
+                    )
             # Note not sending etcd regeneration event for sshd_keys because the service config
             # task below will already do that so lets just rely on that
             self.run_subtask_sync(
