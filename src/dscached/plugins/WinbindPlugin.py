@@ -169,7 +169,7 @@ class WinbindPlugin(DirectoryServicePlugin):
 
     def search(self, search_base, search_filter, attributes=None):
         if self.ldap.closed:
-            self.ldap.bind()
+            self.ldap_bind()
 
         return filter(
             lambda i: i['type'] != 'searchResRef',
@@ -185,7 +185,7 @@ class WinbindPlugin(DirectoryServicePlugin):
 
     def search_dn(self, dn, attributes=None):
         if self.ldap.closed:
-            self.ldap.bind()
+            self.ldap_bind()
 
         return first_or_default(None, self.ldap.extend.standard.paged_search(
             search_base=dn,
@@ -221,14 +221,15 @@ class WinbindPlugin(DirectoryServicePlugin):
             sasl_credentials=None
         )
 
+        self.ldap_bind()
+        logger.debug('LDAP bound')
+
+    def ldap_bind(self):
         if not self.ldap.bind():
             # try TLS now
-            logger.warning('Regular bind failed, trying STARTTLS...')
             self.ldap.start_tls()
             if not self.ldap.bind():
                 raise RuntimeError("Failed to bind")
-
-        logger.debug('LDAP bound')
 
     def bind(self):
         logger.debug('Bind thread: starting')
@@ -614,7 +615,7 @@ class WinbindPlugin(DirectoryServicePlugin):
             self.directory.put_state(DirectoryState.FAILURE)
             return False
 
-        logger.info('Sucessfully joined to the domain {0}'.format(self.realm))
+        logger.info(f'Sucessfully joined to the domain {self.realm}')
         return True
 
     def leave(self):
