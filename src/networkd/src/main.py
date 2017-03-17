@@ -1000,7 +1000,6 @@ class Main(object):
                     # Continue anyway
                     pass
 
-
     def renew_dhcp(self, interface):
         if interface not in self.dhcp_clients:
             raise RpcException(errno.ENXIO, 'Interface {0} is not configured for DHCP'.format(interface))
