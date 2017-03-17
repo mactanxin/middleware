@@ -1121,7 +1121,7 @@ class ShareMigrateTask(Task):
                         'immutable': False,
                         'type': 'iscsi',
                         'target_path': extent_path,
-                        'target_type': fn9_iscsitargetextent['iscsi_target_extent_type'],
+                        'target_type': fn9_iscsitargetextent['iscsi_target_extent_type'].upper(),
                         'properties': {
                             '%type': 'ShareIscsi',
                             'serial': serial,
