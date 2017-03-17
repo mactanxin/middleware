@@ -729,6 +729,7 @@ class ConfigurationService(RpcService):
                     self.logger.info('Stopping DHCP client on interface {0}'.format(name))
                     self.context.deconfigure_dhcp(name)
 
+                iface = netif.get_interface(name)
                 addresses = set(convert_aliases(entity))
                 existing_addresses = set([a for a in iface.addresses if a.af != netif.AddressFamily.LINK])
 
@@ -991,7 +992,7 @@ class Main(object):
 
             # Remove all IP addresses from interface
             for addr in iface.addresses:
-                if addr.af == netif.AddressFamily.LINK:
+                if addr.af in (netif.AddressFamily.LINK, netif.AddressFamily.INET6):
                     continue
 
                 try:
