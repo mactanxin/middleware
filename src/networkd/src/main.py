@@ -984,6 +984,23 @@ class Main(object):
             client.stop()
             del self.dhcp_clients[interface]
 
+            try:
+                iface = netif.get_interface(interface)
+            except NameError:
+                return
+
+            # Remove all IP addresses from interface
+            for addr in iface.addresses:
+                if addr.af == netif.AddressFamily.LINK:
+                    continue
+
+                try:
+                    iface.remove_address(addr)
+                except:
+                    # Continue anyway
+                    pass
+
+
     def renew_dhcp(self, interface):
         if interface not in self.dhcp_clients:
             raise RpcException(errno.ENXIO, 'Interface {0} is not configured for DHCP'.format(interface))
