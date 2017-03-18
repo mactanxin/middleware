@@ -229,6 +229,9 @@ class DirectoryServiceDeleteTask(Task):
 
     def run(self, id):
         directory = self.datastore.get_by_id('directories', id)
+        if not directory:
+            raise TaskException(errno.ENOENT, 'Directory not found')
+
         name = directory['name']
         if directory['immutable']:
             raise TaskException(errno.EPERM, 'Directory {0} is immutable'.format(directory['name']))
