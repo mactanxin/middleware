@@ -33,9 +33,9 @@ from freenas.dispatcher.rpc import RpcException, accepts, returns, SchemaHelper 
 from task import Provider, Task, TaskDescription, TaskException, query
 from freenas.utils.lazy import lazy
 from freenas.utils.password import unpassword
-
-
 from freenas.utils import normalize, query as q
+from debug import AttachRPC
+
 
 logger = logging.getLogger('DirectoryServicePlugin')
 
@@ -245,6 +245,11 @@ class DirectoryServiceDeleteTask(Task):
         self.dispatcher.call_sync('dscached.management.reload_config')
 
 
+def collect_debug(dispatcher):
+    yield AttachRPC('directoryservice-config', 'directoryservice.get_config')
+    yield AttachRPC('directory-query', 'directory.query')
+
+
 def _init(dispatcher, plugin):
     plugin.register_schema_definition('DirectoryserviceConfig', {
         'type': 'object',
@@ -318,3 +323,4 @@ def _init(dispatcher, plugin):
     plugin.register_task_handler('directory.update', DirectoryServiceUpdateTask)
     plugin.register_task_handler('directory.delete', DirectoryServiceDeleteTask)
     plugin.register_task_handler('directoryservice.update', DirectoryServicesConfigureTask)
+    plugin.register_debug_hook(collect_debug)
