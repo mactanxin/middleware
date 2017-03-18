@@ -434,6 +434,7 @@
             },
             "fdf68c06-1f3f-47f8-af28-2402f3d45424": {
                 "dependencies": [
+                    "group:samba",
                     "file:motd",
                     "file:local/sudoers",
                     "plugin:mail/aliases"
