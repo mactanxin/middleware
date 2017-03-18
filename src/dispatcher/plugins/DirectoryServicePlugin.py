@@ -150,14 +150,15 @@ class DirectoryServiceCreateTask(Task):
 
         self.id = self.datastore.insert('directories', directory)
         self.dispatcher.call_sync('dscached.management.configure_directory', self.id)
+
+        node = ConfigNode('directory', self.configstore)
+        node['search_order'] = node['search_order'].value + [directory['name']]
+        self.dispatcher.call_sync('dscached.management.reload_config')
         self.dispatcher.dispatch_event('directory.changed', {
             'operation': 'create',
             'ids': [self.id]
         })
 
-        node = ConfigNode('directory', self.configstore)
-        node['search_order'] = node['search_order'].value + [directory['name']]
-        self.dispatcher.call_sync('dscached.management.reload_config')
         return self.id
 
     def rollback(self, directory):
