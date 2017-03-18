@@ -60,6 +60,7 @@ MONGOD_ARGS = [
 logger = logging.getLogger('dswatch')
 proc = None
 exiting = False
+wipe = False
 
 
 def sigterm(signo, frame):
@@ -114,6 +115,8 @@ def restore():
 
 
 def check_health(dsn):
+    global wipe
+
     signal.pthread_sigmask(signal.SIG_BLOCK, [signal.SIGTERM])
     while not exiting:
         if proc and proc.poll() is None:
@@ -122,7 +125,8 @@ def check_health(dsn):
                 result = conn['freenas'].command({'serverStatus': 1})
 
                 if sum(result['asserts'].values()) > 0:
-                    logger.warning('Found errors reported by MongoDB instance, restarting')
+                    logger.warning('Found errors reported by MongoDB instance, wiping and restarting')
+                    wipe = True
                     proc.terminate()
 
                 conn.close()
@@ -134,7 +138,7 @@ def check_health(dsn):
 
 
 def main():
-    global proc
+    global proc, wipe
     parser = argparse.ArgumentParser()
     parser.add_argument('-c', metavar='CONFIG', default=DEFAULT_CONFIGFILE, help='Config file name')
     parser.add_argument('name', metavar='NAME', help='Datastore name')
@@ -188,11 +192,11 @@ def main():
         if exiting:
             break
 
-        if ret != 0:
-            logger.warning('MongoDB exited with return code {0}'.format(ret))
-            if ret in (100, -6, -11):
-                logger.warning('wiping out database directory')
-                recreate(dbdir)
+        logger.warning('MongoDB exited with return code {0}'.format(ret))
+        if ret in (100, -6, -11) or wipe:
+            logger.warning('wiping out database directory')
+            recreate(dbdir)
+            wipe = False
 
 
 if __name__ == '__main__':
