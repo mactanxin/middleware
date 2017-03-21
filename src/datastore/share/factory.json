@@ -1720,6 +1720,26 @@
                     "second": "0",
                     "timezone": "America/Los_Angeles"
                 }
+            },
+            "291082fa-c16f-11e6-866b-000c2921ac63": {
+                "name": "newsyslog",
+                "task": "calendar_task.command",
+                "args": ["root", "/usr/sbin/newsyslog"],
+                "enabled": true,
+                "hidden": true,
+                "protected": false,
+                "next_run_time": 1,
+                "schedule": {
+                    "year": "*",
+                    "month": "*",
+                    "day": "*",
+                    "week": "*",
+                    "day_of_week": "*",
+                    "hour": "*",
+                    "minute": "0",
+                    "second": "0",
+                    "timezone": "America/Los_Angeles"
+                }
             }
         }
     },
