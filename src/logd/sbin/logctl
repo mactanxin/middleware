@@ -71,7 +71,7 @@ def query(c, args, filter, params):
 
     if args.input:
         f = open(args.input, 'rb')
-        unpacker = msgpack.Unpacker(f, encoding='utf-8', ext_hook=ext_hook)
+        unpacker = msgpack.Unpacker(f, encoding='utf-8', unicode_errors='ignore', ext_hook=ext_hook)
         return q.query(unpacker, *filter, stream=True, **params)
 
     return c.call_sync('logd.logging.query', filter, params)
