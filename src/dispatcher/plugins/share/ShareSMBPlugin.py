@@ -322,6 +322,7 @@ def convert_share(dispatcher, ret, path, enabled, share):
     ret['map hidden'] = yesno(share['map_hidden'])
     ret['map readonly'] = yesno(share['map_readonly'])
     ret['map system'] = yesno(share['map_system'])
+    ret['veto files'] = '/.snapshot/.zfs/.windows/.config-smb-*.json/'
 
     if 'fruit' in vfs_objects:
         ret['fruit:metadata'] = share['fruit_metadata'].lower()
