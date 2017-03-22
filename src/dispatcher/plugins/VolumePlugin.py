@@ -1595,7 +1595,7 @@ class VolumeReplaceTask(ProgressTask):
         else:
             spare = False
             self.run_subtask_sync('disk.format.gpt', disk['id'], 'freebsd-zfs', {'swapsize': swapsize})
-            disk = self.dispatcher.call_sync('disk.query', [('id', '=', disk['id'])], {'single': True})
+            disk = self.dispatcher.call_sync('disk.query', [('path', '=', disk['path'])], {'single': True})
 
         if vol.get('key_encrypted') or vol.get('password_encrypted'):
             encryption = vol['encryption']
