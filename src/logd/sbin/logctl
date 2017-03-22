@@ -105,7 +105,7 @@ def output_entry(format, entry, colors=False, verbose=False, utc=False):
                 if isinstance(v, str) and '\n' in v:
                     v = '\n' + textwrap.indent(v, '        ')
 
-                print('    {0}: {1}'.format(k, v))
+                print(f'    {k}: {v}')
 
         if colors:
             print('\033[0m', end='')
