@@ -397,10 +397,8 @@ class DiskBootFormatTask(Task):
             # ignore
             pass
         try:
-            boot_mode = "pc"
-            with open("/dev/null", "w") as devnull:
-                boot_mode = subprocess.check_output(['/bin/kenv', 'grub.platform'],
-                                                    stderr=devnull).rstrip()
+            boot_mode = subprocess.check_output(['/bin/kenv', 'grub.platform'],
+                                                stderr=subprocess.DEVNULL).rstrip()
         except:
             boot_mode = "pc"
             
