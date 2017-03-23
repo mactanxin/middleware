@@ -170,6 +170,7 @@
             "service.nfs.mountd_port": null,
             "service.nfs.rpcstatd_port": null,
             "service.nfs.rpclockd_port": null,
+            "service.nfs.over_16_groups": false,
             "service.rsyncd.enable": false,
             "service.rsyncd.port": 873,
             "service.rsyncd.auxiliary": null,
@@ -895,7 +896,7 @@
                 "launchd": {
                     "Label": "org.freebsd.ctld",
                     "RunAtLoad": true,
-                    "Requires": ["logging", "etc"],
+                    "Requires": ["logging", "etc", "networking"],
                     "ProgramArguments": [
                         "/usr/sbin/ctld",
                         "-u",
