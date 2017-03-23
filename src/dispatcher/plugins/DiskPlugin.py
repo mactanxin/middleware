@@ -38,6 +38,7 @@ import gevent
 import time
 import libzfs
 import contextlib
+from gevent import subprocess
 from xml.etree import ElementTree
 from bsd import geom, getswapinfo
 from datetime import datetime, timedelta
@@ -395,10 +396,21 @@ class DiskBootFormatTask(Task):
         except SubprocessException:
             # ignore
             pass
-
+        try:
+            boot_mode = "pc"
+            with open("/dev/null", "w") as devnull:
+                boot_mode = subprocess.check_output(['/bin/kenv', 'grub.platform'],
+                                                    stderr=devnull).rstrip()
+        except:
+            boot_mode = "pc"
+            
         try:
             system('/sbin/gpart', 'create', '-s', 'gpt', disk['path'])
-            system('/sbin/gpart', 'add', '-t', 'bios-boot', '-i', '1', '-s', '512k', disk['path'])
+            if boot_mode == "efi":
+                system('/sbin/gpart', 'add', '-i', '1', '-t', 'efi', '-s', '100m', disk['path'])
+                system('/sbin/newfs_msdos', '-F', '16', "/dev/{}p1".format(disk['path']))
+            else:
+                system('/sbin/gpart', 'add', '-t', 'bios-boot', '-i', '1', '-s', '512k', disk['path'])
             system('/sbin/gpart', 'add', '-t', 'freebsd-zfs', '-i', '2', '-a', '4k', disk['path'])
             system('/sbin/gpart', 'set', '-a', 'active', disk['path'])
         except SubprocessException as err:
