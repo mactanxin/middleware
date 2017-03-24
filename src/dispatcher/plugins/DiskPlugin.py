@@ -437,15 +437,18 @@ class DiskInstallBootloaderTask(Task):
         return ['disk:{0}'.format(id)]
 
     def run(self, id):
+        def exec_hook():
+            os.environ["GRUB_TERMINAL_OUTPUT"] = "gfxterm"
+            os.environ["PATH"] = "{0}:/usr/local/bin:/usr/local/sbin".format(os.environ['PATH'])
         boot_mode = get_boot_mode()
         try:
             disk = disk_by_id(self.dispatcher, id)
             if boot_mode == "efi":
-                os.environ["GRUB_TERMINAL_OUTPUT"] = "gfxterm"
                 system("/sbin/mount", "-t", "msdosfs", "{}p1".format(disk['path']), "/boot/efi")
                 try:
-                    system("/usr/local/sbin/grub-install", "--efi-directory=/boot/efi",
-                           "--removable", "--target=x86_64-efi", disk['path'])
+                    subprocess.check_call(["/usr/local/sbin/grub-install", "--efi-directory=/boot/efi",
+                                           "--removable", "--target=x86_64-efi", disk['path']],
+                                          preexec_fn=exec_hook)
                 finally:
                     try:
                         system("/sbin/umount", "/boot/efi")
@@ -453,7 +456,9 @@ class DiskInstallBootloaderTask(Task):
                         pass
             else:
                 system('/usr/local/sbin/grub-install', '--modules=zfs part_gpt', disk['path'])
-            system('/usr/local/sbin/grub-mkconfig', '-o', '/boot/grub/grub.cfg')
+            subprocess.check_call(['/usr/local/sbin/grub-mkconfig', '-o', '/boot/grub/grub.cfg'],
+                                  preexec_fn=exec_hook)
+                                
         except SubprocessException as err:
             raise TaskException(errno.EFAULT, 'Cannot install GRUB: {0}'.format(err.err))
 
