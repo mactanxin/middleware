@@ -138,11 +138,16 @@ class KernelLogReader(object):
                     if b'\033' in line:
                         continue
 
-                    m = KLOG_PATTERN.match(line.decode('utf-8', 'ignore'))
+                    line = line.decode('utf-8', 'ignore')
+                    m = KLOG_PATTERN.match(line)
                     if not m:
-                        continue
+                        m = {
+                            'priority': 'INFO',
+                            'message': line.strip()
+                        }
+                    else:
+                        m = m.groupdict()
 
-                    m = m.groupdict()
                     self.context.push({
                         'priority': m['priority'],
                         'message': m['message'],
