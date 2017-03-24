@@ -89,6 +89,14 @@ class SelfTestType(enum.Enum):
     OFFLINE = 'offline'
 
 
+def get_boot_mode():
+    try:
+        retval = subprocess.check_output(['/bin/kenv', 'grub.platform'],
+                                         stderr=subprocess.DEVNULL).decode('utf8').rstrip()
+    except:
+        retval = "pc"
+    return retval
+
 @description('Provides information about disks')
 class DiskProvider(Provider):
     @query('Disk')
@@ -396,17 +404,12 @@ class DiskBootFormatTask(Task):
         except SubprocessException:
             # ignore
             pass
-        try:
-            boot_mode = subprocess.check_output(['/bin/kenv', 'grub.platform'],
-                                                stderr=subprocess.DEVNULL).rstrip()
-        except:
-            boot_mode = "pc"
-            
+        boot_mode = get_boot_mode()
         try:
             system('/sbin/gpart', 'create', '-s', 'gpt', disk['path'])
             if boot_mode == "efi":
                 system('/sbin/gpart', 'add', '-i', '1', '-t', 'efi', '-s', '100m', disk['path'])
-                system('/sbin/newfs_msdos', '-F', '16', "/dev/{}p1".format(disk['path']))
+                system('/sbin/newfs_msdos', '-F', '16', "{}p1".format(disk['path']))
             else:
                 system('/sbin/gpart', 'add', '-t', 'bios-boot', '-i', '1', '-s', '512k', disk['path'])
             system('/sbin/gpart', 'add', '-t', 'freebsd-zfs', '-i', '2', '-a', '4k', disk['path'])
@@ -434,9 +437,22 @@ class DiskInstallBootloaderTask(Task):
         return ['disk:{0}'.format(id)]
 
     def run(self, id):
+        boot_mode = get_boot_mode()
         try:
             disk = disk_by_id(self.dispatcher, id)
-            system('/usr/local/sbin/grub-install', '--modules=zfs part_gpt', disk['path'])
+            if boot_mode == "efi":
+                os.environ["GRUB_TERMINAL_OUTPUT"] = "gfxterm"
+                system("/sbin/mount", "-t", "msdosfs", "{}p1".format(disk['path']), "/boot/efi")
+                try:
+                    system("/usr/local/sbin/grub-install", "--efi-directory=/boot/efi",
+                           "--removable", "--target=x86_64-efi", disk['path'])
+                finally:
+                    try:
+                        system("/sbin/umount", "/boot/efi")
+                    except:
+                        pass
+            else:
+                system('/usr/local/sbin/grub-install', '--modules=zfs part_gpt', disk['path'])
             system('/usr/local/sbin/grub-mkconfig', '-o', '/boot/grub/grub.cfg')
         except SubprocessException as err:
             raise TaskException(errno.EFAULT, 'Cannot install GRUB: {0}'.format(err.err))
