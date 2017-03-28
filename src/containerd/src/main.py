@@ -925,9 +925,8 @@ class DockerHost(object):
             subnet = str(ipaddress.ip_interface('{address}/{netmask}'.format(**alias)).network)
             external = first_or_default(lambda n: n['Name'] == 'external', self.connection.networks())
             if external and q.get(external, 'Config.Subnet') != subnet:
-                if external:
-                    self.connection.remove_network('external')
-                    external = False
+                self.connection.remove_network('external')
+                external = False
 
             if not external:
                 try:
