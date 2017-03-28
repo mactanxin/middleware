@@ -1803,14 +1803,14 @@ class DockerService(RpcService):
     def start(self, id):
         host = self.context.docker_host_by_container_id(id)
         try:
-            name, hostid, bridge = self.query_containers(
+            name, hostid, bridge, primary_network_mode = self.query_containers(
                 [('id', '=', id)],
-                {'single': True, 'select': ['name', 'host', 'bridge']}
+                {'single': True, 'select': ['name', 'host', 'bridge', 'primary_network_mode']}
             )
         except ValueError as err:
             raise RpcException(errno.EFAULT, 'Failed to start container: {0}'.format(str(err)))
 
-        if bridge.get('enable') and bridge.get('dhcp'):
+        if primary_network_mode=='BRIDGED' and bridge.get('dhcp'):
             lease = get_dhcp_lease(self.context, name, hostid, bridge.get('macaddress'))
             if bridge.get('address') != lease['client_ip']:
                 raise RpcException(
@@ -1833,14 +1833,14 @@ class DockerService(RpcService):
     def restart(self, id):
         host = self.context.docker_host_by_container_id(id)
         try:
-            name, hostid, bridge = self.query_containers(
+            name, hostid, bridge, primary_network_mode = self.query_containers(
                 [('id', '=', id)],
-                {'single': True, 'select': ['name', 'host', 'bridge']}
+                {'single': True, 'select': ['name', 'host', 'bridge', 'primary_network_mode']}
             )
         except ValueError as err:
             raise RpcException(errno.EFAULT, 'Failed to restart container: {0}'.format(str(err)))
 
-        if bridge.get('enable') and bridge.get('dhcp'):
+        if primary_network_mode=='BRIDGED' and bridge.get('dhcp'):
             lease = get_dhcp_lease(self.context, name, hostid, bridge.get('macaddress'))
             if bridge.get('address') != lease['client_ip']:
                 raise RpcException(
