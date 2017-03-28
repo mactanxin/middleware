@@ -923,7 +923,7 @@ class DockerHost(object):
 
         if alias and q.get(network_config, 'gateway.ipv4'):
             external = first_or_default(lambda n: n['Name'] == 'external', self.connection.networks())
-            oldsubnet = q.get(external, 'Config.Subnet')
+            oldsubnet = q.get(external, 'IPAM.Config.0.Subnet')
             currsubnet = str(ipaddress.ip_interface('{address}/{netmask}'.format(**alias)).network)
             if external and oldsubnet != currsubnet:
                 self.logger.info('Detected subnet change on {0} bridged interface. Old: {1}, New: {2}'.format(
