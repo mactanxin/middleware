@@ -922,9 +922,13 @@ class DockerHost(object):
         network_config = self.context.client.call_sync('network.config.get_config')
 
         if alias and q.get(network_config, 'gateway.ipv4'):
-            subnet = str(ipaddress.ip_interface('{address}/{netmask}'.format(**alias)).network)
             external = first_or_default(lambda n: n['Name'] == 'external', self.connection.networks())
-            if external and q.get(external, 'Config.Subnet') != subnet:
+            oldsubnet = q.get(external, 'Config.Subnet')
+            currsubnet = str(ipaddress.ip_interface('{address}/{netmask}'.format(**alias)).network)
+            if external and oldsubnet != currsubnet:
+                self.logger.info('Detected subnet change on {0} bridged interface. Old: {1}, New: {2}'.format(
+                    self.vm.name, oldsubnet, currsubnet
+                ))
                 self.connection.remove_network('external')
                 external = False
 
@@ -937,7 +941,7 @@ class DockerHost(object):
                         ipam=docker.utils.create_ipam_config(
                             pool_configs=[
                                 docker.utils.create_ipam_pool(
-                                    subnet=subnet,
+                                    subnet=currsubnet,
                                     gateway=q.get(network_config, 'gateway.ipv4')
                                 )
                             ]
