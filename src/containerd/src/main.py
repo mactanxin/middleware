@@ -975,7 +975,7 @@ class DockerHost(object):
                     self.connection.start(container=container['Id'])
                 except BaseException as err:
                     self.logger.warning(
-                        'Failed to start {0} container automatically: {1}'.format(q.get(container, 'Names.0'), err)
+                        'Failed to start {0} container automatically: {1}'.format(q.get(container, 'Names.0'), unpack_docker_error(err))
                     )
 
     def listen(self):
