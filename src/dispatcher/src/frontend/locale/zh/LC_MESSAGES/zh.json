@@ -1,8 +1,8 @@
 {
     "title": "标题",
-    "task": "task",
-    "test": "test",
+    "task": "任务",
+    "test": "测试",
     "table": "table",
     "disk": "disk",
-    "list": "list"
+    "list": "列表"
 }
