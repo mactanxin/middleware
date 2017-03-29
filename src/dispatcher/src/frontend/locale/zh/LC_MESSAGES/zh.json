@@ -3,5 +3,6 @@
     "task": "task",
     "test": "test",
     "table": "table",
-    "disk": "disk"
+    "disk": "disk",
+    "list": "list"
 }
